@@ -1,0 +1,1211 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "20a6ab8b-ebb5-4891-9911-620790021293",
+    "workflowId": "YRUQZZzB78mpYXaw",
+    "nodes": [
+      {
+        "parameters": {
+          "promptType": "define",
+          "text": "={{ $json.body }}",
+          "hasOutputParser": true,
+          "needsFallback": true,
+          "options": {
+            "systemMessage": "=Sos un subagente, tu objetivo es traer/matchear el modelo que dice el cliente: {{ $json.body.modelo }} con los disponibles en la base de datos ejecutnado la tool buscar_models(), Puede llegar el modelo solo, la version, o el modelo y version, tu objetivo es elegir el modelo que coincida con los que estan en la base de datos"
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.agent",
+        "typeVersion": 3,
+        "position": [
+          -560,
+          0
+        ],
+        "id": "e6422942-29af-45c3-bc1f-d101c7721a08",
+        "name": "AI Agent"
+      },
+      {
+        "parameters": {
+          "model": {
+            "__rl": true,
+            "mode": "list",
+            "value": "gpt-4.1-mini"
+          },
+          "builtInTools": {},
+          "options": {
+            "temperature": 0.4
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1.3,
+        "position": [
+          -656,
+          224
+        ],
+        "id": "4a4b36f2-2261-4c40-823e-9733e8a7a02b",
+        "name": "OpenAI Chat Model",
+        "credentials": {
+          "openAiApi": {
+            "id": "i0WC0b3DVeKvkza7",
+            "name": "OpenAi account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "model": {
+            "__rl": true,
+            "mode": "list",
+            "value": "gpt-4.1-mini"
+          },
+          "builtInTools": {},
+          "options": {}
+        },
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1.3,
+        "position": [
+          -528,
+          224
+        ],
+        "id": "6240c5d8-a961-44f2-8c83-656cb75d72cb",
+        "name": "OpenAI Chat Model1",
+        "credentials": {
+          "openAiApi": {
+            "id": "i0WC0b3DVeKvkza7",
+            "name": "OpenAi account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsonSchemaExample": "{\n \"id\":\"1\",\n  \"client_id\":\"1\",\n  \"brand\":\"Toyota\",\n  \"name\":\"Corolla\",\n  \"is_active\":\"1\"\n}"
+        },
+        "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+        "typeVersion": 1.3,
+        "position": [
+          -272,
+          224
+        ],
+        "id": "c275831f-a84a-4273-8b02-387a51059ec2",
+        "name": "Structured Output Parser"
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT \n  bvm.id   AS model_id,\n  bvm.brand,\n  bvm.name AS model_name,\n  bvv.id   AS version_id,\n  bvv.name AS version_name,\n  bvv.engine,\n  bvv.transmission\nFROM brand_vehicle_models bvm\nJOIN brand_vehicle_versions bvv ON bvv.brand_vehicle_model_id = bvm.id\nJOIN clients c ON c.brand COLLATE utf8mb4_0900_ai_ci = bvm.brand COLLATE utf8mb4_0900_ai_ci\nWHERE c.id = {{ $json.body.client_id || $json.body.idCliente }}\n  AND bvm.is_active = true\n  AND bvv.is_active = true\nORDER BY bvm.name, bvv.name\n",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.mySqlTool",
+        "typeVersion": 2.5,
+        "position": [
+          -400,
+          224
+        ],
+        "id": "a1c23d9b-4388-4484-b5de-59c111064307",
+        "name": "buscar_models",
+        "credentials": {
+          "mySql": {
+            "id": "7Z96txw3GwxFmnIg",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={\n  \"id_version\":{{ $json.id }},\n  \"vehicle_model_id\":\"{{ $json.vehicle_model_id }}\",\n  \"fullName\":\"{{ $('AI Agent').item.json.output.name }} {{ $json.name }} {{ $json.engine }} {{ $json.transmission }}\",\n  \"name\":\"{{ $('AI Agent').item.json.output.name }}\",\n  \"version\":\"{{ $json.name }}\",\n  \"engine\": \"{{ $json.engine }}\",\n  \"year\":{{ $json.year }}\n}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.5,
+        "position": [
+          160,
+          0
+        ],
+        "id": "39e72dc2-109e-42ae-b4a8-16350ec36b1d",
+        "name": "Respond to Webhook"
+      },
+      {
+        "parameters": {
+          "operation": "select",
+          "table": {
+            "__rl": true,
+            "value": "vehicle_versions",
+            "mode": "list",
+            "cachedResultName": "vehicle_versions"
+          },
+          "returnAll": true,
+          "where": {
+            "values": [
+              {
+                "column": "vehicle_model_id",
+                "value": "={{ $json.output.id }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          -64,
+          0
+        ],
+        "id": "5e27d60e-5f84-4efc-9f64-1500626ff0b4",
+        "name": "buscar_version",
+        "credentials": {
+          "mySql": {
+            "id": "7Z96txw3GwxFmnIg",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "85a8ab9b-82e8-4c12-a579-4b4e21173edf",
+          "responseMode": "responseNode",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.1,
+        "position": [
+          -656,
+          592
+        ],
+        "id": "9583779b-6912-4598-954a-60c38fd5b3ea",
+        "name": "Webhook",
+        "webhookId": "85a8ab9b-82e8-4c12-a579-4b4e21173edf"
+      },
+      {
+        "parameters": {
+          "jsCode": "const body = $input.first().json.body ?? $input.first().json;\nconst vehicleModel = (body.vehicle_model ?? '').trim();\nconst vehicleVersion = (body.vehicle_version ?? '').trim();\nconst customerVehicleId = body.customer_vehicle_id;\nconst clientId = body.client_id;\n\nif (!vehicleModel) {\n  return [{ json: { valid: false, error: 'vehicle_model es requerido' } }];\n}\nif (!customerVehicleId) {\n  return [{ json: { valid: false, error: 'customer_vehicle_id es requerido' } }];\n}\n\nreturn [{ json: { valid: true, client_id: clientId, customer_vehicle_id: customerVehicleId, vehicle_model: vehicleModel, vehicle_version: vehicleVersion } }];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -432,
+          592
+        ],
+        "id": "4fdf952e-1aaa-4e63-838d-e5a00669102a",
+        "name": "Validate Input"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose"
+            },
+            "conditions": [
+              {
+                "id": "cond-valid",
+                "leftValue": "={{ $json.valid }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          -208,
+          592
+        ],
+        "id": "1bbb7467-8caf-4748-9dcc-c8a81eccd2fb",
+        "name": "IF Valid"
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={\n  \"success\": false,\n  \"saved\": false,\n  \"message\": \"{{ $('Validate Input').first().json.error }}\"\n}",
+          "options": {
+            "responseCode": 400
+          }
+        },
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.5,
+        "position": [
+          80,
+          736
+        ],
+        "id": "157935be-9c13-490f-860d-e1f25018b574",
+        "name": "Respond: Invalid Input"
+      },
+      {
+        "parameters": {
+          "jsCode": "const raw = $input.first().json.output ?? '';\nconst ctx = $('Validate Input').first().json;\n\n// Strip markdown code blocks if the LLM wrapped the JSON\nconst cleaned = raw.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n\nlet parsed;\ntry {\n  parsed = JSON.parse(cleaned);\n} catch (e) {\n  return [{ json: {\n    client_id: ctx.client_id,\n    customer_vehicle_id: ctx.customer_vehicle_id,\n    vehicle_model: ctx.vehicle_model,\n    vehicle_version: ctx.vehicle_version,\n    parse_error: true,\n    not_found: true\n  }}];\n}\n\nreturn [{ json: {\n  client_id: ctx.client_id,\n  customer_vehicle_id: ctx.customer_vehicle_id,\n  vehicle_model: ctx.vehicle_model,\n  vehicle_version: ctx.vehicle_version,\n  ...parsed\n}}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          368,
+          432
+        ],
+        "id": "7890454b-1d94-4b8a-9a14-9f41dcb9d201",
+        "name": "Parse AI Output"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 1
+            },
+            "conditions": [
+              {
+                "id": "cond-has-version",
+                "leftValue": "={{ $json.version_id }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "number",
+                  "operation": "notEmpty",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          592,
+          432
+        ],
+        "id": "3d55302d-4b5c-44de-bda1-5922a7b0a248",
+        "name": "IF Has Version"
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "=UPDATE customer_vehicles SET brand_vehicle_version_id = {{ $json.version_id }} WHERE id = {{ $json.customer_vehicle_id }}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          816,
+          336
+        ],
+        "id": "23619bc0-7429-4a07-88f2-fc017a0bfb97",
+        "name": "MySQL: Update Vehicle",
+        "credentials": {
+          "mySql": {
+            "id": "7Z96txw3GwxFmnIg",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={\n  \"success\": true,\n  \"saved\": true,\n  \"brand_vehicle_version_id\": {{ $('Parse AI Output').first().json.version_id }},\n  \"model_name\": \"{{ $('Parse AI Output').first().json.vehicle_model }}\",\n  \"version_name\": \"{{ $('Parse AI Output').first().json.version_name }}\",\n  \"engine\": {{ $('Parse AI Output').first().json.engine !== null ? '\"' + $('Parse AI Output').first().json.engine + '\"' : 'null' }},\n  \"transmission\": {{ $('Parse AI Output').first().json.transmission !== null ? '\"' + $('Parse AI Output').first().json.transmission + '\"' : 'null' }},\n  \"message\": \"Versión {{ $('Parse AI Output').first().json.version_name }} guardada correctamente.\"\n}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.5,
+        "position": [
+          1040,
+          336
+        ],
+        "id": "11ee7bba-6558-45bf-9f3f-acfe627f74a1",
+        "name": "Respond: Success"
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={\n  \"success\": false,\n  \"saved\": false,\n  \"needs_clarification\": {{ $json.needs_clarification === true }},\n  \"not_found\": {{ $json.not_found === true || $json.not_found === true }},\n  \"available_versions\": {{ JSON.stringify($json.available_versions ?? []) }},\n  \"message\": \"{{ $json.needs_clarification ? 'Se encontraron múltiples versiones para ' + $json.vehicle_model + '. Preguntale al cliente cuál es la suya.' : 'No se encontró el modelo ' + $json.vehicle_model + ' en el catálogo.' }}\"\n}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.5,
+        "position": [
+          816,
+          528
+        ],
+        "id": "37777faf-1298-448f-8085-036f142ba3b3",
+        "name": "Respond: Clarification or Not Found"
+      },
+      {
+        "parameters": {
+          "promptType": "define",
+          "text": "={{ $json }}",
+          "options": {
+            "systemMessage": "=Sos un subagente especializado en identificar versiones de vehículos para una concesionaria automotriz.\n\nPASOS A SEGUIR:\n1. Ejecutar buscar_models() UNA SOLA VEZ para obtener TODO el catálogo disponible\n2. Del catálogo, filtrar solo los modelos y versiones que correspondan al modelo indicado\n3. Seguir las REGLAS DE DECISIÓN y responder con el JSON correspondiente\n4. NO llamar a buscar_models() más de una vez\n\nREGLAS DE MATCHING DE MODELO (aplicar en orden, usar el primer match encontrado):\n- EXACTO: el vehicle_model es idéntico al model_name (case-insensitive). Ej: \"Yaris\" → \"Yaris\"\n- CONTENIDO: el vehicle_model está contenido dentro del model_name o viceversa. Ej: \"Yaris GR Sport\" → \"Yaris GR\"\n- SEMÁNTICO: variantes conocidas o abreviaturas. Ej: \"GR Sport\" → \"Yaris GR\"\n- IMPORTANTE: \"Yaris\" NO debe matchear \"Yaris GR\". El match exacto tiene prioridad absoluta.\n  Si existe un match exacto, ignorar cualquier otro modelo con nombre similar pero más largo.\n\nREGLAS DE DECISIÓN (seguir en orden):\nREGLA 1 — Si el modelo NO coincide con ningún model_name del catálogo por ninguno de los criterios anteriores: devolver CASO C.\nREGLA 2 — Si encontraste el modelo y tiene exactamente UNA versión: devolver CASO A con esa versión, SIEMPRE, incluso si la versión indicada está vacía. No preguntes si hay una sola opción.\nREGLA 3 — Si el modelo tiene MÚLTIPLES versiones Y la versión indicada coincide semánticamente con alguna del catálogo: devolver CASO A con la versión que mejor matchea.\nREGLA 4 — Si el modelo tiene MÚLTIPLES versiones Y la versión está vacía o no matchea ninguna: devolver CASO B con la lista de versiones de ESE modelo solamente.\n\nNOTAS SOBRE MATCHING SEMÁNTICO DE VERSIONES:\n- \"2 litros\" → \"2.0\", \"automático\" → \"CVT\" o \"AT\", \"manual\" → \"MT\"\n- Priorizá la coincidencia más específica\n\nFORMATO DE RESPUESTA — respondé ÚNICAMENTE con JSON válido, sin texto adicional, sin markdown:\n\nCASO A — versión identificada:\n{\"version_id\": 4, \"version_name\": \"Base\", \"engine\": null, \"transmission\": null}\n\nCASO B — múltiples versiones sin match claro:\n{\"needs_clarification\": true, \"available_versions\": [{\"id\": 3, \"name\": \"Base\", \"engine\": null, \"transmission\": null}]}\n\nCASO C — modelo no encontrado:\n{\"not_found\": true}\n\nIMPORTANTE: Nunca uses version_id que no existan en el catálogo. Respondé SOLO con el JSON."
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.agent",
+        "typeVersion": 3,
+        "position": [
+          16,
+          336
+        ],
+        "id": "b5c17ec2-4425-476f-ba6a-767d91634ed3",
+        "name": "AI Agent1"
+      },
+      {
+        "parameters": {
+          "model": {
+            "__rl": true,
+            "mode": "list",
+            "value": "gpt-4.1-mini"
+          },
+          "builtInTools": {},
+          "options": {
+            "temperature": 0
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1.3,
+        "position": [
+          32,
+          560
+        ],
+        "id": "7e77f878-cab2-4030-9d9f-2a834b61cf26",
+        "name": "OpenAI Chat Model2",
+        "credentials": {
+          "openAiApi": {
+            "id": "i0WC0b3DVeKvkza7",
+            "name": "OpenAi account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT \n  bvm.id   AS model_id,\n  bvm.brand,\n  bvm.name AS model_name,\n  bvv.id   AS version_id,\n  bvv.name AS version_name,\n  bvv.engine,\n  bvv.transmission\nFROM brand_vehicle_models bvm\nJOIN brand_vehicle_versions bvv ON bvv.brand_vehicle_model_id = bvm.id\nJOIN clients c ON c.brand COLLATE utf8mb4_0900_ai_ci = bvm.brand COLLATE utf8mb4_0900_ai_ci\nWHERE c.id = {{ $('Validate Input').first().json.client_id }}\n  AND bvm.is_active = true\n  AND bvv.is_active = true\nORDER BY bvm.name, bvv.name",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.mySqlTool",
+        "typeVersion": 2.5,
+        "position": [
+          160,
+          560
+        ],
+        "id": "6e141e5f-9983-4b4c-b7c7-a81977723b33",
+        "name": "buscar_models1",
+        "rewireOutputLogTo": "ai_tool",
+        "credentials": {
+          "mySql": {
+            "id": "7Z96txw3GwxFmnIg",
+            "name": "MySQL account"
+          }
+        }
+      }
+    ],
+    "connections": {
+      "OpenAI Chat Model": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "OpenAI Chat Model1": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_languageModel",
+              "index": 1
+            }
+          ]
+        ]
+      },
+      "Structured Output Parser": {
+        "ai_outputParser": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_outputParser",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "buscar_models": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "AI Agent": {
+        "main": [
+          [
+            {
+              "node": "buscar_version",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "buscar_version": {
+        "main": [
+          [
+            {
+              "node": "Respond to Webhook",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "Validate Input",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Validate Input": {
+        "main": [
+          [
+            {
+              "node": "IF Valid",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "IF Valid": {
+        "main": [
+          [
+            {
+              "node": "AI Agent1",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Respond: Invalid Input",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Parse AI Output": {
+        "main": [
+          [
+            {
+              "node": "IF Has Version",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "IF Has Version": {
+        "main": [
+          [
+            {
+              "node": "MySQL: Update Vehicle",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Respond: Clarification or Not Found",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "MySQL: Update Vehicle": {
+        "main": [
+          [
+            {
+              "node": "Respond: Success",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "AI Agent1": {
+        "main": [
+          [
+            {
+              "node": "Parse AI Output",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "OpenAI Chat Model2": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "AI Agent1",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "buscar_models1": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent1",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "REDOO REDOO",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-03-30T18:57:48.054Z",
+    "updatedAt": "2026-03-30T18:57:48.054Z"
+  },
+  "activeVersionId": "20a6ab8b-ebb5-4891-9911-620790021293",
+  "connections": {
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "buscar_models": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "buscar_version",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "buscar_version": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Input": {
+      "main": [
+        [
+          {
+            "node": "IF Valid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Valid": {
+      "main": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond: Invalid Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse AI Output": {
+      "main": [
+        [
+          {
+            "node": "IF Has Version",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Has Version": {
+      "main": [
+        [
+          {
+            "node": "MySQL: Update Vehicle",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond: Clarification or Not Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MySQL: Update Vehicle": {
+      "main": [
+        [
+          {
+            "node": "Respond: Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent1": {
+      "main": [
+        [
+          {
+            "node": "Parse AI Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "buscar_models1": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-03-11T17:52:42.475Z",
+  "id": "YRUQZZzB78mpYXaw",
+  "isArchived": false,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "name": "Vehicle Model Normalizer",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.body }}",
+        "hasOutputParser": true,
+        "needsFallback": true,
+        "options": {
+          "systemMessage": "=Sos un subagente, tu objetivo es traer/matchear el modelo que dice el cliente: {{ $json.body.modelo }} con los disponibles en la base de datos ejecutnado la tool buscar_models(), Puede llegar el modelo solo, la version, o el modelo y version, tu objetivo es elegir el modelo que coincida con los que estan en la base de datos"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        -560,
+        0
+      ],
+      "id": "e6422942-29af-45c3-bc1f-d101c7721a08",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4.1-mini"
+        },
+        "builtInTools": {},
+        "options": {
+          "temperature": 0.4
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        -656,
+        224
+      ],
+      "id": "4a4b36f2-2261-4c40-823e-9733e8a7a02b",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "i0WC0b3DVeKvkza7",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4.1-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        -528,
+        224
+      ],
+      "id": "6240c5d8-a961-44f2-8c83-656cb75d72cb",
+      "name": "OpenAI Chat Model1",
+      "credentials": {
+        "openAiApi": {
+          "id": "i0WC0b3DVeKvkza7",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n \"id\":\"1\",\n  \"client_id\":\"1\",\n  \"brand\":\"Toyota\",\n  \"name\":\"Corolla\",\n  \"is_active\":\"1\"\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        -272,
+        224
+      ],
+      "id": "c275831f-a84a-4273-8b02-387a51059ec2",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n  bvm.id   AS model_id,\n  bvm.brand,\n  bvm.name AS model_name,\n  bvv.id   AS version_id,\n  bvv.name AS version_name,\n  bvv.engine,\n  bvv.transmission\nFROM brand_vehicle_models bvm\nJOIN brand_vehicle_versions bvv ON bvv.brand_vehicle_model_id = bvm.id\nJOIN clients c ON c.brand COLLATE utf8mb4_0900_ai_ci = bvm.brand COLLATE utf8mb4_0900_ai_ci\nWHERE c.id = {{ $json.body.client_id || $json.body.idCliente }}\n  AND bvm.is_active = true\n  AND bvv.is_active = true\nORDER BY bvm.name, bvv.name\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySqlTool",
+      "typeVersion": 2.5,
+      "position": [
+        -400,
+        224
+      ],
+      "id": "a1c23d9b-4388-4484-b5de-59c111064307",
+      "name": "buscar_models",
+      "credentials": {
+        "mySql": {
+          "id": "7Z96txw3GwxFmnIg",
+          "name": "MySQL account-suite-redoo"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"id_version\":{{ $json.id }},\n  \"vehicle_model_id\":\"{{ $json.vehicle_model_id }}\",\n  \"fullName\":\"{{ $('AI Agent').item.json.output.name }} {{ $json.name }} {{ $json.engine }} {{ $json.transmission }}\",\n  \"name\":\"{{ $('AI Agent').item.json.output.name }}\",\n  \"version\":\"{{ $json.name }}\",\n  \"engine\": \"{{ $json.engine }}\",\n  \"year\":{{ $json.year }}\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        160,
+        0
+      ],
+      "id": "39e72dc2-109e-42ae-b4a8-16350ec36b1d",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "operation": "select",
+        "table": {
+          "__rl": true,
+          "value": "vehicle_versions",
+          "mode": "list",
+          "cachedResultName": "vehicle_versions"
+        },
+        "returnAll": true,
+        "where": {
+          "values": [
+            {
+              "column": "vehicle_model_id",
+              "value": "={{ $json.output.id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        -64,
+        0
+      ],
+      "id": "5e27d60e-5f84-4efc-9f64-1500626ff0b4",
+      "name": "buscar_version",
+      "credentials": {
+        "mySql": {
+          "id": "7Z96txw3GwxFmnIg",
+          "name": "MySQL account-suite-redoo"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "85a8ab9b-82e8-4c12-a579-4b4e21173edf",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -656,
+        592
+      ],
+      "id": "9583779b-6912-4598-954a-60c38fd5b3ea",
+      "name": "Webhook",
+      "webhookId": "85a8ab9b-82e8-4c12-a579-4b4e21173edf"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body ?? $input.first().json;\nconst vehicleModel = (body.vehicle_model ?? '').trim();\nconst vehicleVersion = (body.vehicle_version ?? '').trim();\nconst customerVehicleId = body.customer_vehicle_id;\nconst clientId = body.client_id;\n\nif (!vehicleModel) {\n  return [{ json: { valid: false, error: 'vehicle_model es requerido' } }];\n}\nif (!customerVehicleId) {\n  return [{ json: { valid: false, error: 'customer_vehicle_id es requerido' } }];\n}\n\nreturn [{ json: { valid: true, client_id: clientId, customer_vehicle_id: customerVehicleId, vehicle_model: vehicleModel, vehicle_version: vehicleVersion } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -432,
+        592
+      ],
+      "id": "4fdf952e-1aaa-4e63-838d-e5a00669102a",
+      "name": "Validate Input"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "cond-valid",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -208,
+        592
+      ],
+      "id": "1bbb7467-8caf-4748-9dcc-c8a81eccd2fb",
+      "name": "IF Valid"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": false,\n  \"saved\": false,\n  \"message\": \"{{ $('Validate Input').first().json.error }}\"\n}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        80,
+        736
+      ],
+      "id": "157935be-9c13-490f-860d-e1f25018b574",
+      "name": "Respond: Invalid Input"
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first().json.output ?? '';\nconst ctx = $('Validate Input').first().json;\n\n// Strip markdown code blocks if the LLM wrapped the JSON\nconst cleaned = raw.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n\nlet parsed;\ntry {\n  parsed = JSON.parse(cleaned);\n} catch (e) {\n  return [{ json: {\n    client_id: ctx.client_id,\n    customer_vehicle_id: ctx.customer_vehicle_id,\n    vehicle_model: ctx.vehicle_model,\n    vehicle_version: ctx.vehicle_version,\n    parse_error: true,\n    not_found: true\n  }}];\n}\n\nreturn [{ json: {\n  client_id: ctx.client_id,\n  customer_vehicle_id: ctx.customer_vehicle_id,\n  vehicle_model: ctx.vehicle_model,\n  vehicle_version: ctx.vehicle_version,\n  ...parsed\n}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        368,
+        432
+      ],
+      "id": "7890454b-1d94-4b8a-9a14-9f41dcb9d201",
+      "name": "Parse AI Output"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-has-version",
+              "leftValue": "={{ $json.version_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "number",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        592,
+        432
+      ],
+      "id": "3d55302d-4b5c-44de-bda1-5922a7b0a248",
+      "name": "IF Has Version"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=UPDATE customer_vehicles SET brand_vehicle_version_id = {{ $json.version_id }} WHERE id = {{ $json.customer_vehicle_id }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        816,
+        336
+      ],
+      "id": "23619bc0-7429-4a07-88f2-fc017a0bfb97",
+      "name": "MySQL: Update Vehicle",
+      "credentials": {
+        "mySql": {
+          "id": "7Z96txw3GwxFmnIg",
+          "name": "MySQL account-suite-redoo"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"saved\": true,\n  \"brand_vehicle_version_id\": {{ $('Parse AI Output').first().json.version_id }},\n  \"model_name\": \"{{ $('Parse AI Output').first().json.vehicle_model }}\",\n  \"version_name\": \"{{ $('Parse AI Output').first().json.version_name }}\",\n  \"engine\": {{ $('Parse AI Output').first().json.engine !== null ? '\"' + $('Parse AI Output').first().json.engine + '\"' : 'null' }},\n  \"transmission\": {{ $('Parse AI Output').first().json.transmission !== null ? '\"' + $('Parse AI Output').first().json.transmission + '\"' : 'null' }},\n  \"message\": \"Versión {{ $('Parse AI Output').first().json.version_name }} guardada correctamente.\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1040,
+        336
+      ],
+      "id": "11ee7bba-6558-45bf-9f3f-acfe627f74a1",
+      "name": "Respond: Success"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": false,\n  \"saved\": false,\n  \"needs_clarification\": {{ $json.needs_clarification === true }},\n  \"not_found\": {{ $json.not_found === true || $json.not_found === true }},\n  \"available_versions\": {{ JSON.stringify($json.available_versions ?? []) }},\n  \"message\": \"{{ $json.needs_clarification ? 'Se encontraron múltiples versiones para ' + $json.vehicle_model + '. Preguntale al cliente cuál es la suya.' : 'No se encontró el modelo ' + $json.vehicle_model + ' en el catálogo.' }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        816,
+        528
+      ],
+      "id": "37777faf-1298-448f-8085-036f142ba3b3",
+      "name": "Respond: Clarification or Not Found"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json }}",
+        "options": {
+          "systemMessage": "=Sos un subagente especializado en identificar versiones de vehículos para una concesionaria automotriz.\n\nPASOS A SEGUIR:\n1. Ejecutar buscar_models() UNA SOLA VEZ para obtener TODO el catálogo disponible\n2. Del catálogo, filtrar solo los modelos y versiones que correspondan al modelo indicado\n3. Seguir las REGLAS DE DECISIÓN y responder con el JSON correspondiente\n4. NO llamar a buscar_models() más de una vez\n\nREGLAS DE MATCHING DE MODELO (aplicar en orden, usar el primer match encontrado):\n- EXACTO: el vehicle_model es idéntico al model_name (case-insensitive). Ej: \"Yaris\" → \"Yaris\"\n- CONTENIDO: el vehicle_model está contenido dentro del model_name o viceversa. Ej: \"Yaris GR Sport\" → \"Yaris GR\"\n- SEMÁNTICO: variantes conocidas o abreviaturas. Ej: \"GR Sport\" → \"Yaris GR\"\n- IMPORTANTE: \"Yaris\" NO debe matchear \"Yaris GR\". El match exacto tiene prioridad absoluta.\n  Si existe un match exacto, ignorar cualquier otro modelo con nombre similar pero más largo.\n\nREGLAS DE DECISIÓN (seguir en orden):\nREGLA 1 — Si el modelo NO coincide con ningún model_name del catálogo por ninguno de los criterios anteriores: devolver CASO C.\nREGLA 2 — Si encontraste el modelo y tiene exactamente UNA versión: devolver CASO A con esa versión, SIEMPRE, incluso si la versión indicada está vacía. No preguntes si hay una sola opción.\nREGLA 3 — Si el modelo tiene MÚLTIPLES versiones Y la versión indicada coincide semánticamente con alguna del catálogo: devolver CASO A con la versión que mejor matchea.\nREGLA 4 — Si el modelo tiene MÚLTIPLES versiones Y la versión está vacía o no matchea ninguna: devolver CASO B con la lista de versiones de ESE modelo solamente.\n\nNOTAS SOBRE MATCHING SEMÁNTICO DE VERSIONES:\n- \"2 litros\" → \"2.0\", \"automático\" → \"CVT\" o \"AT\", \"manual\" → \"MT\"\n- Priorizá la coincidencia más específica\n\nFORMATO DE RESPUESTA — respondé ÚNICAMENTE con JSON válido, sin texto adicional, sin markdown:\n\nCASO A — versión identificada:\n{\"version_id\": 4, \"version_name\": \"Base\", \"engine\": null, \"transmission\": null}\n\nCASO B — múltiples versiones sin match claro:\n{\"needs_clarification\": true, \"available_versions\": [{\"id\": 3, \"name\": \"Base\", \"engine\": null, \"transmission\": null}]}\n\nCASO C — modelo no encontrado:\n{\"not_found\": true}\n\nIMPORTANTE: Nunca uses version_id que no existan en el catálogo. Respondé SOLO con el JSON."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        16,
+        336
+      ],
+      "id": "b5c17ec2-4425-476f-ba6a-767d91634ed3",
+      "name": "AI Agent1"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4.1-mini"
+        },
+        "builtInTools": {},
+        "options": {
+          "temperature": 0
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        32,
+        560
+      ],
+      "id": "7e77f878-cab2-4030-9d9f-2a834b61cf26",
+      "name": "OpenAI Chat Model2",
+      "credentials": {
+        "openAiApi": {
+          "id": "i0WC0b3DVeKvkza7",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n  bvm.id   AS model_id,\n  bvm.brand,\n  bvm.name AS model_name,\n  bvv.id   AS version_id,\n  bvv.name AS version_name,\n  bvv.engine,\n  bvv.transmission\nFROM brand_vehicle_models bvm\nJOIN brand_vehicle_versions bvv ON bvv.brand_vehicle_model_id = bvm.id\nJOIN clients c ON c.brand COLLATE utf8mb4_0900_ai_ci = bvm.brand COLLATE utf8mb4_0900_ai_ci\nWHERE c.id = {{ $('Validate Input').first().json.client_id }}\n  AND bvm.is_active = true\n  AND bvv.is_active = true\nORDER BY bvm.name, bvv.name",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySqlTool",
+      "typeVersion": 2.5,
+      "position": [
+        160,
+        560
+      ],
+      "id": "6e141e5f-9983-4b4c-b7c7-a81977723b33",
+      "name": "buscar_models1",
+      "rewireOutputLogTo": "ai_tool",
+      "credentials": {
+        "mySql": {
+          "id": "7Z96txw3GwxFmnIg",
+          "name": "MySQL account-suite-redoo"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "YRUQZZzB78mpYXaw",
+      "projectId": "BamGKVVu1YUj0Lvj",
+      "createdAt": "2026-03-11T17:52:42.478Z",
+      "updatedAt": "2026-03-11T17:52:42.478Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [
+    {
+      "id": "FKSx04B7nKKcilCq",
+      "name": "Agente PV",
+      "createdAt": "2026-11-24T18:38:51.966Z",
+      "updatedAt": "2026-11-24T18:38:51.966Z"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-11-24T18:39:12.151Z",
+  "versionId": "8116deb5-06be-400f-aad7-5b768f4177c8"
+}
