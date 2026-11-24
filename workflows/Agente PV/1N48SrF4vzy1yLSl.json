@@ -1,0 +1,2967 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "e8386a62-89cd-4528-865e-5e0271e2cfad",
+    "workflowId": "1N48SrF4vzy1yLSl",
+    "nodes": [
+      {
+        "parameters": {
+          "jsCode": "const body = $input.first().json.body ?? $input.first().json;\nconst action = (body.action ?? '').trim();\nconst validActions = ['get_slots', 'book', 'update', 'delete'];\nif (!validActions.includes(action)) {\n  return [{ json: { valid: false, error: `action inválido: ${action}. Válidos: ${validActions.join(', ')}` } }];\n}\n// Validate per action\nif (action === 'get_slots' && (!body.client_id || !body.branch_id || !body.date)) {\n  return [{ json: { valid: false, error: 'get_slots requiere client_id, branch_id, date' } }];\n}\nif (action === 'book' && (!body.client_id || !body.branch_id || !body.date || !body.time)) {\n  return [{ json: { valid: false, error: 'book requiere client_id, branch_id, date, time' } }];\n}\nif ((action === 'update' || action === 'delete') && (!body.calendar_id || !body.event_id)) {\n  return [{ json: { valid: false, error: `${action} requiere calendar_id, event_id` } }];\n}\nreturn [{ json: { valid: true, action, ...body } }];"
+        },
+        "id": "86d46543-fde3-4c5f-bbe1-5ff74028649f",
+        "name": "Validate Input",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -4576,
+          3680
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 1
+            },
+            "conditions": [
+              {
+                "id": "cond-valid",
+                "leftValue": "={{ $json.valid }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "equals"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "1dbd34af-509c-4704-a1bd-4b71ff1ea5d5",
+        "name": "IF Valid",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          -4352,
+          3680
+        ]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify({ success: false, message: $('Validate Input').first().json.error }) }}",
+          "options": {
+            "responseCode": 400
+          }
+        },
+        "id": "b81a9271-f09c-4563-8830-0002dc468aca",
+        "name": "Respond: Invalid",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.5,
+        "position": [
+          -4128,
+          3792
+        ]
+      },
+      {
+        "parameters": {
+          "rules": {
+            "values": [
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "id": "r1",
+                      "leftValue": "={{ $json.action }}",
+                      "rightValue": "get_slots",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "get_slots"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "id": "r2",
+                      "leftValue": "={{ $json.action }}",
+                      "rightValue": "book",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "book"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "id": "r3",
+                      "leftValue": "={{ $json.action }}",
+                      "rightValue": "update",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "update"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "id": "r4",
+                      "leftValue": "={{ $json.action }}",
+                      "rightValue": "delete",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "delete"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "19072b03-3aec-4832-87ff-111094ccd1dd",
+        "name": "Route by Action",
+        "type": "n8n-nodes-base.switch",
+        "typeVersion": 3,
+        "position": [
+          -4128,
+          3536
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT \n  b.open_time, b.close_time,\n  b.lunch_start_time, b.lunch_duration,\n  b.break1_time, b.break1_duration,\n  b.break2_time, b.break2_duration,\n  b.break3_time, b.break3_duration,\n  b.close_time_weekend,\n  b.open_time_weekend,\n  b.confirmation_hours,\n  b.service_days,\n  w.id AS workshop_id,\n  w.google_calendar_url AS calendar_id\nFROM branches b\nJOIN workshops w ON w.branch_id = b.id \n  AND w.is_active = true \n  AND w.google_calendar_url IS NOT NULL \n  AND w.google_calendar_url != ''\nWHERE b.id = {{ $('Validate Input').first().json.branch_id }}\n  AND b.client_id = {{ $('Validate Input').first().json.client_id }}\n  AND b.is_active = true",
+          "options": {}
+        },
+        "id": "58677621-971b-4bd3-b517-6e67490b4868",
+        "name": "MySQL: Workshops for Slots",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          -3696,
+          2864
+        ],
+        "credentials": {
+          "mySql": {
+            "id": "7Z96txw3GwxFmnIg",
+            "name": "MySQL account-suite-redoo"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "const input = $('Validate Input').first().json;\nconst rows = $input.all().map(r => r.json);\n\nif (!rows || rows.length === 0) {\n  return [{ json: { no_calendar: true, available_slots: [] } }];\n}\n\nconst branch = rows[0];\n\nconst date = new Date(input.date + 'T12:00:00');\nconst dayAbbrs = ['DO', 'LU', 'MA', 'MI', 'JU', 'VI', 'SA'];\nconst dayAbbr = dayAbbrs[date.getDay()];\n\nconst serviceDays = (branch.service_days || '').split(/[-,]/);\nif (!serviceDays.includes(dayAbbr)) {\n  return [{ json: { no_calendar: true, available_slots: [], reason: 'not_service_day' } }];\n}\n\nconst [openH, openM] = (branch.open_time || '08:00').split(':').map(Number);\nconst [closeH, closeM] = (branch.close_time || '18:00').split(':').map(Number);\n\n// 🔥 Helper para formato ISO con -03:00\nfunction toArgentinaISO(dateStr, hours, minutes) {\n  const d = new Date(dateStr);\n  d.setHours(hours, minutes, 0, 0);\n\n  const yyyy = d.getFullYear();\n  const mm = String(d.getMonth() + 1).padStart(2, '0');\n  const dd = String(d.getDate()).padStart(2, '0');\n  const hh = String(d.getHours()).padStart(2, '0');\n  const min = String(d.getMinutes()).padStart(2, '0');\n  const ss = '00';\n\n  return `${yyyy}-${mm}-${dd}T${hh}:${min}:${ss}-03:00`;\n}\n\n// Último turno = cierre (opt-in por sucursal): la ventana que se le pide a Google Calendar\n// llega hasta cierre del día + duración, así los eventos posteriores al cierre cuentan.\nlet endH = closeH, endM = closeM;\nif (input.last_slot_at_close === true) {\n  const isWeekendDay = date.getDay() === 0 || date.getDay() === 6;\n  const closeOfDay = (isWeekendDay && branch.close_time_weekend) ? branch.close_time_weekend : (branch.close_time || '18:00');\n  const [dayCloseH, dayCloseM] = closeOfDay.split(':').map(Number);\n  endH = dayCloseH;\n  endM = dayCloseM + (Number(input.duration_minutes) || 60);\n}\n\n// Build items\nreturn rows.map(r => ({\n  json: {\n    calendar_id: (r.calendar_id || '').trim(),\n    workshop_id: r.workshop_id,\n    branch: branch,\n    input: input,\n    start_iso: toArgentinaISO(input.date, openH, openM),\n    end_iso: toArgentinaISO(input.date, endH, endM)\n  }\n}));\n"
+        },
+        "id": "078d14c8-d237-4f89-b121-f5e6ad4902ef",
+        "name": "Prepare Availability Check",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -3472,
+          2864
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 1
+            },
+            "conditions": [
+              {
+                "id": "c-hascal",
+                "leftValue": "={{ $json.no_calendar }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "notEquals"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "a0b42113-49e3-49c1-b58b-fa7c7457884b",
+        "name": "IF Has Calendars",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          -3248,
+          2864
+        ]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify({ success: true, available_slots: [], no_calendar: true, reason: $('Prepare Availability Check').first().json.reason || 'no_workshops' }) }}",
+          "options": {}
+        },
+        "id": "02425d70-33c7-484b-8ea8-8b23b4ae4bf1",
+        "name": "Respond: No Calendar",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.5,
+        "position": [
+          -3024,
+          3008
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "calendar",
+          "calendar": {
+            "__rl": true,
+            "value": "={{ $json.calendar_id }}",
+            "mode": "id"
+          },
+          "timeMin": "={{ $json.start_iso }}",
+          "timeMax": "={{ $json.end_iso }}",
+          "options": {
+            "outputFormat": "bookedSlots",
+            "timezone": {
+              "__rl": true,
+              "value": "America/Argentina/Buenos_Aires",
+              "mode": "list",
+              "cachedResultName": "America/Argentina/Buenos_Aires"
+            }
+          }
+        },
+        "id": "45644de2-9c75-4e62-bb01-8be98762fec5",
+        "name": "Get availability in a calendar",
+        "type": "n8n-nodes-base.googleCalendar",
+        "typeVersion": 1.3,
+        "position": [
+          -2800,
+          2864
+        ],
+        "alwaysOutputData": true,
+        "credentials": {
+          "googleCalendarOAuth2Api": {
+            "id": "9V18rfjOnZzS4csr",
+            "name": "Google Calendar account"
+          }
+        },
+        "continueOnFail": true
+      },
+      {
+        "parameters": {
+          "jsCode": "// =========================\n// 🧠 HELPER UTC (Argentina -03)\n// =========================\nfunction getDayName(dateStr) {\n  const days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];\n  const day = new Date(dateStr + 'T12:00:00Z').getUTCDay();\n  return days[day];\n}\n\nfunction createUTCDate(dateStr, timeStr) {\n  const [h, m] = timeStr.split(':').map(Number);\n  const d = new Date(dateStr);\n  d.setUTCHours(h + 3, m, 0, 0);\n  return d;\n}\n\n// =========================\n// INPUTS\n// =========================\nconst allResults = $input.all().map(r => r.json);\nconst workshopItems = $('Prepare Availability Check').all().map(r => r.json);\n\nif (!allResults.length || !workshopItems.length) {\n  return [{ json: { success: true, available_slots: [] } }];\n}\n\nif (workshopItems[0].no_calendar) {\n  return [{ json: { success: true, available_slots: [], reason: workshopItems[0].reason } }];\n}\n\nconst input = workshopItems[0].input;\nconst branch = workshopItems[0].branch || workshopItems[0];\n\nif (!input || !input.date) {\n  throw new Error('Missing input.date');\n}\n\nconst dateStr = input.date;\nconst dateName = getDayName(dateStr);\nconst durationMs = (input.duration_minutes || 60) * 60000;\nconst slotIntervalMs = 30 * 60000;\nconst totalSlots = 6;\n\n// =========================\n// 🧹 CLEAN CALENDAR IDS\n// =========================\nworkshopItems.forEach(w => {\n  w.calendar_id = (w.calendar_id || '').trim();\n});\n\n// =========================\n// BUILD BUSY MAP (Google)\n// =========================\nconst busyByCalendar = {};\n\nallResults.forEach((result) => {\n  let slots = [];\n  if (result.busy && Array.isArray(result.busy)) {\n    slots = result.busy;\n  } else if (Array.isArray(result)) {\n    slots = result;\n  } else if (result.start || result.end) {\n    slots = [result];\n  }\n\n  const calId = (result.calendar_id || '').trim();\n  if (!calId) return;\n\n  if (!busyByCalendar[calId]) busyByCalendar[calId] = [];\n\n  slots.forEach(b => {\n    const start = new Date(b.start?.dateTime ?? b.start ?? '');\n    const end   = new Date(b.end?.dateTime   ?? b.end   ?? '');\n    if (!isNaN(start) && !isNaN(end)) {\n      busyByCalendar[calId].push({ start, end });\n    }\n  });\n});\n\n// =========================\n// 🕒 WORK HOURS\n// =========================\nconst dayOfWeek = new Date(dateStr + 'T12:00:00Z').getUTCDay();\nconst isWeekend = dayOfWeek === 0 || dayOfWeek === 6;\n\nconst openTimeStr  = (isWeekend && branch.open_time_weekend)  ? branch.open_time_weekend  : (branch.open_time  || '08:00');\nconst closeTimeStr = (isWeekend && branch.close_time_weekend) ? branch.close_time_weekend : (branch.close_time || '18:00');\n\nlet dayStart = createUTCDate(dateStr, openTimeStr);\nlet dayEnd   = createUTCDate(dateStr, closeTimeStr);\n\n// =========================\n// 🧱 INTERNAL BLOCKS\n// =========================\nconst internalBlocks = [];\n\nconst addBlock = (time, duration) => {\n  if (!time || !duration || duration <= 0) return;\n  const start = createUTCDate(dateStr, time);\n  const end = new Date(start.getTime() + duration * 60000);\n  internalBlocks.push({ start, end });\n};\n\naddBlock(branch.lunch_start_time, branch.lunch_duration);\naddBlock(branch.break1_time, branch.break1_duration);\naddBlock(branch.break2_time, branch.break2_duration);\naddBlock(branch.break3_time, branch.break3_duration);\n\n// =========================\n// FASE 1: Recolectar TODOS los slots libres del día\n// =========================\n\n// Bloqueo de hoy (comportamiento original)\nconst todayStr = new Date().toISOString().slice(0, 10);\nif (dateStr === todayStr) {\n  return [{ json: { success: true, date: dateStr, date_name: dateName, total_free_slots: 0, available_slots: [] } }];\n}\n\n// 🔒 Bloqueo por confirmation_hours  ← NUEVO\nconst confirmationHours = Number(branch.confirmation_hours) || 0;\nconst minAllowedTime = new Date(Date.now() + confirmationHours * 3600000);\n\n// Si el cierre del día cae dentro de la ventana de confirmación → día entero bloqueado\nif (dayEnd <= minAllowedTime) {\n  return [{ json: { success: true, date: dateStr, date_name: dateName, total_free_slots: 0, available_slots: [], reason: 'too_soon' } }];\n}\n\nconst allFreeSlots = [];\nlet scanTime = new Date(dayStart.getTime());\n\n// Último turno = cierre (opt-in por sucursal): el último turno puede EMPEZAR a la hora de\n// cierre del día aunque el servicio termine después. Sin el flag: cierre − duración, como siempre.\nconst lastAtClose = input.last_slot_at_close === true;\nconst scanLimitMs = lastAtClose ? dayEnd.getTime() : dayEnd.getTime() - durationMs;\nwhile (scanTime.getTime() <= scanLimitMs) {\n  const slotEnd = new Date(scanTime.getTime() + durationMs);\n\n  // Saltar slots que aún no cumplen el período de confirmación  ← NUEVO\n  if (scanTime < minAllowedTime) {\n    scanTime = new Date(scanTime.getTime() + slotIntervalMs);\n    continue;\n  }\n\n  for (const w of workshopItems) {\n    const busy = busyByCalendar[w.calendar_id] || [];\n    const isBusyCalendar = busy.some(b => scanTime < b.end && slotEnd > b.start);\n    const isInternalBusy = internalBlocks.some(b => scanTime < b.end && slotEnd > b.start);\n\n    if (!isBusyCalendar && !isInternalBusy) {\n      const displayHour = scanTime.getUTCHours() - 3;\n      const displayMin  = scanTime.getUTCMinutes();\n      allFreeSlots.push({\n        time: `${String(displayHour).padStart(2,'0')}:${String(displayMin).padStart(2,'0')}`,\n        date_name: dateName,\n        workshop_id: w.workshop_id,\n        calendar_id: w.calendar_id\n      });\n      break;\n    }\n  }\n\n  scanTime = new Date(scanTime.getTime() + slotIntervalMs);\n}\n\n// =========================\n// FASE 2: Selección distribuida a lo largo del día\n// =========================\nlet availableSlots = [];\n\nif (allFreeSlots.length === 0) {\n  // sin slots disponibles\n} else if (allFreeSlots.length <= totalSlots) {\n  availableSlots = allFreeSlots;\n} else {\n  const step = (allFreeSlots.length - 1) / (totalSlots - 1);\n  const seen = new Set();\n  for (let i = 0; i < totalSlots; i++) {\n    const idx = Math.min(Math.round(i * step), allFreeSlots.length - 1);\n    if (!seen.has(idx)) {\n      seen.add(idx);\n      availableSlots.push(allFreeSlots[idx]);\n    }\n  }\n}\n\n// =========================\n// OUTPUT\n// =========================\nreturn [{\n  json: {\n    success: true,\n    date: dateStr,\n    date_name: dateName,\n    total_free_slots: allFreeSlots.length,\n    available_slots: availableSlots\n  }\n}];"
+        },
+        "id": "8664e1e6-7906-4326-a613-a20778c13815",
+        "name": "Calculate Available Slots",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -2800,
+          2672
+        ]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify($json) }}",
+          "options": {}
+        },
+        "id": "69bbc165-ad9c-4f6b-99cd-d24d207e7075",
+        "name": "Respond: Slots",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.5,
+        "position": [
+          -2576,
+          2672
+        ]
+      },
+      {
+        "parameters": {
+          "options": {}
+        },
+        "id": "8e0aee79-acf9-4ddc-891b-8730cf713724",
+        "name": "Loop Over Workshops",
+        "type": "n8n-nodes-base.splitInBatches",
+        "typeVersion": 3,
+        "position": [
+          -3024,
+          2768
+        ]
+      },
+      {
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "// Inside loop: current item is a busy event from Google Calendar.\n// $('Loop Over Workshops').item is the ONE workshop being processed this iteration.\nconst workshopItem = $('Loop Over Workshops').item.json;\nreturn {\n  json: {\n    ...($json),\n    calendar_id: workshopItem.calendar_id,\n    workshop_id: workshopItem.workshop_id\n  }\n};"
+        },
+        "id": "2100e02a-7604-4108-8ebc-502eb2f2840d",
+        "name": "Tag Events with Workshop",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -2576,
+          2944
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT \n  b.open_time, b.close_time,\n  b.lunch_start_time, b.lunch_duration,\n  b.break1_time, b.break1_duration,\n  b.break2_time, b.break2_duration,\n  b.break3_time, b.break3_duration,\n  b.service_days,\n  w.id AS workshop_id,\n  w.google_calendar_url AS calendar_id\nFROM branches b\nJOIN workshops w ON w.branch_id = b.id \n  AND w.is_active = true \n  AND w.google_calendar_url IS NOT NULL \n  AND w.google_calendar_url != ''\nWHERE b.id = {{ $('Validate Input').first().json.branch_id }}\n  AND b.client_id = {{ $('Validate Input').first().json.client_id }}\n  AND b.is_active = true",
+          "options": {}
+        },
+        "id": "c5f00d05-743f-420d-9a66-f1ff009c6aae",
+        "name": "MySQL: Workshops for Book1",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          -3696,
+          3376
+        ],
+        "credentials": {
+          "mySql": {
+            "id": "7Z96txw3GwxFmnIg",
+            "name": "MySQL account-suite-redoo"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "const input = $('Validate Input').first().json;\nconst rows = $input.all().map(r => r.json);\n\nif (!rows || rows.length === 0) {\n  return [{ json: { no_calendar: true } }];\n}\n\nconst branch = rows[0];\n\n// Map JS getDay() (0=Sun,...6=Sat) → abreviaciones AR\nconst date = new Date(input.date + 'T12:00:00');\nconst dayAbbrs = ['DO', 'LU', 'MA', 'MI', 'JU', 'VI', 'SA'];\nconst dayAbbr = dayAbbrs[date.getDay()];\n\n// service_days puede venir con \"-\" o \",\"\nconst serviceDays = (branch.service_days || '').split(/[-,]/);\n\nif (!serviceDays.includes(dayAbbr)) {\n  return [{\n    json: {\n      no_calendar: true,\n      available_slots: [],\n      reason: 'not_service_day'\n    }\n  }];\n}\n\n// ==========================================\n// MISMA LÓGICA QUE EL SEGUNDO CÓDIGO\n// ==========================================\nconst [h, m] = input.time.split(':').map(Number);\nconst tzOffset = '-03:00';\n\n// Crear Date real con timezone\nconst slotStart = new Date(\n  `${input.date}T${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:00${tzOffset}`\n);\n\n// Duración + buffer (10 min)\nconst durationMs = (input.duration_minutes || 60) * 60000;\nconst bufferMs = 10 * 60000;\n\nconst slotEnd = new Date(slotStart.getTime() + durationMs + bufferMs);\n\n// ==========================================\n// OUTPUT\n// ==========================================\nreturn rows.map(r => ({\n  json: {\n    calendar_id: r.calendar_id,\n    workshop_id: r.workshop_id,\n    input: input,\n\n    // ISO correcto (igual que el otro flujo)\n    time_min: slotStart.toISOString(),\n    time_max: slotEnd.toISOString()\n  }\n}));"
+        },
+        "id": "1a5efd86-67bf-4fe0-8d2c-1b7ff79437a5",
+        "name": "Prepare Book Check1",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -3472,
+          3376
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 1
+            },
+            "conditions": [
+              {
+                "id": "c-hascal-book",
+                "leftValue": "={{ $json.no_calendar }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "notEquals"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "cfc27809-cfa5-4291-a333-66d816aa65b1",
+        "name": "IF Has Calendars (Book)1",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          -3248,
+          3376
+        ]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={ \"success\": false, \"message\": \"No hay talleres con calendario configurado\" }",
+          "options": {}
+        },
+        "id": "d8a8c8db-479c-4b2a-b262-d50e49773a5c",
+        "name": "Respond: No Workshops1",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.5,
+        "position": [
+          -3024,
+          3472
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "calendar",
+          "calendar": {
+            "__rl": true,
+            "value": "={{ $json.calendar_id || $('Webhook').first().json.body.calendar_id  }}",
+            "mode": "id"
+          },
+          "timeMin": "={{ $json.time_min || $json.input.start_datetime }}",
+          "timeMax": "={{ $json.time_max || $json.input.end_datetime   }}",
+          "options": {
+            "outputFormat": "bookedSlots",
+            "timezone": {
+              "__rl": true,
+              "value": "America/Argentina/Buenos_Aires",
+              "mode": "list",
+              "cachedResultName": "America/Argentina/Buenos_Aires"
+            }
+          }
+        },
+        "id": "e53201e5-da32-48ad-bb56-2da7a9912900",
+        "name": "Get availability for Book1",
+        "type": "n8n-nodes-base.googleCalendar",
+        "typeVersion": 1.3,
+        "position": [
+          -2800,
+          3376
+        ],
+        "alwaysOutputData": true,
+        "credentials": {
+          "googleCalendarOAuth2Api": {
+            "id": "9V18rfjOnZzS4csr",
+            "name": "Google Calendar account"
+          }
+        },
+        "continueOnFail": true
+      },
+      {
+        "parameters": {
+          "jsCode": "const allBusySlots = $input.all().map(r => r.json);\nconst workshopItems = $('Prepare Book Check1').all().map(r => r.json);\n\nif (!workshopItems.length || workshopItems[0]?.no_calendar) {\n  return [{ json: { found: false } }];\n}\n\nconst input = workshopItems[0].input;\nconst [h, m] = input.time.split(':').map(Number);\nconst tzOffset = '-03:00';\nconst slotStart = new Date(`${input.date}T${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:00${tzOffset}`);\nconst slotEnd = new Date(slotStart.getTime() + (input.duration_minutes || 60) * 60000);\n\nlet freeWorkshop = null;\n\nfor (const w of workshopItems) {\n  // Solo los slots de este calendario\n  const workshopSlots = allBusySlots.filter(b => b.calendar_id?.trim() === w.calendar_id?.trim());\n  \n  const hasConflict = workshopSlots.some(b => {\n    const busyStart = new Date(b.start?.dateTime || b.start || '');\n    const busyEnd = new Date(b.end?.dateTime || b.end || '');\n    if (isNaN(busyStart) || isNaN(busyEnd)) return false;\n    return slotStart < busyEnd && slotEnd > busyStart;\n  });\n\n  if (!hasConflict) {\n    freeWorkshop = w;\n    break;\n  }\n}\n\nif (!freeWorkshop) {\n  return [{ json: { found: false } }];\n}\n\nreturn [{ json: {\n  found: true,\n  calendar_id: freeWorkshop.calendar_id,\n  workshop_id: freeWorkshop.workshop_id,\n  input: input,\n  start_iso: slotStart.toISOString(),\n  end_iso: slotEnd.toISOString()\n}}];"
+        },
+        "id": "2b944d9d-ca28-43ad-8835-eea632ac32c8",
+        "name": "Find Free Workshop1",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -2800,
+          3184
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 1
+            },
+            "conditions": [
+              {
+                "id": "cond-found",
+                "leftValue": "={{ $json.found }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "equals"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "77ec95b6-94ba-41b8-85c8-ca706442b254",
+        "name": "IF Found Workshop1",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          -2576,
+          3184
+        ]
+      },
+      {
+        "parameters": {
+          "calendar": {
+            "__rl": true,
+            "value": "={{ $json.calendar_id || ('Webhook').first().json.body.calendar_id  }}",
+            "mode": "id"
+          },
+          "start": "={{ $json.start_iso }}",
+          "end": "={{ $json.end_iso }}",
+          "additionalFields": {
+            "description": "={{ $json.input.description || '' }}",
+            "summary": "={{ $json.input.summary || 'Turno de servicio' }}"
+          }
+        },
+        "id": "04690ae2-0332-4643-bf04-1b8ce487acef",
+        "name": "Create an event1",
+        "type": "n8n-nodes-base.googleCalendar",
+        "typeVersion": 1.3,
+        "position": [
+          -2352,
+          3088
+        ],
+        "credentials": {
+          "googleCalendarOAuth2Api": {
+            "id": "9V18rfjOnZzS4csr",
+            "name": "Google Calendar account"
+          }
+        },
+        "continueOnFail": true
+      },
+      {
+        "parameters": {
+          "jsCode": "const workshopData = $('Find Free Workshop1').first().json;\nconst createdEvent = $input.first().json;\nreturn [{ json: {\n  success: true,\n  event_id: createdEvent.id || createdEvent.eventId || '',\n  workshop_id: workshopData.workshop_id,\n  calendar_id: workshopData.calendar_id\n}}];"
+        },
+        "id": "e73cce3c-423c-47f7-bc91-567bfe482612",
+        "name": "Build Book Response1",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -2128,
+          2992
+        ]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify($json) }}",
+          "options": {}
+        },
+        "id": "8429a971-f513-4266-b6eb-f59beb06aae9",
+        "name": "Respond: Booked1",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.5,
+        "position": [
+          -1904,
+          2992
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "update",
+          "calendar": {
+            "__rl": true,
+            "mode": "id",
+            "value": "={{ $('Validate Input').first().json.calendar_id }}"
+          },
+          "eventId": "={{ $('Validate Input').first().json.event_id }}",
+          "updateFields": {
+            "description": "={{ $('Validate Input').first().json.description || '' }}",
+            "end": "={{ $('Validate Input').first().json.end_datetime }}",
+            "start": "={{ $('Validate Input').first().json.start_datetime }}",
+            "summary": "={{ $('Validate Input').first().json.summary || '' }}"
+          }
+        },
+        "id": "4d65fcda-8c0d-45c8-811b-d13245717a7e",
+        "name": "Update an event1",
+        "type": "n8n-nodes-base.googleCalendar",
+        "typeVersion": 1.3,
+        "position": [
+          -3696,
+          3568
+        ],
+        "credentials": {
+          "googleCalendarOAuth2Api": {
+            "id": "9V18rfjOnZzS4csr",
+            "name": "Google Calendar account"
+          }
+        },
+        "continueOnFail": true
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify({ success: !$json.error, event_id: $('Validate Input').first().json.event_id, message: $json.error ? $json.error.message || 'Error al actualizar evento' : 'Evento actualizado' }) }}",
+          "options": {}
+        },
+        "id": "8ee658e2-79e9-4d93-a34f-9866286176bb",
+        "name": "Respond: Updated1",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.5,
+        "position": [
+          -3472,
+          3568
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "delete",
+          "calendar": {
+            "__rl": true,
+            "value": "={{  $('Validate Input').first().json.calendar_id }}",
+            "mode": "id"
+          },
+          "eventId": "={{   $('Validate Input').first().json.event_id }}",
+          "options": {}
+        },
+        "id": "b6fe9303-0857-41b6-b852-8a075ee05031",
+        "name": "Delete an event1",
+        "type": "n8n-nodes-base.googleCalendar",
+        "typeVersion": 1.3,
+        "position": [
+          -3568,
+          3968
+        ],
+        "credentials": {
+          "googleCalendarOAuth2Api": {
+            "id": "9V18rfjOnZzS4csr",
+            "name": "Google Calendar account"
+          }
+        },
+        "continueOnFail": true
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify({ success: !$json.error, message: $json.error ? $json.error.message || 'Error al eliminar evento' : 'Evento eliminado' }) }}",
+          "options": {}
+        },
+        "id": "f3def400-ae05-4e3e-9015-f698f1028bcf",
+        "name": "Respond: Deleted1",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.5,
+        "position": [
+          -3376,
+          3872
+        ]
+      },
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "calendar-manager2",
+          "responseMode": "responseNode",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.1,
+        "position": [
+          -4800,
+          3680
+        ],
+        "id": "39e0667e-fc03-4346-9362-3e71499ee4d3",
+        "name": "Webhook",
+        "webhookId": "139df698-7f7b-4990-82f2-0ccca2568862"
+      },
+      {
+        "parameters": {
+          "sendTo": "={{ $('Webhook').first().json.body.email_to }}",
+          "subject": "={{ $('Webhook').first().json.body.titulo_email }}",
+          "message": "={{ $('Webhook').first().json.body.mensaje_email }}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2.2,
+        "position": [
+          -2128,
+          3184
+        ],
+        "id": "f4544907-eb84-4151-8f31-5c06359530f1",
+        "name": "Send a message",
+        "webhookId": "84cd64ac-1e02-4691-a099-de6c9772df56",
+        "alwaysOutputData": false,
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "mM64PxZ6QqdZUpPV",
+            "name": "Gmail account"
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "sendTo": "={{ $('Webhook').first().json.body.email_to }}",
+          "subject": "={{ $('Webhook').first().json.body.titulo_email }}",
+          "message": "={{ $('Webhook').first().json.body.mensaje_email }}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2.2,
+        "position": [
+          -3376,
+          4064
+        ],
+        "id": "49e21701-3be3-410a-ac2f-a0faf20ee75c",
+        "name": "Send a message1",
+        "webhookId": "84cd64ac-1e02-4691-a099-de6c9772df56",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "mM64PxZ6QqdZUpPV",
+            "name": "Gmail account"
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "options": {}
+        },
+        "id": "f6de9d6e-ec31-46c3-b03a-52d9f0f08f24",
+        "name": "Loop Over Workshops1",
+        "type": "n8n-nodes-base.splitInBatches",
+        "typeVersion": 3,
+        "position": [
+          -3024,
+          3280
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const calendarItems = $input.all();\nconst loopItem = $('Loop Over Workshops1').item.json;\n\nreturn calendarItems.map(item => ({\n  json: {\n    ...item.json,\n    calendar_id: loopItem.calendar_id?.trim()\n  }\n}));"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -2576,
+          3440
+        ],
+        "id": "2aed3c86-a5f5-447d-a793-6661feac68cd",
+        "name": "Code in JavaScript"
+      },
+      {
+        "parameters": {
+          "operation": "getAll",
+          "calendar": {
+            "__rl": true,
+            "value": "={{ $('Webhook').first().json.body.calendar_id }}",
+            "mode": "id"
+          },
+          "returnAll": true,
+          "timeMin": "={{ $('Loop Over Workshops1').first().json.start }}",
+          "timeMax": "={{ $('Loop Over Workshops1').first().json.end }}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleCalendar",
+        "typeVersion": 1.3,
+        "position": [
+          -2352,
+          3376
+        ],
+        "id": "921f936f-4c11-449c-b2cf-9ab6e3d0c951",
+        "name": "Get many events",
+        "credentials": {
+          "googleCalendarOAuth2Api": {
+            "id": "9V18rfjOnZzS4csr",
+            "name": "Google Calendar account"
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Normalize helper\nconst normalize = (str) => (str || '').trim().toLowerCase();\n\n// Get webhook summary\nconst webhookSummary = normalize(\n  $('Webhook').first().json.body.summary\n);\n\n// Get all Google Calendar events (current input)\nconst calendarItems = $input.all();\n\n// Compare\nconst match = calendarItems.some(item => {\n    const calSummary = normalize(item.json.summary);\n    return calSummary === webhookSummary;\n});\n\n// Return result\nreturn [\n  {\n    json: {\n      webhookSummary,\n      summary:$('Webhook').first().json.body.description,\n      match,\n      message: \"No hay disponibilidad en ese horario el turno ya fue ocupado. No le digas que tuviste un error. Decile que se acaba de ocupar el turno y ejecuta devuelta get_available_slots para ofrecerle mas turnos. NO INVENTES TURNOS\"\n    }\n  }\n];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -2128,
+          3376
+        ],
+        "id": "6fe93b7d-9ca9-43f7-a1c4-476252bc5f51",
+        "name": "Code in JavaScript1"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "5dee1775-3922-4f92-ab7a-222472ae9b3e",
+                "leftValue": "={{ $json.match }}",
+                "rightValue": false,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          -1904,
+          3376
+        ],
+        "id": "d4579dbf-07ef-4c7d-810c-2a2d4c2dfb4b",
+        "name": "If"
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={ \"success\": false, \"message\": \"No hay disponibilidad en ese horario el turno ya fue ocupado. No le digas que tuviste un error. Decile que se acaba de ocupar el turno y ejecuta devuelta get_available_slots para ofrecerle mas turnos. NO INVENTES TURNOS\" }",
+          "options": {}
+        },
+        "id": "16df81e1-3ea3-4e53-8116-171d11e434ba",
+        "name": "Respond: No Availability2",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.5,
+        "position": [
+          -1536,
+          3456
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "getAll",
+          "calendar": {
+            "__rl": true,
+            "value": "248b4f84e12edd9925600aa730446896766a0844543c0199677db45f6fa4a879@group.calendar.google.com",
+            "mode": "list",
+            "cachedResultName": "AUTOSIGLO-EXPRESS"
+          },
+          "returnAll": true,
+          "timeMax": "={{ $now.plus({ week: 8}) }}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleCalendar",
+        "typeVersion": 1.3,
+        "position": [
+          -1216,
+          3360
+        ],
+        "id": "e55dc086-8284-4ebb-9911-94f82c08d1cd",
+        "name": "Get many events1",
+        "credentials": {
+          "googleCalendarOAuth2Api": {
+            "id": "9V18rfjOnZzS4csr",
+            "name": "Google Calendar account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={ \"success\": false, \"message\": \"No hay disponibilidad en ese horario el turno ya fue ocupado. No le digas que tuviste un error. Decile que se acaba de ocupar el turno y ejecuta devuelta get_available_slots para ofrecerle mas turnos. NO INVENTES TURNOS\" }",
+          "options": {}
+        },
+        "id": "41a37eaf-ea99-4436-b852-75457cb4e066",
+        "name": "Respond: No Availability",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.5,
+        "position": [
+          -1504,
+          3248
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "2f1fac1e-3ab3-4bdc-9d34-3e5e6fbdcc8d",
+                "leftValue": "={{ $('Webhook').first().json.body.delete_calendar_event }}",
+                "rightValue": false,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "false",
+                  "singleValue": true
+                }
+              },
+              {
+                "id": "6638dad5-b100-43d6-b147-c2655963b8bc",
+                "leftValue": "={{ $('Webhook').first().json.body.delete_calendar_event }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "exists",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          -3760,
+          3840
+        ],
+        "id": "e2a2140e-8bce-45b3-9d43-3034ab56f952",
+        "name": "If1"
+      },
+      {
+        "parameters": {
+          "sendTo": "={{ $('Webhook').first().json.body.email_to }}",
+          "subject": "={{ $('Webhook').first().json.body.titulo_email }}",
+          "message": "={{ $('Webhook').first().json.body.mensaje_email }}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2.2,
+        "position": [
+          -3536,
+          3792
+        ],
+        "id": "66f82048-a93f-4189-869e-a3f7679d4b60",
+        "name": "Send a message2",
+        "webhookId": "84cd64ac-1e02-4691-a099-de6c9772df56",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "mM64PxZ6QqdZUpPV",
+            "name": "Gmail account"
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "sendTo": "=notificaciones@suiteredoo.ai, lisandro.bachur@redoo.com.ar, ignacio.cabaleiro@redoo.com.ar",
+          "subject": "=NO agendo turno por que estaba ocupado",
+          "message": "={{ $('Webhook').first().json.body.mensaje_email }}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2.2,
+        "position": [
+          -1728,
+          3376
+        ],
+        "id": "60e2c74d-3afb-4d1a-b93f-19f53c03c9b5",
+        "name": "Send a message3",
+        "webhookId": "84cd64ac-1e02-4691-a099-de6c9772df56",
+        "alwaysOutputData": false,
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "mM64PxZ6QqdZUpPV",
+            "name": "Gmail account"
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "5ffbd88c-8d4a-40db-aa11-97c060bd76c9",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.2,
+        "position": [
+          -2016,
+          3648
+        ],
+        "id": "24acddb5-b462-4546-a075-28865e064ad2",
+        "name": "Webhook1",
+        "webhookId": "5ffbd88c-8d4a-40db-aa11-97c060bd76c9"
+      },
+      {
+        "parameters": {
+          "sendTo": "=notificaciones@suiteredoo.ai, lisandro.bachur@redoo.com.ar, ignacio.cabaleiro@redoo.com.ar",
+          "subject": "=NO agendo turno por que estaba ocupado",
+          "message": "={{ $('Webhook1').first().json.body.mensaje_email }}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2.2,
+        "position": [
+          -1824,
+          3648
+        ],
+        "id": "1e89865c-5f8a-4a7d-9d2c-bb5c35ad3c7e",
+        "name": "Send a message4",
+        "webhookId": "84cd64ac-1e02-4691-a099-de6c9772df56",
+        "alwaysOutputData": false,
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "mM64PxZ6QqdZUpPV",
+            "name": "Gmail account"
+          }
+        },
+        "onError": "continueRegularOutput"
+      }
+    ],
+    "connections": {
+      "Validate Input": {
+        "main": [
+          [
+            {
+              "node": "IF Valid",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "IF Valid": {
+        "main": [
+          [
+            {
+              "node": "Route by Action",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Respond: Invalid",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Route by Action": {
+        "main": [
+          [
+            {
+              "node": "MySQL: Workshops for Slots",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "MySQL: Workshops for Book1",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Update an event1",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "If1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "MySQL: Workshops for Slots": {
+        "main": [
+          [
+            {
+              "node": "Prepare Availability Check",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare Availability Check": {
+        "main": [
+          [
+            {
+              "node": "IF Has Calendars",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "IF Has Calendars": {
+        "main": [
+          [
+            {
+              "node": "Loop Over Workshops",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Respond: No Calendar",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Loop Over Workshops": {
+        "main": [
+          [
+            {
+              "node": "Calculate Available Slots",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Get availability in a calendar",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get availability in a calendar": {
+        "main": [
+          [
+            {
+              "node": "Tag Events with Workshop",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Tag Events with Workshop": {
+        "main": [
+          [
+            {
+              "node": "Loop Over Workshops",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Calculate Available Slots": {
+        "main": [
+          [
+            {
+              "node": "Respond: Slots",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "MySQL: Workshops for Book1": {
+        "main": [
+          [
+            {
+              "node": "Prepare Book Check1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare Book Check1": {
+        "main": [
+          [
+            {
+              "node": "IF Has Calendars (Book)1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "IF Has Calendars (Book)1": {
+        "main": [
+          [
+            {
+              "node": "Loop Over Workshops1",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Respond: No Workshops1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get availability for Book1": {
+        "main": [
+          [
+            {
+              "node": "Code in JavaScript",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Find Free Workshop1": {
+        "main": [
+          [
+            {
+              "node": "IF Found Workshop1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "IF Found Workshop1": {
+        "main": [
+          [
+            {
+              "node": "Create an event1",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Get many events",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Create an event1": {
+        "main": [
+          [
+            {
+              "node": "Build Book Response1",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Send a message",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Build Book Response1": {
+        "main": [
+          [
+            {
+              "node": "Respond: Booked1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Update an event1": {
+        "main": [
+          [
+            {
+              "node": "Respond: Updated1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Delete an event1": {
+        "main": [
+          [
+            {
+              "node": "Respond: Deleted1",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Send a message1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "Validate Input",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Loop Over Workshops1": {
+        "main": [
+          [
+            {
+              "node": "Find Free Workshop1",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Get availability for Book1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code in JavaScript": {
+        "main": [
+          [
+            {
+              "node": "Loop Over Workshops1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get many events": {
+        "main": [
+          [
+            {
+              "node": "Code in JavaScript1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code in JavaScript1": {
+        "main": [
+          [
+            {
+              "node": "If",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "If": {
+        "main": [
+          [
+            {
+              "node": "Send a message3",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Send a message3",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get many events1": {
+        "main": [
+          []
+        ]
+      },
+      "If1": {
+        "main": [
+          [
+            {
+              "node": "Send a message2",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Delete an event1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Send a message3": {
+        "main": [
+          [
+            {
+              "node": "Respond: No Availability",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Respond: No Availability2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Webhook1": {
+        "main": [
+          [
+            {
+              "node": "Send a message4",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "REDOO REDOO (via MCP)",
+    "name": "PRUEBA ultimo turno al cierre (borrador)",
+    "description": "Opt-in last_slot_at_close: el último turno puede empezar a la hora de cierre del día. Sin el flag el comportamiento es idéntico. Solo borrador para probar; no publicar sin revisar.",
+    "autosaved": false,
+    "createdAt": "2026-11-20T12:46:06.526Z",
+    "updatedAt": "2026-11-20T12:46:06.526Z"
+  },
+  "activeVersionId": "e8386a62-89cd-4528-865e-5e0271e2cfad",
+  "connections": {
+    "Validate Input": {
+      "main": [
+        [
+          {
+            "node": "IF Valid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Valid": {
+      "main": [
+        [
+          {
+            "node": "Route by Action",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond: Invalid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Action": {
+      "main": [
+        [
+          {
+            "node": "MySQL: Workshops for Slots",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "MySQL: Workshops for Book1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update an event1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MySQL: Workshops for Slots": {
+      "main": [
+        [
+          {
+            "node": "Prepare Availability Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Availability Check": {
+      "main": [
+        [
+          {
+            "node": "IF Has Calendars",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Has Calendars": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Workshops",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond: No Calendar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Workshops": {
+      "main": [
+        [
+          {
+            "node": "Calculate Available Slots",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get availability in a calendar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get availability in a calendar": {
+      "main": [
+        [
+          {
+            "node": "Tag Events with Workshop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tag Events with Workshop": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Workshops",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Available Slots": {
+      "main": [
+        [
+          {
+            "node": "Respond: Slots",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MySQL: Workshops for Book1": {
+      "main": [
+        [
+          {
+            "node": "Prepare Book Check1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Book Check1": {
+      "main": [
+        [
+          {
+            "node": "IF Has Calendars (Book)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Has Calendars (Book)1": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Workshops1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond: No Workshops1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get availability for Book1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Free Workshop1": {
+      "main": [
+        [
+          {
+            "node": "IF Found Workshop1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Found Workshop1": {
+      "main": [
+        [
+          {
+            "node": "Create an event1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get many events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create an event1": {
+      "main": [
+        [
+          {
+            "node": "Build Book Response1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Book Response1": {
+      "main": [
+        [
+          {
+            "node": "Respond: Booked1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update an event1": {
+      "main": [
+        [
+          {
+            "node": "Respond: Updated1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete an event1": {
+      "main": [
+        [
+          {
+            "node": "Respond: Deleted1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send a message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Workshops1": {
+      "main": [
+        [
+          {
+            "node": "Find Free Workshop1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get availability for Book1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Workshops1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many events": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Send a message3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send a message3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many events1": {
+      "main": [
+        []
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Send a message2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Delete an event1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message3": {
+      "main": [
+        [
+          {
+            "node": "Respond: No Availability",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Respond: No Availability2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook1": {
+      "main": [
+        [
+          {
+            "node": "Send a message4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-04-07T19:05:32.984Z",
+  "id": "1N48SrF4vzy1yLSl",
+  "isArchived": false,
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "name": "Calendar Manager2-multicalendario",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body ?? $input.first().json;\nconst action = (body.action ?? '').trim();\nconst validActions = ['get_slots', 'book', 'update', 'delete'];\nif (!validActions.includes(action)) {\n  return [{ json: { valid: false, error: `action inválido: ${action}. Válidos: ${validActions.join(', ')}` } }];\n}\n// Validate per action\nif (action === 'get_slots' && (!body.client_id || !body.branch_id || !body.date)) {\n  return [{ json: { valid: false, error: 'get_slots requiere client_id, branch_id, date' } }];\n}\nif (action === 'book' && (!body.client_id || !body.branch_id || !body.date || !body.time)) {\n  return [{ json: { valid: false, error: 'book requiere client_id, branch_id, date, time' } }];\n}\nif ((action === 'update' || action === 'delete') && (!body.calendar_id || !body.event_id)) {\n  return [{ json: { valid: false, error: `${action} requiere calendar_id, event_id` } }];\n}\nreturn [{ json: { valid: true, action, ...body } }];"
+      },
+      "id": "86d46543-fde3-4c5f-bbe1-5ff74028649f",
+      "name": "Validate Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -4576,
+        3680
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-valid",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "1dbd34af-509c-4704-a1bd-4b71ff1ea5d5",
+      "name": "IF Valid",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -4352,
+        3680
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: false, message: $('Validate Input').first().json.error }) }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "b81a9271-f09c-4563-8830-0002dc468aca",
+      "name": "Respond: Invalid",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -4128,
+        3792
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "r1",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "get_slots",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "get_slots"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "r2",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "book",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "book"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "r3",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "update",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "update"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "r4",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "delete",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "delete"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "19072b03-3aec-4832-87ff-111094ccd1dd",
+      "name": "Route by Action",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        -4128,
+        3536
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n  b.open_time, b.close_time,\n  b.lunch_start_time, b.lunch_duration,\n  b.break1_time, b.break1_duration,\n  b.break2_time, b.break2_duration,\n  b.break3_time, b.break3_duration,\n  b.close_time_weekend,\n  b.open_time_weekend,\n  b.confirmation_hours,\n  b.service_days,\n  w.id AS workshop_id,\n  w.google_calendar_url AS calendar_id\nFROM branches b\nJOIN workshops w ON w.branch_id = b.id \n  AND w.is_active = true \n  AND w.google_calendar_url IS NOT NULL \n  AND w.google_calendar_url != ''\nWHERE b.id = {{ $('Validate Input').first().json.branch_id }}\n  AND b.client_id = {{ $('Validate Input').first().json.client_id }}\n  AND b.is_active = true",
+        "options": {}
+      },
+      "id": "58677621-971b-4bd3-b517-6e67490b4868",
+      "name": "MySQL: Workshops for Slots",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        -3696,
+        2864
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "7Z96txw3GwxFmnIg",
+          "name": "MySQL account-suite-redoo"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $('Validate Input').first().json;\nconst rows = $input.all().map(r => r.json);\n\nif (!rows || rows.length === 0) {\n  return [{ json: { no_calendar: true, available_slots: [] } }];\n}\n\nconst branch = rows[0];\n\nconst date = new Date(input.date + 'T12:00:00');\nconst dayAbbrs = ['DO', 'LU', 'MA', 'MI', 'JU', 'VI', 'SA'];\nconst dayAbbr = dayAbbrs[date.getDay()];\n\nconst serviceDays = (branch.service_days || '').split(/[-,]/);\nif (!serviceDays.includes(dayAbbr)) {\n  return [{ json: { no_calendar: true, available_slots: [], reason: 'not_service_day' } }];\n}\n\nconst [openH, openM] = (branch.open_time || '08:00').split(':').map(Number);\nconst [closeH, closeM] = (branch.close_time || '18:00').split(':').map(Number);\n\n// 🔥 Helper para formato ISO con -03:00\nfunction toArgentinaISO(dateStr, hours, minutes) {\n  const d = new Date(dateStr);\n  d.setHours(hours, minutes, 0, 0);\n\n  const yyyy = d.getFullYear();\n  const mm = String(d.getMonth() + 1).padStart(2, '0');\n  const dd = String(d.getDate()).padStart(2, '0');\n  const hh = String(d.getHours()).padStart(2, '0');\n  const min = String(d.getMinutes()).padStart(2, '0');\n  const ss = '00';\n\n  return `${yyyy}-${mm}-${dd}T${hh}:${min}:${ss}-03:00`;\n}\n\n// Build items\nreturn rows.map(r => ({\n  json: {\n    calendar_id: (r.calendar_id || '').trim(),\n    workshop_id: r.workshop_id,\n    branch: branch,\n    input: input,\n    start_iso: toArgentinaISO(input.date, openH, openM),\n    end_iso: toArgentinaISO(input.date, closeH, closeM)\n  }\n}));"
+      },
+      "id": "078d14c8-d237-4f89-b121-f5e6ad4902ef",
+      "name": "Prepare Availability Check",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3472,
+        2864
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "c-hascal",
+              "leftValue": "={{ $json.no_calendar }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a0b42113-49e3-49c1-b58b-fa7c7457884b",
+      "name": "IF Has Calendars",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -3248,
+        2864
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, available_slots: [], no_calendar: true, reason: $('Prepare Availability Check').first().json.reason || 'no_workshops' }) }}",
+        "options": {}
+      },
+      "id": "02425d70-33c7-484b-8ea8-8b23b4ae4bf1",
+      "name": "Respond: No Calendar",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -3024,
+        3008
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "calendar",
+        "calendar": {
+          "__rl": true,
+          "value": "={{ $json.calendar_id }}",
+          "mode": "id"
+        },
+        "timeMin": "={{ $json.start_iso }}",
+        "timeMax": "={{ $json.end_iso }}",
+        "options": {
+          "outputFormat": "bookedSlots",
+          "timezone": {
+            "__rl": true,
+            "value": "America/Argentina/Buenos_Aires",
+            "mode": "list",
+            "cachedResultName": "America/Argentina/Buenos_Aires"
+          }
+        }
+      },
+      "id": "45644de2-9c75-4e62-bb01-8be98762fec5",
+      "name": "Get availability in a calendar",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        -2800,
+        2864
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "9V18rfjOnZzS4csr",
+          "name": "Google Calendar account"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// =========================\n// 🧠 HELPER UTC (Argentina -03)\n// =========================\nfunction getDayName(dateStr) {\n  const days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];\n  const day = new Date(dateStr + 'T12:00:00Z').getUTCDay();\n  return days[day];\n}\n\nfunction createUTCDate(dateStr, timeStr) {\n  const [h, m] = timeStr.split(':').map(Number);\n  const d = new Date(dateStr);\n  d.setUTCHours(h + 3, m, 0, 0);\n  return d;\n}\n\n// =========================\n// INPUTS\n// =========================\nconst allResults = $input.all().map(r => r.json);\nconst workshopItems = $('Prepare Availability Check').all().map(r => r.json);\n\nif (!allResults.length || !workshopItems.length) {\n  return [{ json: { success: true, available_slots: [] } }];\n}\n\nif (workshopItems[0].no_calendar) {\n  return [{ json: { success: true, available_slots: [], reason: workshopItems[0].reason } }];\n}\n\nconst input = workshopItems[0].input;\nconst branch = workshopItems[0].branch || workshopItems[0];\n\nif (!input || !input.date) {\n  throw new Error('Missing input.date');\n}\n\nconst dateStr = input.date;\nconst dateName = getDayName(dateStr);\nconst durationMs = (input.duration_minutes || 60) * 60000;\nconst slotIntervalMs = 30 * 60000;\nconst totalSlots = 6;\n\n// =========================\n// 🧹 CLEAN CALENDAR IDS\n// =========================\nworkshopItems.forEach(w => {\n  w.calendar_id = (w.calendar_id || '').trim();\n});\n\n// =========================\n// BUILD BUSY MAP (Google)\n// =========================\nconst busyByCalendar = {};\n\nallResults.forEach((result) => {\n  let slots = [];\n  if (result.busy && Array.isArray(result.busy)) {\n    slots = result.busy;\n  } else if (Array.isArray(result)) {\n    slots = result;\n  } else if (result.start || result.end) {\n    slots = [result];\n  }\n\n  const calId = (result.calendar_id || '').trim();\n  if (!calId) return;\n\n  if (!busyByCalendar[calId]) busyByCalendar[calId] = [];\n\n  slots.forEach(b => {\n    const start = new Date(b.start?.dateTime ?? b.start ?? '');\n    const end   = new Date(b.end?.dateTime   ?? b.end   ?? '');\n    if (!isNaN(start) && !isNaN(end)) {\n      busyByCalendar[calId].push({ start, end });\n    }\n  });\n});\n\n// =========================\n// 🕒 WORK HOURS\n// =========================\nconst dayOfWeek = new Date(dateStr + 'T12:00:00Z').getUTCDay();\nconst isWeekend = dayOfWeek === 0 || dayOfWeek === 6;\n\nconst openTimeStr  = (isWeekend && branch.open_time_weekend)  ? branch.open_time_weekend  : (branch.open_time  || '08:00');\nconst closeTimeStr = (isWeekend && branch.close_time_weekend) ? branch.close_time_weekend : (branch.close_time || '18:00');\n\nlet dayStart = createUTCDate(dateStr, openTimeStr);\nlet dayEnd   = createUTCDate(dateStr, closeTimeStr);\n\n// =========================\n// 🧱 INTERNAL BLOCKS\n// =========================\nconst internalBlocks = [];\n\nconst addBlock = (time, duration) => {\n  if (!time || !duration || duration <= 0) return;\n  const start = createUTCDate(dateStr, time);\n  const end = new Date(start.getTime() + duration * 60000);\n  internalBlocks.push({ start, end });\n};\n\naddBlock(branch.lunch_start_time, branch.lunch_duration);\naddBlock(branch.break1_time, branch.break1_duration);\naddBlock(branch.break2_time, branch.break2_duration);\naddBlock(branch.break3_time, branch.break3_duration);\n\n// =========================\n// FASE 1: Recolectar TODOS los slots libres del día\n// =========================\n\n// Bloqueo de hoy (comportamiento original)\nconst todayStr = new Date().toISOString().slice(0, 10);\nif (dateStr === todayStr) {\n  return [{ json: { success: true, date: dateStr, date_name: dateName, total_free_slots: 0, available_slots: [] } }];\n}\n\n// 🔒 Bloqueo por confirmation_hours  ← NUEVO\nconst confirmationHours = Number(branch.confirmation_hours) || 0;\nconst minAllowedTime = new Date(Date.now() + confirmationHours * 3600000);\n\n// Si el cierre del día cae dentro de la ventana de confirmación → día entero bloqueado\nif (dayEnd <= minAllowedTime) {\n  return [{ json: { success: true, date: dateStr, date_name: dateName, total_free_slots: 0, available_slots: [], reason: 'too_soon' } }];\n}\n\nconst allFreeSlots = [];\nlet scanTime = new Date(dayStart.getTime());\n\nwhile (scanTime.getTime() + durationMs <= dayEnd.getTime()) {\n  const slotEnd = new Date(scanTime.getTime() + durationMs);\n\n  // Saltar slots que aún no cumplen el período de confirmación  ← NUEVO\n  if (scanTime < minAllowedTime) {\n    scanTime = new Date(scanTime.getTime() + slotIntervalMs);\n    continue;\n  }\n\n  for (const w of workshopItems) {\n    const busy = busyByCalendar[w.calendar_id] || [];\n    const isBusyCalendar = busy.some(b => scanTime < b.end && slotEnd > b.start);\n    const isInternalBusy = internalBlocks.some(b => scanTime < b.end && slotEnd > b.start);\n\n    if (!isBusyCalendar && !isInternalBusy) {\n      const displayHour = scanTime.getUTCHours() - 3;\n      const displayMin  = scanTime.getUTCMinutes();\n      allFreeSlots.push({\n        time: `${String(displayHour).padStart(2,'0')}:${String(displayMin).padStart(2,'0')}`,\n        date_name: dateName,\n        workshop_id: w.workshop_id,\n        calendar_id: w.calendar_id\n      });\n      break;\n    }\n  }\n\n  scanTime = new Date(scanTime.getTime() + slotIntervalMs);\n}\n\n// =========================\n// FASE 2: Selección distribuida a lo largo del día\n// =========================\nlet availableSlots = [];\n\nif (allFreeSlots.length === 0) {\n  // sin slots disponibles\n} else if (allFreeSlots.length <= totalSlots) {\n  availableSlots = allFreeSlots;\n} else {\n  const step = (allFreeSlots.length - 1) / (totalSlots - 1);\n  const seen = new Set();\n  for (let i = 0; i < totalSlots; i++) {\n    const idx = Math.min(Math.round(i * step), allFreeSlots.length - 1);\n    if (!seen.has(idx)) {\n      seen.add(idx);\n      availableSlots.push(allFreeSlots[idx]);\n    }\n  }\n}\n\n// =========================\n// OUTPUT\n// =========================\nreturn [{\n  json: {\n    success: true,\n    date: dateStr,\n    date_name: dateName,\n    total_free_slots: allFreeSlots.length,\n    available_slots: availableSlots\n  }\n}];"
+      },
+      "id": "8664e1e6-7906-4326-a613-a20778c13815",
+      "name": "Calculate Available Slots",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2800,
+        2672
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "69bbc165-ad9c-4f6b-99cd-d24d207e7075",
+      "name": "Respond: Slots",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -2576,
+        2672
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "8e0aee79-acf9-4ddc-891b-8730cf713724",
+      "name": "Loop Over Workshops",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -3024,
+        2768
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Inside loop: current item is a busy event from Google Calendar.\n// $('Loop Over Workshops').item is the ONE workshop being processed this iteration.\nconst workshopItem = $('Loop Over Workshops').item.json;\nreturn {\n  json: {\n    ...($json),\n    calendar_id: workshopItem.calendar_id,\n    workshop_id: workshopItem.workshop_id\n  }\n};"
+      },
+      "id": "2100e02a-7604-4108-8ebc-502eb2f2840d",
+      "name": "Tag Events with Workshop",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2576,
+        2944
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n  b.open_time, b.close_time,\n  b.lunch_start_time, b.lunch_duration,\n  b.break1_time, b.break1_duration,\n  b.break2_time, b.break2_duration,\n  b.break3_time, b.break3_duration,\n  b.service_days,\n  w.id AS workshop_id,\n  w.google_calendar_url AS calendar_id\nFROM branches b\nJOIN workshops w ON w.branch_id = b.id \n  AND w.is_active = true \n  AND w.google_calendar_url IS NOT NULL \n  AND w.google_calendar_url != ''\nWHERE b.id = {{ $('Validate Input').first().json.branch_id }}\n  AND b.client_id = {{ $('Validate Input').first().json.client_id }}\n  AND b.is_active = true",
+        "options": {}
+      },
+      "id": "c5f00d05-743f-420d-9a66-f1ff009c6aae",
+      "name": "MySQL: Workshops for Book1",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        -3696,
+        3376
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "7Z96txw3GwxFmnIg",
+          "name": "MySQL account-suite-redoo"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $('Validate Input').first().json;\nconst rows = $input.all().map(r => r.json);\n\nif (!rows || rows.length === 0) {\n  return [{ json: { no_calendar: true } }];\n}\n\nconst branch = rows[0];\n\n// Map JS getDay() (0=Sun,...6=Sat) → abreviaciones AR\nconst date = new Date(input.date + 'T12:00:00');\nconst dayAbbrs = ['DO', 'LU', 'MA', 'MI', 'JU', 'VI', 'SA'];\nconst dayAbbr = dayAbbrs[date.getDay()];\n\n// service_days puede venir con \"-\" o \",\"\nconst serviceDays = (branch.service_days || '').split(/[-,]/);\n\nif (!serviceDays.includes(dayAbbr)) {\n  return [{\n    json: {\n      no_calendar: true,\n      available_slots: [],\n      reason: 'not_service_day'\n    }\n  }];\n}\n\n// ==========================================\n// MISMA LÓGICA QUE EL SEGUNDO CÓDIGO\n// ==========================================\nconst [h, m] = input.time.split(':').map(Number);\nconst tzOffset = '-03:00';\n\n// Crear Date real con timezone\nconst slotStart = new Date(\n  `${input.date}T${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:00${tzOffset}`\n);\n\n// Duración + buffer (10 min)\nconst durationMs = (input.duration_minutes || 60) * 60000;\nconst bufferMs = 10 * 60000;\n\nconst slotEnd = new Date(slotStart.getTime() + durationMs + bufferMs);\n\n// ==========================================\n// OUTPUT\n// ==========================================\nreturn rows.map(r => ({\n  json: {\n    calendar_id: r.calendar_id,\n    workshop_id: r.workshop_id,\n    input: input,\n\n    // ISO correcto (igual que el otro flujo)\n    time_min: slotStart.toISOString(),\n    time_max: slotEnd.toISOString()\n  }\n}));"
+      },
+      "id": "1a5efd86-67bf-4fe0-8d2c-1b7ff79437a5",
+      "name": "Prepare Book Check1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3472,
+        3376
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "c-hascal-book",
+              "leftValue": "={{ $json.no_calendar }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "cfc27809-cfa5-4291-a333-66d816aa65b1",
+      "name": "IF Has Calendars (Book)1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -3248,
+        3376
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"success\": false, \"message\": \"No hay talleres con calendario configurado\" }",
+        "options": {}
+      },
+      "id": "d8a8c8db-479c-4b2a-b262-d50e49773a5c",
+      "name": "Respond: No Workshops1",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -3024,
+        3472
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "calendar",
+        "calendar": {
+          "__rl": true,
+          "value": "={{ $json.calendar_id || $('Webhook').first().json.body.calendar_id  }}",
+          "mode": "id"
+        },
+        "timeMin": "={{ $json.time_min || $json.input.start_datetime }}",
+        "timeMax": "={{ $json.time_max || $json.input.end_datetime   }}",
+        "options": {
+          "outputFormat": "bookedSlots",
+          "timezone": {
+            "__rl": true,
+            "value": "America/Argentina/Buenos_Aires",
+            "mode": "list",
+            "cachedResultName": "America/Argentina/Buenos_Aires"
+          }
+        }
+      },
+      "id": "e53201e5-da32-48ad-bb56-2da7a9912900",
+      "name": "Get availability for Book1",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        -2800,
+        3376
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "9V18rfjOnZzS4csr",
+          "name": "Google Calendar account"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const allBusySlots = $input.all().map(r => r.json);\nconst workshopItems = $('Prepare Book Check1').all().map(r => r.json);\n\nif (!workshopItems.length || workshopItems[0]?.no_calendar) {\n  return [{ json: { found: false } }];\n}\n\nconst input = workshopItems[0].input;\nconst [h, m] = input.time.split(':').map(Number);\nconst tzOffset = '-03:00';\nconst slotStart = new Date(`${input.date}T${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:00${tzOffset}`);\nconst slotEnd = new Date(slotStart.getTime() + (input.duration_minutes || 60) * 60000);\n\nlet freeWorkshop = null;\n\nfor (const w of workshopItems) {\n  // Solo los slots de este calendario\n  const workshopSlots = allBusySlots.filter(b => b.calendar_id?.trim() === w.calendar_id?.trim());\n  \n  const hasConflict = workshopSlots.some(b => {\n    const busyStart = new Date(b.start?.dateTime || b.start || '');\n    const busyEnd = new Date(b.end?.dateTime || b.end || '');\n    if (isNaN(busyStart) || isNaN(busyEnd)) return false;\n    return slotStart < busyEnd && slotEnd > busyStart;\n  });\n\n  if (!hasConflict) {\n    freeWorkshop = w;\n    break;\n  }\n}\n\nif (!freeWorkshop) {\n  return [{ json: { found: false } }];\n}\n\nreturn [{ json: {\n  found: true,\n  calendar_id: freeWorkshop.calendar_id,\n  workshop_id: freeWorkshop.workshop_id,\n  input: input,\n  start_iso: slotStart.toISOString(),\n  end_iso: slotEnd.toISOString()\n}}];"
+      },
+      "id": "2b944d9d-ca28-43ad-8835-eea632ac32c8",
+      "name": "Find Free Workshop1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2800,
+        3184
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-found",
+              "leftValue": "={{ $json.found }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "77ec95b6-94ba-41b8-85c8-ca706442b254",
+      "name": "IF Found Workshop1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -2576,
+        3184
+      ]
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "value": "={{ $json.calendar_id || ('Webhook').first().json.body.calendar_id  }}",
+          "mode": "id"
+        },
+        "start": "={{ $json.start_iso }}",
+        "end": "={{ $json.end_iso }}",
+        "additionalFields": {
+          "description": "={{ $json.input.description || '' }}",
+          "summary": "={{ $json.input.summary || 'Turno de servicio' }}"
+        }
+      },
+      "id": "04690ae2-0332-4643-bf04-1b8ce487acef",
+      "name": "Create an event1",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        -2352,
+        3088
+      ],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "9V18rfjOnZzS4csr",
+          "name": "Google Calendar account"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const workshopData = $('Find Free Workshop1').first().json;\nconst createdEvent = $input.first().json;\nreturn [{ json: {\n  success: true,\n  event_id: createdEvent.id || createdEvent.eventId || '',\n  workshop_id: workshopData.workshop_id,\n  calendar_id: workshopData.calendar_id\n}}];"
+      },
+      "id": "e73cce3c-423c-47f7-bc91-567bfe482612",
+      "name": "Build Book Response1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2128,
+        2992
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "8429a971-f513-4266-b6eb-f59beb06aae9",
+      "name": "Respond: Booked1",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -1904,
+        2992
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "calendar": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Validate Input').first().json.calendar_id }}"
+        },
+        "eventId": "={{ $('Validate Input').first().json.event_id }}",
+        "updateFields": {
+          "description": "={{ $('Validate Input').first().json.description || '' }}",
+          "end": "={{ $('Validate Input').first().json.end_datetime }}",
+          "start": "={{ $('Validate Input').first().json.start_datetime }}",
+          "summary": "={{ $('Validate Input').first().json.summary || '' }}"
+        }
+      },
+      "id": "4d65fcda-8c0d-45c8-811b-d13245717a7e",
+      "name": "Update an event1",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        -3696,
+        3568
+      ],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "9V18rfjOnZzS4csr",
+          "name": "Google Calendar account"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: !$json.error, event_id: $('Validate Input').first().json.event_id, message: $json.error ? $json.error.message || 'Error al actualizar evento' : 'Evento actualizado' }) }}",
+        "options": {}
+      },
+      "id": "8ee658e2-79e9-4d93-a34f-9866286176bb",
+      "name": "Respond: Updated1",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -3472,
+        3568
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "calendar": {
+          "__rl": true,
+          "value": "={{  $('Validate Input').first().json.calendar_id }}",
+          "mode": "id"
+        },
+        "eventId": "={{   $('Validate Input').first().json.event_id }}",
+        "options": {}
+      },
+      "id": "b6fe9303-0857-41b6-b852-8a075ee05031",
+      "name": "Delete an event1",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        -3568,
+        3968
+      ],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "9V18rfjOnZzS4csr",
+          "name": "Google Calendar account"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: !$json.error, message: $json.error ? $json.error.message || 'Error al eliminar evento' : 'Evento eliminado' }) }}",
+        "options": {}
+      },
+      "id": "f3def400-ae05-4e3e-9015-f698f1028bcf",
+      "name": "Respond: Deleted1",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -3376,
+        3872
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "calendar-manager2",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -4800,
+        3680
+      ],
+      "id": "39e0667e-fc03-4346-9362-3e71499ee4d3",
+      "name": "Webhook",
+      "webhookId": "139df698-7f7b-4990-82f2-0ccca2568862"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Webhook').first().json.body.email_to }}",
+        "subject": "={{ $('Webhook').first().json.body.titulo_email }}",
+        "message": "={{ $('Webhook').first().json.body.mensaje_email }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -2128,
+        3184
+      ],
+      "id": "f4544907-eb84-4151-8f31-5c06359530f1",
+      "name": "Send a message",
+      "webhookId": "84cd64ac-1e02-4691-a099-de6c9772df56",
+      "alwaysOutputData": false,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "mM64PxZ6QqdZUpPV",
+          "name": "Gmail account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Webhook').first().json.body.email_to }}",
+        "subject": "={{ $('Webhook').first().json.body.titulo_email }}",
+        "message": "={{ $('Webhook').first().json.body.mensaje_email }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -3376,
+        4064
+      ],
+      "id": "49e21701-3be3-410a-ac2f-a0faf20ee75c",
+      "name": "Send a message1",
+      "webhookId": "84cd64ac-1e02-4691-a099-de6c9772df56",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "mM64PxZ6QqdZUpPV",
+          "name": "Gmail account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "f6de9d6e-ec31-46c3-b03a-52d9f0f08f24",
+      "name": "Loop Over Workshops1",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -3024,
+        3280
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const calendarItems = $input.all();\nconst loopItem = $('Loop Over Workshops1').item.json;\n\nreturn calendarItems.map(item => ({\n  json: {\n    ...item.json,\n    calendar_id: loopItem.calendar_id?.trim()\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2576,
+        3440
+      ],
+      "id": "2aed3c86-a5f5-447d-a793-6661feac68cd",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "={{ $('Webhook').first().json.body.calendar_id }}",
+          "mode": "id"
+        },
+        "returnAll": true,
+        "timeMin": "={{ $('Loop Over Workshops1').first().json.start }}",
+        "timeMax": "={{ $('Loop Over Workshops1').first().json.end }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        -2352,
+        3376
+      ],
+      "id": "921f936f-4c11-449c-b2cf-9ab6e3d0c951",
+      "name": "Get many events",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "9V18rfjOnZzS4csr",
+          "name": "Google Calendar account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalize helper\nconst normalize = (str) => (str || '').trim().toLowerCase();\n\n// Get webhook summary\nconst webhookSummary = normalize(\n  $('Webhook').first().json.body.summary\n);\n\n// Get all Google Calendar events (current input)\nconst calendarItems = $input.all();\n\n// Compare\nconst match = calendarItems.some(item => {\n    const calSummary = normalize(item.json.summary);\n    return calSummary === webhookSummary;\n});\n\n// Return result\nreturn [\n  {\n    json: {\n      webhookSummary,\n      summary:$('Webhook').first().json.body.description,\n      match,\n      message: \"No hay disponibilidad en ese horario el turno ya fue ocupado. No le digas que tuviste un error. Decile que se acaba de ocupar el turno y ejecuta devuelta get_available_slots para ofrecerle mas turnos. NO INVENTES TURNOS\"\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2128,
+        3376
+      ],
+      "id": "6fe93b7d-9ca9-43f7-a1c4-476252bc5f51",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "5dee1775-3922-4f92-ab7a-222472ae9b3e",
+              "leftValue": "={{ $json.match }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1904,
+        3376
+      ],
+      "id": "d4579dbf-07ef-4c7d-810c-2a2d4c2dfb4b",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"success\": false, \"message\": \"No hay disponibilidad en ese horario el turno ya fue ocupado. No le digas que tuviste un error. Decile que se acaba de ocupar el turno y ejecuta devuelta get_available_slots para ofrecerle mas turnos. NO INVENTES TURNOS\" }",
+        "options": {}
+      },
+      "id": "16df81e1-3ea3-4e53-8116-171d11e434ba",
+      "name": "Respond: No Availability2",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -1536,
+        3456
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "248b4f84e12edd9925600aa730446896766a0844543c0199677db45f6fa4a879@group.calendar.google.com",
+          "mode": "list",
+          "cachedResultName": "AUTOSIGLO-EXPRESS"
+        },
+        "returnAll": true,
+        "timeMax": "={{ $now.plus({ week: 8}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        -1216,
+        3360
+      ],
+      "id": "e55dc086-8284-4ebb-9911-94f82c08d1cd",
+      "name": "Get many events1",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "9V18rfjOnZzS4csr",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"success\": false, \"message\": \"No hay disponibilidad en ese horario el turno ya fue ocupado. No le digas que tuviste un error. Decile que se acaba de ocupar el turno y ejecuta devuelta get_available_slots para ofrecerle mas turnos. NO INVENTES TURNOS\" }",
+        "options": {}
+      },
+      "id": "41a37eaf-ea99-4436-b852-75457cb4e066",
+      "name": "Respond: No Availability",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -1504,
+        3248
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "2f1fac1e-3ab3-4bdc-9d34-3e5e6fbdcc8d",
+              "leftValue": "={{ $('Webhook').first().json.body.delete_calendar_event }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "6638dad5-b100-43d6-b147-c2655963b8bc",
+              "leftValue": "={{ $('Webhook').first().json.body.delete_calendar_event }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -3760,
+        3840
+      ],
+      "id": "e2a2140e-8bce-45b3-9d43-3034ab56f952",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Webhook').first().json.body.email_to }}",
+        "subject": "={{ $('Webhook').first().json.body.titulo_email }}",
+        "message": "={{ $('Webhook').first().json.body.mensaje_email }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -3536,
+        3792
+      ],
+      "id": "66f82048-a93f-4189-869e-a3f7679d4b60",
+      "name": "Send a message2",
+      "webhookId": "84cd64ac-1e02-4691-a099-de6c9772df56",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "mM64PxZ6QqdZUpPV",
+          "name": "Gmail account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "sendTo": "=notificaciones@suiteredoo.ai, lisandro.bachur@redoo.com.ar, ignacio.cabaleiro@redoo.com.ar",
+        "subject": "=NO agendo turno por que estaba ocupado",
+        "message": "={{ $('Webhook').first().json.body.mensaje_email }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -1728,
+        3376
+      ],
+      "id": "60e2c74d-3afb-4d1a-b93f-19f53c03c9b5",
+      "name": "Send a message3",
+      "webhookId": "84cd64ac-1e02-4691-a099-de6c9772df56",
+      "alwaysOutputData": false,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "mM64PxZ6QqdZUpPV",
+          "name": "Gmail account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "5ffbd88c-8d4a-40db-aa11-97c060bd76c9",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [
+        -2016,
+        3648
+      ],
+      "id": "24acddb5-b462-4546-a075-28865e064ad2",
+      "name": "Webhook1",
+      "webhookId": "5ffbd88c-8d4a-40db-aa11-97c060bd76c9"
+    },
+    {
+      "parameters": {
+        "sendTo": "=notificaciones@suiteredoo.ai, lisandro.bachur@redoo.com.ar, ignacio.cabaleiro@redoo.com.ar",
+        "subject": "=NO agendo turno por que estaba ocupado",
+        "message": "={{ $('Webhook1').first().json.body.mensaje_email }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -1824,
+        3648
+      ],
+      "id": "1e89865c-5f8a-4a7d-9d2c-bb5c35ad3c7e",
+      "name": "Send a message4",
+      "webhookId": "84cd64ac-1e02-4691-a099-de6c9772df56",
+      "alwaysOutputData": false,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "mM64PxZ6QqdZUpPV",
+          "name": "Gmail account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "headers": {
+            "host": "agentepv.redooconect.com.ar",
+            "user-agent": "Go-http-client/1.1",
+            "content-type": "application/json",
+            "accept-encoding": "gzip",
+            "x-forwarded-for": "208.77.244.242",
+            "x-forwarded-host": "agentepv.redooconect.com.ar",
+            "x-forwarded-server": "agentepv.redooconect.com.ar",
+            "content-length": "1383",
+            "connection": "Keep-Alive"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "action": "delete",
+            "calendar_id": "c_1168bee7ca121ea127049ba66ce85a284dbde24a62d99024a3d269c30fe58902@group.calendar.google.com",
+            "email_to": "notificaciones@suiteredoo.ai, lisandro.bachur@gmail.com",
+            "delete_calendar_event": true,
+            "event_id": "qevl5tm2jej9hciboedvsa3d00",
+            "mensaje_email": "<pre>=================================================\n🚨 CANCELACIÓN DE TURNO POR CLIENTE\n=================================================\n\n⏰ FECHA Y HORA DE CANCELACIÓN: 20/07/2026 11:24\n\n📋 DATOS DEL TURNO CANCELADO:\n─────────────────────────────────────────────────\n📅 Fecha del turno: Miércoles 22/07/2026\n🕐 Horario: 14:30\n🏢 Sucursal: Ferro \n🔧 Servicio: Mantenimiento - 10000 km\n\n👤 DATOS DEL CLIENTE:\n─────────────────────────────────────────────────\nNombre: Redoo\nTeléfono: 5491131438902\nEmail: redoo@gmail.com\n\n🚗 DATOS DEL VEHÍCULO:\n─────────────────────────────────────────────────\nPatente: KO123OK\nKilometraje: 10000 km\n\n💰 PRECIO INFORMADO: $0.00\n</pre>",
+            "titulo_email": "⚠️ CANCELACIÓN DE TURNO - Patente KO123OK"
+          },
+          "webhookUrl": "https://agentepv.redooconect.com.ar/webhook/calendar-manager2",
+          "executionMode": "production"
+        }
+      }
+    ]
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate"
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "1N48SrF4vzy1yLSl",
+      "projectId": "BamGKVVu1YUj0Lvj",
+      "createdAt": "2026-04-07T19:05:32.986Z",
+      "updatedAt": "2026-04-07T19:05:32.986Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [
+    {
+      "id": "FKSx04B7nKKcilCq",
+      "name": "Agente PV",
+      "createdAt": "2026-11-24T18:38:51.966Z",
+      "updatedAt": "2026-11-24T18:38:51.966Z"
+    }
+  ],
+  "triggerCount": 2,
+  "updatedAt": "2026-11-24T18:38:51.983Z",
+  "versionId": "795ee51e-95d1-4990-ae7e-21529a08cde8"
+}
