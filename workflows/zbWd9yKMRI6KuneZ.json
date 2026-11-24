@@ -1,0 +1,403 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "51bf7b83-db69-4c51-9c76-85a565989769",
+    "workflowId": "zbWd9yKMRI6KuneZ",
+    "nodes": [
+      {
+        "parameters": {
+          "workflowInputs": {
+            "values": [
+              {
+                "name": "from"
+              }
+            ]
+          }
+        },
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "typeVersion": 1.1,
+        "position": [
+          -112,
+          -176
+        ],
+        "id": "b902e7cb-f98f-43db-bc37-4d1b1a352439",
+        "name": "When Executed by Another Workflow"
+      },
+      {
+        "parameters": {},
+        "type": "n8n-nodes-base.manualTrigger",
+        "typeVersion": 1,
+        "position": [
+          16,
+          0
+        ],
+        "id": "f4d7eb15-e2e9-49a9-b9b5-acd321510467",
+        "name": "When clicking ‘Execute workflow’",
+        "disabled": true
+      },
+      {
+        "parameters": {
+          "documentId": {
+            "__rl": true,
+            "value": "13jyooewKwPa3pzFnxmq-w8-MwxTeDZhY2URD89a6PvM",
+            "mode": "list",
+            "cachedResultName": "FLAMAGAS",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/13jyooewKwPa3pzFnxmq-w8-MwxTeDZhY2URD89a6PvM/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": 2007522017,
+            "mode": "list",
+            "cachedResultName": "Historial_Pedidos",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/13jyooewKwPa3pzFnxmq-w8-MwxTeDZhY2URD89a6PvM/edit#gid=2007522017"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.7,
+        "position": [
+          560,
+          0
+        ],
+        "id": "c19074ed-9bec-4dba-825f-7dc6e0119340",
+        "name": "Get row(s) in sheet",
+        "alwaysOutputData": true,
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "hFJp9zrGSgotyX7W",
+            "name": "Google Sheets account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "// ==================================== \n// OBTENER NEXT ID\n// ==================================== \nconst filas = $input.all();\nif (!filas || filas.length === 0) {\n  return [{ nextId: 1 }];\n}\nconst ids = filas.map(fila => {\n  const valor = Object.values(fila.json)[1];\n  return parseInt(valor) || 0;\n});\nconst maxId = Math.max(...ids);\nconst nextId = maxId + 1;\n\n// ==================================== \n// OBTENER FERIADOS\n// ==================================== \nconst feriados = $(\"feriados\").all().map(item => item.json.fecha_iso);\n\n// ==================================== \n// FUNCIONES AUXILIARES\n// ==================================== \nfunction formatearFecha(date) {\n  const y = date.getFullYear();\n  const m = String(date.getMonth() + 1).padStart(2, '0');\n  const d = String(date.getDate()).padStart(2, '0');\n  return `${y}-${m}-${d}`;\n}\nfunction esFeriado(date) {\n  return feriados.includes(formatearFecha(date));\n}\nfunction esFinDeSemana(date) {\n  const d = date.getDay();\n  return d === 0 || d === 6;\n}\n\n// ==================================== \n// FECHA ACTUAL ARGENTINA\n// ==================================== \nconst ahora = new Date();\nconst partes = new Intl.DateTimeFormat('en-CA', {\n  timeZone: 'America/Argentina/Buenos_Aires',\n  year: 'numeric',\n  month: '2-digit',\n  day: '2-digit',\n  hour: '2-digit',\n  minute: '2-digit',\n  hour12: false\n}).formatToParts(ahora);\n\nconst get = (type) => partes.find(p => p.type === type).value;\nconst year  = parseInt(get('year'));\nconst month = parseInt(get('month')) - 1;\nconst day   = parseInt(get('day'));\nconst hour  = parseInt(get('hour'));\nconst minute = parseInt(get('minute'));\nconst horaActual = hour + minute / 60;\n\nlet fechaEntrega = new Date(year, month, day);\nfechaEntrega.setHours(0, 0, 0, 0);\nconst hoyStr = formatearFecha(fechaEntrega);\nconst diaSemana = fechaEntrega.getDay();\n\n// ==================================== \n// 🔥 EXCEPCION SEMANA SANTA\n// 01/04 todo el día         → entrega 02/04\n// 02/04 hasta las 12hs      → entrega 02/04\n// 02/04 después de las 12hs → entrega 06/04\n// 03/04 todo el día         → entrega 06/04\n// 04/04 hasta las 12hs      → entrega 04/04  (sábado, se entrega igual)\n// 04/04 después de las 12hs → entrega 06/04\n// ==================================== \nif (hoyStr === \"2026-04-01\" || (hoyStr === \"2026-04-02\" && horaActual <= 12)) {\n  return [{ nextId: $(\"When Executed by Another Workflow\").item.json.from, turno: \"2026-04-02\" }];\n}\n\nif ((hoyStr === \"2026-04-02\" && horaActual > 12) || hoyStr === \"2026-04-03\") {\n  return [{ nextId: $(\"When Executed by Another Workflow\").item.json.from, turno: \"2026-04-06\" }];\n}\n\nif (hoyStr === \"2026-04-04\" && horaActual <= 12) {\n  return [{ nextId: $(\"When Executed by Another Workflow\").item.json.from, turno: \"2026-04-04\" }];\n}\n\nif (hoyStr === \"2026-04-04\" && horaActual > 12) {\n  return [{ nextId: $(\"When Executed by Another Workflow\").item.json.from, turno: \"2026-04-06\" }];\n}\n\n// ==================================== \n// LÓGICA NORMAL\n// ==================================== \nif (diaSemana === 0) {\n  fechaEntrega.setDate(fechaEntrega.getDate() + 1);\n} else if (diaSemana === 6) {\n  if (horaActual > 12.5) {\n    fechaEntrega.setDate(fechaEntrega.getDate() + 2);\n  }\n} else {\n  if (horaActual > 18) {\n    if (diaSemana === 5) {\n      fechaEntrega.setDate(fechaEntrega.getDate() + 3);\n    } else {\n      fechaEntrega.setDate(fechaEntrega.getDate() + 1);\n    }\n  }\n}\n\n// ==================================== \n// AJUSTE GENERAL\n// ==================================== \nwhile (esFeriado(fechaEntrega) || esFinDeSemana(fechaEntrega)) {\n  fechaEntrega.setDate(fechaEntrega.getDate() + 1);\n}\n\n// ==================================== \n// RESULTADO\n// ==================================== \nreturn [{\n  nextId: $(\"When Executed by Another Workflow\").first().json.from,\n  turno: formatearFecha(fechaEntrega)\n}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          768,
+          0
+        ],
+        "id": "3e2d419d-b1d2-4c37-855f-73c048650863",
+        "name": "Code"
+      },
+      {
+        "parameters": {
+          "operation": "getAll",
+          "calendar": {
+            "__rl": true,
+            "value": "es-419.ar#holiday@group.v.calendar.google.com",
+            "mode": "list",
+            "cachedResultName": "Días feriados en Argentina"
+          },
+          "timeMax": "={{ $now.plus({ week: 5 }) }}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleCalendar",
+        "typeVersion": 1.3,
+        "position": [
+          96,
+          -176
+        ],
+        "id": "7fee7aea-d8fd-482c-9838-91b8718798a7",
+        "name": "Get many events",
+        "credentials": {
+          "googleCalendarOAuth2Api": {
+            "id": "9V18rfjOnZzS4csr",
+            "name": "Google Calendar account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "return $input.all()\n  .filter(item => {\n    const nombre = (item.json.summary || \"\").toLowerCase();\n    const excluir = [\n      \"pascuas judías\",\n      \"pésaj\",\n      \"pesaj\",\n      \"rosh hashaná\",\n      \"rosh hashana\",\n      \"yom kipur\",\n      \"yom kippur\",\n      \"shavuot\",\n      \"sucot\",\n      \"simjat torá\",\n      \"simchat torah\",\n    ];\n    return !excluir.some(e => nombre.includes(e));\n  })\n  .map(item => {\n    const fechaRaw = item.json.start.date || item.json.start.dateTime;\n    const fecha = new Date(fechaRaw);\n    const meses = [\n      'enero','febrero','marzo','abril','mayo','junio',\n      'julio','agosto','septiembre','octubre','noviembre','diciembre'\n    ];\n    const dia = fecha.getDate();\n    const mes = meses[fecha.getMonth()];\n    const nombre = item.json.summary;\n    return {\n      json: {\n        feriado_formateado: `🇦🇷 ${dia} de ${mes} - ${nombre}`,\n        fecha_iso: fechaRaw\n      }\n    };\n  });"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          288,
+          -128
+        ],
+        "id": "5ae68a43-cf5e-4763-a8ef-11fbe57a9333",
+        "name": "feriados"
+      }
+    ],
+    "connections": {
+      "When Executed by Another Workflow": {
+        "main": [
+          [
+            {
+              "node": "Get many events",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "When clicking ‘Execute workflow’": {
+        "main": [
+          [
+            {
+              "node": "Get row(s) in sheet",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get row(s) in sheet": {
+        "main": [
+          [
+            {
+              "node": "Code",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get many events": {
+        "main": [
+          [
+            {
+              "node": "feriados",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "feriados": {
+        "main": [
+          [
+            {
+              "node": "Get row(s) in sheet",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "system migration",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-10-13T14:50:06.523Z",
+    "updatedAt": "2026-10-13T14:50:06.523Z"
+  },
+  "activeVersionId": "51bf7b83-db69-4c51-9c76-85a565989769",
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Get many events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many events": {
+      "main": [
+        [
+          {
+            "node": "feriados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "feriados": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-04-08T11:45:45.787Z",
+  "id": "zbWd9yKMRI6KuneZ",
+  "isArchived": true,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "name": "My workflow",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "from"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -112,
+        -176
+      ],
+      "id": "b902e7cb-f98f-43db-bc37-4d1b1a352439",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        16,
+        0
+      ],
+      "id": "f4d7eb15-e2e9-49a9-b9b5-acd321510467",
+      "name": "When clicking ‘Execute workflow’",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "13jyooewKwPa3pzFnxmq-w8-MwxTeDZhY2URD89a6PvM",
+          "mode": "list",
+          "cachedResultName": "FLAMAGAS",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/13jyooewKwPa3pzFnxmq-w8-MwxTeDZhY2URD89a6PvM/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 2007522017,
+          "mode": "list",
+          "cachedResultName": "Historial_Pedidos",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/13jyooewKwPa3pzFnxmq-w8-MwxTeDZhY2URD89a6PvM/edit#gid=2007522017"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        560,
+        0
+      ],
+      "id": "c19074ed-9bec-4dba-825f-7dc6e0119340",
+      "name": "Get row(s) in sheet",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "hFJp9zrGSgotyX7W",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ==================================== \n// OBTENER NEXT ID\n// ==================================== \nconst filas = $input.all();\nif (!filas || filas.length === 0) {\n  return [{ nextId: 1 }];\n}\nconst ids = filas.map(fila => {\n  const valor = Object.values(fila.json)[1];\n  return parseInt(valor) || 0;\n});\nconst maxId = Math.max(...ids);\nconst nextId = maxId + 1;\n\n// ==================================== \n// OBTENER FERIADOS\n// ==================================== \nconst feriados = $(\"feriados\").all().map(item => item.json.fecha_iso);\n\n// ==================================== \n// FUNCIONES AUXILIARES\n// ==================================== \nfunction formatearFecha(date) {\n  const y = date.getFullYear();\n  const m = String(date.getMonth() + 1).padStart(2, '0');\n  const d = String(date.getDate()).padStart(2, '0');\n  return `${y}-${m}-${d}`;\n}\nfunction esFeriado(date) {\n  return feriados.includes(formatearFecha(date));\n}\nfunction esFinDeSemana(date) {\n  const d = date.getDay();\n  return d === 0 || d === 6;\n}\n\n// ==================================== \n// FECHA ACTUAL ARGENTINA\n// ==================================== \nconst ahora = new Date();\nconst partes = new Intl.DateTimeFormat('en-CA', {\n  timeZone: 'America/Argentina/Buenos_Aires',\n  year: 'numeric',\n  month: '2-digit',\n  day: '2-digit',\n  hour: '2-digit',\n  minute: '2-digit',\n  hour12: false\n}).formatToParts(ahora);\n\nconst get = (type) => partes.find(p => p.type === type).value;\nconst year  = parseInt(get('year'));\nconst month = parseInt(get('month')) - 1;\nconst day   = parseInt(get('day'));\nconst hour  = parseInt(get('hour'));\nconst minute = parseInt(get('minute'));\nconst horaActual = hour + minute / 60;\n\nlet fechaEntrega = new Date(year, month, day);\nfechaEntrega.setHours(0, 0, 0, 0);\nconst hoyStr = formatearFecha(fechaEntrega);\nconst diaSemana = fechaEntrega.getDay();\n\n// ==================================== \n// 🔥 EXCEPCION SEMANA SANTA\n// 01/04 todo el día         → entrega 02/04\n// 02/04 hasta las 12hs      → entrega 02/04\n// 02/04 después de las 12hs → entrega 06/04\n// 03/04 todo el día         → entrega 06/04\n// 04/04 hasta las 12hs      → entrega 04/04  (sábado, se entrega igual)\n// 04/04 después de las 12hs → entrega 06/04\n// ==================================== \nif (hoyStr === \"2026-04-01\" || (hoyStr === \"2026-04-02\" && horaActual <= 12)) {\n  return [{ nextId: $(\"When Executed by Another Workflow\").item.json.from, turno: \"2026-04-02\" }];\n}\n\nif ((hoyStr === \"2026-04-02\" && horaActual > 12) || hoyStr === \"2026-04-03\") {\n  return [{ nextId: $(\"When Executed by Another Workflow\").item.json.from, turno: \"2026-04-06\" }];\n}\n\nif (hoyStr === \"2026-04-04\" && horaActual <= 12) {\n  return [{ nextId: $(\"When Executed by Another Workflow\").item.json.from, turno: \"2026-04-04\" }];\n}\n\nif (hoyStr === \"2026-04-04\" && horaActual > 12) {\n  return [{ nextId: $(\"When Executed by Another Workflow\").item.json.from, turno: \"2026-04-06\" }];\n}\n\n// ==================================== \n// LÓGICA NORMAL\n// ==================================== \nif (diaSemana === 0) {\n  fechaEntrega.setDate(fechaEntrega.getDate() + 1);\n} else if (diaSemana === 6) {\n  if (horaActual > 12.5) {\n    fechaEntrega.setDate(fechaEntrega.getDate() + 2);\n  }\n} else {\n  if (horaActual > 18) {\n    if (diaSemana === 5) {\n      fechaEntrega.setDate(fechaEntrega.getDate() + 3);\n    } else {\n      fechaEntrega.setDate(fechaEntrega.getDate() + 1);\n    }\n  }\n}\n\n// ==================================== \n// AJUSTE GENERAL\n// ==================================== \nwhile (esFeriado(fechaEntrega) || esFinDeSemana(fechaEntrega)) {\n  fechaEntrega.setDate(fechaEntrega.getDate() + 1);\n}\n\n// ==================================== \n// RESULTADO\n// ==================================== \nreturn [{\n  nextId: $(\"When Executed by Another Workflow\").first().json.from,\n  turno: formatearFecha(fechaEntrega)\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        768,
+        0
+      ],
+      "id": "3e2d419d-b1d2-4c37-855f-73c048650863",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "es-419.ar#holiday@group.v.calendar.google.com",
+          "mode": "list",
+          "cachedResultName": "Días feriados en Argentina"
+        },
+        "timeMax": "={{ $now.plus({ week: 5 }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        96,
+        -176
+      ],
+      "id": "7fee7aea-d8fd-482c-9838-91b8718798a7",
+      "name": "Get many events",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "9V18rfjOnZzS4csr",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all()\n  .filter(item => {\n    const nombre = (item.json.summary || \"\").toLowerCase();\n    const excluir = [\n      \"pascuas judías\",\n      \"pésaj\",\n      \"pesaj\",\n      \"rosh hashaná\",\n      \"rosh hashana\",\n      \"yom kipur\",\n      \"yom kippur\",\n      \"shavuot\",\n      \"sucot\",\n      \"simjat torá\",\n      \"simchat torah\",\n    ];\n    return !excluir.some(e => nombre.includes(e));\n  })\n  .map(item => {\n    const fechaRaw = item.json.start.date || item.json.start.dateTime;\n    const fecha = new Date(fechaRaw);\n    const meses = [\n      'enero','febrero','marzo','abril','mayo','junio',\n      'julio','agosto','septiembre','octubre','noviembre','diciembre'\n    ];\n    const dia = fecha.getDate();\n    const mes = meses[fecha.getMonth()];\n    const nombre = item.json.summary;\n    return {\n      json: {\n        feriado_formateado: `🇦🇷 ${dia} de ${mes} - ${nombre}`,\n        fecha_iso: fechaRaw\n      }\n    };\n  });"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        288,
+        -128
+      ],
+      "id": "5ae68a43-cf5e-4763-a8ef-11fbe57a9333",
+      "name": "feriados"
+    }
+  ],
+  "pinData": {
+    "When Executed by Another Workflow": [
+      {
+        "json": {
+          "from": "+5491131438902"
+        }
+      }
+    ]
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "zbWd9yKMRI6KuneZ",
+      "projectId": "BamGKVVu1YUj0Lvj",
+      "createdAt": "2026-04-08T11:45:45.790Z",
+      "updatedAt": "2026-04-08T11:45:45.790Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2026-04-08T11:50:06.000Z",
+  "versionId": "51bf7b83-db69-4c51-9c76-85a565989769"
+}
