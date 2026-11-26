@@ -1,0 +1,3067 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "f4a89149-956f-46de-adb1-74ac494e27c3",
+    "workflowId": "ivccwWeLkaZurA40",
+    "nodes": [
+      {
+        "parameters": {
+          "workflowInputs": {
+            "values": [
+              {
+                "name": "Id_Calendario"
+              },
+              {
+                "name": "Fecha"
+              },
+              {
+                "name": "hora_inicio"
+              },
+              {
+                "name": "hora_fin"
+              },
+              {
+                "name": "duracion_servicio"
+              },
+              {
+                "name": "Descripcion"
+              },
+              {
+                "name": "Titulo"
+              },
+              {
+                "name": "Fin"
+              },
+              {
+                "name": "Modelo"
+              },
+              {
+                "name": "Tiempo_Modelo"
+              },
+              {
+                "name": "Calendar"
+              },
+              {
+                "name": "Fallback_Aplicado"
+              },
+              {
+                "name": "idConversation"
+              }
+            ]
+          }
+        },
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "typeVersion": 1.1,
+        "position": [
+          -1104,
+          528
+        ],
+        "id": "db775992-95b6-4080-bf39-c9205d78dfaf",
+        "name": "When Executed by Another Workflow"
+      },
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "3909a8df-c067-447f-a2db-ab1a1bfa1b4d",
+          "responseMode": "lastNode",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.1,
+        "position": [
+          -1040,
+          272
+        ],
+        "id": "a97c20af-2754-4e56-861a-f0d9125d3da2",
+        "name": "Webhook",
+        "webhookId": "3909a8df-c067-447f-a2db-ab1a1bfa1b4d",
+        "disabled": true
+      },
+      {
+        "parameters": {
+          "calendar": {
+            "__rl": true,
+            "value": "={{ $json.Calendar }}",
+            "mode": "id"
+          },
+          "start": "={{ $json.Fecha }}",
+          "end": "={{ $json.Fin }}",
+          "additionalFields": {
+            "description": "={{ $json.Descripcion }}",
+            "summary": "={{ $json.Titulo }}"
+          }
+        },
+        "type": "n8n-nodes-base.googleCalendar",
+        "typeVersion": 1.3,
+        "position": [
+          944,
+          80
+        ],
+        "id": "6b5cb6a6-72a1-4249-aef6-5ad67d84c0cc",
+        "name": "Create an event1",
+        "credentials": {
+          "googleCalendarOAuth2Api": {
+            "id": "QOb8WX49Qkxe1yfG",
+            "name": "Google Calendar account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "getAll",
+          "calendar": {
+            "__rl": true,
+            "value": "=ad14cb678193cedab78820bf58be38634064b706bfca8a4faf0c88f5d57aa6cb@group.calendar.google.com",
+            "mode": "id"
+          },
+          "returnAll": true,
+          "timeMax": "={{ $now.plus({ month: 2}) }}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleCalendar",
+        "typeVersion": 1.3,
+        "position": [
+          -192,
+          80
+        ],
+        "id": "098096af-92a4-454d-98c4-fa99af25a443",
+        "name": "PILAR_1_CALENDARIO",
+        "alwaysOutputData": true,
+        "retryOnFail": true,
+        "waitBetweenTries": 3000,
+        "executeOnce": true,
+        "credentials": {
+          "googleCalendarOAuth2Api": {
+            "id": "QOb8WX49Qkxe1yfG",
+            "name": "Google Calendar account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "getAll",
+          "calendar": {
+            "__rl": true,
+            "value": "=217322b9430c5267532c4794903cfa262172a1313d8ed029b3d39e2bca90ccb5@group.calendar.google.com",
+            "mode": "id"
+          },
+          "returnAll": true,
+          "timeMax": "={{ $now.plus({ month: 2}) }}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleCalendar",
+        "typeVersion": 1.3,
+        "position": [
+          64,
+          80
+        ],
+        "id": "ef352c59-1674-4a54-aac1-8931b7d120a0",
+        "name": "PILAR_2_CALENDARIO",
+        "alwaysOutputData": true,
+        "retryOnFail": true,
+        "waitBetweenTries": 3000,
+        "executeOnce": true,
+        "credentials": {
+          "googleCalendarOAuth2Api": {
+            "id": "QOb8WX49Qkxe1yfG",
+            "name": "Google Calendar account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "// 🕐 Utilidades\nfunction sumarMinutosLocal(fechaStr, minutos) {\n  const fecha = new Date(fechaStr);\n  if (isNaN(fecha)) throw new Error(`Fecha inválida: ${fechaStr}`);\n  fecha.setMinutes(fecha.getMinutes() + minutos);\n  // Generar string ISO sin zona horaria (local)\n  const [fechaPart, horaPart] = fecha.toISOString().split(\"T\");\n  const horaLocal = horaPart.substring(0, 5);\n  return `${fechaPart}T${horaLocal}:00`;\n}\n\nfunction timeToMinutes(timeStr) {\n  const [h, m] = timeStr.split(':').map(Number);\n  return h * 60 + m;\n}\n\n// ✅ Obtener datos correctamente\nconst solicitudRaw = $('Code3').first();\nconst solicitud = solicitudRaw.json || solicitudRaw;\n\n// ✅ Asegurar campos requeridos\nif (!solicitud.Fecha || !solicitud.Fin) {\n  return [{\n    json: {\n      error: 'Faltan campos Fecha o Fin en la solicitud',\n      recibido: solicitud\n    }\n  }];\n}\n\n// ✅ Extraer fecha y horas sin modificar zona horaria\nconst solicitudFecha = solicitud.Fecha.split('T')[0];\nconst solicitudInicio = solicitud.Fecha.split('T')[1].substring(0, 5);\nconst solicitudFin = solicitud.Fin.split('T')[1].substring(0, 5);\n\n// ✅ Turnos ocupados\nconst pilar1Ocupados = $('PILAR_4').all().map(i => i.json).flat();\nconst pilar2Ocupados = $('PILAR_3').all().map(i => i.json).flat();\n\nfunction tieneConflicto(fecha, inicio, fin, ocupados) {\n  if (!Array.isArray(ocupados)) return false;\n  const inicioMin = timeToMinutes(inicio);\n  const finMin = timeToMinutes(fin);\n  return ocupados.some(o => {\n    if (o.dia !== fecha) return false;\n    const oIni = timeToMinutes(o.inicio);\n    const oFin = timeToMinutes(o.final);\n    return inicioMin < oFin && finMin > oIni;\n  });\n}\n\n// ✅ Calendarios\nconst PILAR_1_ID = \"ad14cb678193cedab78820bf58be38634064b706bfca8a4faf0c88f5d57aa6cb@group.calendar.google.com\";\nconst PILAR_2_ID = \"217322b9430c5267532c4794903cfa262172a1313d8ed029b3d39e2bca90ccb5@group.calendar.google.com\";\n\nconst p1Disp = !tieneConflicto(solicitudFecha, solicitudInicio, solicitudFin, pilar1Ocupados);\nconst p2Disp = !tieneConflicto(solicitudFecha, solicitudInicio, solicitudFin, pilar2Ocupados);\n\nlet calendarId = null;\nif (p1Disp) calendarId = PILAR_1_ID;\nelse if (p2Disp) calendarId = PILAR_2_ID;\n\nif (!calendarId) {\n  return [{\n    json: {\n      error: `No hay calendarios disponibles para ${solicitudFecha} ${solicitudInicio}-${solicitudFin}`,\n      debug: { solicitud, p1Disp, p2Disp }\n    }\n  }];\n}\n\n// ✅ Reconstruir Fecha y Fin con horas locales correctas\nconst fechaFinal = `${solicitudFecha}T${solicitudFin}:00`;\nconst fechaInicio = `${solicitudFecha}T${solicitudInicio}:00`;\n\n// ✅ Devolver resultado final limpio\nreturn [{\n  json: {\n    ...solicitud,\n    Fecha: fechaInicio,\n    Fin: fechaFinal,\n    Calendar: calendarId\n  }\n}];\n"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          800,
+          80
+        ],
+        "id": "852d477f-1045-4a9a-9762-1bb1dbce0a1e",
+        "name": "Code"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Convierte \"H:MM:SS\" → minutos\nfunction tiempoAHorasMinutos(tiempoStr) {\n  const [h, m] = (tiempoStr || \"0:30:00\").split(\":\").map(Number);\n  return (h * 60) + (m || 0);\n}\n\n// HH:MM -> minutos\nfunction timeToMinutes(t) {\n  const [h, m] = t.split(\":\").map(Number);\n  return h * 60 + m;\n}\n\n// minutos -> HH:MM\nfunction minutesToTime(mins) {\n  const h = Math.floor(mins / 60);\n  const m = mins % 60;\n  return `${String(h).padStart(2,\"0\")}:${String(m).padStart(2,\"0\")}`;\n}\n\n// ── Leer nodos\nconst raw = $(\"When Executed by Another Workflow\").all();\nconst modelo = $(\"Code4\").first()?.json?.modelo || null;\nconst tiempos = $(\"Get_Tiempo\").first()?.json || {};\nconst reglas = $(\"Get_Reglas1\").first()?.json || {};\n\n// ── Extraer datos del \"When...\"\nlet datos;\nif (Array.isArray(raw)) {\n  const first = raw[0];\n  if (first.json?.query) {\n    datos = typeof first.json.query === \"string\" ? JSON.parse(first.json.query) : first.json.query;\n  } else if (first.json) {\n    datos = first.json;\n  } else {\n    datos = first;\n  }\n} else if (raw?.json?.query) {\n  datos = typeof raw.json.query === \"string\" ? JSON.parse(raw.json.query) : raw.json.query;\n} else if (raw?.query) {\n  datos = typeof raw.query === \"string\" ? JSON.parse(raw.query) : raw.query;\n} else {\n  datos = raw;\n}\n\n// Validaciones mínimas\nif (!datos.Fecha || !datos.hora_inicio) {\n  return [{ json: { error: \"Faltan campos Fecha u hora_inicio\", recibido: datos }}];\n}\n\n// tiempo del modelo (fallback 30')\nconst tiempoModeloStr = (modelo && tiempos[modelo]) ? tiempos[modelo] : \"0:30:00\";\nconst minutosModelo = tiempoAHorasMinutos(tiempoModeloStr) || 30;\n\n// ── Cálculo SIN Date/UTC: todo en minutos\nconst inicioMin = timeToMinutes(datos.hora_inicio) + 15;     // +15 al inicio\nconst finMin    = inicioMin + minutosModelo;                 // +tiempo del modelo\n\nconst inicioHHMM = minutesToTime(inicioMin);\nconst finHHMM    = minutesToTime(finMin);\n\n// Construir datetimes locales (sin Z)\nconst FechaISO = `${datos.Fecha}T${inicioHHMM}:00`;\nconst FinISO   = `${datos.Fecha}T${finHHMM}:00`;\n\n// Salida final\nreturn [{\n  json: {\n    ...datos,\n    // mantenemos lo que vino y sobreescribimos Fecha/Fin con los valores correctos\n    Fecha: FechaISO,\n    Fin: FinISO,\n    Modelo: modelo || \"Desconocido\",\n    Tiempo_Modelo: tiempoModeloStr,\n    Calendar: reglas.Id_Calendario || null,\n    Fallback_Aplicado: !modelo || !tiempos[modelo]\n  }\n}];\n"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -336,
+          80
+        ],
+        "id": "55d6f20f-f937-48a5-b0b6-7ba08b58e9fa",
+        "name": "Code3"
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\nconst returnItems = [];\n\n// Verificar si hay items\nif (!items || items.length === 0) {\n  return [];\n}\n\nfor (const item of items) {\n  // Verificar que el item tenga la estructura correcta\n  if (!item || !item.json || !item.json.start || !item.json.start.dateTime) {\n    continue; // Saltar este item si no tiene la estructura correcta\n  }\n  \n  let data = item.json;\n  \n  const dia = data.start.dateTime.split('T')[0];\n  const inicio = data.start.dateTime.split('T')[1].substring(0, 5);\n  const final = data.end.dateTime.split('T')[1].substring(0, 5);\n  \n  returnItems.push({\n    json: {\n      dia: dia,\n      inicio: inicio, \n      final: final\n    }\n  });\n}\n\nreturn returnItems;"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          192,
+          80
+        ],
+        "id": "34bccf07-d6b3-45f2-a5c9-1c25a16e9761",
+        "name": "PILAR_3",
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "documentId": {
+            "__rl": true,
+            "value": "1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM",
+            "mode": "list",
+            "cachedResultName": "Del Pilar MANTENIMIENTO",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": 323427792,
+            "mode": "list",
+            "cachedResultName": "Tabla Horarios Taller",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM/edit#gid=323427792"
+          },
+          "filtersUI": {
+            "values": [
+              {
+                "lookupColumn": "Taller",
+                "lookupValue": "PILAR_1"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.7,
+        "position": [
+          -736,
+          80
+        ],
+        "id": "7da09c31-98c3-46b2-a1ab-75c3550677f3",
+        "name": "Get_Reglas1",
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "ZDmT59glKYmZVPyM",
+            "name": "Google Sheets account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "documentId": {
+            "__rl": true,
+            "value": "1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM",
+            "mode": "list",
+            "cachedResultName": "Del Pilar MANTENIMIENTO",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": 1939395583,
+            "mode": "list",
+            "cachedResultName": "Tabla Tiempo Mantenimiento",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM/edit#gid=1939395583"
+          },
+          "filtersUI": {
+            "values": [
+              {
+                "lookupColumn": "KM",
+                "lookupValue": "={{ $json.kilometraje || 100000}}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.7,
+        "position": [
+          -480,
+          80
+        ],
+        "id": "1293f18a-5d7f-4ef3-9664-2c97511f013b",
+        "name": "Get_Tiempo",
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "ZDmT59glKYmZVPyM",
+            "name": "Google Sheets account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "// 🚗 Lista de modelos posibles\nconst MODELOS = [\n  \"Etios\",\n  \"Yaris\",\n  \"Yaris GR\",\n  \"Corolla\",\n  \"Prius\",\n  \"Rav4\",\n  \"Innova\",\n  \"Hilux\",\n  \"SW4\",\n  \"Hiace\",\n  \"CH-R\",\n  \"Camry\",\n  \"Land Cruiser\"\n];\n\n// 🧩 Función para extraer datos correctamente desde n8n\nfunction extraerDatos(input) {\n  let datos = input;\n\n  // Si es array (por ejemplo, .all()), tomar el primer elemento\n  if (Array.isArray(datos)) datos = datos[0];\n  if (datos.json) datos = datos.json;\n\n  // Si tiene query, parsearla\n  if (datos.query) {\n    if (typeof datos.query === \"string\") {\n      try {\n        datos = JSON.parse(datos.query);\n      } catch (e) {\n        throw new Error(\"Error al parsear query: \" + e.message);\n      }\n    } else {\n      datos = datos.query;\n    }\n  }\n\n  return datos;\n}\n\n// 🧮 Función para buscar modelo\nfunction detectarModelo(texto) {\n  for (const modelo of MODELOS) {\n    // Buscamos el modelo dentro del texto, tolerando sufijos como \"Yaris XS\"\n    const regex = new RegExp(`\\\\b${modelo}\\\\b`, \"i\");\n    if (regex.test(texto)) {\n      return modelo;\n    }\n  }\n  return null;\n}\n\n// 🧮 Función para buscar kilometraje\nfunction detectarKilometraje(texto) {\n  const match = texto.match(/(\\d{1,3}(?:\\.\\d{3})*|\\d+)\\s*km/i);\n  if (match) {\n    const km = match[1].replace(/\\./g, \"\");\n    return parseInt(km, 10);\n  }\n  return null;\n}\n\n// 🧩 Obtener datos desde el nodo anterior\nconst inputData = $(\"When Executed by Another Workflow\").all();\nconst solicitud = extraerDatos(inputData);\n\n// 🔍 Buscar modelo y km en la descripción o título\nconst textoBusqueda = `${solicitud.Descripcion || \"\"} ${solicitud.Titulo || \"\"}`;\nconst modeloDetectado = detectarModelo(textoBusqueda);\nconst kmDetectado = detectarKilometraje(textoBusqueda);\n\n// 🧾 Devolver resultado\nreturn [\n  {\n    json: {\n      modelo: modeloDetectado,\n      kilometraje: kmDetectado,\n      textoAnalizado: textoBusqueda // útil para debug\n    }\n  }\n];\n"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -608,
+          80
+        ],
+        "id": "1fd57bcc-399d-4a3b-b1ba-b481d9f2efb5",
+        "name": "Code4"
+      },
+      {
+        "parameters": {
+          "jsCode": "return [{\n  json: {\n    id_turno: $input.first().json.id,\n    id_calendario: $input.first().json.organizer.email,\n  }\n}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1088,
+          80
+        ],
+        "id": "397b1bb8-ce74-4170-a782-6c8f2cc16d81",
+        "name": "Code5"
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\nconst returnItems = [];\n\n// Verificar si hay items\nif (!items || items.length === 0) {\n  return [];\n}\n\nfor (const item of items) {\n  // Verificar que el item tenga la estructura correcta\n  if (!item || !item.json || !item.json.start || !item.json.start.dateTime) {\n    continue; // Saltar este item si no tiene la estructura correcta\n  }\n  \n  let data = item.json;\n  \n  const dia = data.start.dateTime.split('T')[0];\n  const inicio = data.start.dateTime.split('T')[1].substring(0, 5);\n  const final = data.end.dateTime.split('T')[1].substring(0, 5);\n  \n  returnItems.push({\n    json: {\n      dia: dia,\n      inicio: inicio, \n      final: final\n    }\n  });\n}\n\nreturn returnItems;"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -64,
+          80
+        ],
+        "id": "a466d94d-7767-42d8-94a1-f32f09e894e1",
+        "name": "PILAR_4",
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "calendar": {
+            "__rl": true,
+            "value": "={{ $json.Calendar }}",
+            "mode": "id"
+          },
+          "start": "={{ $json.Fecha }}",
+          "end": "={{ $json.Fin }}",
+          "additionalFields": {
+            "description": "={{ $json.Descripcion }}",
+            "summary": "={{ $json.Titulo }}"
+          }
+        },
+        "type": "n8n-nodes-base.googleCalendar",
+        "typeVersion": 1.3,
+        "position": [
+          928,
+          272
+        ],
+        "id": "f8f3cb8a-18dc-49dc-a0bb-0d79b622a8e7",
+        "name": "Create an event2",
+        "credentials": {
+          "googleCalendarOAuth2Api": {
+            "id": "QOb8WX49Qkxe1yfG",
+            "name": "Google Calendar account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "getAll",
+          "calendar": {
+            "__rl": true,
+            "value": "=ad14cb678193cedab78820bf58be38634064b706bfca8a4faf0c88f5d57aa6cb@group.calendar.google.com",
+            "mode": "id"
+          },
+          "returnAll": true,
+          "timeMax": "={{ $now.plus({ month: 2}) }}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleCalendar",
+        "typeVersion": 1.3,
+        "position": [
+          -208,
+          272
+        ],
+        "id": "472a8bff-0bd8-417a-8da5-292b806168aa",
+        "name": "PILAR_1_CALENDARIO2",
+        "alwaysOutputData": true,
+        "retryOnFail": true,
+        "waitBetweenTries": 3000,
+        "executeOnce": true,
+        "credentials": {
+          "googleCalendarOAuth2Api": {
+            "id": "QOb8WX49Qkxe1yfG",
+            "name": "Google Calendar account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "getAll",
+          "calendar": {
+            "__rl": true,
+            "value": "=217322b9430c5267532c4794903cfa262172a1313d8ed029b3d39e2bca90ccb5@group.calendar.google.com",
+            "mode": "id"
+          },
+          "returnAll": true,
+          "timeMax": "={{ $now.plus({ month: 2}) }}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleCalendar",
+        "typeVersion": 1.3,
+        "position": [
+          48,
+          272
+        ],
+        "id": "a6b160f8-73d9-45ee-a4ee-c45e904cc94a",
+        "name": "PILAR_2_CALENDARIO3",
+        "alwaysOutputData": true,
+        "retryOnFail": true,
+        "waitBetweenTries": 3000,
+        "executeOnce": true,
+        "credentials": {
+          "googleCalendarOAuth2Api": {
+            "id": "QOb8WX49Qkxe1yfG",
+            "name": "Google Calendar account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "// 🕐 Utilidades\nfunction sumarMinutosLocal(fechaStr, minutos) {\n  const fecha = new Date(fechaStr);\n  if (isNaN(fecha)) throw new Error(`Fecha inválida: ${fechaStr}`);\n  fecha.setMinutes(fecha.getMinutes() + minutos);\n  const [fechaPart, horaPart] = fecha.toISOString().split(\"T\");\n  const horaLocal = horaPart.substring(0, 5);\n  return `${fechaPart}T${horaLocal}:00`;\n}\n\nfunction timeToMinutes(timeStr) {\n  const [h, m] = timeStr.split(':').map(Number);\n  return h * 60 + m;\n}\n\n// ✅ Obtener datos correctamente\nconst solicitudRaw = $('Code7').first();\nconst solicitud = solicitudRaw.json || solicitudRaw;\n\n// ✅ Validar campos\nif (!solicitud.Fecha || !solicitud.Fin) {\n  return [{\n    json: {\n      error: 'Faltan campos Fecha o Fin en la solicitud',\n      recibido: solicitud\n    }\n  }];\n}\n\n// ✅ Extraer fecha y horas\nconst solicitudFecha = solicitud.Fecha.split('T')[0];\nconst solicitudInicio = solicitud.Fecha.split('T')[1].substring(0, 5);\nconst solicitudFin = solicitud.Fin.split('T')[1].substring(0, 5);\n\n// ✅ Turnos ocupados\nconst pilar1Ocupados = $('PILAR_6').all().map(i => i.json).flat();\nconst pilar2Ocupados = $('PILAR_5').all().map(i => i.json).flat();\nconst pilar3Ocupados = $('PILAR_7').all().map(i => i.json).flat(); // ← NUEVO\n\nfunction tieneConflicto(fecha, inicio, fin, ocupados) {\n  if (!Array.isArray(ocupados)) return false;\n\n  const inicioMin = timeToMinutes(inicio);\n  const finMin = timeToMinutes(fin);\n\n  return ocupados.some(o => {\n    if (o.dia !== fecha) return false;\n\n    const oIni = timeToMinutes(o.inicio);\n    const oFin = timeToMinutes(o.final);\n\n    return inicioMin < oFin && finMin > oIni;\n  });\n}\n\n// ✅ Calendarios\nconst PILAR_1_ID = \"ad14cb678193cedab78820bf58be38634064b706bfca8a4faf0c88f5d57aa6cb@group.calendar.google.com\";\nconst PILAR_2_ID = \"217322b9430c5267532c4794903cfa262172a1313d8ed029b3d39e2bca90ccb5@group.calendar.google.com\";\nconst PILAR_3_ID = \"3ccb979ea76f0de678f0c6d033c4cf56ae093264d575897fc742c0ccf446b8ed@group.calendar.google.com\";\n\n// ✅ Disponibilidad\nconst p1Disp = !tieneConflicto(solicitudFecha, solicitudInicio, solicitudFin, pilar1Ocupados);\nconst p2Disp = !tieneConflicto(solicitudFecha, solicitudInicio, solicitudFin, pilar2Ocupados);\nconst p3Disp = !tieneConflicto(solicitudFecha, solicitudInicio, solicitudFin, pilar3Ocupados); // ← NUEVO\n\nlet calendarId = null;\n\n// Prioridad secuencial\nif (p1Disp) {\n  calendarId = PILAR_1_ID;\n} else if (p2Disp) {\n  calendarId = PILAR_2_ID;\n} else if (p3Disp) {\n  calendarId = PILAR_3_ID;\n}\n\nif (!calendarId) {\n  return [{\n    json: {\n      error: `No hay calendarios disponibles para ${solicitudFecha} ${solicitudInicio}-${solicitudFin}`,\n      debug: {\n        solicitud,\n        p1Disp,\n        p2Disp,\n        p3Disp\n      }\n    }\n  }];\n}\n\n// ✅ Reconstruir fecha final limpia\nconst fechaInicio = `${solicitudFecha}T${solicitudInicio}:00`;\nconst fechaFinal = `${solicitudFecha}T${solicitudFin}:00`;\n\n// ✅ Resultado final\nreturn [{\n  json: {\n    ...solicitud,\n    Fecha: fechaInicio,\n    Fin: fechaFinal,\n    Calendar: calendarId\n  }\n}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          784,
+          272
+        ],
+        "id": "275e6d4f-cdae-42c9-9630-3ab1bfa217cb",
+        "name": "Code6"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Convierte \"H:MM:SS\" → minutos\nfunction tiempoAHorasMinutos(tiempoStr) {\n  const [h, m] = (tiempoStr || \"0:30:00\").split(\":\").map(Number);\n  return (h * 60) + (m || 0);\n}\n\n// HH:MM -> minutos\nfunction timeToMinutes(t) {\n  const [h, m] = t.split(\":\").map(Number);\n  return h * 60 + m;\n}\n\n// minutos -> HH:MM\nfunction minutesToTime(mins) {\n  const h = Math.floor(mins / 60);\n  const m = mins % 60;\n  return `${String(h).padStart(2,\"0\")}:${String(m).padStart(2,\"0\")}`;\n}\n\n// ── Leer nodos\nconst raw = $(\"When Executed by Another Workflow\").all();\nconst modelo = $(\"Code8\").first()?.json?.modelo || null;\nconst tiempos = $(\"Get_Tiempo1\").first()?.json || {};\nconst reglas = $(\"Get_Reglas2\").first()?.json || {};\n\n// ── Extraer datos del \"When...\"\nlet datos;\nif (Array.isArray(raw)) {\n  const first = raw[0];\n  if (first.json?.query) {\n    datos = typeof first.json.query === \"string\" ? JSON.parse(first.json.query) : first.json.query;\n  } else if (first.json) {\n    datos = first.json;\n  } else {\n    datos = first;\n  }\n} else if (raw?.json?.query) {\n  datos = typeof raw.json.query === \"string\" ? JSON.parse(raw.json.query) : raw.json.query;\n} else if (raw?.query) {\n  datos = typeof raw.query === \"string\" ? JSON.parse(raw.query) : raw.query;\n} else {\n  datos = raw;\n}\n\n// Validaciones mínimas\nif (!datos.Fecha || !datos.hora_inicio) {\n  return [{ json: { error: \"Faltan campos Fecha u hora_inicio\", recibido: datos }}];\n}\n\n// tiempo del modelo (fallback 30')\nconst tiempoModeloStr = (modelo && tiempos[modelo]) ? tiempos[modelo] : \"0:30:00\";\nconst minutosModelo = tiempoAHorasMinutos(tiempoModeloStr) || 30;\n\n// ── Cálculo SIN Date/UTC: todo en minutos\nconst inicioMin = timeToMinutes(datos.hora_inicio) + 15;     // +15 al inicio\nconst finMin    = inicioMin + minutosModelo;                 // +tiempo del modelo\n\nconst inicioHHMM = minutesToTime(inicioMin);\nconst finHHMM    = minutesToTime(finMin);\n\n// Construir datetimes locales (sin Z)\nconst FechaISO = `${datos.Fecha}T${inicioHHMM}:00`;\nconst FinISO   = `${datos.Fecha}T${finHHMM}:00`;\n\n// Salida final\nreturn [{\n  json: {\n    ...datos,\n    // mantenemos lo que vino y sobreescribimos Fecha/Fin con los valores correctos\n    Fecha: FechaISO,\n    Fin: FinISO,\n    Modelo: modelo || \"Desconocido\",\n    Tiempo_Modelo: tiempoModeloStr,\n    Calendar: reglas.Id_Calendario || null,\n    Fallback_Aplicado: !modelo || !tiempos[modelo]\n  }\n}];\n"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -352,
+          272
+        ],
+        "id": "6fbbcdc6-0154-4619-8120-14529d47906b",
+        "name": "Code7"
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\nconst returnItems = [];\n\n// Verificar si hay items\nif (!items || items.length === 0) {\n  return [];\n}\n\nfor (const item of items) {\n  // Verificar que el item tenga la estructura correcta\n  if (!item || !item.json || !item.json.start || !item.json.start.dateTime) {\n    continue; // Saltar este item si no tiene la estructura correcta\n  }\n  \n  let data = item.json;\n  \n  const dia = data.start.dateTime.split('T')[0];\n  const inicio = data.start.dateTime.split('T')[1].substring(0, 5);\n  const final = data.end.dateTime.split('T')[1].substring(0, 5);\n  \n  returnItems.push({\n    json: {\n      dia: dia,\n      inicio: inicio, \n      final: final\n    }\n  });\n}\n\nreturn returnItems;"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          176,
+          272
+        ],
+        "id": "9edb7732-9a2d-4cf9-94f5-6cc038b249cc",
+        "name": "PILAR_5",
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "documentId": {
+            "__rl": true,
+            "value": "1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM",
+            "mode": "list",
+            "cachedResultName": "Del Pilar MANTENIMIENTO",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": 323427792,
+            "mode": "list",
+            "cachedResultName": "Tabla Horarios Taller",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM/edit#gid=323427792"
+          },
+          "filtersUI": {
+            "values": [
+              {
+                "lookupColumn": "Taller",
+                "lookupValue": "PILAR_1"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.7,
+        "position": [
+          -752,
+          272
+        ],
+        "id": "e8199766-68fb-478f-8cc4-f2b5e8629737",
+        "name": "Get_Reglas2",
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "ZDmT59glKYmZVPyM",
+            "name": "Google Sheets account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "documentId": {
+            "__rl": true,
+            "value": "1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM",
+            "mode": "list",
+            "cachedResultName": "Del Pilar MANTENIMIENTO",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": 1939395583,
+            "mode": "list",
+            "cachedResultName": "Tabla Tiempo Mantenimiento",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM/edit#gid=1939395583"
+          },
+          "filtersUI": {
+            "values": [
+              {
+                "lookupColumn": "KM",
+                "lookupValue": "={{ $json.kilometraje || 100000}}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.7,
+        "position": [
+          -496,
+          272
+        ],
+        "id": "3be13523-c17a-4b14-b519-5d24d3641501",
+        "name": "Get_Tiempo1",
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "ZDmT59glKYmZVPyM",
+            "name": "Google Sheets account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "// 🚗 Lista de modelos posibles\nconst MODELOS = [\n  \"Etios\",\n  \"Yaris\",\n  \"Yaris GR\",\n  \"Corolla\",\n  \"Prius\",\n  \"Rav4\",\n  \"Innova\",\n  \"Hilux\",\n  \"SW4\",\n  \"Hiace\",\n  \"CH-R\",\n  \"Camry\",\n  \"Land Cruiser\"\n];\n\n// 🧩 Función para extraer datos correctamente desde n8n\nfunction extraerDatos(input) {\n  let datos = input;\n\n  // Si es array (por ejemplo, .all()), tomar el primer elemento\n  if (Array.isArray(datos)) datos = datos[0];\n  if (datos.json) datos = datos.json;\n\n  // Si tiene query, parsearla\n  if (datos.query) {\n    if (typeof datos.query === \"string\") {\n      try {\n        datos = JSON.parse(datos.query);\n      } catch (e) {\n        throw new Error(\"Error al parsear query: \" + e.message);\n      }\n    } else {\n      datos = datos.query;\n    }\n  }\n\n  return datos;\n}\n\n// 🧮 Función para buscar modelo\nfunction detectarModelo(texto) {\n  for (const modelo of MODELOS) {\n    // Buscamos el modelo dentro del texto, tolerando sufijos como \"Yaris XS\"\n    const regex = new RegExp(`\\\\b${modelo}\\\\b`, \"i\");\n    if (regex.test(texto)) {\n      return modelo;\n    }\n  }\n  return null;\n}\n\n// 🧮 Función para buscar kilometraje\nfunction detectarKilometraje(texto) {\n  const match = texto.match(/(\\d{1,3}(?:\\.\\d{3})*|\\d+)\\s*km/i);\n  if (match) {\n    const km = match[1].replace(/\\./g, \"\");\n    return parseInt(km, 10);\n  }\n  return null;\n}\n\n// 🧩 Obtener datos desde el nodo anterior\nconst inputData = $(\"When Executed by Another Workflow\").all();\nconst solicitud = extraerDatos(inputData);\n\n// 🔍 Buscar modelo y km en la descripción o título\nconst textoBusqueda = `${solicitud.Descripcion || \"\"} ${solicitud.Titulo || \"\"}`;\nconst modeloDetectado = detectarModelo(textoBusqueda);\nconst kmDetectado = detectarKilometraje(textoBusqueda);\n\n// 🧾 Devolver resultado\nreturn [\n  {\n    json: {\n      modelo: modeloDetectado,\n      kilometraje: kmDetectado,\n      textoAnalizado: textoBusqueda // útil para debug\n    }\n  }\n];\n"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -624,
+          272
+        ],
+        "id": "c00251e6-e5e3-4dc9-a49b-a292ee0c9163",
+        "name": "Code8"
+      },
+      {
+        "parameters": {
+          "jsCode": "return [{\n  json: {\n    id_turno: $input.first().json.id,\n    id_calendario: $input.first().json.organizer.email,\n  }\n}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1072,
+          272
+        ],
+        "id": "ce8e0391-326c-4787-bed5-828fac78fb50",
+        "name": "Code9"
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\nconst returnItems = [];\n\n// Verificar si hay items\nif (!items || items.length === 0) {\n  return [];\n}\n\nfor (const item of items) {\n  // Verificar que el item tenga la estructura correcta\n  if (!item || !item.json || !item.json.start || !item.json.start.dateTime) {\n    continue; // Saltar este item si no tiene la estructura correcta\n  }\n  \n  let data = item.json;\n  \n  const dia = data.start.dateTime.split('T')[0];\n  const inicio = data.start.dateTime.split('T')[1].substring(0, 5);\n  const final = data.end.dateTime.split('T')[1].substring(0, 5);\n  \n  returnItems.push({\n    json: {\n      dia: dia,\n      inicio: inicio, \n      final: final\n    }\n  });\n}\n\nreturn returnItems;"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -80,
+          272
+        ],
+        "id": "dcd315f4-d669-4d17-a962-e7161a3d4c04",
+        "name": "PILAR_6",
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "operation": "getAll",
+          "calendar": {
+            "__rl": true,
+            "value": "=3ccb979ea76f0de678f0c6d033c4cf56ae093264d575897fc742c0ccf446b8ed@group.calendar.google.com",
+            "mode": "id"
+          },
+          "returnAll": true,
+          "timeMax": "={{ $now.plus({ month: 2}) }}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleCalendar",
+        "typeVersion": 1.3,
+        "position": [
+          384,
+          272
+        ],
+        "id": "58653bd2-e41b-4d25-94fc-0d4fce94b0ea",
+        "name": "PILAR_3_CALENDARIO",
+        "alwaysOutputData": true,
+        "retryOnFail": true,
+        "waitBetweenTries": 3000,
+        "executeOnce": true,
+        "credentials": {
+          "googleCalendarOAuth2Api": {
+            "id": "QOb8WX49Qkxe1yfG",
+            "name": "Google Calendar account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\nconst returnItems = [];\n\n// Verificar si hay items\nif (!items || items.length === 0) {\n  return [];\n}\n\nfor (const item of items) {\n  // Verificar que el item tenga la estructura correcta\n  if (!item || !item.json || !item.json.start || !item.json.start.dateTime) {\n    continue; // Saltar este item si no tiene la estructura correcta\n  }\n  \n  let data = item.json;\n  \n  const dia = data.start.dateTime.split('T')[0];\n  const inicio = data.start.dateTime.split('T')[1].substring(0, 5);\n  const final = data.end.dateTime.split('T')[1].substring(0, 5);\n  \n  returnItems.push({\n    json: {\n      dia: dia,\n      inicio: inicio, \n      final: final\n    }\n  });\n}\n\nreturn returnItems;"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          512,
+          272
+        ],
+        "id": "544e9977-ef02-45ff-bb02-2e5c941d1ecc",
+        "name": "PILAR_7",
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "content": "## a partir del Lunes 23/03"
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          576,
+          400
+        ],
+        "typeVersion": 1,
+        "id": "7d3c2403-6139-4518-9410-13b96ca554c3",
+        "name": "Sticky Note"
+      },
+      {
+        "parameters": {
+          "promptType": "define",
+          "text": "=recibis el turno a agendar: {{ $json.Descripcion }}",
+          "hasOutputParser": true,
+          "needsFallback": true,
+          "options": {
+            "systemMessage": "=Recibís un turno de taller en formato JSON.\n\nTu tarea es ajustar el horario del turno utilizando las herramientas disponibles.\n\nRecibís estos campos:\n\nFecha del turno: {{ $json.Fecha }}\n\nHora de inicio del turno: {{ $json.hora_inicio }}\n\nHora de fin: {{ $json.hora_fin }}\n\nduracion_servicio (este valor puede ser incorrecto y debe corroborarse con la tool): {{ $json.duracion_servicio }}\n\nDescripcion: {{ $json.Descripcion }}\n\nTitulo: {{ $json.Titulo }}\n\nModelo de vehiculo: {{ $json.Modelo }}\n\nTiempo de modelo: {{ $json.Tiempo_Modelo }}\n\nId_Calendario: {{ $json.Id_Calendario }}\n\nCalendar: {{ $json.Calendar }}\n\nidConversation: {{ $json.idConversation }}\n\nReglas:\n\n1. Extraé el kilometraje únicamente desde el campo \"Descripcion\".\n\nEjemplo:\n\n\"Kilometraje: 72000 km\"\n\n→ kilometraje = 72000\n\nNunca inventes kilometrajes.\n\nNunca utilices otro valor distinto al encontrado en Descripcion.\n\n2. Ejecutá la herramienta \"Get_reglas\".\n\nGuardá los datos devueltos.\n\n3. Ejecutá la herramienta \"Get_tiempos\" enviando el kilometraje extraído.\n\nDebés buscar exactamente el kilometraje obtenido de la descripción.\n\n4. Del resultado obtenido identificá el tiempo correspondiente al modelo indicado en el campo \"Modelo\".\n\nLa comparación debe ser exacta.\n\n5. Aplicá los siguientes cálculos:\n\n* Mantener exactamente la Fecha original recibida.\n* Mantener exactamente la hora_inicio original recibida.\n* Mantener exactamente todos los demás campos recibidos, salvo los que deban recalcularse.\n\nIMPORTANTE:\n\nLa hora de referencia para realizar los cálculos es SIEMPRE la hora incluida dentro del campo Fecha.\n\nNO utilizar hora_inicio para realizar cálculos.\n\nEjemplo:\n\nFecha = 2026-06-26T15:15:00\n\nTiempo_Modelo = 0:30:00\n\nResultado:\n\nFin = 2026-06-26T15:45:00\n\nhora_fin = 15:45\n\n6. Recalcular:\n\n* duracion_servicio\n* Fin\n* hora_fin\n\nutilizando exclusivamente el Tiempo_Modelo obtenido desde Get_tiempos.\n\n7. Fórmulas:\n\nduracion_servicio = minutos equivalentes al Tiempo_Modelo\n\nFin = Fecha + Tiempo_Modelo\n\nhora_fin = hora obtenida desde Fin en formato HH:mm\n\n8. Si no encontrás tiempo para el modelo:\n\n* usar Tiempo_Modelo = \"0:30:00\"\n* duracion_servicio = 30\n* Fallback_Aplicado = true\n\n9. Si encontrás tiempo para el modelo:\n\nFallback_Aplicado = false\n\n10. Calendar debe tomar el valor devuelto por Get_reglas.\n\nSi Get_reglas no devuelve Calendar válido, conservar el Calendar original.\n\n11. Id_Calendario y Calendar son campos distintos.\n\n* Nunca copiar Calendar dentro de Id_Calendario.\n* Nunca copiar Id_Calendario dentro de Calendar.\n* Id_Calendario debe conservar exactamente el valor recibido.\n* Calendar debe usar el valor obtenido desde Get_reglas o el original si no existe reemplazo.\n\n12. Conservar exactamente:\n\n* Fecha\n* hora_inicio\n* Descripcion\n* Titulo\n* Modelo\n* idConversation\n* Id_Calendario\n\n13. Devolver exclusivamente un objeto JSON válido.\n\nNo agregar explicaciones.\n\nNo agregar markdown.\n\nNo agregar texto adicional.\n\nEstructura obligatoria:\n\n{\n\"Id_Calendario\": \"{{ $json.Id_Calendario }}\",\n\"Fecha\": \"{{ $json.Fecha }}\",\n\"hora_inicio\": \"...\",\n\"hora_fin\": \"...\",\n\"duracion_servicio\": ...,\n\"Descripcion\": \"{{ $json.Descripcion }}\",\n\"Titulo\": \"{{ $json.Titulo }}\",\n\"Fin\": \"...\",\n\"Modelo\": \"{{ $json.Modelo }}\",\n\"Tiempo_Modelo\": \"...\",\n\"Calendar\": \"...\",\n\"idConversation\": \"{{ $json.idConversation }}\",\n\"Fallback_Aplicado\": true\n}\n\nValidaciones finales obligatorias antes de responder:\n\n* Verificar que el kilometraje fue extraído desde Descripcion.\n* Verificar que Get_reglas fue ejecutado antes que Get_tiempos.\n* Verificar que Tiempo_Modelo corresponde al kilometraje encontrado.\n* Verificar que Fin = Fecha + Tiempo_Modelo.\n* Verificar que hora_fin coincide con la hora resultante de Fin.\n* Verificar que hora_inicio no fue utilizada para los cálculos.\n* Verificar que Id_Calendario conserva exactamente el valor original.\n* Verificar que la salida es únicamente un JSON válido.\n",
+            "maxIterations": 6
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.agent",
+        "typeVersion": 2.2,
+        "position": [
+          -464,
+          560
+        ],
+        "id": "26164c1a-1e25-4afe-ae10-7774d0abdbef",
+        "name": "AI Agent1",
+        "retryOnFail": true,
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "model": {
+            "__rl": true,
+            "value": "gpt-4o",
+            "mode": "list",
+            "cachedResultName": "gpt-4o"
+          },
+          "options": {
+            "temperature": 0.2
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1.2,
+        "position": [
+          -688,
+          768
+        ],
+        "id": "c779c29a-6221-40fe-a085-58fad4764cf8",
+        "name": "OpenAI Chat Model3",
+        "credentials": {
+          "openAiApi": {
+            "id": "aDI3wnbufE0mPuCr",
+            "name": "OpenAi account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "model": {
+            "__rl": true,
+            "value": "gpt-4o",
+            "mode": "list",
+            "cachedResultName": "gpt-4o"
+          },
+          "options": {
+            "temperature": 0.2
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1.2,
+        "position": [
+          -544,
+          800
+        ],
+        "id": "b9c4a3a7-221d-4d04-b504-c3f801d8d104",
+        "name": "OpenAI Chat Model4",
+        "credentials": {
+          "openAiApi": {
+            "id": "aDI3wnbufE0mPuCr",
+            "name": "OpenAi account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "sessionIdType": "customKey",
+          "sessionKey": "={{ $json.idConversation }}"
+        },
+        "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+        "typeVersion": 1.3,
+        "position": [
+          -448,
+          784
+        ],
+        "id": "086b9e6e-7540-45b5-8b75-a75b679c4b27",
+        "name": "Simple Memory1"
+      },
+      {
+        "parameters": {
+          "documentId": {
+            "__rl": true,
+            "value": "1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM",
+            "mode": "list",
+            "cachedResultName": "Del Pilar MANTENIMIENTO",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": 323427792,
+            "mode": "list",
+            "cachedResultName": "Tabla Horarios Taller",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM/edit#gid=323427792"
+          },
+          "filtersUI": {
+            "values": [
+              {
+                "lookupColumn": "Taller",
+                "lookupValue": "PILAR_1"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleSheetsTool",
+        "typeVersion": 4.7,
+        "position": [
+          -336,
+          848
+        ],
+        "id": "25dc275d-916f-4138-ac8c-0cbf4f200ae6",
+        "name": "Get_reglas1",
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "ZDmT59glKYmZVPyM",
+            "name": "Google Sheets account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsonSchemaExample": "  {\n    \"Id_Calendario\": \"6\",\n    \"Fecha\": \"2026-07-01T11:00:00\",\n    \"hora_inicio\": \"10:45\",\n    \"hora_fin\": \"12:15\",\n    \"duracion_servicio\": 90,\n    \"Descripcion\": \"Mantenimiento 70000 km - Corolla\\nPatente: AF559VB\\nNombre: Hugo Enrique Perdomo\\nSucursal: Tigre\\nKilometraje: 72000 km\\nPrecio: $419.600\",\n    \"Titulo\": \"2026-07-01 - Turno Agendado en Sucursal Tigre - AF559VB - Hugo Enrique Perdomo\",\n    \"Fin\": \"2026-07-01T11:30:00\",\n    \"Modelo\": \"Corolla\",\n    \"Tiempo_Modelo\": \"0:30:00\",\n    \"Calendar\": \"54e76531d432c15df73ed90e6cca47c95605c52085b9f491bb1b0ddac0fd7818@group.calendar.google.com\",\n\"idConversation\": \n\"907459\",\n    \"Fallback_Aplicado\": false\n  }\n",
+          "autoFix": true
+        },
+        "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+        "typeVersion": 1.3,
+        "position": [
+          -80,
+          784
+        ],
+        "id": "90789460-191e-40ee-90e6-3f0c9525134e",
+        "name": "Structured Output Parser1",
+        "notesInFlow": false
+      },
+      {
+        "parameters": {
+          "model": {
+            "__rl": true,
+            "mode": "list",
+            "value": "gpt-4.1-mini"
+          },
+          "options": {
+            "temperature": 0.1
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1.2,
+        "position": [
+          -32,
+          960
+        ],
+        "id": "a840ffaf-6860-4c03-83e5-41edb905dff1",
+        "name": "OpenAI Chat Model6",
+        "credentials": {
+          "openAiApi": {
+            "id": "aDI3wnbufE0mPuCr",
+            "name": "OpenAi account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "documentId": {
+            "__rl": true,
+            "value": "1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM",
+            "mode": "list",
+            "cachedResultName": "Del Pilar MANTENIMIENTO",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": 1939395583,
+            "mode": "list",
+            "cachedResultName": "Tabla Tiempo Mantenimiento",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM/edit#gid=1939395583"
+          },
+          "filtersUI": {
+            "values": [
+              {
+                "lookupColumn": "KM",
+                "lookupValue": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('values0_Value', `Kilometraje del turno a agendar del usuario, no usar ningun otro valor, siempre usar el valor del kilometraje`, 'string') }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleSheetsTool",
+        "typeVersion": 4.7,
+        "position": [
+          -224,
+          848
+        ],
+        "id": "46b55112-11c9-40ec-a00c-86647554fc4c",
+        "name": "Get_tiempos1",
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "ZDmT59glKYmZVPyM",
+            "name": "Google Sheets account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "removeItemsSeenInPreviousExecutions",
+          "dedupeValue": "={{ $json.idConversation }}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.removeDuplicates",
+        "typeVersion": 2,
+        "position": [
+          -800,
+          544
+        ],
+        "id": "35402f85-8b7a-43d3-b238-7e60fbc6f3e4",
+        "name": "Remove Duplicates",
+        "disabled": true
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\nconst returnItems = [];\n\n// Verificar si hay items\nif (!items || items.length === 0) {\n  return [];\n}\n\nfor (const item of items) {\n  // Verificar que el item tenga la estructura correcta\n  if (!item || !item.json || !item.json.start || !item.json.start.dateTime) {\n    continue; // Saltar este item si no tiene la estructura correcta\n  }\n  \n  let data = item.json;\n  \n  const dia = data.start.dateTime.split('T')[0];\n  const inicio = data.start.dateTime.split('T')[1].substring(0, 5);\n  const final = data.end.dateTime.split('T')[1].substring(0, 5);\n  \n  returnItems.push({\n    json: {\n      dia: dia,\n      inicio: inicio, \n      final: final\n    }\n  });\n}\n\nreturn returnItems;"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          304,
+          560
+        ],
+        "id": "d9e06acb-e563-4ce0-ad01-3f197abb2bf0",
+        "name": "PILAR_",
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "jsCode": "return [{\n  json: {\n    id_turno: $input.first().json.id,\n    id_calendario: $input.first().json.organizer.email,\n  }\n}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1280,
+          560
+        ],
+        "id": "6f0e6c45-0ea9-4077-a280-17b0791b7880",
+        "name": "Code10"
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\nconst returnItems = [];\n\n// Verificar si hay items\nif (!items || items.length === 0) {\n  return [];\n}\n\nfor (const item of items) {\n  // Verificar que el item tenga la estructura correcta\n  if (!item || !item.json || !item.json.start || !item.json.start.dateTime) {\n    continue; // Saltar este item si no tiene la estructura correcta\n  }\n  \n  let data = item.json;\n  \n  const dia = data.start.dateTime.split('T')[0];\n  const inicio = data.start.dateTime.split('T')[1].substring(0, 5);\n  const final = data.end.dateTime.split('T')[1].substring(0, 5);\n  \n  returnItems.push({\n    json: {\n      dia: dia,\n      inicio: inicio, \n      final: final\n    }\n  });\n}\n\nreturn returnItems;"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          48,
+          560
+        ],
+        "id": "5cd36c47-c79c-4f58-8e40-8ed817199d8b",
+        "name": "PILAR_8",
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "operation": "getAll",
+          "calendar": {
+            "__rl": true,
+            "value": "=3ccb979ea76f0de678f0c6d033c4cf56ae093264d575897fc742c0ccf446b8ed@group.calendar.google.com",
+            "mode": "id"
+          },
+          "returnAll": true,
+          "timeMax": "={{ $now.plus({ month: 2}) }}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleCalendar",
+        "typeVersion": 1.3,
+        "position": [
+          512,
+          560
+        ],
+        "id": "a3f8eba5-545e-420b-bcfc-ce0dbb6c4aac",
+        "name": "PILAR_3_CALENDARIO1",
+        "alwaysOutputData": true,
+        "retryOnFail": true,
+        "waitBetweenTries": 3000,
+        "executeOnce": true,
+        "credentials": {
+          "googleCalendarOAuth2Api": {
+            "id": "QOb8WX49Qkxe1yfG",
+            "name": "Google Calendar account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\nconst returnItems = [];\n\n// Verificar si hay items\nif (!items || items.length === 0) {\n  return [];\n}\n\nfor (const item of items) {\n  // Verificar que el item tenga la estructura correcta\n  if (!item || !item.json || !item.json.start || !item.json.start.dateTime) {\n    continue; // Saltar este item si no tiene la estructura correcta\n  }\n  \n  let data = item.json;\n  \n  const dia = data.start.dateTime.split('T')[0];\n  const inicio = data.start.dateTime.split('T')[1].substring(0, 5);\n  const final = data.end.dateTime.split('T')[1].substring(0, 5);\n  \n  returnItems.push({\n    json: {\n      dia: dia,\n      inicio: inicio, \n      final: final\n    }\n  });\n}\n\nreturn returnItems;"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          640,
+          560
+        ],
+        "id": "42316f50-4b47-4008-812a-81047f72bd96",
+        "name": "PILAR_9",
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "calendar": {
+            "__rl": true,
+            "value": "={{ $json.Calendar }}",
+            "mode": "id"
+          },
+          "start": "={{ $json.Fecha }}",
+          "end": "={{ $json.Fin }}",
+          "additionalFields": {
+            "description": "={{ $json.Descripcion }}",
+            "summary": "={{ $json.Titulo }}"
+          }
+        },
+        "type": "n8n-nodes-base.googleCalendar",
+        "typeVersion": 1.3,
+        "position": [
+          1136,
+          560
+        ],
+        "id": "f30835fd-921b-4740-a9a3-7c9b77c5be98",
+        "name": "Create an event3",
+        "credentials": {
+          "googleCalendarOAuth2Api": {
+            "id": "QOb8WX49Qkxe1yfG",
+            "name": "Google Calendar account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "getAll",
+          "calendar": {
+            "__rl": true,
+            "value": "=ad14cb678193cedab78820bf58be38634064b706bfca8a4faf0c88f5d57aa6cb@group.calendar.google.com",
+            "mode": "id"
+          },
+          "returnAll": true,
+          "timeMax": "={{ $now.plus({ month: 2}) }}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleCalendar",
+        "typeVersion": 1.3,
+        "position": [
+          -80,
+          560
+        ],
+        "id": "df6a47e2-cbd4-461f-b35e-377d22e07fba",
+        "name": "PILAR_1_CALENDARIO3",
+        "alwaysOutputData": true,
+        "retryOnFail": true,
+        "waitBetweenTries": 3000,
+        "executeOnce": true,
+        "credentials": {
+          "googleCalendarOAuth2Api": {
+            "id": "QOb8WX49Qkxe1yfG",
+            "name": "Google Calendar account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "getAll",
+          "calendar": {
+            "__rl": true,
+            "value": "=217322b9430c5267532c4794903cfa262172a1313d8ed029b3d39e2bca90ccb5@group.calendar.google.com",
+            "mode": "id"
+          },
+          "returnAll": true,
+          "timeMax": "={{ $now.plus({ month: 2}) }}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleCalendar",
+        "typeVersion": 1.3,
+        "position": [
+          176,
+          560
+        ],
+        "id": "74b97889-ef91-4523-bf30-ec1dd7beb629",
+        "name": "PILAR_2_CALENDARIO2",
+        "alwaysOutputData": true,
+        "retryOnFail": true,
+        "waitBetweenTries": 3000,
+        "executeOnce": true,
+        "credentials": {
+          "googleCalendarOAuth2Api": {
+            "id": "QOb8WX49Qkxe1yfG",
+            "name": "Google Calendar account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "// 🕐 Utilidades\nfunction sumarMinutosLocal(fechaStr, minutos) {\n  const fecha = new Date(fechaStr);\n  if (isNaN(fecha)) throw new Error(`Fecha inválida: ${fechaStr}`);\n  fecha.setMinutes(fecha.getMinutes() + minutos);\n  const [fechaPart, horaPart] = fecha.toISOString().split(\"T\");\n  const horaLocal = horaPart.substring(0, 5);\n  return `${fechaPart}T${horaLocal}:00`;\n}\n\nfunction timeToMinutes(timeStr) {\n  const [h, m] = timeStr.split(':').map(Number);\n  return h * 60 + m;\n}\n\n// ✅ Obtener datos correctamente\nconst solicitudRaw = $('AI Agent1').first();\nconst rawJson = solicitudRaw.json || solicitudRaw;\nconst solicitud = rawJson.output || rawJson;\n\n// ✅ Validar campos\nif (!solicitud.Fecha || !solicitud.Fin) {\n  return [{\n    json: {\n      error: 'Faltan campos Fecha o Fin en la solicitud',\n      recibido: solicitud\n    }\n  }];\n}\n\n// ✅ Extraer fecha y horas\nconst solicitudFecha = solicitud.Fecha.split('T')[0];\nconst solicitudInicio = solicitud.Fecha.split('T')[1].substring(0, 5);\nconst solicitudFin = solicitud.Fin.split('T')[1].substring(0, 5);\n\n// ✅ Turnos ocupados\nconst pilar1Ocupados = $('PILAR_8').all().map(i => i.json).flat();\nconst pilar2Ocupados = $('PILAR_').all().map(i => i.json).flat();\nconst pilar3Ocupados = $('PILAR_9').all().map(i => i.json).flat(); // ← NUEVO\n\nfunction tieneConflicto(fecha, inicio, fin, ocupados) {\n  if (!Array.isArray(ocupados)) return false;\n\n  const inicioMin = timeToMinutes(inicio);\n  const finMin = timeToMinutes(fin);\n\n  return ocupados.some(o => {\n    if (o.dia !== fecha) return false;\n\n    const oIni = timeToMinutes(o.inicio);\n    const oFin = timeToMinutes(o.final);\n\n    return inicioMin < oFin && finMin > oIni;\n  });\n}\n\n// ✅ Calendarios\nconst PILAR_1_ID = \"ad14cb678193cedab78820bf58be38634064b706bfca8a4faf0c88f5d57aa6cb@group.calendar.google.com\";\nconst PILAR_2_ID = \"217322b9430c5267532c4794903cfa262172a1313d8ed029b3d39e2bca90ccb5@group.calendar.google.com\";\nconst PILAR_3_ID = \"3ccb979ea76f0de678f0c6d033c4cf56ae093264d575897fc742c0ccf446b8ed@group.calendar.google.com\";\n\n// ✅ Disponibilidad\nconst p1Disp = !tieneConflicto(solicitudFecha, solicitudInicio, solicitudFin, pilar1Ocupados);\nconst p2Disp = !tieneConflicto(solicitudFecha, solicitudInicio, solicitudFin, pilar2Ocupados);\nconst p3Disp = !tieneConflicto(solicitudFecha, solicitudInicio, solicitudFin, pilar3Ocupados); // ← NUEVO\n\nlet calendarId = null;\n\n// Prioridad secuencial\nif (p1Disp) {\n  calendarId = PILAR_1_ID;\n} else if (p2Disp) {\n  calendarId = PILAR_2_ID;\n} else if (p3Disp) {\n  calendarId = PILAR_3_ID;\n}\n\nif (!calendarId) {\n  return [{\n    json: {\n      error: `No hay calendarios disponibles para ${solicitudFecha} ${solicitudInicio}-${solicitudFin}`,\n      debug: {\n        solicitud,\n        p1Disp,\n        p2Disp,\n        p3Disp\n      }\n    }\n  }];\n}\n\n// ✅ Reconstruir fecha final limpia\nconst fechaInicio = `${solicitudFecha}T${solicitudInicio}:00`;\nconst fechaFinal = `${solicitudFecha}T${solicitudFin}:00`;\n\n// ✅ Resultado final\nreturn [{\n  json: {\n    ...solicitud,\n    Fecha: fechaInicio,\n    Fin: fechaFinal,\n    Calendar: calendarId\n  }\n}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          832,
+          560
+        ],
+        "id": "4b0c7b9a-ea39-4f5a-a315-0887f6957b4f",
+        "name": "Code11"
+      }
+    ],
+    "connections": {
+      "When Executed by Another Workflow": {
+        "main": [
+          [
+            {
+              "node": "Remove Duplicates",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "PILAR_1_CALENDARIO": {
+        "main": [
+          [
+            {
+              "node": "PILAR_4",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "PILAR_2_CALENDARIO": {
+        "main": [
+          [
+            {
+              "node": "PILAR_3",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code": {
+        "main": [
+          [
+            {
+              "node": "Create an event1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code3": {
+        "main": [
+          [
+            {
+              "node": "PILAR_1_CALENDARIO",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "PILAR_3": {
+        "main": [
+          [
+            {
+              "node": "Code",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get_Reglas1": {
+        "main": [
+          [
+            {
+              "node": "Code4",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code4": {
+        "main": [
+          [
+            {
+              "node": "Get_Tiempo",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get_Tiempo": {
+        "main": [
+          [
+            {
+              "node": "Code3",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Create an event1": {
+        "main": [
+          [
+            {
+              "node": "Code5",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "PILAR_4": {
+        "main": [
+          [
+            {
+              "node": "PILAR_2_CALENDARIO",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Create an event2": {
+        "main": [
+          [
+            {
+              "node": "Code9",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "PILAR_1_CALENDARIO2": {
+        "main": [
+          [
+            {
+              "node": "PILAR_6",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "PILAR_2_CALENDARIO3": {
+        "main": [
+          [
+            {
+              "node": "PILAR_5",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code6": {
+        "main": [
+          [
+            {
+              "node": "Create an event2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code7": {
+        "main": [
+          [
+            {
+              "node": "PILAR_1_CALENDARIO2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "PILAR_5": {
+        "main": [
+          [
+            {
+              "node": "PILAR_3_CALENDARIO",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get_Reglas2": {
+        "main": [
+          [
+            {
+              "node": "Code8",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get_Tiempo1": {
+        "main": [
+          [
+            {
+              "node": "Code7",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code8": {
+        "main": [
+          [
+            {
+              "node": "Get_Tiempo1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "PILAR_6": {
+        "main": [
+          [
+            {
+              "node": "PILAR_2_CALENDARIO3",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "PILAR_3_CALENDARIO": {
+        "main": [
+          [
+            {
+              "node": "PILAR_7",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "PILAR_7": {
+        "main": [
+          [
+            {
+              "node": "Code6",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "AI Agent1": {
+        "main": [
+          [
+            {
+              "node": "PILAR_1_CALENDARIO3",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "OpenAI Chat Model3": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "AI Agent1",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "OpenAI Chat Model4": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "AI Agent1",
+              "type": "ai_languageModel",
+              "index": 1
+            }
+          ]
+        ]
+      },
+      "Simple Memory1": {
+        "ai_memory": [
+          [
+            {
+              "node": "AI Agent1",
+              "type": "ai_memory",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get_reglas1": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent1",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Structured Output Parser1": {
+        "ai_outputParser": [
+          [
+            {
+              "node": "AI Agent1",
+              "type": "ai_outputParser",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "OpenAI Chat Model6": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "Structured Output Parser1",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get_tiempos1": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent1",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Remove Duplicates": {
+        "main": [
+          [
+            {
+              "node": "AI Agent1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "PILAR_": {
+        "main": [
+          [
+            {
+              "node": "PILAR_3_CALENDARIO1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "PILAR_8": {
+        "main": [
+          [
+            {
+              "node": "PILAR_2_CALENDARIO2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "PILAR_3_CALENDARIO1": {
+        "main": [
+          [
+            {
+              "node": "PILAR_9",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "PILAR_9": {
+        "main": [
+          [
+            {
+              "node": "Code11",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Create an event3": {
+        "main": [
+          [
+            {
+              "node": "Code10",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "PILAR_1_CALENDARIO3": {
+        "main": [
+          [
+            {
+              "node": "PILAR_8",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "PILAR_2_CALENDARIO2": {
+        "main": [
+          [
+            {
+              "node": "PILAR_",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code11": {
+        "main": [
+          [
+            {
+              "node": "Create an event3",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "system migration",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-11-16T12:59:54.712Z",
+    "updatedAt": "2026-11-16T12:59:54.712Z"
+  },
+  "activeVersionId": "f4a89149-956f-46de-adb1-74ac494e27c3",
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Remove Duplicates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PILAR_1_CALENDARIO": {
+      "main": [
+        [
+          {
+            "node": "PILAR_4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PILAR_2_CALENDARIO": {
+      "main": [
+        [
+          {
+            "node": "PILAR_3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "Create an event1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code3": {
+      "main": [
+        [
+          {
+            "node": "PILAR_1_CALENDARIO",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PILAR_3": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get_Reglas1": {
+      "main": [
+        [
+          {
+            "node": "Code4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code4": {
+      "main": [
+        [
+          {
+            "node": "Get_Tiempo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get_Tiempo": {
+      "main": [
+        [
+          {
+            "node": "Code3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create an event1": {
+      "main": [
+        [
+          {
+            "node": "Code5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PILAR_4": {
+      "main": [
+        [
+          {
+            "node": "PILAR_2_CALENDARIO",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create an event2": {
+      "main": [
+        [
+          {
+            "node": "Code9",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PILAR_1_CALENDARIO2": {
+      "main": [
+        [
+          {
+            "node": "PILAR_6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PILAR_2_CALENDARIO3": {
+      "main": [
+        [
+          {
+            "node": "PILAR_5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code6": {
+      "main": [
+        [
+          {
+            "node": "Create an event2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code7": {
+      "main": [
+        [
+          {
+            "node": "PILAR_1_CALENDARIO2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PILAR_5": {
+      "main": [
+        [
+          {
+            "node": "PILAR_3_CALENDARIO",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get_Reglas2": {
+      "main": [
+        [
+          {
+            "node": "Code8",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get_Tiempo1": {
+      "main": [
+        [
+          {
+            "node": "Code7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code8": {
+      "main": [
+        [
+          {
+            "node": "Get_Tiempo1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PILAR_6": {
+      "main": [
+        [
+          {
+            "node": "PILAR_2_CALENDARIO3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PILAR_3_CALENDARIO": {
+      "main": [
+        [
+          {
+            "node": "PILAR_7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PILAR_7": {
+      "main": [
+        [
+          {
+            "node": "Code6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent1": {
+      "main": [
+        [
+          {
+            "node": "PILAR_1_CALENDARIO3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model3": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model4": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Simple Memory1": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get_reglas1": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser1": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model6": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Structured Output Parser1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get_tiempos1": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remove Duplicates": {
+      "main": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PILAR_": {
+      "main": [
+        [
+          {
+            "node": "PILAR_3_CALENDARIO1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PILAR_8": {
+      "main": [
+        [
+          {
+            "node": "PILAR_2_CALENDARIO2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PILAR_3_CALENDARIO1": {
+      "main": [
+        [
+          {
+            "node": "PILAR_9",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PILAR_9": {
+      "main": [
+        [
+          {
+            "node": "Code11",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create an event3": {
+      "main": [
+        [
+          {
+            "node": "Code10",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PILAR_1_CALENDARIO3": {
+      "main": [
+        [
+          {
+            "node": "PILAR_8",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PILAR_2_CALENDARIO2": {
+      "main": [
+        [
+          {
+            "node": "PILAR_",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code11": {
+      "main": [
+        [
+          {
+            "node": "Create an event3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-06-25T18:05:15.667Z",
+  "id": "ivccwWeLkaZurA40",
+  "isArchived": false,
+  "meta": null,
+  "name": "TEst_SET-PILAR",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "Id_Calendario"
+            },
+            {
+              "name": "Fecha"
+            },
+            {
+              "name": "hora_inicio"
+            },
+            {
+              "name": "hora_fin"
+            },
+            {
+              "name": "duracion_servicio"
+            },
+            {
+              "name": "Descripcion"
+            },
+            {
+              "name": "Titulo"
+            },
+            {
+              "name": "Fin"
+            },
+            {
+              "name": "Modelo"
+            },
+            {
+              "name": "Tiempo_Modelo"
+            },
+            {
+              "name": "Calendar"
+            },
+            {
+              "name": "Fallback_Aplicado"
+            },
+            {
+              "name": "idConversation"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1104,
+        528
+      ],
+      "id": "db775992-95b6-4080-bf39-c9205d78dfaf",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "3909a8df-c067-447f-a2db-ab1a1bfa1b4d",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1040,
+        272
+      ],
+      "id": "a97c20af-2754-4e56-861a-f0d9125d3da2",
+      "name": "Webhook",
+      "webhookId": "3909a8df-c067-447f-a2db-ab1a1bfa1b4d",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "value": "={{ $json.Calendar }}",
+          "mode": "id"
+        },
+        "start": "={{ $json.Fecha }}",
+        "end": "={{ $json.Fin }}",
+        "additionalFields": {
+          "description": "={{ $json.Descripcion }}",
+          "summary": "={{ $json.Titulo }}"
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        944,
+        80
+      ],
+      "id": "6b5cb6a6-72a1-4249-aef6-5ad67d84c0cc",
+      "name": "Create an event1",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "QOb8WX49Qkxe1yfG",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "=ad14cb678193cedab78820bf58be38634064b706bfca8a4faf0c88f5d57aa6cb@group.calendar.google.com",
+          "mode": "id"
+        },
+        "returnAll": true,
+        "timeMax": "={{ $now.plus({ month: 2}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        -192,
+        80
+      ],
+      "id": "098096af-92a4-454d-98c4-fa99af25a443",
+      "name": "PILAR_1_CALENDARIO",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "waitBetweenTries": 3000,
+      "executeOnce": true,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "QOb8WX49Qkxe1yfG",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "=217322b9430c5267532c4794903cfa262172a1313d8ed029b3d39e2bca90ccb5@group.calendar.google.com",
+          "mode": "id"
+        },
+        "returnAll": true,
+        "timeMax": "={{ $now.plus({ month: 2}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        64,
+        80
+      ],
+      "id": "ef352c59-1674-4a54-aac1-8931b7d120a0",
+      "name": "PILAR_2_CALENDARIO",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "waitBetweenTries": 3000,
+      "executeOnce": true,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "QOb8WX49Qkxe1yfG",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 🕐 Utilidades\nfunction sumarMinutosLocal(fechaStr, minutos) {\n  const fecha = new Date(fechaStr);\n  if (isNaN(fecha)) throw new Error(`Fecha inválida: ${fechaStr}`);\n  fecha.setMinutes(fecha.getMinutes() + minutos);\n  // Generar string ISO sin zona horaria (local)\n  const [fechaPart, horaPart] = fecha.toISOString().split(\"T\");\n  const horaLocal = horaPart.substring(0, 5);\n  return `${fechaPart}T${horaLocal}:00`;\n}\n\nfunction timeToMinutes(timeStr) {\n  const [h, m] = timeStr.split(':').map(Number);\n  return h * 60 + m;\n}\n\n// ✅ Obtener datos correctamente\nconst solicitudRaw = $('Code3').first();\nconst solicitud = solicitudRaw.json || solicitudRaw;\n\n// ✅ Asegurar campos requeridos\nif (!solicitud.Fecha || !solicitud.Fin) {\n  return [{\n    json: {\n      error: 'Faltan campos Fecha o Fin en la solicitud',\n      recibido: solicitud\n    }\n  }];\n}\n\n// ✅ Extraer fecha y horas sin modificar zona horaria\nconst solicitudFecha = solicitud.Fecha.split('T')[0];\nconst solicitudInicio = solicitud.Fecha.split('T')[1].substring(0, 5);\nconst solicitudFin = solicitud.Fin.split('T')[1].substring(0, 5);\n\n// ✅ Turnos ocupados\nconst pilar1Ocupados = $('PILAR_4').all().map(i => i.json).flat();\nconst pilar2Ocupados = $('PILAR_3').all().map(i => i.json).flat();\n\nfunction tieneConflicto(fecha, inicio, fin, ocupados) {\n  if (!Array.isArray(ocupados)) return false;\n  const inicioMin = timeToMinutes(inicio);\n  const finMin = timeToMinutes(fin);\n  return ocupados.some(o => {\n    if (o.dia !== fecha) return false;\n    const oIni = timeToMinutes(o.inicio);\n    const oFin = timeToMinutes(o.final);\n    return inicioMin < oFin && finMin > oIni;\n  });\n}\n\n// ✅ Calendarios\nconst PILAR_1_ID = \"ad14cb678193cedab78820bf58be38634064b706bfca8a4faf0c88f5d57aa6cb@group.calendar.google.com\";\nconst PILAR_2_ID = \"217322b9430c5267532c4794903cfa262172a1313d8ed029b3d39e2bca90ccb5@group.calendar.google.com\";\n\nconst p1Disp = !tieneConflicto(solicitudFecha, solicitudInicio, solicitudFin, pilar1Ocupados);\nconst p2Disp = !tieneConflicto(solicitudFecha, solicitudInicio, solicitudFin, pilar2Ocupados);\n\nlet calendarId = null;\nif (p1Disp) calendarId = PILAR_1_ID;\nelse if (p2Disp) calendarId = PILAR_2_ID;\n\nif (!calendarId) {\n  return [{\n    json: {\n      error: `No hay calendarios disponibles para ${solicitudFecha} ${solicitudInicio}-${solicitudFin}`,\n      debug: { solicitud, p1Disp, p2Disp }\n    }\n  }];\n}\n\n// ✅ Reconstruir Fecha y Fin con horas locales correctas\nconst fechaFinal = `${solicitudFecha}T${solicitudFin}:00`;\nconst fechaInicio = `${solicitudFecha}T${solicitudInicio}:00`;\n\n// ✅ Devolver resultado final limpio\nreturn [{\n  json: {\n    ...solicitud,\n    Fecha: fechaInicio,\n    Fin: fechaFinal,\n    Calendar: calendarId\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        80
+      ],
+      "id": "852d477f-1045-4a9a-9762-1bb1dbce0a1e",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Convierte \"H:MM:SS\" → minutos\nfunction tiempoAHorasMinutos(tiempoStr) {\n  const [h, m] = (tiempoStr || \"0:30:00\").split(\":\").map(Number);\n  return (h * 60) + (m || 0);\n}\n\n// HH:MM -> minutos\nfunction timeToMinutes(t) {\n  const [h, m] = t.split(\":\").map(Number);\n  return h * 60 + m;\n}\n\n// minutos -> HH:MM\nfunction minutesToTime(mins) {\n  const h = Math.floor(mins / 60);\n  const m = mins % 60;\n  return `${String(h).padStart(2,\"0\")}:${String(m).padStart(2,\"0\")}`;\n}\n\n// ── Leer nodos\nconst raw = $(\"When Executed by Another Workflow\").all();\nconst modelo = $(\"Code4\").first()?.json?.modelo || null;\nconst tiempos = $(\"Get_Tiempo\").first()?.json || {};\nconst reglas = $(\"Get_Reglas1\").first()?.json || {};\n\n// ── Extraer datos del \"When...\"\nlet datos;\nif (Array.isArray(raw)) {\n  const first = raw[0];\n  if (first.json?.query) {\n    datos = typeof first.json.query === \"string\" ? JSON.parse(first.json.query) : first.json.query;\n  } else if (first.json) {\n    datos = first.json;\n  } else {\n    datos = first;\n  }\n} else if (raw?.json?.query) {\n  datos = typeof raw.json.query === \"string\" ? JSON.parse(raw.json.query) : raw.json.query;\n} else if (raw?.query) {\n  datos = typeof raw.query === \"string\" ? JSON.parse(raw.query) : raw.query;\n} else {\n  datos = raw;\n}\n\n// Validaciones mínimas\nif (!datos.Fecha || !datos.hora_inicio) {\n  return [{ json: { error: \"Faltan campos Fecha u hora_inicio\", recibido: datos }}];\n}\n\n// tiempo del modelo (fallback 30')\nconst tiempoModeloStr = (modelo && tiempos[modelo]) ? tiempos[modelo] : \"0:30:00\";\nconst minutosModelo = tiempoAHorasMinutos(tiempoModeloStr) || 30;\n\n// ── Cálculo SIN Date/UTC: todo en minutos\nconst inicioMin = timeToMinutes(datos.hora_inicio) + 15;     // +15 al inicio\nconst finMin    = inicioMin + minutosModelo;                 // +tiempo del modelo\n\nconst inicioHHMM = minutesToTime(inicioMin);\nconst finHHMM    = minutesToTime(finMin);\n\n// Construir datetimes locales (sin Z)\nconst FechaISO = `${datos.Fecha}T${inicioHHMM}:00`;\nconst FinISO   = `${datos.Fecha}T${finHHMM}:00`;\n\n// Salida final\nreturn [{\n  json: {\n    ...datos,\n    // mantenemos lo que vino y sobreescribimos Fecha/Fin con los valores correctos\n    Fecha: FechaISO,\n    Fin: FinISO,\n    Modelo: modelo || \"Desconocido\",\n    Tiempo_Modelo: tiempoModeloStr,\n    Calendar: reglas.Id_Calendario || null,\n    Fallback_Aplicado: !modelo || !tiempos[modelo]\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -336,
+        80
+      ],
+      "id": "55d6f20f-f937-48a5-b0b6-7ba08b58e9fa",
+      "name": "Code3"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst returnItems = [];\n\n// Verificar si hay items\nif (!items || items.length === 0) {\n  return [];\n}\n\nfor (const item of items) {\n  // Verificar que el item tenga la estructura correcta\n  if (!item || !item.json || !item.json.start || !item.json.start.dateTime) {\n    continue; // Saltar este item si no tiene la estructura correcta\n  }\n  \n  let data = item.json;\n  \n  const dia = data.start.dateTime.split('T')[0];\n  const inicio = data.start.dateTime.split('T')[1].substring(0, 5);\n  const final = data.end.dateTime.split('T')[1].substring(0, 5);\n  \n  returnItems.push({\n    json: {\n      dia: dia,\n      inicio: inicio, \n      final: final\n    }\n  });\n}\n\nreturn returnItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        192,
+        80
+      ],
+      "id": "34bccf07-d6b3-45f2-a5c9-1c25a16e9761",
+      "name": "PILAR_3",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM",
+          "mode": "list",
+          "cachedResultName": "Del Pilar MANTENIMIENTO",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 323427792,
+          "mode": "list",
+          "cachedResultName": "Tabla Horarios Taller",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM/edit#gid=323427792"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Taller",
+              "lookupValue": "PILAR_1"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -736,
+        80
+      ],
+      "id": "7da09c31-98c3-46b2-a1ab-75c3550677f3",
+      "name": "Get_Reglas1",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "ZDmT59glKYmZVPyM",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM",
+          "mode": "list",
+          "cachedResultName": "Del Pilar MANTENIMIENTO",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1939395583,
+          "mode": "list",
+          "cachedResultName": "Tabla Tiempo Mantenimiento",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM/edit#gid=1939395583"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "KM",
+              "lookupValue": "={{ $json.kilometraje || 100000}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -480,
+        80
+      ],
+      "id": "1293f18a-5d7f-4ef3-9664-2c97511f013b",
+      "name": "Get_Tiempo",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "ZDmT59glKYmZVPyM",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 🚗 Lista de modelos posibles\nconst MODELOS = [\n  \"Etios\",\n  \"Yaris\",\n  \"Yaris GR\",\n  \"Corolla\",\n  \"Prius\",\n  \"Rav4\",\n  \"Innova\",\n  \"Hilux\",\n  \"SW4\",\n  \"Hiace\",\n  \"CH-R\",\n  \"Camry\",\n  \"Land Cruiser\"\n];\n\n// 🧩 Función para extraer datos correctamente desde n8n\nfunction extraerDatos(input) {\n  let datos = input;\n\n  // Si es array (por ejemplo, .all()), tomar el primer elemento\n  if (Array.isArray(datos)) datos = datos[0];\n  if (datos.json) datos = datos.json;\n\n  // Si tiene query, parsearla\n  if (datos.query) {\n    if (typeof datos.query === \"string\") {\n      try {\n        datos = JSON.parse(datos.query);\n      } catch (e) {\n        throw new Error(\"Error al parsear query: \" + e.message);\n      }\n    } else {\n      datos = datos.query;\n    }\n  }\n\n  return datos;\n}\n\n// 🧮 Función para buscar modelo\nfunction detectarModelo(texto) {\n  for (const modelo of MODELOS) {\n    // Buscamos el modelo dentro del texto, tolerando sufijos como \"Yaris XS\"\n    const regex = new RegExp(`\\\\b${modelo}\\\\b`, \"i\");\n    if (regex.test(texto)) {\n      return modelo;\n    }\n  }\n  return null;\n}\n\n// 🧮 Función para buscar kilometraje\nfunction detectarKilometraje(texto) {\n  const match = texto.match(/(\\d{1,3}(?:\\.\\d{3})*|\\d+)\\s*km/i);\n  if (match) {\n    const km = match[1].replace(/\\./g, \"\");\n    return parseInt(km, 10);\n  }\n  return null;\n}\n\n// 🧩 Obtener datos desde el nodo anterior\nconst inputData = $(\"When Executed by Another Workflow\").all();\nconst solicitud = extraerDatos(inputData);\n\n// 🔍 Buscar modelo y km en la descripción o título\nconst textoBusqueda = `${solicitud.Descripcion || \"\"} ${solicitud.Titulo || \"\"}`;\nconst modeloDetectado = detectarModelo(textoBusqueda);\nconst kmDetectado = detectarKilometraje(textoBusqueda);\n\n// 🧾 Devolver resultado\nreturn [\n  {\n    json: {\n      modelo: modeloDetectado,\n      kilometraje: kmDetectado,\n      textoAnalizado: textoBusqueda // útil para debug\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -608,
+        80
+      ],
+      "id": "1fd57bcc-399d-4a3b-b1ba-b481d9f2efb5",
+      "name": "Code4"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    id_turno: $input.first().json.id,\n    id_calendario: $input.first().json.organizer.email,\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1088,
+        80
+      ],
+      "id": "397b1bb8-ce74-4170-a782-6c8f2cc16d81",
+      "name": "Code5"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst returnItems = [];\n\n// Verificar si hay items\nif (!items || items.length === 0) {\n  return [];\n}\n\nfor (const item of items) {\n  // Verificar que el item tenga la estructura correcta\n  if (!item || !item.json || !item.json.start || !item.json.start.dateTime) {\n    continue; // Saltar este item si no tiene la estructura correcta\n  }\n  \n  let data = item.json;\n  \n  const dia = data.start.dateTime.split('T')[0];\n  const inicio = data.start.dateTime.split('T')[1].substring(0, 5);\n  const final = data.end.dateTime.split('T')[1].substring(0, 5);\n  \n  returnItems.push({\n    json: {\n      dia: dia,\n      inicio: inicio, \n      final: final\n    }\n  });\n}\n\nreturn returnItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -64,
+        80
+      ],
+      "id": "a466d94d-7767-42d8-94a1-f32f09e894e1",
+      "name": "PILAR_4",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "value": "={{ $json.Calendar }}",
+          "mode": "id"
+        },
+        "start": "={{ $json.Fecha }}",
+        "end": "={{ $json.Fin }}",
+        "additionalFields": {
+          "description": "={{ $json.Descripcion }}",
+          "summary": "={{ $json.Titulo }}"
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        928,
+        272
+      ],
+      "id": "f8f3cb8a-18dc-49dc-a0bb-0d79b622a8e7",
+      "name": "Create an event2",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "QOb8WX49Qkxe1yfG",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "=ad14cb678193cedab78820bf58be38634064b706bfca8a4faf0c88f5d57aa6cb@group.calendar.google.com",
+          "mode": "id"
+        },
+        "returnAll": true,
+        "timeMax": "={{ $now.plus({ month: 2}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        -208,
+        272
+      ],
+      "id": "472a8bff-0bd8-417a-8da5-292b806168aa",
+      "name": "PILAR_1_CALENDARIO2",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "waitBetweenTries": 3000,
+      "executeOnce": true,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "QOb8WX49Qkxe1yfG",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "=217322b9430c5267532c4794903cfa262172a1313d8ed029b3d39e2bca90ccb5@group.calendar.google.com",
+          "mode": "id"
+        },
+        "returnAll": true,
+        "timeMax": "={{ $now.plus({ month: 2}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        48,
+        272
+      ],
+      "id": "a6b160f8-73d9-45ee-a4ee-c45e904cc94a",
+      "name": "PILAR_2_CALENDARIO3",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "waitBetweenTries": 3000,
+      "executeOnce": true,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "QOb8WX49Qkxe1yfG",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 🕐 Utilidades\nfunction sumarMinutosLocal(fechaStr, minutos) {\n  const fecha = new Date(fechaStr);\n  if (isNaN(fecha)) throw new Error(`Fecha inválida: ${fechaStr}`);\n  fecha.setMinutes(fecha.getMinutes() + minutos);\n  const [fechaPart, horaPart] = fecha.toISOString().split(\"T\");\n  const horaLocal = horaPart.substring(0, 5);\n  return `${fechaPart}T${horaLocal}:00`;\n}\n\nfunction timeToMinutes(timeStr) {\n  const [h, m] = timeStr.split(':').map(Number);\n  return h * 60 + m;\n}\n\n// ✅ Obtener datos correctamente\nconst solicitudRaw = $('Code7').first();\nconst solicitud = solicitudRaw.json || solicitudRaw;\n\n// ✅ Validar campos\nif (!solicitud.Fecha || !solicitud.Fin) {\n  return [{\n    json: {\n      error: 'Faltan campos Fecha o Fin en la solicitud',\n      recibido: solicitud\n    }\n  }];\n}\n\n// ✅ Extraer fecha y horas\nconst solicitudFecha = solicitud.Fecha.split('T')[0];\nconst solicitudInicio = solicitud.Fecha.split('T')[1].substring(0, 5);\nconst solicitudFin = solicitud.Fin.split('T')[1].substring(0, 5);\n\n// ✅ Turnos ocupados\nconst pilar1Ocupados = $('PILAR_6').all().map(i => i.json).flat();\nconst pilar2Ocupados = $('PILAR_5').all().map(i => i.json).flat();\nconst pilar3Ocupados = $('PILAR_7').all().map(i => i.json).flat(); // ← NUEVO\n\nfunction tieneConflicto(fecha, inicio, fin, ocupados) {\n  if (!Array.isArray(ocupados)) return false;\n\n  const inicioMin = timeToMinutes(inicio);\n  const finMin = timeToMinutes(fin);\n\n  return ocupados.some(o => {\n    if (o.dia !== fecha) return false;\n\n    const oIni = timeToMinutes(o.inicio);\n    const oFin = timeToMinutes(o.final);\n\n    return inicioMin < oFin && finMin > oIni;\n  });\n}\n\n// ✅ Calendarios\nconst PILAR_1_ID = \"ad14cb678193cedab78820bf58be38634064b706bfca8a4faf0c88f5d57aa6cb@group.calendar.google.com\";\nconst PILAR_2_ID = \"217322b9430c5267532c4794903cfa262172a1313d8ed029b3d39e2bca90ccb5@group.calendar.google.com\";\nconst PILAR_3_ID = \"3ccb979ea76f0de678f0c6d033c4cf56ae093264d575897fc742c0ccf446b8ed@group.calendar.google.com\";\n\n// ✅ Disponibilidad\nconst p1Disp = !tieneConflicto(solicitudFecha, solicitudInicio, solicitudFin, pilar1Ocupados);\nconst p2Disp = !tieneConflicto(solicitudFecha, solicitudInicio, solicitudFin, pilar2Ocupados);\nconst p3Disp = !tieneConflicto(solicitudFecha, solicitudInicio, solicitudFin, pilar3Ocupados); // ← NUEVO\n\nlet calendarId = null;\n\n// Prioridad secuencial\nif (p1Disp) {\n  calendarId = PILAR_1_ID;\n} else if (p2Disp) {\n  calendarId = PILAR_2_ID;\n} else if (p3Disp) {\n  calendarId = PILAR_3_ID;\n}\n\nif (!calendarId) {\n  return [{\n    json: {\n      error: `No hay calendarios disponibles para ${solicitudFecha} ${solicitudInicio}-${solicitudFin}`,\n      debug: {\n        solicitud,\n        p1Disp,\n        p2Disp,\n        p3Disp\n      }\n    }\n  }];\n}\n\n// ✅ Reconstruir fecha final limpia\nconst fechaInicio = `${solicitudFecha}T${solicitudInicio}:00`;\nconst fechaFinal = `${solicitudFecha}T${solicitudFin}:00`;\n\n// ✅ Resultado final\nreturn [{\n  json: {\n    ...solicitud,\n    Fecha: fechaInicio,\n    Fin: fechaFinal,\n    Calendar: calendarId\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        784,
+        272
+      ],
+      "id": "275e6d4f-cdae-42c9-9630-3ab1bfa217cb",
+      "name": "Code6"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Convierte \"H:MM:SS\" → minutos\nfunction tiempoAHorasMinutos(tiempoStr) {\n  const [h, m] = (tiempoStr || \"0:30:00\").split(\":\").map(Number);\n  return (h * 60) + (m || 0);\n}\n\n// HH:MM -> minutos\nfunction timeToMinutes(t) {\n  const [h, m] = t.split(\":\").map(Number);\n  return h * 60 + m;\n}\n\n// minutos -> HH:MM\nfunction minutesToTime(mins) {\n  const h = Math.floor(mins / 60);\n  const m = mins % 60;\n  return `${String(h).padStart(2,\"0\")}:${String(m).padStart(2,\"0\")}`;\n}\n\n// ── Leer nodos\nconst raw = $(\"When Executed by Another Workflow\").all();\nconst modelo = $(\"Code8\").first()?.json?.modelo || null;\nconst tiempos = $(\"Get_Tiempo1\").first()?.json || {};\nconst reglas = $(\"Get_Reglas2\").first()?.json || {};\n\n// ── Extraer datos del \"When...\"\nlet datos;\nif (Array.isArray(raw)) {\n  const first = raw[0];\n  if (first.json?.query) {\n    datos = typeof first.json.query === \"string\" ? JSON.parse(first.json.query) : first.json.query;\n  } else if (first.json) {\n    datos = first.json;\n  } else {\n    datos = first;\n  }\n} else if (raw?.json?.query) {\n  datos = typeof raw.json.query === \"string\" ? JSON.parse(raw.json.query) : raw.json.query;\n} else if (raw?.query) {\n  datos = typeof raw.query === \"string\" ? JSON.parse(raw.query) : raw.query;\n} else {\n  datos = raw;\n}\n\n// Validaciones mínimas\nif (!datos.Fecha || !datos.hora_inicio) {\n  return [{ json: { error: \"Faltan campos Fecha u hora_inicio\", recibido: datos }}];\n}\n\n// tiempo del modelo (fallback 30')\nconst tiempoModeloStr = (modelo && tiempos[modelo]) ? tiempos[modelo] : \"0:30:00\";\nconst minutosModelo = tiempoAHorasMinutos(tiempoModeloStr) || 30;\n\n// ── Cálculo SIN Date/UTC: todo en minutos\nconst inicioMin = timeToMinutes(datos.hora_inicio) + 15;     // +15 al inicio\nconst finMin    = inicioMin + minutosModelo;                 // +tiempo del modelo\n\nconst inicioHHMM = minutesToTime(inicioMin);\nconst finHHMM    = minutesToTime(finMin);\n\n// Construir datetimes locales (sin Z)\nconst FechaISO = `${datos.Fecha}T${inicioHHMM}:00`;\nconst FinISO   = `${datos.Fecha}T${finHHMM}:00`;\n\n// Salida final\nreturn [{\n  json: {\n    ...datos,\n    // mantenemos lo que vino y sobreescribimos Fecha/Fin con los valores correctos\n    Fecha: FechaISO,\n    Fin: FinISO,\n    Modelo: modelo || \"Desconocido\",\n    Tiempo_Modelo: tiempoModeloStr,\n    Calendar: reglas.Id_Calendario || null,\n    Fallback_Aplicado: !modelo || !tiempos[modelo]\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -352,
+        272
+      ],
+      "id": "6fbbcdc6-0154-4619-8120-14529d47906b",
+      "name": "Code7"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst returnItems = [];\n\n// Verificar si hay items\nif (!items || items.length === 0) {\n  return [];\n}\n\nfor (const item of items) {\n  // Verificar que el item tenga la estructura correcta\n  if (!item || !item.json || !item.json.start || !item.json.start.dateTime) {\n    continue; // Saltar este item si no tiene la estructura correcta\n  }\n  \n  let data = item.json;\n  \n  const dia = data.start.dateTime.split('T')[0];\n  const inicio = data.start.dateTime.split('T')[1].substring(0, 5);\n  const final = data.end.dateTime.split('T')[1].substring(0, 5);\n  \n  returnItems.push({\n    json: {\n      dia: dia,\n      inicio: inicio, \n      final: final\n    }\n  });\n}\n\nreturn returnItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        176,
+        272
+      ],
+      "id": "9edb7732-9a2d-4cf9-94f5-6cc038b249cc",
+      "name": "PILAR_5",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM",
+          "mode": "list",
+          "cachedResultName": "Del Pilar MANTENIMIENTO",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 323427792,
+          "mode": "list",
+          "cachedResultName": "Tabla Horarios Taller",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM/edit#gid=323427792"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Taller",
+              "lookupValue": "PILAR_1"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -752,
+        272
+      ],
+      "id": "e8199766-68fb-478f-8cc4-f2b5e8629737",
+      "name": "Get_Reglas2",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "ZDmT59glKYmZVPyM",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM",
+          "mode": "list",
+          "cachedResultName": "Del Pilar MANTENIMIENTO",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1939395583,
+          "mode": "list",
+          "cachedResultName": "Tabla Tiempo Mantenimiento",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM/edit#gid=1939395583"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "KM",
+              "lookupValue": "={{ $json.kilometraje || 100000}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -496,
+        272
+      ],
+      "id": "3be13523-c17a-4b14-b519-5d24d3641501",
+      "name": "Get_Tiempo1",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "ZDmT59glKYmZVPyM",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 🚗 Lista de modelos posibles\nconst MODELOS = [\n  \"Etios\",\n  \"Yaris\",\n  \"Yaris GR\",\n  \"Corolla\",\n  \"Prius\",\n  \"Rav4\",\n  \"Innova\",\n  \"Hilux\",\n  \"SW4\",\n  \"Hiace\",\n  \"CH-R\",\n  \"Camry\",\n  \"Land Cruiser\"\n];\n\n// 🧩 Función para extraer datos correctamente desde n8n\nfunction extraerDatos(input) {\n  let datos = input;\n\n  // Si es array (por ejemplo, .all()), tomar el primer elemento\n  if (Array.isArray(datos)) datos = datos[0];\n  if (datos.json) datos = datos.json;\n\n  // Si tiene query, parsearla\n  if (datos.query) {\n    if (typeof datos.query === \"string\") {\n      try {\n        datos = JSON.parse(datos.query);\n      } catch (e) {\n        throw new Error(\"Error al parsear query: \" + e.message);\n      }\n    } else {\n      datos = datos.query;\n    }\n  }\n\n  return datos;\n}\n\n// 🧮 Función para buscar modelo\nfunction detectarModelo(texto) {\n  for (const modelo of MODELOS) {\n    // Buscamos el modelo dentro del texto, tolerando sufijos como \"Yaris XS\"\n    const regex = new RegExp(`\\\\b${modelo}\\\\b`, \"i\");\n    if (regex.test(texto)) {\n      return modelo;\n    }\n  }\n  return null;\n}\n\n// 🧮 Función para buscar kilometraje\nfunction detectarKilometraje(texto) {\n  const match = texto.match(/(\\d{1,3}(?:\\.\\d{3})*|\\d+)\\s*km/i);\n  if (match) {\n    const km = match[1].replace(/\\./g, \"\");\n    return parseInt(km, 10);\n  }\n  return null;\n}\n\n// 🧩 Obtener datos desde el nodo anterior\nconst inputData = $(\"When Executed by Another Workflow\").all();\nconst solicitud = extraerDatos(inputData);\n\n// 🔍 Buscar modelo y km en la descripción o título\nconst textoBusqueda = `${solicitud.Descripcion || \"\"} ${solicitud.Titulo || \"\"}`;\nconst modeloDetectado = detectarModelo(textoBusqueda);\nconst kmDetectado = detectarKilometraje(textoBusqueda);\n\n// 🧾 Devolver resultado\nreturn [\n  {\n    json: {\n      modelo: modeloDetectado,\n      kilometraje: kmDetectado,\n      textoAnalizado: textoBusqueda // útil para debug\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -624,
+        272
+      ],
+      "id": "c00251e6-e5e3-4dc9-a49b-a292ee0c9163",
+      "name": "Code8"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    id_turno: $input.first().json.id,\n    id_calendario: $input.first().json.organizer.email,\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1072,
+        272
+      ],
+      "id": "ce8e0391-326c-4787-bed5-828fac78fb50",
+      "name": "Code9"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst returnItems = [];\n\n// Verificar si hay items\nif (!items || items.length === 0) {\n  return [];\n}\n\nfor (const item of items) {\n  // Verificar que el item tenga la estructura correcta\n  if (!item || !item.json || !item.json.start || !item.json.start.dateTime) {\n    continue; // Saltar este item si no tiene la estructura correcta\n  }\n  \n  let data = item.json;\n  \n  const dia = data.start.dateTime.split('T')[0];\n  const inicio = data.start.dateTime.split('T')[1].substring(0, 5);\n  const final = data.end.dateTime.split('T')[1].substring(0, 5);\n  \n  returnItems.push({\n    json: {\n      dia: dia,\n      inicio: inicio, \n      final: final\n    }\n  });\n}\n\nreturn returnItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -80,
+        272
+      ],
+      "id": "dcd315f4-d669-4d17-a962-e7161a3d4c04",
+      "name": "PILAR_6",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "=3ccb979ea76f0de678f0c6d033c4cf56ae093264d575897fc742c0ccf446b8ed@group.calendar.google.com",
+          "mode": "id"
+        },
+        "returnAll": true,
+        "timeMax": "={{ $now.plus({ month: 2}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        384,
+        272
+      ],
+      "id": "58653bd2-e41b-4d25-94fc-0d4fce94b0ea",
+      "name": "PILAR_3_CALENDARIO",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "waitBetweenTries": 3000,
+      "executeOnce": true,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "QOb8WX49Qkxe1yfG",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst returnItems = [];\n\n// Verificar si hay items\nif (!items || items.length === 0) {\n  return [];\n}\n\nfor (const item of items) {\n  // Verificar que el item tenga la estructura correcta\n  if (!item || !item.json || !item.json.start || !item.json.start.dateTime) {\n    continue; // Saltar este item si no tiene la estructura correcta\n  }\n  \n  let data = item.json;\n  \n  const dia = data.start.dateTime.split('T')[0];\n  const inicio = data.start.dateTime.split('T')[1].substring(0, 5);\n  const final = data.end.dateTime.split('T')[1].substring(0, 5);\n  \n  returnItems.push({\n    json: {\n      dia: dia,\n      inicio: inicio, \n      final: final\n    }\n  });\n}\n\nreturn returnItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        512,
+        272
+      ],
+      "id": "544e9977-ef02-45ff-bb02-2e5c941d1ecc",
+      "name": "PILAR_7",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "content": "## a partir del Lunes 23/03"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        576,
+        400
+      ],
+      "typeVersion": 1,
+      "id": "7d3c2403-6139-4518-9410-13b96ca554c3",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=recibis el turno a agendar: {{ $json.Descripcion }}",
+        "hasOutputParser": true,
+        "needsFallback": true,
+        "options": {
+          "systemMessage": "=Recibís un turno de taller en formato JSON.\n\nTu tarea es ajustar el horario del turno utilizando las herramientas disponibles.\n\nRecibís estos campos:\n\nFecha del turno: {{ $json.Fecha }}\n\nHora de inicio del turno: {{ $json.hora_inicio }}\n\nHora de fin: {{ $json.hora_fin }}\n\nduracion_servicio (este valor puede ser incorrecto y debe corroborarse con la tool): {{ $json.duracion_servicio }}\n\nDescripcion: {{ $json.Descripcion }}\n\nTitulo: {{ $json.Titulo }}\n\nModelo de vehiculo: {{ $json.Modelo }}\n\nTiempo de modelo: {{ $json.Tiempo_Modelo }}\n\nId_Calendario: {{ $json.Id_Calendario }}\n\nCalendar: {{ $json.Calendar }}\n\nidConversation: {{ $json.idConversation }}\n\nReglas:\n\n1. Extraé el kilometraje únicamente desde el campo \"Descripcion\".\n\nEjemplo:\n\n\"Kilometraje: 72000 km\"\n\n→ kilometraje = 72000\n\nNunca inventes kilometrajes.\n\nNunca utilices otro valor distinto al encontrado en Descripcion.\n\n2. Ejecutá la herramienta \"Get_reglas\".\n\nGuardá los datos devueltos.\n\n3. Ejecutá la herramienta \"Get_tiempos\" enviando el kilometraje extraído.\n\nDebés buscar exactamente el kilometraje obtenido de la descripción.\n\n4. Del resultado obtenido identificá el tiempo correspondiente al modelo indicado en el campo \"Modelo\".\n\nLa comparación debe ser exacta.\n\n5. Aplicá los siguientes cálculos:\n\n* Mantener exactamente la Fecha original recibida.\n* Mantener exactamente la hora_inicio original recibida.\n* Mantener exactamente todos los demás campos recibidos, salvo los que deban recalcularse.\n\nIMPORTANTE:\n\nLa hora de referencia para realizar los cálculos es SIEMPRE la hora incluida dentro del campo Fecha.\n\nNO utilizar hora_inicio para realizar cálculos.\n\nEjemplo:\n\nFecha = 2026-06-26T15:15:00\n\nTiempo_Modelo = 0:30:00\n\nResultado:\n\nFin = 2026-06-26T15:45:00\n\nhora_fin = 15:45\n\n6. Recalcular:\n\n* duracion_servicio\n* Fin\n* hora_fin\n\nutilizando exclusivamente el Tiempo_Modelo obtenido desde Get_tiempos.\n\n7. Fórmulas:\n\nduracion_servicio = minutos equivalentes al Tiempo_Modelo\n\nFin = Fecha + Tiempo_Modelo\n\nhora_fin = hora obtenida desde Fin en formato HH:mm\n\n8. Si no encontrás tiempo para el modelo:\n\n* usar Tiempo_Modelo = \"0:30:00\"\n* duracion_servicio = 30\n* Fallback_Aplicado = true\n\n9. Si encontrás tiempo para el modelo:\n\nFallback_Aplicado = false\n\n10. Calendar debe tomar el valor devuelto por Get_reglas.\n\nSi Get_reglas no devuelve Calendar válido, conservar el Calendar original.\n\n11. Id_Calendario y Calendar son campos distintos.\n\n* Nunca copiar Calendar dentro de Id_Calendario.\n* Nunca copiar Id_Calendario dentro de Calendar.\n* Id_Calendario debe conservar exactamente el valor recibido.\n* Calendar debe usar el valor obtenido desde Get_reglas o el original si no existe reemplazo.\n\n12. Conservar exactamente:\n\n* Fecha\n* hora_inicio\n* Descripcion\n* Titulo\n* Modelo\n* idConversation\n* Id_Calendario\n\n13. Devolver exclusivamente un objeto JSON válido.\n\nNo agregar explicaciones.\n\nNo agregar markdown.\n\nNo agregar texto adicional.\n\nEstructura obligatoria:\n\n{\n\"Id_Calendario\": \"{{ $json.Id_Calendario }}\",\n\"Fecha\": \"{{ $json.Fecha }}\",\n\"hora_inicio\": \"...\",\n\"hora_fin\": \"...\",\n\"duracion_servicio\": ...,\n\"Descripcion\": \"{{ $json.Descripcion }}\",\n\"Titulo\": \"{{ $json.Titulo }}\",\n\"Fin\": \"...\",\n\"Modelo\": \"{{ $json.Modelo }}\",\n\"Tiempo_Modelo\": \"...\",\n\"Calendar\": \"...\",\n\"idConversation\": \"{{ $json.idConversation }}\",\n\"Fallback_Aplicado\": true\n}\n\nValidaciones finales obligatorias antes de responder:\n\n* Verificar que el kilometraje fue extraído desde Descripcion.\n* Verificar que Get_reglas fue ejecutado antes que Get_tiempos.\n* Verificar que Tiempo_Modelo corresponde al kilometraje encontrado.\n* Verificar que Fin = Fecha + Tiempo_Modelo.\n* Verificar que hora_fin coincide con la hora resultante de Fin.\n* Verificar que hora_inicio no fue utilizada para los cálculos.\n* Verificar que Id_Calendario conserva exactamente el valor original.\n* Verificar que la salida es únicamente un JSON válido.\n",
+          "maxIterations": 6
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        -464,
+        560
+      ],
+      "id": "26164c1a-1e25-4afe-ae10-7774d0abdbef",
+      "name": "AI Agent1",
+      "retryOnFail": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "gpt-4o"
+        },
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -688,
+        768
+      ],
+      "id": "c779c29a-6221-40fe-a085-58fad4764cf8",
+      "name": "OpenAI Chat Model3",
+      "credentials": {
+        "openAiApi": {
+          "id": "aDI3wnbufE0mPuCr",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "gpt-4o"
+        },
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -544,
+        800
+      ],
+      "id": "b9c4a3a7-221d-4d04-b504-c3f801d8d104",
+      "name": "OpenAI Chat Model4",
+      "credentials": {
+        "openAiApi": {
+          "id": "aDI3wnbufE0mPuCr",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.idConversation }}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        -448,
+        784
+      ],
+      "id": "086b9e6e-7540-45b5-8b75-a75b679c4b27",
+      "name": "Simple Memory1"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM",
+          "mode": "list",
+          "cachedResultName": "Del Pilar MANTENIMIENTO",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 323427792,
+          "mode": "list",
+          "cachedResultName": "Tabla Horarios Taller",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM/edit#gid=323427792"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Taller",
+              "lookupValue": "PILAR_1"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        -336,
+        848
+      ],
+      "id": "25dc275d-916f-4138-ac8c-0cbf4f200ae6",
+      "name": "Get_reglas1",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "ZDmT59glKYmZVPyM",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "  {\n    \"Id_Calendario\": \"6\",\n    \"Fecha\": \"2026-07-01T11:00:00\",\n    \"hora_inicio\": \"10:45\",\n    \"hora_fin\": \"12:15\",\n    \"duracion_servicio\": 90,\n    \"Descripcion\": \"Mantenimiento 70000 km - Corolla\\nPatente: AF559VB\\nNombre: Hugo Enrique Perdomo\\nSucursal: Tigre\\nKilometraje: 72000 km\\nPrecio: $419.600\",\n    \"Titulo\": \"2026-07-01 - Turno Agendado en Sucursal Tigre - AF559VB - Hugo Enrique Perdomo\",\n    \"Fin\": \"2026-07-01T11:30:00\",\n    \"Modelo\": \"Corolla\",\n    \"Tiempo_Modelo\": \"0:30:00\",\n    \"Calendar\": \"54e76531d432c15df73ed90e6cca47c95605c52085b9f491bb1b0ddac0fd7818@group.calendar.google.com\",\n\"idConversation\": \n\"907459\",\n    \"Fallback_Aplicado\": false\n  }\n",
+        "autoFix": true
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        -80,
+        784
+      ],
+      "id": "90789460-191e-40ee-90e6-3f0c9525134e",
+      "name": "Structured Output Parser1",
+      "notesInFlow": false
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4.1-mini"
+        },
+        "options": {
+          "temperature": 0.1
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -32,
+        960
+      ],
+      "id": "a840ffaf-6860-4c03-83e5-41edb905dff1",
+      "name": "OpenAI Chat Model6",
+      "credentials": {
+        "openAiApi": {
+          "id": "aDI3wnbufE0mPuCr",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM",
+          "mode": "list",
+          "cachedResultName": "Del Pilar MANTENIMIENTO",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1939395583,
+          "mode": "list",
+          "cachedResultName": "Tabla Tiempo Mantenimiento",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM/edit#gid=1939395583"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "KM",
+              "lookupValue": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('values0_Value', `Kilometraje del turno a agendar del usuario, no usar ningun otro valor, siempre usar el valor del kilometraje`, 'string') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        -224,
+        848
+      ],
+      "id": "46b55112-11c9-40ec-a00c-86647554fc4c",
+      "name": "Get_tiempos1",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "ZDmT59glKYmZVPyM",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "removeItemsSeenInPreviousExecutions",
+        "dedupeValue": "={{ $json.idConversation }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.removeDuplicates",
+      "typeVersion": 2,
+      "position": [
+        -800,
+        544
+      ],
+      "id": "35402f85-8b7a-43d3-b238-7e60fbc6f3e4",
+      "name": "Remove Duplicates",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst returnItems = [];\n\n// Verificar si hay items\nif (!items || items.length === 0) {\n  return [];\n}\n\nfor (const item of items) {\n  // Verificar que el item tenga la estructura correcta\n  if (!item || !item.json || !item.json.start || !item.json.start.dateTime) {\n    continue; // Saltar este item si no tiene la estructura correcta\n  }\n  \n  let data = item.json;\n  \n  const dia = data.start.dateTime.split('T')[0];\n  const inicio = data.start.dateTime.split('T')[1].substring(0, 5);\n  const final = data.end.dateTime.split('T')[1].substring(0, 5);\n  \n  returnItems.push({\n    json: {\n      dia: dia,\n      inicio: inicio, \n      final: final\n    }\n  });\n}\n\nreturn returnItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        304,
+        560
+      ],
+      "id": "d9e06acb-e563-4ce0-ad01-3f197abb2bf0",
+      "name": "PILAR_",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    id_turno: $input.first().json.id,\n    id_calendario: $input.first().json.organizer.email,\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1280,
+        560
+      ],
+      "id": "6f0e6c45-0ea9-4077-a280-17b0791b7880",
+      "name": "Code10"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst returnItems = [];\n\n// Verificar si hay items\nif (!items || items.length === 0) {\n  return [];\n}\n\nfor (const item of items) {\n  // Verificar que el item tenga la estructura correcta\n  if (!item || !item.json || !item.json.start || !item.json.start.dateTime) {\n    continue; // Saltar este item si no tiene la estructura correcta\n  }\n  \n  let data = item.json;\n  \n  const dia = data.start.dateTime.split('T')[0];\n  const inicio = data.start.dateTime.split('T')[1].substring(0, 5);\n  const final = data.end.dateTime.split('T')[1].substring(0, 5);\n  \n  returnItems.push({\n    json: {\n      dia: dia,\n      inicio: inicio, \n      final: final\n    }\n  });\n}\n\nreturn returnItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        48,
+        560
+      ],
+      "id": "5cd36c47-c79c-4f58-8e40-8ed817199d8b",
+      "name": "PILAR_8",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "=3ccb979ea76f0de678f0c6d033c4cf56ae093264d575897fc742c0ccf446b8ed@group.calendar.google.com",
+          "mode": "id"
+        },
+        "returnAll": true,
+        "timeMax": "={{ $now.plus({ month: 2}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        512,
+        560
+      ],
+      "id": "a3f8eba5-545e-420b-bcfc-ce0dbb6c4aac",
+      "name": "PILAR_3_CALENDARIO1",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "waitBetweenTries": 3000,
+      "executeOnce": true,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "QOb8WX49Qkxe1yfG",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst returnItems = [];\n\n// Verificar si hay items\nif (!items || items.length === 0) {\n  return [];\n}\n\nfor (const item of items) {\n  // Verificar que el item tenga la estructura correcta\n  if (!item || !item.json || !item.json.start || !item.json.start.dateTime) {\n    continue; // Saltar este item si no tiene la estructura correcta\n  }\n  \n  let data = item.json;\n  \n  const dia = data.start.dateTime.split('T')[0];\n  const inicio = data.start.dateTime.split('T')[1].substring(0, 5);\n  const final = data.end.dateTime.split('T')[1].substring(0, 5);\n  \n  returnItems.push({\n    json: {\n      dia: dia,\n      inicio: inicio, \n      final: final\n    }\n  });\n}\n\nreturn returnItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        640,
+        560
+      ],
+      "id": "42316f50-4b47-4008-812a-81047f72bd96",
+      "name": "PILAR_9",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "value": "={{ $json.Calendar }}",
+          "mode": "id"
+        },
+        "start": "={{ $json.Fecha }}",
+        "end": "={{ $json.Fin }}",
+        "additionalFields": {
+          "description": "={{ $json.Descripcion }}",
+          "summary": "={{ $json.Titulo }}"
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        1136,
+        560
+      ],
+      "id": "f30835fd-921b-4740-a9a3-7c9b77c5be98",
+      "name": "Create an event3",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "QOb8WX49Qkxe1yfG",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "=ad14cb678193cedab78820bf58be38634064b706bfca8a4faf0c88f5d57aa6cb@group.calendar.google.com",
+          "mode": "id"
+        },
+        "returnAll": true,
+        "timeMax": "={{ $now.plus({ month: 2}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        -80,
+        560
+      ],
+      "id": "df6a47e2-cbd4-461f-b35e-377d22e07fba",
+      "name": "PILAR_1_CALENDARIO3",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "waitBetweenTries": 3000,
+      "executeOnce": true,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "QOb8WX49Qkxe1yfG",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "=217322b9430c5267532c4794903cfa262172a1313d8ed029b3d39e2bca90ccb5@group.calendar.google.com",
+          "mode": "id"
+        },
+        "returnAll": true,
+        "timeMax": "={{ $now.plus({ month: 2}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        176,
+        560
+      ],
+      "id": "74b97889-ef91-4523-bf30-ec1dd7beb629",
+      "name": "PILAR_2_CALENDARIO2",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "waitBetweenTries": 3000,
+      "executeOnce": true,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "QOb8WX49Qkxe1yfG",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 🕐 Utilidades\nfunction sumarMinutosLocal(fechaStr, minutos) {\n  const fecha = new Date(fechaStr);\n  if (isNaN(fecha)) throw new Error(`Fecha inválida: ${fechaStr}`);\n  fecha.setMinutes(fecha.getMinutes() + minutos);\n  const [fechaPart, horaPart] = fecha.toISOString().split(\"T\");\n  const horaLocal = horaPart.substring(0, 5);\n  return `${fechaPart}T${horaLocal}:00`;\n}\n\nfunction timeToMinutes(timeStr) {\n  const [h, m] = timeStr.split(':').map(Number);\n  return h * 60 + m;\n}\n\n// ✅ Obtener datos correctamente\nconst solicitudRaw = $('AI Agent1').first();\nconst rawJson = solicitudRaw.json || solicitudRaw;\nconst solicitud = rawJson.output || rawJson;\n\n// ✅ Validar campos\nif (!solicitud.Fecha || !solicitud.Fin) {\n  return [{\n    json: {\n      error: 'Faltan campos Fecha o Fin en la solicitud',\n      recibido: solicitud\n    }\n  }];\n}\n\n// ✅ Extraer fecha y horas\nconst solicitudFecha = solicitud.Fecha.split('T')[0];\nconst solicitudInicio = solicitud.Fecha.split('T')[1].substring(0, 5);\nconst solicitudFin = solicitud.Fin.split('T')[1].substring(0, 5);\n\n// ✅ Turnos ocupados\nconst pilar1Ocupados = $('PILAR_8').all().map(i => i.json).flat();\nconst pilar2Ocupados = $('PILAR_').all().map(i => i.json).flat();\nconst pilar3Ocupados = $('PILAR_9').all().map(i => i.json).flat(); // ← NUEVO\n\nfunction tieneConflicto(fecha, inicio, fin, ocupados) {\n  if (!Array.isArray(ocupados)) return false;\n\n  const inicioMin = timeToMinutes(inicio);\n  const finMin = timeToMinutes(fin);\n\n  return ocupados.some(o => {\n    if (o.dia !== fecha) return false;\n\n    const oIni = timeToMinutes(o.inicio);\n    const oFin = timeToMinutes(o.final);\n\n    return inicioMin < oFin && finMin > oIni;\n  });\n}\n\n// ✅ Calendarios\nconst PILAR_1_ID = \"ad14cb678193cedab78820bf58be38634064b706bfca8a4faf0c88f5d57aa6cb@group.calendar.google.com\";\nconst PILAR_2_ID = \"217322b9430c5267532c4794903cfa262172a1313d8ed029b3d39e2bca90ccb5@group.calendar.google.com\";\nconst PILAR_3_ID = \"3ccb979ea76f0de678f0c6d033c4cf56ae093264d575897fc742c0ccf446b8ed@group.calendar.google.com\";\n\n// ✅ Disponibilidad\nconst p1Disp = !tieneConflicto(solicitudFecha, solicitudInicio, solicitudFin, pilar1Ocupados);\nconst p2Disp = !tieneConflicto(solicitudFecha, solicitudInicio, solicitudFin, pilar2Ocupados);\nconst p3Disp = !tieneConflicto(solicitudFecha, solicitudInicio, solicitudFin, pilar3Ocupados); // ← NUEVO\n\nlet calendarId = null;\n\n// Prioridad secuencial\nif (p1Disp) {\n  calendarId = PILAR_1_ID;\n} else if (p2Disp) {\n  calendarId = PILAR_2_ID;\n} else if (p3Disp) {\n  calendarId = PILAR_3_ID;\n}\n\nif (!calendarId) {\n  return [{\n    json: {\n      error: `No hay calendarios disponibles para ${solicitudFecha} ${solicitudInicio}-${solicitudFin}`,\n      debug: {\n        solicitud,\n        p1Disp,\n        p2Disp,\n        p3Disp\n      }\n    }\n  }];\n}\n\n// ✅ Reconstruir fecha final limpia\nconst fechaInicio = `${solicitudFecha}T${solicitudInicio}:00`;\nconst fechaFinal = `${solicitudFecha}T${solicitudFin}:00`;\n\n// ✅ Resultado final\nreturn [{\n  json: {\n    ...solicitud,\n    Fecha: fechaInicio,\n    Fin: fechaFinal,\n    Calendar: calendarId\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        832,
+        560
+      ],
+      "id": "4b0c7b9a-ea39-4f5a-a315-0887f6957b4f",
+      "name": "Code11"
+    }
+  ],
+  "pinData": {
+    "When Executed by Another Workflow": [
+      {
+        "json": {
+          "Id_Calendario": "2",
+          "Fecha": "2026-07-13T12:00:00",
+          "hora_inicio": "11:45",
+          "hora_fin": "15:00",
+          "duracion_servicio": 135,
+          "Descripcion": "Mantenimiento 30000 km - Corolla\nPatente: AH237DQ\nNombre: fabian diaz\nSucursal: Pilar\nKilometraje: 30000 km\nPrecio: $419.600",
+          "Titulo": "2026-07-13 - Turno Agendado en Sucursal Pilar - AH237DQ - fabian diaz",
+          "Fin": "2026-07-13T12:30:00",
+          "Modelo": "Corolla",
+          "Tiempo_Modelo": "0:30:00",
+          "Calendar": "ad14cb678193cedab78820bf58be38634064b706bfca8a4faf0c88f5d57aa6cb@group.calendar.google.com",
+          "Fallback_Aplicado": false,
+          "idConversation": "907459"
+        }
+      }
+    ]
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "ivccwWeLkaZurA40",
+      "projectId": "QDE2NLjJUSw6ETz9",
+      "createdAt": "2026-06-25T18:05:15.671Z",
+      "updatedAt": "2026-06-25T18:05:15.671Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [
+    {
+      "id": "Zt74TZhLsYEx7COH",
+      "name": "delpilar",
+      "createdAt": "2025-09-03T18:36:10.973Z",
+      "updatedAt": "2026-02-27T20:41:31.103Z"
+    }
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2026-11-16T13:24:58.462Z",
+  "versionId": "f4a89149-956f-46de-adb1-74ac494e27c3"
+}
