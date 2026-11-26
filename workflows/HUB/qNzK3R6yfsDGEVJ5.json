@@ -1,0 +1,4507 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "88ed17c2-9745-4f84-9852-cf50f329a583",
+    "workflowId": "qNzK3R6yfsDGEVJ5",
+    "nodes": [
+      {
+        "parameters": {},
+        "type": "n8n-nodes-base.manualTrigger",
+        "typeVersion": 1,
+        "position": [
+          256,
+          624
+        ],
+        "id": "887414db-12ee-45f3-ab36-ad8197f84f0c",
+        "name": "When clicking ‘Execute workflow’"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://dm-us.informaticacloud.com/authz-service/oauth/token",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Authorization",
+                "value": "Basic OWdmd1VKUXhPY3ZiT2xkd1VoVnVrbDpmTUN6QW5UMEo="
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ]
+          },
+          "sendBody": true,
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "client_id",
+                "value": "9gfwUJQxOcvbOldwUhVukl"
+              },
+              {
+                "name": "client_Secret",
+                "value": "fMCzAnT0J"
+              },
+              {
+                "name": "grant_type",
+                "value": "client_credentials"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          608,
+          240
+        ],
+        "id": "dea62076-3efc-4c04-95ae-14e800d271d2",
+        "name": "Token"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://usw1-gw.dm-us.informaticacloud.com/alliance.sandbox.com/API-NIS-NARG-DDM-AINT/v1/p-WS-LD001-NARG-HotLeads",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $json.access_token }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": " {\n    \"COD_BIR\": \"07600653\",\n    \"CNPJ_BIR\": \"04777242000309\",\n    \"SIS_ORIGEM\": \"3\",\n    \"VERSAO_WS\": \"21.0.10\",\n    \"DTINI\": \"2000-06-17\",\n    \"DTFIM\": \"2026-07-21\"\n}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          736,
+          240
+        ],
+        "id": "11b9f2ed-8134-4ca7-86a3-1571e76e481c",
+        "name": "GetLeads"
+      },
+      {
+        "parameters": {
+          "options": {}
+        },
+        "type": "n8n-nodes-base.splitInBatches",
+        "typeVersion": 3,
+        "position": [
+          1216,
+          784
+        ],
+        "id": "f9d8ade2-d700-4bed-a2dc-45ea125f8bfa",
+        "name": "Loop Over Items"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Obtenemos el array de leads\nconst leads = $input.first().json.response;\nconst nuevoLead = {\n    \"ID_LEAD\": \"123131231231\",\n    \"QUITAR\": \"\",\n    \"TIPO_DE_REGISTRO_DE_LEAD\": \"ARG New Vehicle\",\n    \"ORIGEN_DEL_LEAD\": \"INTERNET\",\n    \"CAMPANA_COMENTARIOS\": \"\",\n    \"MODELO\": \"Leaf\",\n    \"CUIL_CUIT_DNI\": \"98777777\",\n    \"PRIORIDAD\": \"\",\n    \"ID_PROPIETARIO\": \"\",\n    \"SUB_ORIGEN\": \"SOCIAL MEDIA\",\n    \"MOTIVO_DEL_ESTADO\": \"\",\n    \"NOMBRE\": \"Prueba_02_190126 Toth\",\n    \"DT_DISP_LEAD\": \"2026-01-19T18:01:34.000+0000\",\n    \"PCIA\": \"Argentina\",\n    \"CP\": \"1076\",\n    \"PROVINCIA\": \"\",\n    \"FORMAS_DE_PAGO\": \"\",\n    \"ID_CAMPANA\": \"\",\n    \"NOMBRE_DEALER\": \"\",\n    \"FORMA_CONTACTO\": \"\",\n    \"CELULAR\": \"5491150997009\",\n    \"COMENTARIOS\": \"\",\n    \"CODIGO_DEL_DEALER\": \"231111\",\n    \"CAMPANA\": \"\",\n    \"TELEFONO\": \"5491150997009\",\n    \"ESTADO_LEAD\": \"New\",\n    \"DETALLE\": \"Meta\",\n    \"SUBDETALLE\": \"Frontier Retail\",\n    \"CIUDAD\": \"Buenos Aires\",\n    \"DESCRIPCION_PROPIETARIO\": \"\",\n    \"E-MAIL\": \"toth@mail.com.ar\"\n};\n\n// Calculamos la fecha límite (hace 24 horas)\nconst ahora = new Date();\nconst hace24Horas = new Date(ahora.getTime() - (24 * 60 * 60 * 1000));\n\n// Filtramos por fecha, teléfono y normalizamos\nconst leadsValidos = leads.filter(lead => {\n  // Validación de fecha\n  if (!lead.DT_DISP_LEAD) return false;\n  \n  const fechaLead = new Date(lead.DT_DISP_LEAD);\n  if (fechaLead < hace24Horas) return false;\n  \n  // Validación y normalización de teléfono\n  const telefono = lead.CELULAR || '';\n  \n  // Si empieza con 11, le agregamos 549 al principio\n  if (telefono.startsWith('11')) {\n    lead.CELULAR = '549' + telefono;\n    return true;\n  }\n  \n  // Aceptamos los que empiezan con 54, +54, 55 o +55\n  return telefono.startsWith('54') || \n         telefono.startsWith('+54') || \n         telefono.startsWith('55') || \n         telefono.startsWith('+55');\n});\n\nleadsValidos.unshift(nuevoLead);\n\n// Retornamos el array filtrado\nreturn leadsValidos;"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          864,
+          240
+        ],
+        "id": "b95450ed-8ce8-409d-a2c0-3802294c12e5",
+        "name": "Code",
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "path": "2309c00d-d8b2-4a45-9eb7-2b10792c0a4a",
+          "responseMode": "responseNode",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.1,
+        "position": [
+          1232,
+          -16
+        ],
+        "id": "8af914f1-aeb8-45d1-a0f8-bafe34c55f65",
+        "name": "Webhook",
+        "webhookId": "2309c00d-d8b2-4a45-9eb7-2b10792c0a4a"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://dm-us.informaticacloud.com/authz-service/oauth/token",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Authorization",
+                "value": "Basic OWdmd1VKUXhPY3ZiT2xkd1VoVnVrbDpmTUN6QW5UMEo="
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ]
+          },
+          "sendBody": true,
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "client_id",
+                "value": "9gfwUJQxOcvbOldwUhVukl"
+              },
+              {
+                "name": "client_Secret",
+                "value": "fMCzAnT0J"
+              },
+              {
+                "name": "grant_type",
+                "value": "client_credentials"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          496,
+          -288
+        ],
+        "id": "c4203dee-9f0f-4d50-bcf3-13e7f0c8cd43",
+        "name": "Token1"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://usw1-gw.dm-us.informaticacloud.com/alliance.sandbox.com/API-NIS-NARG-DDM-AINT/v1/p-WS-LD001-NARG-HotLeads",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $json.access_token }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": " {\n    \"COD_BIR\": \"07600653\",\n    \"CNPJ_BIR\": \"04777242000309\",\n    \"SIS_ORIGEM\": \"3\",\n    \"VERSAO_WS\": \"21.0.10\",\n    \"DTINI\": \"2000-06-17\",\n    \"DTFIM\": \"2026-07-21\"\n}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          720,
+          -288
+        ],
+        "id": "99bc76fa-333a-41ca-88c1-2a448e56d923",
+        "name": "GetLeads1"
+      },
+      {
+        "parameters": {
+          "respondWith": "allIncomingItems",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.4,
+        "position": [
+          1952,
+          -16
+        ],
+        "id": "197a273e-f594-4cf1-a77b-3c0c83a1ffd4",
+        "name": "Respond to Webhook"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Obtenemos el array de leads del input\nconst leads = $input.all()[0].json.response;\n\n// Registro hardcodeado para agregar\nconst nuevoLead = {\n    \"ID_LEAD\": \"111\",\n    \"QUITAR\": \"\",\n    \"TIPO_DE_REGISTRO_DE_LEAD\": \"ARG Savings Plan\",\n    \"ORIGEN_DEL_LEAD\": \"SALESFORCE\",\n    \"CAMPANA_COMENTARIOS\": \"\",\n    \"MODELO\": \"KAIT\",\n    \"CUIL_CUIT_DNI\": \"41289870\",\n    \"PRIORIDAD\": \"\",\n    \"ID_PROPIETARIO\": \"\",\n    \"SUB_ORIGEN\": \"Sitio Nissan Organico\",\n    \"MOTIVO_DEL_ESTADO\": \"\",\n    \"NOMBRE\": \"NACHO TEST\",\n    \"DT_DISP_LEAD\": \"2026-02-10T21:07:09.000+0000\",\n    \"PCIA\": \"Argentina\",\n    \"CP\": \"\",\n    \"PROVINCIA\": \"\",\n    \"FORMAS_DE_PAGO\": \"\",\n    \"ID_CAMPANA\": \"\",\n    \"NOMBRE_DEALER\": \"\",\n    \"FORMA_CONTACTO\": \"\",\n    \"CELULAR\": \"5492616809213\",\n    \"COMENTARIOS\": \"\",\n    \"CODIGO_DEL_DEALER\": \"231111\",\n    \"CAMPANA\": \"\",\n    \"TELEFONO\": \"\",\n    \"ESTADO_LEAD\": \"New\",\n    \"DETALLE\": \"\",\n    \"SUBDETALLE\": \"\",\n    \"CIUDAD\": \"\",\n    \"DESCRIPCION_PROPIETARIO\": \"\",\n    \"E-MAIL\": \"test@redoo.com\"\n};\n// Normalizamos todos los teléfonos que empiezan con 11\nleads.forEach(lead => {\n  const telefono = lead.TELEFONO || '';\n  if (telefono.startsWith('11')) {\n    lead.TELEFONO = '549' + telefono;\n  }\n});\n\n// Agregamos el nuevo lead al inicio\nleads.unshift(nuevoLead);\n\n// Retornamos la estructura completa\nreturn [{\n  json: {\n    response: leads\n  }\n}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1728,
+          -16
+        ],
+        "id": "71515fbc-e39c-43da-8f8e-43c59ec11357",
+        "name": "Code1"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Acceder directamente al item del Loop Over Items\nconst item = $('Loop Over Items').item.json;\n\n// Debug: ver qué estamos recibiendo del loop\nconsole.log('Item del Loop Over Items:', JSON.stringify(item, null, 2));\n\n// Normalizar el texto del modelo\nconst modeloRaw = (item.MODELO || \"No aclarado\").trim().toLowerCase();\n\nconsole.log('Modelo normalizado:', modeloRaw);\n\n// Función para determinar la imagen según el modelo\nfunction obtenerImagen(modelo) {\n\n  // 🔋 X-Trail e-Power (prioridad alta)\n  if (\n    modelo.includes(\"x-trail e-power\") ||\n    modelo.includes(\"x trail e power\") ||\n    (modelo.includes(\"x-trail\") && modelo.includes(\"e-power\")) ||\n    (modelo.includes(\"x trail\") && modelo.includes(\"e power\"))\n  ) {\n    return \"Foto_Template_e_power_Xtrail_20260202_155844.jpg\";\n  }\n\n  // 🚙 X-Trail común\n  if (modelo.includes(\"x-trail\") || modelo.includes(\"x trail\")) {\n    return \"Foto_Template_Xtrail_20260202_103322.jpg\";\n  }\n\n  if (modelo.includes(\"kicks play\")) {\n    return \"Foto_Template_Kicks_play_20260108_150209.jpg\";\n  }\n\n  if (modelo.includes(\"nuevo kicks\") || modelo === \"kicks\") {\n    return \"Foto_Template_Nueva_Kicks_20260108_150214.jpg\";\n  }\n\n  if (modelo.includes(\"frontier\")) {\n    return \"Foto_Template_Frontier_20260108_150219.jpg\";\n  }\n\n  if (modelo.includes(\"sentra\")) {\n    return \"Foto_Template_Sentra_20260108_150223.jpg\";\n  }\n\n  if (modelo.includes(\"versa\")) {\n    return \"Foto_Template_Versa_20260108_150226.jpg\";\n  }\n  \n  if (modelo.includes(\"kait\")) {\n    return \"foto_kai_2.jpeg\";\n  }\n  // Imagen por defecto\n  return \"nissan_20251218_100834.jpeg\";\n}\n\n// Determinar la imagen según el modelo\nconst imagen = obtenerImagen(modeloRaw);\n\nconsole.log('Imagen seleccionada:', imagen);\n\n// Plan de Ahorro: mismo criterio que getBusinessTypeId (businesstypeid 3)\nconst esPlanAhorro = [\"ARG Savings Plan\", \"ARG Saving Plan\"].includes(item.TIPO_DE_REGISTRO_DE_LEAD);\n\n// Construir el objeto de variables para Twilio\nconst variables = {\n  \"1\": item.NOMBRE || \"No aclarado\",\n  \"2\": \"Nissan\",\n  \"3\": item.MODELO || \"No aclarado\",\n  \"4\": imagen,\n  \"5\": JSON.stringify({\n    origen: item.ORIGEN_DEL_LEAD || \"SALESFORCE\",\n    id_lead: item.ID_LEAD || \"0\"\n  }),\n  \"6\": \"1231232131231\"\n};\n\n// Retornar el objeto final\nreturn {\n  json: {\n    ContentVariables: JSON.stringify(variables),\n    template_id: esPlanAhorro\n      ? \"HX2dbcd4a90a4395f8de53e7dfc4050b78\"\n      : modeloRaw.includes(\"kait\") \n        ? \"HX7d9c678ec05d3c3772c228a8e3b7c29c\" \n        : \"HXa27af2cd7224303f29bec2488e44d801\",\n    debug: {\n      nombreOriginal: item.NOMBRE,\n      modeloOriginal: item.MODELO,\n      modeloNormalizado: modeloRaw,\n      imagenSeleccionada: imagen,\n      esPlanAhorro: esPlanAhorro\n    }\n  }\n};"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2240,
+          720
+        ],
+        "id": "fb3c9c07-8807-4e37-befd-c69821d0d78e",
+        "name": "Code4",
+        "executeOnce": true
+      },
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "minutes"
+              }
+            ]
+          }
+        },
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          256,
+          784
+        ],
+        "id": "14c1da7d-480a-42eb-a758-8e5c7cf86fd6",
+        "name": "Schedule Trigger"
+      },
+      {
+        "parameters": {
+          "operation": "select",
+          "table": {
+            "__rl": true,
+            "value": "nissan_salesforce",
+            "mode": "list",
+            "cachedResultName": "nissan_salesforce"
+          },
+          "where": {
+            "values": [
+              {
+                "column": "LeadId",
+                "value": "={{ $json.ID_LEAD }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          1472,
+          800
+        ],
+        "id": "c8cc3a77-83ee-4026-a592-f794fdc3b141",
+        "name": "Select rows from a table",
+        "alwaysOutputData": true,
+        "retryOnFail": true,
+        "maxTries": 5,
+        "waitBetweenTries": 5000,
+        "credentials": {
+          "mySql": {
+            "id": "FezTcDnLo3SqPHvd",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "table": {
+            "__rl": true,
+            "value": "nissan_salesforce",
+            "mode": "list",
+            "cachedResultName": "nissan_salesforce"
+          },
+          "dataMode": "defineBelow",
+          "valuesToSend": {
+            "values": [
+              {
+                "column": "LeadId",
+                "value": "={{ $('Loop Over Items').item.json.ID_LEAD }}"
+              },
+              {
+                "column": "telefono",
+                "value": "={{ $('Loop Over Items').item.json.CELULAR.startsWith('+') ? $('Loop Over Items').item.json.CELULAR : '+' + $('Loop Over Items').item.json.CELULAR }}"
+              },
+              {
+                "column": "status",
+                "value": "={{ $('getStatus').first().json.status || \"failed\"}}"
+              },
+              {
+                "column": "created_at",
+                "value": "={{$now}}"
+              },
+              {
+                "column": "updated_at",
+                "value": "={{$now}}"
+              },
+              {
+                "column": "nombre",
+                "value": "={{ $('Loop Over Items').item.json.NOMBRE }}"
+              },
+              {
+                "column": "modelo",
+                "value": "={{ $('Loop Over Items').item.json.MODELO }}"
+              },
+              {
+                "column": "dealer",
+                "value": "={{ $('Loop Over Items').item.json.CODIGO_DEL_DEALER }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          2864,
+          1088
+        ],
+        "id": "083855a6-ef14-4835-9870-a2d34d7ebe6f",
+        "name": "Insert rows in a table",
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "credentials": {
+          "mySql": {
+            "id": "FezTcDnLo3SqPHvd",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "1d100b7a-5f96-41b2-9d07-4828d20cb715",
+                "leftValue": "={{ $json.id }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "number",
+                  "operation": "notExists",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          1680,
+          800
+        ],
+        "id": "42d35d30-f55c-449c-b9ae-a3355875876a",
+        "name": "If"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.twilio.com/2010-04-01/Accounts/TWILIO_SID_OCULTO/Messages.json",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpBasicAuth",
+          "sendBody": true,
+          "contentType": "multipart-form-data",
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "MessagingServiceSid",
+                "value": "MGb0752daac2cb0fa7e1a893dae90651a3"
+              },
+              {
+                "name": "To",
+                "value": "=whatsapp:{{ $('Loop Over Items').item.json.CELULAR.startsWith('+') ? $('Loop Over Items').item.json.CELULAR : '+' + $('Loop Over Items').item.json.CELULAR }}"
+              },
+              {
+                "name": "ContentSid",
+                "value": "={{$json.template_id}}"
+              },
+              {
+                "name": "ContentVariables",
+                "value": "={{$('Code4').first().json.ContentVariables}}"
+              },
+              {
+                "name": "From",
+                "value": "whatsapp:+5491176470070"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "90dacaa7-bf2a-4e6e-b694-b728d84bf791",
+        "name": "HTTP Request3",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2368,
+          720
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "credentials": {
+          "httpBasicAuth": {
+            "id": "2mSmUWqeRXMBKQOe",
+            "name": "NISSAN ARGENTINA-TWILIO"
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "content": "el http request1 fallaba por el contet variables y el content sid, lo dejo por que las otras variables las tomana bie, esto se cambia el dia 10/1/2026, el http request3 es una copia del http2 que funciono\nEstaba este HX3fb9663527ce4565cc2c24822693a679 (content sid) el dia 16/1/2026\n",
+          "height": 208,
+          "width": 704
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          2576,
+          -32
+        ],
+        "id": "96fd5dbb-2937-417c-aec3-958a0bdb4cba",
+        "name": "Sticky Note1"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://dm-us.informaticacloud.com/authz-service/oauth/token",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Authorization",
+                "value": "Basic N2FjM05zeHphSTdkTVRLWDgyMVd5Uzp5d1R0aWp4azk="
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ]
+          },
+          "sendBody": true,
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "client_id",
+                "value": "7ac3NsxzaI7dMTKX821WyS"
+              },
+              {
+                "name": "client_Secret",
+                "value": "ywTtijxk9"
+              },
+              {
+                "name": "grant_type",
+                "value": "client_credentials"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          432,
+          784
+        ],
+        "id": "8cdd1937-dfe4-4109-a836-4e99cc4425d4",
+        "name": "TokenProd"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://usw1-gw.dm-us.informaticacloud.com/alliance.prd.com/API-NIS-NARG-DDM-AINT/v1/p-WS-LD001-NARG-HotLeads",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $json.access_token }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": " {\n    \"COD_BIR\": \"07600653\",\n    \"CNPJ_BIR\": \"04777242000309\",\n    \"SIS_ORIGEM\": \"3\",\n    \"VERSAO_WS\": \"21.0.10\",\n    \"DTINI\": \"2026-02-01\",\n    \"DTFIM\": \"2026-07-21\"\n}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          560,
+          784
+        ],
+        "id": "5c459bd6-ee7a-4be8-854a-3fe66875ee7c",
+        "name": "GetLeads Prod1",
+        "onError": "continueErrorOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// ====================================\n// CONFIGURACIÓN (FÁCIL DE MODIFICAR)\n// ====================================\nconst HORAS_FILTRO = 20;\nconst FILTRAR_POR_DEALER = true;\nconst DEALERS_PERMITIDOS = [\"235013\", \"230112\", \"230311\", \"230314\",\"230312\", \"232711\", \"232722\", \"232712\",\n\"230411\", \"230421\", \"230431\", \"230433\",\n\"230513\", \"230514\", \"230512\", \"230516\",\n\"230712\", \"230721\", \"230731\",\n\"230822\", \"230852\", \"230814\",\n\"230911\", \"230914\", \"230915\",\n\"231314\", \"231313\", \"231311\",\n\"233111\", \"233214\", \"233211\", \"233213\",\n\"231612\", \"231651\", \"231614\",\n\"232011\", \"232021\", \"232032\", \"232013\",\n\"231111\", \"231141\",\n\"232311\", \"232313\",\n\"232521\", \"232532\", \"232541\",\n\"230622\", \"230611\",\n\"233012\", \"233013\", \"233015\",\n\"232916\", \"232912\",\"232921\", \"232917\",\n\"231911\",\"231931\",\"231921\",\n\"232021\", \"232032\", \"232011\", \"232013\",\n\"232922\",\n\"233215\"]; \n\n// ====================================\n// CÓDIGO PRINCIPAL\n// ====================================\nconst leads = $input.first().json.response;\nconst ahora = new Date();\nconst fechaLimite = new Date(ahora.getTime() - (HORAS_FILTRO * 60 * 60 * 1000));\n\nconst leadsValidos = leads.filter(lead => {\n  // Filtro 1: fecha (excepto ML y WA)\n  if (!lead.DT_DISP_LEAD) return false;\n  const subOrigen = (lead.SUB_ORIGEN || '').toUpperCase().trim();\n  const exentoFiltroFecha = subOrigen === 'MERCADO LIBRE' || subOrigen === 'WHATSAPP';\n  if (!exentoFiltroFecha) {\n    const fechaLead = new Date(lead.DT_DISP_LEAD);\n    if (fechaLead < fechaLimite) return false;\n  }\n\n  // Filtro 2: dealer\n  if (FILTRAR_POR_DEALER) {\n    if (!lead.CODIGO_DEL_DEALER || !DEALERS_PERMITIDOS.includes(lead.CODIGO_DEL_DEALER)) {\n      return false;\n    }\n  }\n\n  // Normalización de teléfono (no filtra, solo transforma)\n  const telefono = lead.CELULAR || lead.TELEFONO || '';\n  let telefonoLimpio = telefono.replace(/\\D/g, '');\n\n  if (telefonoLimpio.startsWith('549')) {\n    // Ya viene bien formado, no tocar\n  } else if (telefonoLimpio.startsWith('54')) {\n    // Tiene código de país pero le falta el 9 del celular -> se lo insertamos\n    telefonoLimpio = '549' + telefonoLimpio.slice(2);\n  } else if (telefonoLimpio.startsWith('55')) {\n    // Brasil u otro caso ya con código de país, se deja como está\n  } else if (telefonoLimpio.length >= 8) {\n    telefonoLimpio = '549' + telefonoLimpio;\n  }\n\n  lead.CELULAR = telefonoLimpio || telefono;\n\n  return true;\n});\n\nreturn leadsValidos;"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          784,
+          768
+        ],
+        "id": "59f7f21e-bc63-428a-867e-d301a060cb2a",
+        "name": "Code3",
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://dm-us.informaticacloud.com/authz-service/oauth/token",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Authorization",
+                "value": "Basic N2FjM05zeHphSTdkTVRLWDgyMVd5Uzp5d1R0aWp4azk="
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ]
+          },
+          "sendBody": true,
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "client_id",
+                "value": "7ac3NsxzaI7dMTKX821WyS"
+              },
+              {
+                "name": "client_Secret",
+                "value": "ywTtijxk9"
+              },
+              {
+                "name": "grant_type",
+                "value": "client_credentials"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1408,
+          -16
+        ],
+        "id": "9a6e413c-d357-4a20-8309-e1128e07e22b",
+        "name": "TokenProd1"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://usw1-gw.dm-us.informaticacloud.com/alliance.prd.com/API-NIS-NARG-DDM-AINT/v1/p-WS-LD001-NARG-HotLeads",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $json.access_token }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": " {\n    \"COD_BIR\": \"07600653\",\n    \"CNPJ_BIR\": \"04777242000309\",\n    \"SIS_ORIGEM\": \"3\",\n    \"VERSAO_WS\": \"21.0.10\",\n    \"DTINI\": \"2000-06-17\",\n    \"DTFIM\": \"2026-07-21\"\n}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1584,
+          -16
+        ],
+        "id": "06c84068-f5cd-4fda-beda-5bcc874b8383",
+        "name": "GetLeads Prod2",
+        "retryOnFail": true,
+        "maxTries": 5,
+        "waitBetweenTries": 5000
+      },
+      {
+        "parameters": {
+          "amount": "={{ Math.floor(Math.random() * (8 - 3 + 1)) + 14 }}"
+        },
+        "id": "9f56dd65-8839-4a5a-99a5-f4520ea20245",
+        "name": "Wait7",
+        "type": "n8n-nodes-base.wait",
+        "typeVersion": 1.1,
+        "position": [
+          2496,
+          720
+        ],
+        "webhookId": "9d3161eb-3b85-4e9a-93e1-857cdb88bdfd"
+      },
+      {
+        "parameters": {
+          "url": "=https://api.twilio.com/2010-04-01/Accounts/TWILIO_SID_OCULTO/Messages/{{ $('HTTP Request3').item.json.sid }}.json",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpBasicAuth",
+          "options": {}
+        },
+        "id": "b56d6d79-5373-487b-b0cd-eb905f46a473",
+        "name": "getStatus",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2896,
+          800
+        ],
+        "alwaysOutputData": true,
+        "retryOnFail": true,
+        "waitBetweenTries": 5000,
+        "credentials": {
+          "httpBasicAuth": {
+            "id": "2mSmUWqeRXMBKQOe",
+            "name": "NISSAN ARGENTINA-TWILIO"
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "cecd3b89-17f6-484a-8127-2ba4902ff1af",
+                "leftValue": "={{ $('getStatus').first().json.status }}",
+                "rightValue": "undelivered",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals",
+                  "name": "filter.operator.equals"
+                }
+              },
+              {
+                "id": "198be7a4-c1a3-4e67-be3c-7a5a258d98ab",
+                "leftValue": "={{ $('getStatus').first().json.status }}",
+                "rightValue": "failed",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals",
+                  "name": "filter.operator.equals"
+                }
+              },
+              {
+                "id": "d794728b-4604-4ad2-a636-829933ead6ec",
+                "leftValue": "={{ $('getStatus').item.json.error }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "object",
+                  "operation": "exists",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "or"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          3248,
+          800
+        ],
+        "id": "5e58012d-1dd4-4575-b769-8cec3792de06",
+        "name": "If2"
+      },
+      {
+        "parameters": {
+          "jsCode": "// ====================================\n// MAPEO DE DEALERS Y CONFIGURACIÓN\n// ====================================\nconst FIELD_ALIASES = {\n    \"social media\":  \"media social\"\n};\n\nconst DEALER_ASSIGNMENTS = {\n    \"aika@nissan.com\": [\"230112\", \"230113\"],\n    \"aucam@nissan.com\": [\"230311\", \"230312\", \"230314\"],\n    \"autogen@nissan.com\": [\"230411\", \"230412\", \"230421\", \"230431\", \"230432\", \"230433\"],\n    \"autossan@nissan.com\": [\"230512\", \"230513\", \"230514\", \"230515\", \"230516\"],\n    \"tdfmotors@nissan.com\": [\"230611\", \"230612\", \"230622\"],\n    \"cityssan@nissan.com\": [\"230712\", \"230721\", \"230722\", \"230731\"],\n    \"egeoautomotores@nissan.com\": [\"230812\", \"230813\", \"230814\", \"230822\", \"230852\"],\n    \"femotors@nissan.com\": [\"230911\", \"230912\", \"230914\", \"230915\"],\n    \"sendai@nissan.com\": [\"231111\", \"231112\", \"231121\", \"231132\", \"231141\", \"231151\", \"231161\"],\n    \"kyotoautomotores@nissan.com\": [\"231311\", \"231312\", \"231313\", \"231314\", \"231316\", \"231317\"],\n    \"carone@nissan.com\": [\"231611\", \"231612\", \"231614\", \"231651\"],\n    \"nix@nissan.com\": [\"231911\", \"231921\", \"231931\"],\n    \"noale@nissan.com\": [\"232011\", \"232013\", \"232021\", \"232032\"],\n    \"senta@nissan.com\": [\"232311\", \"232312\", \"232313\", \"232314\"],\n    \"surisan@nissan.com\": [\"232521\", \"232522\", \"232531\", \"232532\", \"232541\"],\n    \"autoferro@nissan.com\": [\"232711\", \"232712\", \"232722\"],\n    \"fianiautomotores@nissan.com\": [\"232911\", \"232912\", \"232915\", \"232916\", \"232917\", \"232921\",\"232922\"],\n    \"yacopinimirai@nissan.com\": [\"233012\", \"233013\", \"233015\"],\n    \"neostar@nissan.com\": [\"233111\", \"233115\"],\n    \"capital@nissan.com\": [\"233211\", \"233212\", \"233213\", \"233214\",\"233215\"],\n    \"agnoa@nissan.com\": [\"235013\", \"235014\"]\n};\n\nconst ORIGEN_PILOT_MAP = [\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Frontier Brand\", pilotCode: \"mailing_frontierbrand_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Frontier NPA\", pilotCode: \"mailing_frontiernpa_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Frontier Retail\", pilotCode: \"mailing_frontierretail_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Kicks Play Brand\", pilotCode: \"mailing_kicksplaybrand_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Kicks Play NPA\", pilotCode: \"mailing_kicksplaynpa_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Kicks Play Retail\", pilotCode: \"mailing_kicksplayretail_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Nuevo Kicks Brand\", pilotCode: \"mailing_nuevokicksbrand_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Nuevo Kicks NPA\", pilotCode: \"mailing_nuevokicksnpa_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Nuevo Kicks Retail\", pilotCode: \"mailing_nuevokicksretail_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Sentra Brand\", pilotCode: \"mailing_sentrabrand_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Sentra Retail\", pilotCode: \"mailing_sentraretail_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Versa Brand\", pilotCode: \"mailing_versabrand_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Versa NPA\", pilotCode: \"mailing_versanpa_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Versa Retail\", pilotCode: \"mailing_versaretail_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"X-Trail Brand\", pilotCode: \"mailing_xtrailbrand_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"X-Trail Retail\", pilotCode: \"mailing_xtrailretail_campaigns\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Frontier Brand\", pilotCode: \"meta_frontier_brand\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Frontier NPA\", pilotCode: \"meta_frontier_npa\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Frontier Retail\", pilotCode: \"meta_frontier_retail\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Kicks Play Brand\", pilotCode: \"meta_kicks_play_brand\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Kicks Play NPA\", pilotCode: \"meta_kicks_play_npa\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Kicks Play Retail\", pilotCode: \"meta_kicks_play_retail\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Nuevo Kicks Brand\", pilotCode: \"meta_nuevo_kicks_brand\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Nuevo Kicks Retail\", pilotCode: \"meta_nuevo_kicks_retail\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Nuevo kicks NPA\", pilotCode: \"meta_nuevo_kicks_npa\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Sentra Brand\", pilotCode: \"meta_sentra_brand\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Sentra Retail\", pilotCode: \"meta_sentra_retail\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Versa Brand\", pilotCode: \"meta_versa_brand\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Versa NPA\", pilotCode: \"meta_versa_npa\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Versa Retail\", pilotCode: \"meta_versa_retail\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"X-Trail Brand\", pilotCode: \"meta_xtrail_brand\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"X-Trail Retail\", pilotCode: \"meta_xtrail_retail\" },\n    { origen: \"Internet\", suborigen: \"MERCADO LIBRE\", detalle: \"Frontier\", subdetalle: \"Frontier Brand\", pilotCode: \"frontier_frontier_brand\" },\n    { origen: \"Internet\", suborigen: \"MERCADO LIBRE\", detalle: \"Frontier\", subdetalle: \"Frontier Retail\", pilotCode: \"meli_frontier_retail\" },\n    { origen: \"Internet\", suborigen: \"MERCADO LIBRE\", detalle: \"Kicks Play\", subdetalle: \"Kicks Play Brand\", pilotCode: \"kicksplay_kicksplay_brand\" },\n    { origen: \"Internet\", suborigen: \"MERCADO LIBRE\", detalle: \"Kicks Play\", subdetalle: \"Kicks Play Retail\", pilotCode: \"kicksplay_kicksplay_retail\" },\n    { origen: \"Internet\", suborigen: \"MERCADO LIBRE\", detalle: \"New Kicks\", subdetalle: \"Nuevo Kicks Brand\", pilotCode: \"newkicks_nuevokicks_brand\" },\n    { origen: \"Internet\", suborigen: \"MERCADO LIBRE\", detalle: \"New Kicks\", subdetalle: \"Nuevo Kicks Retail\", pilotCode: \"meli_nuevokicks_retail\" },\n    { origen: \"Internet\", suborigen: \"MERCADO LIBRE\", detalle: \"X-Gear\", subdetalle: \"X-Gear Brand\", pilotCode: \"xgear_xgear_brand\" },\n    { origen: \"Internet\", suborigen: \"MERCADO LIBRE\", detalle: \"X-Gear\", subdetalle: \"X-Gear Retail\", pilotCode: \"xgear_xgear_retail\" },\n    { origen: \"Internet\", suborigen: \"MERCADO LIBRE\", detalle: \"X-Trail\", subdetalle: \"X-Trail Brand\", pilotCode: \"xtrail_xtrail_brand\" },\n    { origen: \"Internet\", suborigen: \"MERCADO LIBRE\", detalle: \"X-Trail\", subdetalle: \"X-Trail Retail\", pilotCode: \"meli_xtrail_retail\" },\n    { origen: \"Internet\", suborigen: \"Sitio Nissan Organico\", detalle: \"Credinissan\", subdetalle: \"Credinissan Form\", pilotCode: \"sitio_credinissan\" },\n    { origen: \"Internet\", suborigen: \"Sitio Nissan Organico\", detalle: \"Plan de ahorro\", subdetalle: \"Plan de ahorro mas informacion\", pilotCode: \"sitio_npa\" },\n    { origen: \"Internet\", suborigen: \"Sitio Nissan Organico\", detalle: \"Posventa\", subdetalle: \"Accesorios\", pilotCode: \"sitio_posventa_accesorios\" },\n    { origen: \"Internet\", suborigen: \"Sitio Nissan Organico\", detalle: \"Posventa\", subdetalle: \"Online booking\", pilotCode: \"sitio_posventa_onlinebooking\" },\n    { origen: \"Internet\", suborigen: \"Sitio Nissan Organico\", detalle: \"Posventa\", subdetalle: \"Posventa\", pilotCode: \"sitio_posventa_posventa\" },\n    { origen: \"Internet\", suborigen: \"Sitio Nissan Organico\", detalle: \"Venta\", subdetalle: \"Solicitar cotizacion\", pilotCode: \"sitio_venta_solicitarcotizacion\" },\n    { origen: \"Internet\", suborigen: \"WHATSAPP\", detalle: \"Offline Whatsapp\", subdetalle: \"Campaña RRSS\", pilotCode: \"whatsapp_offline\" },\n    { origen: \"Internet\", suborigen: \"WHATSAPP\", detalle: \"Online Whatsapp\", subdetalle: \"Campaña RRSS\", pilotCode: \"whatsapp_online\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Kait Brand\", pilotCode: \"meta_kait_brand\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Kait NPA\", pilotCode: \"meta_kait_npa\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Kait Retail\", pilotCode: \"meta_kait_retail\" },\n    { origen: \"VACIO\", suborigen: \"VACIO\", detalle: \"VACIO\", subdetalle: \"VACIO\", pilotCode: \"leads_nissan\" },\n];\n// ====================================\n// FUNCIONES AUXILIARES\n// ====================================\n\nfunction findDealerEmail(codigoDealer) {\n    for (const [email, codigos] of Object.entries(DEALER_ASSIGNMENTS)) {\n        if (codigos.includes(codigoDealer)) {\n            return email;\n        }\n    }\n    return null;\n}\n\n// ====================================\n// NORMALIZACIÓN DE CAMPOS\n// ====================================\n\n\nfunction normalizeField(value) {\n    const v = String(value || '').trim().toLowerCase();\n    return FIELD_ALIASES[v] ?? v;\n}\n\nfunction findPilotCode(origen, suborigen, detalle, subdetalle) {\n    const o  = normalizeField(origen);\n    const s  = normalizeField(suborigen);\n    const d  = normalizeField(detalle);\n    const sd = normalizeField(subdetalle);\n\n    // 1° intento: match exacto con los 4 campos (case-insensitive)\n    const exactMatch = ORIGEN_PILOT_MAP.find(item =>\n        normalizeField(item.origen)     === o  &&\n        normalizeField(item.suborigen)  === s  &&\n        normalizeField(item.detalle)    === d  &&\n        normalizeField(item.subdetalle) === sd\n    );\n    if (exactMatch) return exactMatch.pilotCode;\n\n    // 2° intento: match por origen, suborigen y subdetalle (ignorando detalle)\n    if (sd) {\n        const fallbackMatch = ORIGEN_PILOT_MAP.find(item =>\n            normalizeField(item.origen)     === o  &&\n            normalizeField(item.suborigen)  === s  &&\n            normalizeField(item.subdetalle) === sd\n        );\n        if (fallbackMatch) return fallbackMatch.pilotCode;\n    }\n\n    // 3° intento: match por origen, suborigen y detalle (ignorando subdetalle)\n    if (d) {\n        const detalleMatch = ORIGEN_PILOT_MAP.find(item =>\n            normalizeField(item.origen)    === o &&\n            normalizeField(item.suborigen) === s &&\n            normalizeField(item.detalle)   === d\n        );\n        if (detalleMatch) return detalleMatch.pilotCode;\n    }\n\n    // 4° intento: match solo por origen + suborigen (cuando detalle y subdetalle vienen vacíos)\n    const subOrigenMatch = ORIGEN_PILOT_MAP.find(item =>\n        normalizeField(item.origen)    === o &&\n        normalizeField(item.suborigen) === s\n    );\n    if (subOrigenMatch) return subOrigenMatch.pilotCode;\n\n    // 5° intento: default\n    return 'leads_nissan';\n}\n\nfunction getBusinessTypeId(tipoRegistro) {\n    if (tipoRegistro === \"ARG New Vehicle\") {\n        return 1;\n    } else if (tipoRegistro === \"ARG Savings Plan\" || tipoRegistro === \"ARG Saving Plan\") {\n        return 3;\n    }\n    return null;\n}\n\n// ====================================\n// PROCESAMIENTO PRINCIPAL\n// ====================================\n\n// Obtener el lead del nodo Loop Over Items\nconst lead = $('Loop Over Items').first().json;\n\n// Enriquecer el lead\nconst businesstypeid = getBusinessTypeId(lead.TIPO_DE_REGISTRO_DE_LEAD);\nconst dealerEmail = findDealerEmail(lead.CODIGO_DEL_DEALER);\nconst pilotCode = findPilotCode(lead.ORIGEN_DEL_LEAD, lead.SUB_ORIGEN,lead.DETALLE, lead.SUBDETALLE);\n\n// Retornar lead enriquecido\nreturn {\n    ...lead,\n    businesstypeid: businesstypeid,\n    dealerEmail: dealerEmail,\n    pilotCode: pilotCode\n};"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          3456,
+          784
+        ],
+        "id": "346269c2-b2ad-42ba-b3bc-53925111bd4b",
+        "name": "Code6"
+      },
+      {
+        "parameters": {
+          "url": "https://api.pilotsolution.net/webhooks/welcome.php",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "appkey",
+                "value": "=66477DB0-FC50-4DEC-BF96-67B7DB080B76"
+              },
+              {
+                "name": "pilot_firstname",
+                "value": "={{ $json.NOMBRE.split(' ')[0] }}"
+              },
+              {
+                "name": "pilot_cellphone",
+                "value": "={{ $json.CELULAR }}"
+              },
+              {
+                "name": "pilot_contact_type_id",
+                "value": "1"
+              },
+              {
+                "name": "pilot_suborigin_id",
+                "value": "={{ $json.pilotCode }}"
+              },
+              {
+                "name": "pilot_business_type_id",
+                "value": "={{$json.businesstypeid || 1}}"
+              },
+              {
+                "name": "pilot_notes",
+                "value": "=Grado de Interes: Cold | Resumen: Se requiere contacto desde el concesionario | Origen Salesforce: {{ $json.ORIGEN_DEL_LEAD || \"No especificado\"}} | SubOrigen Salesforce: {{ $json.SUB_ORIGEN || \"No especificado\"}} | Código Dealer: {{ $json.CODIGO_DEL_DEALER || \"No especificado\"}} | Detalle Salesforce: {{ $json.DETALLE || \"No especificado\"}} | SubDetalle Salesforce: {{ $json.SUBDETALLE || \"No especificado\"}}"
+              },
+              {
+                "name": "pilot_product_of_interest",
+                "value": "={{ $json.MODELO }}"
+              },
+              {
+                "name": "pilot_lastname",
+                "value": "={{ $json.NOMBRE.split(' ').slice(1).join(' ') }}"
+              },
+              {
+                "name": "pilot_email",
+                "value": "={{ $json[\"E-MAIL\"] }}"
+              },
+              {
+                "name": "document_number",
+                "value": "={{ $json.CUIL_CUIT_DNI }}"
+              },
+              {
+                "name": "pilot_client_identity_document",
+                "value": "={{ $json.CUIL_CUIT_DNI }}"
+              },
+              {
+                "name": "pilot_document_number",
+                "value": "={{ $json.CUIL_CUIT_DNI }}"
+              },
+              {
+                "name": "pilot_assigned_user",
+                "value": "={{ $json.dealerEmail || \"sendai@nissan.com\" }} "
+              },
+              {
+                "name": "pilot_provider_service",
+                "value": "={{ $json.CODIGO_DEL_DEALER }}"
+              },
+              {
+                "name": "pilot_tracking_id",
+                "value": "={{ $json.ID_LEAD }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "99ae07bb-1628-437d-8c1f-5fbe0937ac97",
+        "name": "HTTP Request1",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          3632,
+          784
+        ],
+        "executeOnce": true
+      },
+      {
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "b223ceea-a793-41c8-8730-cce0790a5487",
+                "name": "token",
+                "value": "={{ $json.result.entitydata.accounts[0].token }}",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "f9becfaa-f1db-438c-802a-1d82c8f5d76e",
+        "name": "Edit Fields2",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [
+          3936,
+          784
+        ]
+      },
+      {
+        "parameters": {
+          "url": "=https://api.pilotsolution.net/v1/users/authentication.php",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpCustomAuth",
+          "options": {}
+        },
+        "id": "82287c37-de9a-4d1a-ac63-b4339068f645",
+        "name": "Login",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          3776,
+          784
+        ],
+        "credentials": {
+          "httpCustomAuth": {
+            "id": "jP4TWD9WrWhP4iTY",
+            "name": "API NISSAN"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "url": "=https://api.pilotsolution.net/v1/users/authorization.php",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "identity_token",
+                "value": "={{ $json.token }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "9e777829-c7bd-4ea3-9d2d-c5081b08cae1",
+        "name": "Login1",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          4096,
+          784
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.pilotsolution.net/v1/welcomes/update.php",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={\n  \"data\": {\n    \"id\": \"{{ $('HTTP Request1').item.json.data.welcome_guid }}\",\n    \"interest_level_code\": \"Cold\"\n  },\n  \"header\": {\n    \"FlowName\": \"update_prospect\",\n    \"SequenceId\": 1,\n    \"TimeStamp\": 1248377,\n    \"TrackingId\": \"FD1C4A1A-CAFB-467E-825B-7FFB86CC21E3\",\n    \"access_token\": \"{{ $('Login1').item.json.result.entitydata.session.identityToken }}\"\n  }\n}",
+          "options": {}
+        },
+        "id": "e5d360e3-979a-4179-9c3d-55b47a8b2c15",
+        "name": "updateLead",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          4544,
+          784
+        ]
+      },
+      {
+        "parameters": {},
+        "type": "n8n-nodes-base.wait",
+        "typeVersion": 1.1,
+        "position": [
+          4256,
+          784
+        ],
+        "id": "65a73b14-ccd3-4584-b097-115eb50bbfee",
+        "name": "Wait",
+        "webhookId": "9a5a5878-493a-466d-a4ba-bd596a9297fa"
+      },
+      {
+        "parameters": {
+          "content": "## PRODUCCION",
+          "height": 80,
+          "width": 192
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          3216,
+          1056
+        ],
+        "typeVersion": 1,
+        "id": "3f1f284b-ee79-47e0-b17d-10b891562c15",
+        "name": "Sticky Note2"
+      },
+      {
+        "parameters": {
+          "sendTo": "ijcabaleiro@gmail.com",
+          "subject": "Lead Inválido NISSAN",
+          "message": "=-{{ $json.ID_LEAD }}\n\n-{{ $json.CELULAR }}\n\n-{{ $json.MODELO }}\n\n-{{ $json.CODIGO_DEL_DEALER }}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2.1,
+        "position": [
+          3632,
+          624
+        ],
+        "id": "5b10530d-c0cd-4504-9d47-f502b46883e9",
+        "name": "Send a message",
+        "webhookId": "245ad24b-9ede-4762-9214-407b229e63b4",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "jwGXROodBSgsAjaM",
+            "name": "Gmail notificaciones IA"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "7003da5d-84cb-41c3-a249-337c0302aeca",
+                "leftValue": "={{ $json.error }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "object",
+                  "operation": "exists",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          2704,
+          720
+        ],
+        "id": "5a37c21b-92aa-4de5-a2ab-003684862303",
+        "name": "If1"
+      },
+      {
+        "parameters": {
+          "table": {
+            "__rl": true,
+            "value": "nissan_salesforce",
+            "mode": "list",
+            "cachedResultName": "nissan_salesforce"
+          },
+          "dataMode": "defineBelow",
+          "valuesToSend": {
+            "values": [
+              {
+                "column": "LeadId",
+                "value": "={{ $('Loop Over Items').item.json.ID_LEAD }}"
+              },
+              {
+                "column": "telefono",
+                "value": "={{ $('Loop Over Items').item.json.CELULAR.startsWith('+') ? $('Loop Over Items').item.json.CELULAR : '+' + $('Loop Over Items').item.json.CELULAR }}"
+              },
+              {
+                "column": "status",
+                "value": "={{\"failed\"}}"
+              },
+              {
+                "column": "created_at",
+                "value": "={{ $now.toUTC().toFormat('yyyy-MM-dd HH:mm:ss') }}"
+              },
+              {
+                "column": "updated_at",
+                "value": "={{ $now.toUTC().toFormat('yyyy-MM-dd HH:mm:ss') }}"
+              },
+              {
+                "column": "nombre",
+                "value": "={{ $('Loop Over Items').item.json.NOMBRE }}"
+              },
+              {
+                "column": "modelo",
+                "value": "={{ $('Loop Over Items').item.json.MODELO }}"
+              },
+              {
+                "column": "dealer",
+                "value": "={{ $('Loop Over Items').item.json.CODIGO_DEL_DEALER }}"
+              },
+              {
+                "column": "dni",
+                "value": "={{ $('Loop Over Items').item.json.CUIL_CUIT_DNI || \"No especificado\" }}"
+              },
+              {
+                "column": "mail",
+                "value": "={{ $('Loop Over Items').item.json[\"E-MAIL\"] || \"No especificado\"}}"
+              },
+              {
+                "column": "suborigen_salesforce",
+                "value": "={{ $('Loop Over Items').item.json.SUB_ORIGEN || \"No especificado\" }}"
+              },
+              {
+                "column": "detalle_salesforce",
+                "value": "={{ $('Loop Over Items').item.json.DETALLE || \"No especificado\"}}"
+              },
+              {
+                "column": "subdetalle_salesforce",
+                "value": "={{ $('Loop Over Items').item.json.SUBDETALLE || \"No especificado\"}}"
+              },
+              {
+                "column": "tipo_registro",
+                "value": "={{ $('Loop Over Items').item.json.TIPO_DE_REGISTRO_DE_LEAD || \"No especificado\"}}"
+              },
+              {
+                "column": "provincia",
+                "value": "={{ $('Loop Over Items').item.json.PROVINCIA ||  $('Loop Over Items').item.json.PCIA || \"No especificado\"}}"
+              },
+              {
+                "column": "origen_salesforce",
+                "value": "={{ $('Loop Over Items').item.json.ORIGEN_DEL_LEAD || \"No especificado\"}}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          2928,
+          608
+        ],
+        "id": "43f35591-3b96-4f9c-ab5d-352fb783c141",
+        "name": "Insert rows in a table1",
+        "alwaysOutputData": true,
+        "executeOnce": false,
+        "credentials": {
+          "mySql": {
+            "id": "FezTcDnLo3SqPHvd",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "sendTo": "ignacio.cabaleiro@redoo.com.ar, francomartin.menna@nissan.com.ar",
+          "subject": "Error API Salesforce",
+          "emailType": "text",
+          "message": "=Hubo un error en la API de SALESFORCE. Error:  {{ $json.error.message }}",
+          "options": {
+            "appendAttribution": false
+          }
+        },
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2.1,
+        "position": [
+          1184,
+          1088
+        ],
+        "id": "43a24e0e-e424-4856-a037-6d22859bd3c5",
+        "name": "Send a message1",
+        "webhookId": "38be75a0-59a7-48f7-b207-768dafb9d4d7",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "jwGXROodBSgsAjaM",
+            "name": "Gmail notificaciones IA"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "update",
+          "table": {
+            "__rl": true,
+            "value": "nissan_salesforce",
+            "mode": "list",
+            "cachedResultName": "nissan_salesforce"
+          },
+          "dataMode": "defineBelow",
+          "columnToMatchOn": "LeadId",
+          "valueToMatchOn": "={{$('Code6').first().json.ID_LEAD}}",
+          "valuesToSend": {
+            "values": [
+              {
+                "column": "leadIdPilot",
+                "value": "={{ $('HTTP Request1').item.json.data.welcome_guid }}"
+              },
+              {
+                "column": "interes",
+                "value": "Cold"
+              },
+              {
+                "column": "origen_pilot",
+                "value": "={{$('Code6').first().json.pilotCode}}"
+              },
+              {
+                "column": "origen_salesforce",
+                "value": "={{$('Code6').first().json.ORIGEN_DEL_LEAD}}"
+              },
+              {
+                "column": "updated_at",
+                "value": "={{ $now.toUTC().toFormat('yyyy-MM-dd HH:mm:ss') }}"
+              },
+              {
+                "column": "productoInteres_pilot",
+                "value": "={{ $('Code6').item.json.MODELO }}"
+              },
+              {
+                "column": "dealer_pilot",
+                "value": "={{ $('Code6').item.json.CODIGO_DEL_DEALER }}"
+              },
+              {
+                "column": "id_pilot",
+                "value": "={{ $('HTTP Request1').item.json.data.welcome_id }}"
+              },
+              {
+                "column": "motivo",
+                "value": "Lead falló el envío"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          4400,
+          784
+        ],
+        "id": "16067035-4d6f-4b55-85c7-dbcf3149edd7",
+        "name": "savePilotID",
+        "credentials": {
+          "mySql": {
+            "id": "FezTcDnLo3SqPHvd",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "b145c0ad-1256-4bf7-89a9-962c65d3639e",
+                "leftValue": "={{$('Loop Over Items').item.json.SUB_ORIGEN}}",
+                "rightValue": "MERCADO LIBRE",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals",
+                  "name": "filter.operator.equals"
+                }
+              },
+              {
+                "id": "58c47450-3795-428d-b3d2-dd3fb247c8a6",
+                "leftValue": "={{$('Loop Over Items').item.json.SUB_ORIGEN}}",
+                "rightValue": "WHATSAPP",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals",
+                  "name": "filter.operator.equals"
+                }
+              }
+            ],
+            "combinator": "or"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          1888,
+          704
+        ],
+        "id": "ceeb2398-f8c9-404a-83af-8425491da337",
+        "name": "If3"
+      },
+      {
+        "parameters": {
+          "table": {
+            "__rl": true,
+            "value": "nissan_salesforce",
+            "mode": "list",
+            "cachedResultName": "nissan_salesforce"
+          },
+          "dataMode": "defineBelow",
+          "valuesToSend": {
+            "values": [
+              {
+                "column": "LeadId",
+                "value": "={{ $('Loop Over Items').item.json.ID_LEAD }}"
+              },
+              {
+                "column": "telefono",
+                "value": "={{ $('Loop Over Items').item.json.CELULAR.startsWith('+') ? $('Loop Over Items').item.json.CELULAR : '+' + $('Loop Over Items').item.json.CELULAR }}"
+              },
+              {
+                "column": "status",
+                "value": "=ml_wp"
+              },
+              {
+                "column": "created_at",
+                "value": "={{ $now.toUTC().toFormat('yyyy-MM-dd HH:mm:ss') }}"
+              },
+              {
+                "column": "updated_at",
+                "value": "={{ $now.toUTC().toFormat('yyyy-MM-dd HH:mm:ss') }}"
+              },
+              {
+                "column": "nombre",
+                "value": "={{ $('Loop Over Items').item.json.NOMBRE }}"
+              },
+              {
+                "column": "modelo",
+                "value": "={{ $('Loop Over Items').item.json.MODELO }}"
+              },
+              {
+                "column": "dealer",
+                "value": "={{ $('Loop Over Items').item.json.CODIGO_DEL_DEALER }}"
+              },
+              {
+                "column": "motivo",
+                "value": "Whatsapp"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          2208,
+          384
+        ],
+        "id": "04396f3f-5b33-4b81-9fc5-a912584d62c1",
+        "name": "Insert rows in a table2",
+        "alwaysOutputData": true,
+        "executeOnce": false,
+        "credentials": {
+          "mySql": {
+            "id": "FezTcDnLo3SqPHvd",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "// ====================================\n// MAPEO DE DEALERS Y CONFIGURACIÓN\n// ====================================\nconst FIELD_ALIASES = {\n    \"social media\":  \"media social\"\n};\n\nconst DEALER_ASSIGNMENTS = {\n    \"aika@nissan.com\": [\"230112\", \"230113\"],\n    \"aucam@nissan.com\": [\"230311\", \"230312\", \"230314\"],\n    \"autogen@nissan.com\": [\"230411\", \"230412\", \"230421\", \"230431\", \"230432\", \"230433\"],\n    \"autossan@nissan.com\": [\"230512\", \"230513\", \"230514\", \"230515\", \"230516\"],\n    \"tdfmotors@nissan.com\": [\"230611\", \"230612\", \"230622\"],\n    \"cityssan@nissan.com\": [\"230712\", \"230721\", \"230722\", \"230731\"],\n    \"egeoautomotores@nissan.com\": [\"230812\", \"230813\", \"230814\", \"230822\", \"230852\"],\n    \"femotors@nissan.com\": [\"230911\", \"230912\", \"230914\", \"230915\"],\n    \"sendai@nissan.com\": [\"231111\", \"231112\", \"231121\", \"231132\", \"231141\", \"231151\", \"231161\"],\n    \"kyotoautomotores@nissan.com\": [\"231311\", \"231312\", \"231313\", \"231314\", \"231316\", \"231317\"],\n    \"carone@nissan.com\": [\"231611\", \"231612\", \"231614\", \"231651\"],\n    \"nix@nissan.com\": [\"231911\", \"231921\", \"231931\"],\n    \"noale@nissan.com\": [\"232011\", \"232013\", \"232021\", \"232032\"],\n    \"senta@nissan.com\": [\"232311\", \"232312\", \"232313\", \"232314\"],\n    \"surisan@nissan.com\": [\"232521\", \"232522\", \"232531\", \"232532\", \"232541\"],\n    \"autoferro@nissan.com\": [\"232711\", \"232712\", \"232722\"],\n    \"fianiautomotores@nissan.com\": [\"232911\", \"232912\", \"232915\", \"232916\", \"232917\", \"232921\"],\n    \"yacopinimirai@nissan.com\": [\"233012\", \"233013\", \"233015\"],\n    \"neostar@nissan.com\": [\"233111\", \"233115\"],\n    \"capital@nissan.com\": [\"233211\", \"233212\", \"233213\", \"233214\"],\n    \"agnoa@nissan.com\": [\"235013\", \"235014\"]\n};\n\nconst ORIGEN_PILOT_MAP = [\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Frontier Brand\", pilotCode: \"mailing_frontierbrand_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Frontier NPA\", pilotCode: \"mailing_frontiernpa_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Frontier Retail\", pilotCode: \"mailing_frontierretail_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Kicks Play Brand\", pilotCode: \"mailing_kicksplaybrand_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Kicks Play NPA\", pilotCode: \"mailing_kicksplaynpa_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Kicks Play Retail\", pilotCode: \"mailing_kicksplayretail_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Nuevo Kicks Brand\", pilotCode: \"mailing_nuevokicksbrand_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Nuevo Kicks NPA\", pilotCode: \"mailing_nuevokicksnpa_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Nuevo Kicks Retail\", pilotCode: \"mailing_nuevokicksretail_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Sentra Brand\", pilotCode: \"mailing_sentrabrand_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Sentra Retail\", pilotCode: \"mailing_sentraretail_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Versa Brand\", pilotCode: \"mailing_versabrand_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Versa NPA\", pilotCode: \"mailing_versanpa_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Versa Retail\", pilotCode: \"mailing_versaretail_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"X-Trail Brand\", pilotCode: \"mailing_xtrailbrand_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"X-Trail Retail\", pilotCode: \"mailing_xtrailretail_campaigns\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Frontier Brand\", pilotCode: \"meta_frontier_brand\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Frontier NPA\", pilotCode: \"meta_frontier_npa\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Frontier Retail\", pilotCode: \"meta_frontier_retail\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Kicks Play Brand\", pilotCode: \"meta_kicks_play_brand\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Kicks Play NPA\", pilotCode: \"meta_kicks_play_npa\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Kicks Play Retail\", pilotCode: \"meta_kicks_play_retail\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Nuevo Kicks Brand\", pilotCode: \"meta_nuevo_kicks_brand\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Nuevo Kicks Retail\", pilotCode: \"meta_nuevo_kicks_retail\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Nuevo kicks NPA\", pilotCode: \"meta_nuevo_kicks_npa\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Sentra Brand\", pilotCode: \"meta_sentra_brand\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Sentra Retail\", pilotCode: \"meta_sentra_retail\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Versa Brand\", pilotCode: \"meta_versa_brand\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Versa NPA\", pilotCode: \"meta_versa_npa\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Versa Retail\", pilotCode: \"meta_versa_retail\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"X-Trail Brand\", pilotCode: \"meta_xtrail_brand\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"X-Trail Retail\", pilotCode: \"meta_xtrail_retail\" },\n    { origen: \"Internet\", suborigen: \"MERCADO LIBRE\", detalle: \"Frontier\", subdetalle: \"Frontier Brand\", pilotCode: \"frontier_frontier_brand\" },\n    { origen: \"Internet\", suborigen: \"MERCADO LIBRE\", detalle: \"Frontier\", subdetalle: \"Frontier Retail\", pilotCode: \"meli_frontier_retail\" },\n    { origen: \"Internet\", suborigen: \"MERCADO LIBRE\", detalle: \"Kicks Play\", subdetalle: \"Kicks Play Brand\", pilotCode: \"kicksplay_kicksplay_brand\" },\n    { origen: \"Internet\", suborigen: \"MERCADO LIBRE\", detalle: \"Kicks Play\", subdetalle: \"Kicks Play Retail\", pilotCode: \"kicksplay_kicksplay_retail\" },\n    { origen: \"Internet\", suborigen: \"MERCADO LIBRE\", detalle: \"New Kicks\", subdetalle: \"Nuevo Kicks Brand\", pilotCode: \"newkicks_nuevokicks_brand\" },\n    { origen: \"Internet\", suborigen: \"MERCADO LIBRE\", detalle: \"New Kicks\", subdetalle: \"Nuevo Kicks Retail\", pilotCode: \"meli_nuevokicks_retail\" },\n    { origen: \"Internet\", suborigen: \"MERCADO LIBRE\", detalle: \"X-Gear\", subdetalle: \"X-Gear Brand\", pilotCode: \"xgear_xgear_brand\" },\n    { origen: \"Internet\", suborigen: \"MERCADO LIBRE\", detalle: \"X-Gear\", subdetalle: \"X-Gear Retail\", pilotCode: \"xgear_xgear_retail\" },\n    { origen: \"Internet\", suborigen: \"MERCADO LIBRE\", detalle: \"X-Trail\", subdetalle: \"X-Trail Brand\", pilotCode: \"xtrail_xtrail_brand\" },\n    { origen: \"Internet\", suborigen: \"MERCADO LIBRE\", detalle: \"X-Trail\", subdetalle: \"X-Trail Retail\", pilotCode: \"meli_xtrail_retail\" },\n    { origen: \"Internet\", suborigen: \"Sitio Nissan Organico\", detalle: \"Credinissan\", subdetalle: \"Credinissan Form\", pilotCode: \"sitio_credinissan\" },\n    { origen: \"Internet\", suborigen: \"Sitio Nissan Organico\", detalle: \"Plan de ahorro\", subdetalle: \"Plan de ahorro mas informacion\", pilotCode: \"sitio_npa\" },\n    { origen: \"Internet\", suborigen: \"Sitio Nissan Organico\", detalle: \"Posventa\", subdetalle: \"Accesorios\", pilotCode: \"sitio_posventa_accesorios\" },\n    { origen: \"Internet\", suborigen: \"Sitio Nissan Organico\", detalle: \"Posventa\", subdetalle: \"Online booking\", pilotCode: \"sitio_posventa_onlinebooking\" },\n    { origen: \"Internet\", suborigen: \"Sitio Nissan Organico\", detalle: \"Posventa\", subdetalle: \"Posventa\", pilotCode: \"sitio_posventa_posventa\" },\n    { origen: \"Internet\", suborigen: \"Sitio Nissan Organico\", detalle: \"Venta\", subdetalle: \"Solicitar cotizacion\", pilotCode: \"sitio_venta_solicitarcotizacion\" },\n    { origen: \"Internet\", suborigen: \"WHATSAPP\", detalle: \"Offline Whatsapp\", subdetalle: \"Campaña RRSS\", pilotCode: \"whatsapp_offline\" },\n    { origen: \"Internet\", suborigen: \"WHATSAPP\", detalle: \"Online Whatsapp\", subdetalle: \"Campaña RRSS\", pilotCode: \"whatsapp_online\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Kait Brand\", pilotCode: \"meta_kait_brand\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Kait NPA\", pilotCode: \"meta_kait_npa\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Kait Retail\", pilotCode: \"meta_kait_retail\" },\n    { origen: \"VACIO\", suborigen: \"VACIO\", detalle: \"VACIO\", subdetalle: \"VACIO\", pilotCode: \"leads_nissan\" },\n];\n\n// ====================================\n// FUNCIONES AUXILIARES\n// ====================================\n\nfunction findDealerEmail(codigoDealer) {\n    for (const [email, codigos] of Object.entries(DEALER_ASSIGNMENTS)) {\n        if (codigos.includes(codigoDealer)) {\n            return email;\n        }\n    }\n    return null;\n}\n\nfunction normalizeField(value) {\n    const v = String(value || '').trim().toLowerCase();\n    return FIELD_ALIASES[v] ?? v;\n}\n\nfunction findPilotCode(origen, suborigen, detalle, subdetalle) {\n    const o  = normalizeField(origen);\n    const s  = normalizeField(suborigen);\n    const d  = normalizeField(detalle);\n    const sd = normalizeField(subdetalle);\n\n    // 1° intento: match exacto con los 4 campos (case-insensitive)\n    const exactMatch = ORIGEN_PILOT_MAP.find(item =>\n        normalizeField(item.origen)     === o  &&\n        normalizeField(item.suborigen)  === s  &&\n        normalizeField(item.detalle)    === d  &&\n        normalizeField(item.subdetalle) === sd\n    );\n    if (exactMatch) return exactMatch.pilotCode;\n\n    // 2° intento: match por origen, suborigen y subdetalle (ignorando detalle)\n    if (sd) {\n        const fallbackMatch = ORIGEN_PILOT_MAP.find(item =>\n            normalizeField(item.origen)     === o  &&\n            normalizeField(item.suborigen)  === s  &&\n            normalizeField(item.subdetalle) === sd\n        );\n        if (fallbackMatch) return fallbackMatch.pilotCode;\n    }\n\n    // 3° intento: match por origen, suborigen y detalle (ignorando subdetalle)\n    if (d) {\n        const detalleMatch = ORIGEN_PILOT_MAP.find(item =>\n            normalizeField(item.origen)    === o &&\n            normalizeField(item.suborigen) === s &&\n            normalizeField(item.detalle)   === d\n        );\n        if (detalleMatch) return detalleMatch.pilotCode;\n    }\n\n    // 4° intento: match solo por origen + suborigen (cuando detalle y subdetalle vienen vacíos)\n    const subOrigenMatch = ORIGEN_PILOT_MAP.find(item =>\n        normalizeField(item.origen)    === o &&\n        normalizeField(item.suborigen) === s\n    );\n    if (subOrigenMatch) return subOrigenMatch.pilotCode;\n\n    // 5° intento: default\n    return 'leads_nissan';\n}\n\nfunction getBusinessTypeId(tipoRegistro) {\n    if (tipoRegistro === \"ARG New Vehicle\") {\n        return 1;\n    } else if (tipoRegistro === \"ARG Savings Plan\" || tipoRegistro === \"ARG Saving Plan\") {\n        return 3;\n    }\n    return null;\n}\n\n// ====================================\n// PROCESAMIENTO PRINCIPAL\n// ====================================\n\nconst lead = $('Loop Over Items').first().json;\n\nconst businesstypeid = getBusinessTypeId(lead.TIPO_DE_REGISTRO_DE_LEAD);\nconst dealerEmail = findDealerEmail(lead.CODIGO_DEL_DEALER);\nconst pilotCode = findPilotCode(lead.ORIGEN_DEL_LEAD, lead.SUB_ORIGEN, lead.DETALLE, lead.SUBDETALLE);\n\nreturn {\n    ...lead,\n    businesstypeid: businesstypeid,\n    dealerEmail: dealerEmail,\n    pilotCode: pilotCode\n};"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2352,
+          384
+        ],
+        "id": "4bbcd7a4-6d6c-4285-a369-93d1950478f5",
+        "name": "Code7"
+      },
+      {
+        "parameters": {
+          "url": "https://api.pilotsolution.net/webhooks/welcome.php",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "appkey",
+                "value": "=66477DB0-FC50-4DEC-BF96-67B7DB080B76"
+              },
+              {
+                "name": "pilot_firstname",
+                "value": "={{ $json.NOMBRE }}"
+              },
+              {
+                "name": "pilot_cellphone",
+                "value": "={{ $json.CELULAR }}"
+              },
+              {
+                "name": "pilot_contact_type_id",
+                "value": "1"
+              },
+              {
+                "name": "pilot_suborigin_id",
+                "value": "={{ $json.pilotCode }}"
+              },
+              {
+                "name": "pilot_business_type_id",
+                "value": "={{$json.businesstypeid || 1}}"
+              },
+              {
+                "name": "pilot_notes",
+                "value": "=Grado de Interes: Cold | Resumen: El mensaje no se envio ya que pertenece a un lead con suborigen MERCADO LIBRE o Whatsapp. | Origen Salesforce: {{ $json.ORIGEN_DEL_LEAD || \"No especificado\"}} | SubOrigen Salesforce: {{ $json.SUB_ORIGEN || \"No especificado\"}} | Código Dealer: {{ $json.CODIGO_DEL_DEALER || \"No especificado\"}}"
+              },
+              {
+                "name": "pilot_product_of_interest",
+                "value": "={{ $json.MODELO }}"
+              },
+              {
+                "name": "pilot_lastname",
+                "value": "={{ $json.NOMBRE }}"
+              },
+              {
+                "name": "pilot_email",
+                "value": "={{ $json[\"E-MAIL\"] }}"
+              },
+              {
+                "name": "document_number",
+                "value": "={{ $json.CUIL_CUIT_DNI }}"
+              },
+              {
+                "name": "pilot_client_identity_document",
+                "value": "={{ $json.CUIL_CUIT_DNI }}"
+              },
+              {
+                "name": "pilot_document_number",
+                "value": "={{ $json.CUIL_CUIT_DNI }}"
+              },
+              {
+                "name": "pilot_assigned_user",
+                "value": "={{ $json.dealerEmail || \"sendai@nissan.com\" }} "
+              },
+              {
+                "name": "pilot_provider_service",
+                "value": "={{ $json.CODIGO_DEL_DEALER }}"
+              },
+              {
+                "name": "pilot_tracking_id",
+                "value": "={{ $json.ID_LEAD }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "bccb3921-916e-4d0b-a8fc-f1da30347484",
+        "name": "HTTP Request",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2528,
+          384
+        ],
+        "executeOnce": true
+      },
+      {
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "b223ceea-a793-41c8-8730-cce0790a5487",
+                "name": "token",
+                "value": "={{ $json.result.entitydata.accounts[0].token }}",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "b430d0cb-1769-47ec-bbdb-0570949fa0d2",
+        "name": "Edit Fields",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [
+          2832,
+          384
+        ]
+      },
+      {
+        "parameters": {
+          "url": "=https://api.pilotsolution.net/v1/users/authentication.php",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpCustomAuth",
+          "options": {}
+        },
+        "id": "29c5686b-ca5a-4c94-a660-12e6fe428f3e",
+        "name": "Login2",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2672,
+          384
+        ],
+        "credentials": {
+          "httpCustomAuth": {
+            "id": "jP4TWD9WrWhP4iTY",
+            "name": "API NISSAN"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "url": "=https://api.pilotsolution.net/v1/users/authorization.php",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "identity_token",
+                "value": "={{ $json.token }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "f63fb180-95b7-4976-8174-6ef45fdef75d",
+        "name": "Login3",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2992,
+          384
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.pilotsolution.net/v1/welcomes/update.php",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={\n  \"data\": {\n    \"id\": \"{{ $('HTTP Request').item.json.data.welcome_guid }}\",\n    \"interest_level_code\": \"Cold\"\n  },\n  \"header\": {\n    \"FlowName\": \"update_prospect\",\n    \"SequenceId\": 1,\n    \"TimeStamp\": 1248377,\n    \"TrackingId\": \"FD1C4A1A-CAFB-467E-825B-7FFB86CC21E3\",\n    \"access_token\": \"{{ $('Login3').item.json.result.entitydata.session.identityToken }}\"\n  }\n}",
+          "options": {}
+        },
+        "id": "ee5038ef-bf69-4deb-84a8-91408d2a8236",
+        "name": "updateLead1",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          3440,
+          384
+        ]
+      },
+      {
+        "parameters": {},
+        "type": "n8n-nodes-base.wait",
+        "typeVersion": 1.1,
+        "position": [
+          3152,
+          384
+        ],
+        "id": "a985aa5d-e3bb-4f21-b1fd-772055bff137",
+        "name": "Wait1",
+        "webhookId": "9a5a5878-493a-466d-a4ba-bd596a9297fa"
+      },
+      {
+        "parameters": {
+          "operation": "update",
+          "table": {
+            "__rl": true,
+            "value": "nissan_salesforce",
+            "mode": "list",
+            "cachedResultName": "nissan_salesforce"
+          },
+          "dataMode": "defineBelow",
+          "columnToMatchOn": "LeadId",
+          "valueToMatchOn": "={{$('Code7').first().json.ID_LEAD}}",
+          "valuesToSend": {
+            "values": [
+              {
+                "column": "leadIdPilot",
+                "value": "={{ $('HTTP Request').item.json.data.welcome_guid }}"
+              },
+              {
+                "column": "interes",
+                "value": "Cold"
+              },
+              {
+                "column": "origen_pilot",
+                "value": "={{$('Code7').first().json.pilotCode}}"
+              },
+              {
+                "column": "origen_salesforce",
+                "value": "={{$('Code7').first().json.ORIGEN_DEL_LEAD}}"
+              },
+              {
+                "column": "id_pilot",
+                "value": "={{ $('HTTP Request').item.json.data.welcome_id }}"
+              },
+              {
+                "column": "dealer_pilot",
+                "value": "={{ $('Code7').item.json.CODIGO_DEL_DEALER }}"
+              },
+              {
+                "column": "updated_at",
+                "value": "={{$now}}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          3296,
+          384
+        ],
+        "id": "b9034a2d-2322-431a-8023-728510c2db1b",
+        "name": "savePilotID1",
+        "credentials": {
+          "mySql": {
+            "id": "FezTcDnLo3SqPHvd",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "content": "## Mercado libre o Whatsapp"
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          1824,
+          336
+        ],
+        "typeVersion": 1,
+        "id": "468bf1c8-5992-4e37-be89-e7c034bcf520",
+        "name": "Sticky Note"
+      },
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "minutes",
+                "minutesInterval": 6
+              }
+            ]
+          }
+        },
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          1184,
+          1248
+        ],
+        "id": "af102d5f-213e-4c89-9eed-fd7c95d1408c",
+        "name": "Schedule Trigger1",
+        "disabled": true
+      },
+      {
+        "parameters": {
+          "operation": "removeItemsSeenInPreviousExecutions",
+          "dedupeValue": "={{$json.ID_LEAD}}",
+          "options": {
+            "historySize": 100000000
+          }
+        },
+        "type": "n8n-nodes-base.removeDuplicates",
+        "typeVersion": 2,
+        "position": [
+          992,
+          784
+        ],
+        "id": "acd7bd0f-b8ed-4dd0-bf02-9afe246d445a",
+        "name": "Remove Duplicates"
+      },
+      {
+        "parameters": {
+          "table": {
+            "__rl": true,
+            "value": "nissan_salesforce",
+            "mode": "list",
+            "cachedResultName": "nissan_salesforce"
+          },
+          "dataMode": "defineBelow",
+          "valuesToSend": {
+            "values": [
+              {
+                "column": "LeadId",
+                "value": "={{ $('Loop Over Items').item.json.ID_LEAD }}"
+              },
+              {
+                "column": "telefono",
+                "value": "={{ $('Loop Over Items').item.json.CELULAR.startsWith('+') ? $('Loop Over Items').item.json.CELULAR : '+' + $('Loop Over Items').item.json.CELULAR }}"
+              },
+              {
+                "column": "status",
+                "value": "={{ $('getStatus').first().json.status || \"failed\"}}"
+              },
+              {
+                "column": "created_at",
+                "value": "={{ $now.toUTC().toFormat('yyyy-MM-dd HH:mm:ss') }}"
+              },
+              {
+                "column": "updated_at",
+                "value": "={{ $now.toUTC().toFormat('yyyy-MM-dd HH:mm:ss') }}"
+              },
+              {
+                "column": "nombre",
+                "value": "={{ $('Loop Over Items').item.json.NOMBRE }}"
+              },
+              {
+                "column": "modelo",
+                "value": "={{ $('Loop Over Items').item.json.MODELO }}"
+              },
+              {
+                "column": "dealer",
+                "value": "={{ $('Loop Over Items').item.json.CODIGO_DEL_DEALER }}"
+              },
+              {
+                "column": "dni",
+                "value": "={{ $('Loop Over Items').item.json.CUIL_CUIT_DNI || \"No especificado\" }}"
+              },
+              {
+                "column": "mail",
+                "value": "={{ $('Loop Over Items').item.json[\"E-MAIL\"] || \"No especificado\"}}"
+              },
+              {
+                "column": "suborigen_salesforce",
+                "value": "={{ $('Loop Over Items').item.json.SUB_ORIGEN || \"No especificado\" }}"
+              },
+              {
+                "column": "detalle_salesforce",
+                "value": "={{ $('Loop Over Items').item.json.DETALLE || \"No especificado\"}}"
+              },
+              {
+                "column": "subdetalle_salesforce",
+                "value": "={{ $('Loop Over Items').item.json.SUBDETALLE || \"No especificado\"}}"
+              },
+              {
+                "column": "tipo_registro",
+                "value": "={{ $('Loop Over Items').item.json.TIPO_DE_REGISTRO_DE_LEAD || \"No especificado\"}}"
+              },
+              {
+                "column": "provincia",
+                "value": "={{ $('Loop Over Items').item.json.PROVINCIA ||  $('Loop Over Items').item.json.PCIA || \"No especificado\"}}"
+              },
+              {
+                "column": "origen_salesforce",
+                "value": "={{ $('Loop Over Items').item.json.ORIGEN_DEL_LEAD || \"No especificado\"}}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          3056,
+          800
+        ],
+        "id": "358eb0c2-2344-4d97-9c5b-ee5016d7e9e7",
+        "name": "Insert rows in a table3",
+        "alwaysOutputData": true,
+        "executeOnce": false,
+        "credentials": {
+          "mySql": {
+            "id": "FezTcDnLo3SqPHvd",
+            "name": "MySQL account"
+          }
+        }
+      }
+    ],
+    "connections": {
+      "When clicking ‘Execute workflow’": {
+        "main": [
+          [
+            {
+              "node": "TokenProd",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Token": {
+        "main": [
+          [
+            {
+              "node": "GetLeads",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "GetLeads": {
+        "main": [
+          [
+            {
+              "node": "Code",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Loop Over Items": {
+        "main": [
+          [],
+          [
+            {
+              "node": "Select rows from a table",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code": {
+        "main": [
+          []
+        ]
+      },
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "TokenProd1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Token1": {
+        "main": [
+          [
+            {
+              "node": "GetLeads1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "GetLeads1": {
+        "main": [
+          []
+        ]
+      },
+      "Code1": {
+        "main": [
+          [
+            {
+              "node": "Respond to Webhook",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code4": {
+        "main": [
+          [
+            {
+              "node": "HTTP Request3",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Schedule Trigger": {
+        "main": [
+          [
+            {
+              "node": "TokenProd",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Select rows from a table": {
+        "main": [
+          [
+            {
+              "node": "If",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Insert rows in a table": {
+        "main": [
+          []
+        ]
+      },
+      "If": {
+        "main": [
+          [
+            {
+              "node": "If3",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Loop Over Items",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "HTTP Request3": {
+        "main": [
+          [
+            {
+              "node": "Wait7",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "TokenProd": {
+        "main": [
+          [
+            {
+              "node": "GetLeads Prod1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "GetLeads Prod1": {
+        "main": [
+          [
+            {
+              "node": "Code3",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Send a message1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code3": {
+        "main": [
+          [
+            {
+              "node": "Remove Duplicates",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "TokenProd1": {
+        "main": [
+          [
+            {
+              "node": "GetLeads Prod2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "GetLeads Prod2": {
+        "main": [
+          [
+            {
+              "node": "Code1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Wait7": {
+        "main": [
+          [
+            {
+              "node": "If1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "getStatus": {
+        "main": [
+          [
+            {
+              "node": "Insert rows in a table3",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "If2": {
+        "main": [
+          [
+            {
+              "node": "Code6",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Loop Over Items",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "HTTP Request1": {
+        "main": [
+          [
+            {
+              "node": "Login",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Edit Fields2": {
+        "main": [
+          [
+            {
+              "node": "Login1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Login": {
+        "main": [
+          [
+            {
+              "node": "Edit Fields2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Login1": {
+        "main": [
+          [
+            {
+              "node": "Wait",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Wait": {
+        "main": [
+          [
+            {
+              "node": "savePilotID",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code6": {
+        "main": [
+          [
+            {
+              "node": "HTTP Request1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "updateLead": {
+        "main": [
+          [
+            {
+              "node": "Loop Over Items",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "If1": {
+        "main": [
+          [
+            {
+              "node": "Insert rows in a table1",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "getStatus",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Insert rows in a table1": {
+        "main": [
+          [
+            {
+              "node": "Code6",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "savePilotID": {
+        "main": [
+          [
+            {
+              "node": "updateLead",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "If3": {
+        "main": [
+          [
+            {
+              "node": "Insert rows in a table2",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Code4",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code7": {
+        "main": [
+          [
+            {
+              "node": "HTTP Request",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "HTTP Request": {
+        "main": [
+          [
+            {
+              "node": "Login2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Edit Fields": {
+        "main": [
+          [
+            {
+              "node": "Login3",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Login2": {
+        "main": [
+          [
+            {
+              "node": "Edit Fields",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Login3": {
+        "main": [
+          [
+            {
+              "node": "Wait1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Wait1": {
+        "main": [
+          [
+            {
+              "node": "savePilotID1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "savePilotID1": {
+        "main": [
+          [
+            {
+              "node": "updateLead1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "updateLead1": {
+        "main": [
+          [
+            {
+              "node": "Loop Over Items",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Insert rows in a table2": {
+        "main": [
+          [
+            {
+              "node": "Code7",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Remove Duplicates": {
+        "main": [
+          [
+            {
+              "node": "Loop Over Items",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Insert rows in a table3": {
+        "main": [
+          [
+            {
+              "node": "If2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "MARCELO AGUSTIN DRI",
+    "name": "Version 88ed17c2",
+    "description": "",
+    "autosaved": true,
+    "createdAt": "2026-11-06T11:55:43.107Z",
+    "updatedAt": "2026-11-06T11:55:45.000Z"
+  },
+  "activeVersionId": "88ed17c2-9745-4f84-9852-cf50f329a583",
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "TokenProd",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Token": {
+      "main": [
+        [
+          {
+            "node": "GetLeads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GetLeads": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Select rows from a table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        []
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "TokenProd1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Token1": {
+      "main": [
+        [
+          {
+            "node": "GetLeads1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GetLeads1": {
+      "main": [
+        []
+      ]
+    },
+    "Code1": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code4": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "TokenProd",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select rows from a table": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert rows in a table": {
+      "main": [
+        []
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "If3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request3": {
+      "main": [
+        [
+          {
+            "node": "Wait7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "TokenProd": {
+      "main": [
+        [
+          {
+            "node": "GetLeads Prod1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GetLeads Prod1": {
+      "main": [
+        [
+          {
+            "node": "Code3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send a message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code3": {
+      "main": [
+        [
+          {
+            "node": "Remove Duplicates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "TokenProd1": {
+      "main": [
+        [
+          {
+            "node": "GetLeads Prod2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GetLeads Prod2": {
+      "main": [
+        [
+          {
+            "node": "Code1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait7": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "getStatus": {
+      "main": [
+        [
+          {
+            "node": "Insert rows in a table3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If2": {
+      "main": [
+        [
+          {
+            "node": "Code6",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "Login",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields2": {
+      "main": [
+        [
+          {
+            "node": "Login1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Login": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Login1": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "savePilotID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code6": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "updateLead": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Insert rows in a table1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "getStatus",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert rows in a table1": {
+      "main": [
+        [
+          {
+            "node": "Code6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "savePilotID": {
+      "main": [
+        [
+          {
+            "node": "updateLead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If3": {
+      "main": [
+        [
+          {
+            "node": "Insert rows in a table2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code7": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Login2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Login3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Login2": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Login3": {
+      "main": [
+        [
+          {
+            "node": "Wait1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait1": {
+      "main": [
+        [
+          {
+            "node": "savePilotID1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "savePilotID1": {
+      "main": [
+        [
+          {
+            "node": "updateLead1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "updateLead1": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert rows in a table2": {
+      "main": [
+        [
+          {
+            "node": "Code7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remove Duplicates": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert rows in a table3": {
+      "main": [
+        [
+          {
+            "node": "If2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2025-12-18T11:28:17.903Z",
+  "id": "qNzK3R6yfsDGEVJ5",
+  "isArchived": false,
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "name": "NISSAN - API SALESFORCE",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        256,
+        624
+      ],
+      "id": "887414db-12ee-45f3-ab36-ad8197f84f0c",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://dm-us.informaticacloud.com/authz-service/oauth/token",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Basic OWdmd1VKUXhPY3ZiT2xkd1VoVnVrbDpmTUN6QW5UMEo="
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/x-www-form-urlencoded"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "client_id",
+              "value": "9gfwUJQxOcvbOldwUhVukl"
+            },
+            {
+              "name": "client_Secret",
+              "value": "fMCzAnT0J"
+            },
+            {
+              "name": "grant_type",
+              "value": "client_credentials"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        608,
+        240
+      ],
+      "id": "dea62076-3efc-4c04-95ae-14e800d271d2",
+      "name": "Token"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://usw1-gw.dm-us.informaticacloud.com/alliance.sandbox.com/API-NIS-NARG-DDM-AINT/v1/p-WS-LD001-NARG-HotLeads",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.access_token }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": " {\n    \"COD_BIR\": \"07600653\",\n    \"CNPJ_BIR\": \"04777242000309\",\n    \"SIS_ORIGEM\": \"3\",\n    \"VERSAO_WS\": \"21.0.10\",\n    \"DTINI\": \"2000-06-17\",\n    \"DTFIM\": \"2026-07-21\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        736,
+        240
+      ],
+      "id": "11b9f2ed-8134-4ca7-86a3-1571e76e481c",
+      "name": "GetLeads"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1216,
+        784
+      ],
+      "id": "f9d8ade2-d700-4bed-a2dc-45ea125f8bfa",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Obtenemos el array de leads\nconst leads = $input.first().json.response;\nconst nuevoLead = {\n    \"ID_LEAD\": \"123131231231\",\n    \"QUITAR\": \"\",\n    \"TIPO_DE_REGISTRO_DE_LEAD\": \"ARG New Vehicle\",\n    \"ORIGEN_DEL_LEAD\": \"INTERNET\",\n    \"CAMPANA_COMENTARIOS\": \"\",\n    \"MODELO\": \"Leaf\",\n    \"CUIL_CUIT_DNI\": \"98777777\",\n    \"PRIORIDAD\": \"\",\n    \"ID_PROPIETARIO\": \"\",\n    \"SUB_ORIGEN\": \"SOCIAL MEDIA\",\n    \"MOTIVO_DEL_ESTADO\": \"\",\n    \"NOMBRE\": \"Prueba_02_190126 Toth\",\n    \"DT_DISP_LEAD\": \"2026-01-19T18:01:34.000+0000\",\n    \"PCIA\": \"Argentina\",\n    \"CP\": \"1076\",\n    \"PROVINCIA\": \"\",\n    \"FORMAS_DE_PAGO\": \"\",\n    \"ID_CAMPANA\": \"\",\n    \"NOMBRE_DEALER\": \"\",\n    \"FORMA_CONTACTO\": \"\",\n    \"CELULAR\": \"5491150997009\",\n    \"COMENTARIOS\": \"\",\n    \"CODIGO_DEL_DEALER\": \"231111\",\n    \"CAMPANA\": \"\",\n    \"TELEFONO\": \"5491150997009\",\n    \"ESTADO_LEAD\": \"New\",\n    \"DETALLE\": \"Meta\",\n    \"SUBDETALLE\": \"Frontier Retail\",\n    \"CIUDAD\": \"Buenos Aires\",\n    \"DESCRIPCION_PROPIETARIO\": \"\",\n    \"E-MAIL\": \"toth@mail.com.ar\"\n};\n\n// Calculamos la fecha límite (hace 24 horas)\nconst ahora = new Date();\nconst hace24Horas = new Date(ahora.getTime() - (24 * 60 * 60 * 1000));\n\n// Filtramos por fecha, teléfono y normalizamos\nconst leadsValidos = leads.filter(lead => {\n  // Validación de fecha\n  if (!lead.DT_DISP_LEAD) return false;\n  \n  const fechaLead = new Date(lead.DT_DISP_LEAD);\n  if (fechaLead < hace24Horas) return false;\n  \n  // Validación y normalización de teléfono\n  const telefono = lead.CELULAR || '';\n  \n  // Si empieza con 11, le agregamos 549 al principio\n  if (telefono.startsWith('11')) {\n    lead.CELULAR = '549' + telefono;\n    return true;\n  }\n  \n  // Aceptamos los que empiezan con 54, +54, 55 o +55\n  return telefono.startsWith('54') || \n         telefono.startsWith('+54') || \n         telefono.startsWith('55') || \n         telefono.startsWith('+55');\n});\n\nleadsValidos.unshift(nuevoLead);\n\n// Retornamos el array filtrado\nreturn leadsValidos;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        864,
+        240
+      ],
+      "id": "b95450ed-8ce8-409d-a2c0-3802294c12e5",
+      "name": "Code",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "path": "2309c00d-d8b2-4a45-9eb7-2b10792c0a4a",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        1232,
+        -16
+      ],
+      "id": "8af914f1-aeb8-45d1-a0f8-bafe34c55f65",
+      "name": "Webhook",
+      "webhookId": "2309c00d-d8b2-4a45-9eb7-2b10792c0a4a"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://dm-us.informaticacloud.com/authz-service/oauth/token",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Basic OWdmd1VKUXhPY3ZiT2xkd1VoVnVrbDpmTUN6QW5UMEo="
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/x-www-form-urlencoded"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "client_id",
+              "value": "9gfwUJQxOcvbOldwUhVukl"
+            },
+            {
+              "name": "client_Secret",
+              "value": "fMCzAnT0J"
+            },
+            {
+              "name": "grant_type",
+              "value": "client_credentials"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        496,
+        -288
+      ],
+      "id": "c4203dee-9f0f-4d50-bcf3-13e7f0c8cd43",
+      "name": "Token1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://usw1-gw.dm-us.informaticacloud.com/alliance.sandbox.com/API-NIS-NARG-DDM-AINT/v1/p-WS-LD001-NARG-HotLeads",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.access_token }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": " {\n    \"COD_BIR\": \"07600653\",\n    \"CNPJ_BIR\": \"04777242000309\",\n    \"SIS_ORIGEM\": \"3\",\n    \"VERSAO_WS\": \"21.0.10\",\n    \"DTINI\": \"2000-06-17\",\n    \"DTFIM\": \"2026-07-21\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        -288
+      ],
+      "id": "99bc76fa-333a-41ca-88c1-2a448e56d923",
+      "name": "GetLeads1"
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1952,
+        -16
+      ],
+      "id": "197a273e-f594-4cf1-a77b-3c0c83a1ffd4",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Obtenemos el array de leads del input\nconst leads = $input.all()[0].json.response;\n\n// Registro hardcodeado para agregar\nconst nuevoLead = {\n    \"ID_LEAD\": \"111\",\n    \"QUITAR\": \"\",\n    \"TIPO_DE_REGISTRO_DE_LEAD\": \"ARG Savings Plan\",\n    \"ORIGEN_DEL_LEAD\": \"SALESFORCE\",\n    \"CAMPANA_COMENTARIOS\": \"\",\n    \"MODELO\": \"KAIT\",\n    \"CUIL_CUIT_DNI\": \"41289870\",\n    \"PRIORIDAD\": \"\",\n    \"ID_PROPIETARIO\": \"\",\n    \"SUB_ORIGEN\": \"Sitio Nissan Organico\",\n    \"MOTIVO_DEL_ESTADO\": \"\",\n    \"NOMBRE\": \"NACHO TEST\",\n    \"DT_DISP_LEAD\": \"2026-02-10T21:07:09.000+0000\",\n    \"PCIA\": \"Argentina\",\n    \"CP\": \"\",\n    \"PROVINCIA\": \"\",\n    \"FORMAS_DE_PAGO\": \"\",\n    \"ID_CAMPANA\": \"\",\n    \"NOMBRE_DEALER\": \"\",\n    \"FORMA_CONTACTO\": \"\",\n    \"CELULAR\": \"5492616809213\",\n    \"COMENTARIOS\": \"\",\n    \"CODIGO_DEL_DEALER\": \"231111\",\n    \"CAMPANA\": \"\",\n    \"TELEFONO\": \"\",\n    \"ESTADO_LEAD\": \"New\",\n    \"DETALLE\": \"\",\n    \"SUBDETALLE\": \"\",\n    \"CIUDAD\": \"\",\n    \"DESCRIPCION_PROPIETARIO\": \"\",\n    \"E-MAIL\": \"test@redoo.com\"\n};\n// Normalizamos todos los teléfonos que empiezan con 11\nleads.forEach(lead => {\n  const telefono = lead.TELEFONO || '';\n  if (telefono.startsWith('11')) {\n    lead.TELEFONO = '549' + telefono;\n  }\n});\n\n// Agregamos el nuevo lead al inicio\nleads.unshift(nuevoLead);\n\n// Retornamos la estructura completa\nreturn [{\n  json: {\n    response: leads\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1728,
+        -16
+      ],
+      "id": "71515fbc-e39c-43da-8f8e-43c59ec11357",
+      "name": "Code1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Acceder directamente al item del Loop Over Items\nconst item = $('Loop Over Items').item.json;\n\n// Debug: ver qué estamos recibiendo del loop\nconsole.log('Item del Loop Over Items:', JSON.stringify(item, null, 2));\n\n// Normalizar el texto del modelo\nconst modeloRaw = (item.MODELO || \"No aclarado\").trim().toLowerCase();\n\nconsole.log('Modelo normalizado:', modeloRaw);\n\n// Función para determinar la imagen según el modelo\nfunction obtenerImagen(modelo) {\n\n  // 🔋 X-Trail e-Power (prioridad alta)\n  if (\n    modelo.includes(\"x-trail e-power\") ||\n    modelo.includes(\"x trail e power\") ||\n    (modelo.includes(\"x-trail\") && modelo.includes(\"e-power\")) ||\n    (modelo.includes(\"x trail\") && modelo.includes(\"e power\"))\n  ) {\n    return \"Foto_Template_e_power_Xtrail_20260202_155844.jpg\";\n  }\n\n  // 🚙 X-Trail común\n  if (modelo.includes(\"x-trail\") || modelo.includes(\"x trail\")) {\n    return \"Foto_Template_Xtrail_20260202_103322.jpg\";\n  }\n\n  if (modelo.includes(\"kicks play\")) {\n    return \"Foto_Template_Kicks_play_20260108_150209.jpg\";\n  }\n\n  if (modelo.includes(\"nuevo kicks\") || modelo === \"kicks\") {\n    return \"Foto_Template_Nueva_Kicks_20260108_150214.jpg\";\n  }\n\n  if (modelo.includes(\"frontier\")) {\n    return \"Foto_Template_Frontier_20260108_150219.jpg\";\n  }\n\n  if (modelo.includes(\"sentra\")) {\n    return \"Foto_Template_Sentra_20260108_150223.jpg\";\n  }\n\n  if (modelo.includes(\"versa\")) {\n    return \"Foto_Template_Versa_20260108_150226.jpg\";\n  }\n  \n  if (modelo.includes(\"kait\")) {\n    return \"foto_kai_2.jpeg\";\n  }\n  // Imagen por defecto\n  return \"nissan_20251218_100834.jpeg\";\n}\n\n// Determinar la imagen según el modelo\nconst imagen = obtenerImagen(modeloRaw);\n\nconsole.log('Imagen seleccionada:', imagen);\n\n// Plan de Ahorro: mismo criterio que getBusinessTypeId (businesstypeid 3)\nconst esPlanAhorro = [\"ARG Savings Plan\", \"ARG Saving Plan\"].includes(item.TIPO_DE_REGISTRO_DE_LEAD);\n\n// Construir el objeto de variables para Twilio\nconst variables = {\n  \"1\": item.NOMBRE || \"No aclarado\",\n  \"2\": \"Nissan\",\n  \"3\": item.MODELO || \"No aclarado\",\n  \"4\": imagen,\n  \"5\": JSON.stringify({\n    origen: item.ORIGEN_DEL_LEAD || \"SALESFORCE\",\n    id_lead: item.ID_LEAD || \"0\"\n  }),\n  \"6\": \"1231232131231\"\n};\n\n// Retornar el objeto final\nreturn {\n  json: {\n    ContentVariables: JSON.stringify(variables),\n    template_id: esPlanAhorro\n      ? \"HX2dbcd4a90a4395f8de53e7dfc4050b78\"\n      : modeloRaw.includes(\"kait\") \n        ? \"HX7d9c678ec05d3c3772c228a8e3b7c29c\" \n        : \"HXa27af2cd7224303f29bec2488e44d801\",\n    debug: {\n      nombreOriginal: item.NOMBRE,\n      modeloOriginal: item.MODELO,\n      modeloNormalizado: modeloRaw,\n      imagenSeleccionada: imagen,\n      esPlanAhorro: esPlanAhorro\n    }\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        720
+      ],
+      "id": "fb3c9c07-8807-4e37-befd-c69821d0d78e",
+      "name": "Code4",
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        256,
+        784
+      ],
+      "id": "14c1da7d-480a-42eb-a758-8e5c7cf86fd6",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "operation": "select",
+        "table": {
+          "__rl": true,
+          "value": "nissan_salesforce",
+          "mode": "list",
+          "cachedResultName": "nissan_salesforce"
+        },
+        "where": {
+          "values": [
+            {
+              "column": "LeadId",
+              "value": "={{ $json.ID_LEAD }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        1472,
+        800
+      ],
+      "id": "c8cc3a77-83ee-4026-a592-f794fdc3b141",
+      "name": "Select rows from a table",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "mySql": {
+          "id": "FezTcDnLo3SqPHvd",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "table": {
+          "__rl": true,
+          "value": "nissan_salesforce",
+          "mode": "list",
+          "cachedResultName": "nissan_salesforce"
+        },
+        "dataMode": "defineBelow",
+        "valuesToSend": {
+          "values": [
+            {
+              "column": "LeadId",
+              "value": "={{ $('Loop Over Items').item.json.ID_LEAD }}"
+            },
+            {
+              "column": "telefono",
+              "value": "={{ $('Loop Over Items').item.json.CELULAR.startsWith('+') ? $('Loop Over Items').item.json.CELULAR : '+' + $('Loop Over Items').item.json.CELULAR }}"
+            },
+            {
+              "column": "status",
+              "value": "={{ $('getStatus').first().json.status || \"failed\"}}"
+            },
+            {
+              "column": "created_at",
+              "value": "={{$now}}"
+            },
+            {
+              "column": "updated_at",
+              "value": "={{$now}}"
+            },
+            {
+              "column": "nombre",
+              "value": "={{ $('Loop Over Items').item.json.NOMBRE }}"
+            },
+            {
+              "column": "modelo",
+              "value": "={{ $('Loop Over Items').item.json.MODELO }}"
+            },
+            {
+              "column": "dealer",
+              "value": "={{ $('Loop Over Items').item.json.CODIGO_DEL_DEALER }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        2864,
+        1088
+      ],
+      "id": "083855a6-ef14-4835-9870-a2d34d7ebe6f",
+      "name": "Insert rows in a table",
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "mySql": {
+          "id": "FezTcDnLo3SqPHvd",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "1d100b7a-5f96-41b2-9d07-4828d20cb715",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "number",
+                "operation": "notExists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1680,
+        800
+      ],
+      "id": "42d35d30-f55c-449c-b9ae-a3355875876a",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.twilio.com/2010-04-01/Accounts/TWILIO_SID_OCULTO/Messages.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "MessagingServiceSid",
+              "value": "MGb0752daac2cb0fa7e1a893dae90651a3"
+            },
+            {
+              "name": "To",
+              "value": "=whatsapp:{{ $('Loop Over Items').item.json.CELULAR.startsWith('+') ? $('Loop Over Items').item.json.CELULAR : '+' + $('Loop Over Items').item.json.CELULAR }}"
+            },
+            {
+              "name": "ContentSid",
+              "value": "={{$json.template_id}}"
+            },
+            {
+              "name": "ContentVariables",
+              "value": "={{$('Code4').first().json.ContentVariables}}"
+            },
+            {
+              "name": "From",
+              "value": "whatsapp:+5491176470070"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "90dacaa7-bf2a-4e6e-b694-b728d84bf791",
+      "name": "HTTP Request3",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2368,
+        720
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "2mSmUWqeRXMBKQOe",
+          "name": "NISSAN ARGENTINA-TWILIO"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "content": "el http request1 fallaba por el contet variables y el content sid, lo dejo por que las otras variables las tomana bie, esto se cambia el dia 10/1/2026, el http request3 es una copia del http2 que funciono\nEstaba este HX3fb9663527ce4565cc2c24822693a679 (content sid) el dia 16/1/2026\n",
+        "height": 208,
+        "width": 704
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2576,
+        -32
+      ],
+      "id": "96fd5dbb-2937-417c-aec3-958a0bdb4cba",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://dm-us.informaticacloud.com/authz-service/oauth/token",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Basic N2FjM05zeHphSTdkTVRLWDgyMVd5Uzp5d1R0aWp4azk="
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/x-www-form-urlencoded"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "client_id",
+              "value": "7ac3NsxzaI7dMTKX821WyS"
+            },
+            {
+              "name": "client_Secret",
+              "value": "ywTtijxk9"
+            },
+            {
+              "name": "grant_type",
+              "value": "client_credentials"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        432,
+        784
+      ],
+      "id": "8cdd1937-dfe4-4109-a836-4e99cc4425d4",
+      "name": "TokenProd"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://usw1-gw.dm-us.informaticacloud.com/alliance.prd.com/API-NIS-NARG-DDM-AINT/v1/p-WS-LD001-NARG-HotLeads",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.access_token }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": " {\n    \"COD_BIR\": \"07600653\",\n    \"CNPJ_BIR\": \"04777242000309\",\n    \"SIS_ORIGEM\": \"3\",\n    \"VERSAO_WS\": \"21.0.10\",\n    \"DTINI\": \"2026-02-01\",\n    \"DTFIM\": \"2026-07-21\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        560,
+        784
+      ],
+      "id": "5c459bd6-ee7a-4be8-854a-3fe66875ee7c",
+      "name": "GetLeads Prod1",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ====================================\n// CONFIGURACIÓN (FÁCIL DE MODIFICAR)\n// ====================================\nconst HORAS_FILTRO = 20;\nconst FILTRAR_POR_DEALER = true;\nconst DEALERS_PERMITIDOS = [\"235013\", \"230112\", \"230311\", \"230314\",\"230312\", \"232711\", \"232722\", \"232712\",\n\"230411\", \"230421\", \"230431\", \"230433\",\n\"230513\", \"230514\", \"230512\", \"230516\",\n\"230712\", \"230721\", \"230731\",\n\"230822\", \"230852\", \"230814\",\n\"230911\", \"230914\", \"230915\",\n\"231314\", \"231313\", \"231311\",\n\"233111\", \"233214\", \"233211\", \"233213\",\n\"231612\", \"231651\", \"231614\",\n\"232011\", \"232021\", \"232032\", \"232013\",\n\"231111\", \"231141\",\n\"232311\", \"232313\",\n\"232521\", \"232532\", \"232541\",\n\"230622\", \"230611\",\n\"233012\", \"233013\", \"233015\",\n\"232916\", \"232912\",\"232921\", \"232917\",\n\"231911\",\"231931\",\"231921\",\n\"232021\", \"232032\", \"232011\", \"232013\",\n\"232922\",\n\"233215\"]; \n\n// ====================================\n// CÓDIGO PRINCIPAL\n// ====================================\nconst leads = $input.first().json.response;\nconst ahora = new Date();\nconst fechaLimite = new Date(ahora.getTime() - (HORAS_FILTRO * 60 * 60 * 1000));\n\nconst leadsValidos = leads.filter(lead => {\n  // Filtro 1: fecha (excepto ML y WA)\n  if (!lead.DT_DISP_LEAD) return false;\n  const subOrigen = (lead.SUB_ORIGEN || '').toUpperCase().trim();\n  const exentoFiltroFecha = subOrigen === 'MERCADO LIBRE' || subOrigen === 'WHATSAPP';\n  if (!exentoFiltroFecha) {\n    const fechaLead = new Date(lead.DT_DISP_LEAD);\n    if (fechaLead < fechaLimite) return false;\n  }\n\n  // Filtro 2: dealer\n  if (FILTRAR_POR_DEALER) {\n    if (!lead.CODIGO_DEL_DEALER || !DEALERS_PERMITIDOS.includes(lead.CODIGO_DEL_DEALER)) {\n      return false;\n    }\n  }\n\n  // Normalización de teléfono (no filtra, solo transforma)\n  const telefono = lead.CELULAR || lead.TELEFONO || '';\n  let telefonoLimpio = telefono.replace(/\\D/g, '');\n\n  if (telefonoLimpio.startsWith('549')) {\n    // Ya viene bien formado, no tocar\n  } else if (telefonoLimpio.startsWith('54')) {\n    // Tiene código de país pero le falta el 9 del celular -> se lo insertamos\n    telefonoLimpio = '549' + telefonoLimpio.slice(2);\n  } else if (telefonoLimpio.startsWith('55')) {\n    // Brasil u otro caso ya con código de país, se deja como está\n  } else if (telefonoLimpio.length >= 8) {\n    telefonoLimpio = '549' + telefonoLimpio;\n  }\n\n  lead.CELULAR = telefonoLimpio || telefono;\n\n  return true;\n});\n\nreturn leadsValidos;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        784,
+        768
+      ],
+      "id": "59f7f21e-bc63-428a-867e-d301a060cb2a",
+      "name": "Code3",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://dm-us.informaticacloud.com/authz-service/oauth/token",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Basic N2FjM05zeHphSTdkTVRLWDgyMVd5Uzp5d1R0aWp4azk="
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/x-www-form-urlencoded"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "client_id",
+              "value": "7ac3NsxzaI7dMTKX821WyS"
+            },
+            {
+              "name": "client_Secret",
+              "value": "ywTtijxk9"
+            },
+            {
+              "name": "grant_type",
+              "value": "client_credentials"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1408,
+        -16
+      ],
+      "id": "9a6e413c-d357-4a20-8309-e1128e07e22b",
+      "name": "TokenProd1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://usw1-gw.dm-us.informaticacloud.com/alliance.prd.com/API-NIS-NARG-DDM-AINT/v1/p-WS-LD001-NARG-HotLeads",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.access_token }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": " {\n    \"COD_BIR\": \"07600653\",\n    \"CNPJ_BIR\": \"04777242000309\",\n    \"SIS_ORIGEM\": \"3\",\n    \"VERSAO_WS\": \"21.0.10\",\n    \"DTINI\": \"2000-06-17\",\n    \"DTFIM\": \"2026-07-21\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1584,
+        -16
+      ],
+      "id": "06c84068-f5cd-4fda-beda-5bcc874b8383",
+      "name": "GetLeads Prod2",
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "amount": "={{ Math.floor(Math.random() * (8 - 3 + 1)) + 14 }}"
+      },
+      "id": "9f56dd65-8839-4a5a-99a5-f4520ea20245",
+      "name": "Wait7",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        2496,
+        720
+      ],
+      "webhookId": "9d3161eb-3b85-4e9a-93e1-857cdb88bdfd"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.twilio.com/2010-04-01/Accounts/TWILIO_SID_OCULTO/Messages/{{ $('HTTP Request3').item.json.sid }}.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "options": {}
+      },
+      "id": "b56d6d79-5373-487b-b0cd-eb905f46a473",
+      "name": "getStatus",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2896,
+        800
+      ],
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "2mSmUWqeRXMBKQOe",
+          "name": "NISSAN ARGENTINA-TWILIO"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cecd3b89-17f6-484a-8127-2ba4902ff1af",
+              "leftValue": "={{ $('getStatus').first().json.status }}",
+              "rightValue": "undelivered",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            },
+            {
+              "id": "198be7a4-c1a3-4e67-be3c-7a5a258d98ab",
+              "leftValue": "={{ $('getStatus').first().json.status }}",
+              "rightValue": "failed",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            },
+            {
+              "id": "d794728b-4604-4ad2-a636-829933ead6ec",
+              "leftValue": "={{ $('getStatus').item.json.error }}",
+              "rightValue": "",
+              "operator": {
+                "type": "object",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3248,
+        800
+      ],
+      "id": "5e58012d-1dd4-4575-b769-8cec3792de06",
+      "name": "If2"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ====================================\n// MAPEO DE DEALERS Y CONFIGURACIÓN\n// ====================================\nconst FIELD_ALIASES = {\n    \"social media\":  \"media social\"\n};\n\nconst DEALER_ASSIGNMENTS = {\n    \"aika@nissan.com\": [\"230112\", \"230113\"],\n    \"aucam@nissan.com\": [\"230311\", \"230312\", \"230314\"],\n    \"autogen@nissan.com\": [\"230411\", \"230412\", \"230421\", \"230431\", \"230432\", \"230433\"],\n    \"autossan@nissan.com\": [\"230512\", \"230513\", \"230514\", \"230515\", \"230516\"],\n    \"tdfmotors@nissan.com\": [\"230611\", \"230612\", \"230622\"],\n    \"cityssan@nissan.com\": [\"230712\", \"230721\", \"230722\", \"230731\"],\n    \"egeoautomotores@nissan.com\": [\"230812\", \"230813\", \"230814\", \"230822\", \"230852\"],\n    \"femotors@nissan.com\": [\"230911\", \"230912\", \"230914\", \"230915\"],\n    \"sendai@nissan.com\": [\"231111\", \"231112\", \"231121\", \"231132\", \"231141\", \"231151\", \"231161\"],\n    \"kyotoautomotores@nissan.com\": [\"231311\", \"231312\", \"231313\", \"231314\", \"231316\", \"231317\"],\n    \"carone@nissan.com\": [\"231611\", \"231612\", \"231614\", \"231651\"],\n    \"nix@nissan.com\": [\"231911\", \"231921\", \"231931\"],\n    \"noale@nissan.com\": [\"232011\", \"232013\", \"232021\", \"232032\"],\n    \"senta@nissan.com\": [\"232311\", \"232312\", \"232313\", \"232314\"],\n    \"surisan@nissan.com\": [\"232521\", \"232522\", \"232531\", \"232532\", \"232541\"],\n    \"autoferro@nissan.com\": [\"232711\", \"232712\", \"232722\"],\n    \"fianiautomotores@nissan.com\": [\"232911\", \"232912\", \"232915\", \"232916\", \"232917\", \"232921\",\"232922\"],\n    \"yacopinimirai@nissan.com\": [\"233012\", \"233013\", \"233015\"],\n    \"neostar@nissan.com\": [\"233111\", \"233115\"],\n    \"capital@nissan.com\": [\"233211\", \"233212\", \"233213\", \"233214\",\"233215\"],\n    \"agnoa@nissan.com\": [\"235013\", \"235014\"]\n};\n\nconst ORIGEN_PILOT_MAP = [\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Frontier Brand\", pilotCode: \"mailing_frontierbrand_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Frontier NPA\", pilotCode: \"mailing_frontiernpa_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Frontier Retail\", pilotCode: \"mailing_frontierretail_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Kicks Play Brand\", pilotCode: \"mailing_kicksplaybrand_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Kicks Play NPA\", pilotCode: \"mailing_kicksplaynpa_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Kicks Play Retail\", pilotCode: \"mailing_kicksplayretail_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Nuevo Kicks Brand\", pilotCode: \"mailing_nuevokicksbrand_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Nuevo Kicks NPA\", pilotCode: \"mailing_nuevokicksnpa_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Nuevo Kicks Retail\", pilotCode: \"mailing_nuevokicksretail_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Sentra Brand\", pilotCode: \"mailing_sentrabrand_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Sentra Retail\", pilotCode: \"mailing_sentraretail_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Versa Brand\", pilotCode: \"mailing_versabrand_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Versa NPA\", pilotCode: \"mailing_versanpa_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Versa Retail\", pilotCode: \"mailing_versaretail_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"X-Trail Brand\", pilotCode: \"mailing_xtrailbrand_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"X-Trail Retail\", pilotCode: \"mailing_xtrailretail_campaigns\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Frontier Brand\", pilotCode: \"meta_frontier_brand\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Frontier NPA\", pilotCode: \"meta_frontier_npa\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Frontier Retail\", pilotCode: \"meta_frontier_retail\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Kicks Play Brand\", pilotCode: \"meta_kicks_play_brand\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Kicks Play NPA\", pilotCode: \"meta_kicks_play_npa\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Kicks Play Retail\", pilotCode: \"meta_kicks_play_retail\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Nuevo Kicks Brand\", pilotCode: \"meta_nuevo_kicks_brand\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Nuevo Kicks Retail\", pilotCode: \"meta_nuevo_kicks_retail\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Nuevo kicks NPA\", pilotCode: \"meta_nuevo_kicks_npa\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Sentra Brand\", pilotCode: \"meta_sentra_brand\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Sentra Retail\", pilotCode: \"meta_sentra_retail\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Versa Brand\", pilotCode: \"meta_versa_brand\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Versa NPA\", pilotCode: \"meta_versa_npa\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Versa Retail\", pilotCode: \"meta_versa_retail\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"X-Trail Brand\", pilotCode: \"meta_xtrail_brand\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"X-Trail Retail\", pilotCode: \"meta_xtrail_retail\" },\n    { origen: \"Internet\", suborigen: \"MERCADO LIBRE\", detalle: \"Frontier\", subdetalle: \"Frontier Brand\", pilotCode: \"frontier_frontier_brand\" },\n    { origen: \"Internet\", suborigen: \"MERCADO LIBRE\", detalle: \"Frontier\", subdetalle: \"Frontier Retail\", pilotCode: \"meli_frontier_retail\" },\n    { origen: \"Internet\", suborigen: \"MERCADO LIBRE\", detalle: \"Kicks Play\", subdetalle: \"Kicks Play Brand\", pilotCode: \"kicksplay_kicksplay_brand\" },\n    { origen: \"Internet\", suborigen: \"MERCADO LIBRE\", detalle: \"Kicks Play\", subdetalle: \"Kicks Play Retail\", pilotCode: \"kicksplay_kicksplay_retail\" },\n    { origen: \"Internet\", suborigen: \"MERCADO LIBRE\", detalle: \"New Kicks\", subdetalle: \"Nuevo Kicks Brand\", pilotCode: \"newkicks_nuevokicks_brand\" },\n    { origen: \"Internet\", suborigen: \"MERCADO LIBRE\", detalle: \"New Kicks\", subdetalle: \"Nuevo Kicks Retail\", pilotCode: \"meli_nuevokicks_retail\" },\n    { origen: \"Internet\", suborigen: \"MERCADO LIBRE\", detalle: \"X-Gear\", subdetalle: \"X-Gear Brand\", pilotCode: \"xgear_xgear_brand\" },\n    { origen: \"Internet\", suborigen: \"MERCADO LIBRE\", detalle: \"X-Gear\", subdetalle: \"X-Gear Retail\", pilotCode: \"xgear_xgear_retail\" },\n    { origen: \"Internet\", suborigen: \"MERCADO LIBRE\", detalle: \"X-Trail\", subdetalle: \"X-Trail Brand\", pilotCode: \"xtrail_xtrail_brand\" },\n    { origen: \"Internet\", suborigen: \"MERCADO LIBRE\", detalle: \"X-Trail\", subdetalle: \"X-Trail Retail\", pilotCode: \"meli_xtrail_retail\" },\n    { origen: \"Internet\", suborigen: \"Sitio Nissan Organico\", detalle: \"Credinissan\", subdetalle: \"Credinissan Form\", pilotCode: \"sitio_credinissan\" },\n    { origen: \"Internet\", suborigen: \"Sitio Nissan Organico\", detalle: \"Plan de ahorro\", subdetalle: \"Plan de ahorro mas informacion\", pilotCode: \"sitio_npa\" },\n    { origen: \"Internet\", suborigen: \"Sitio Nissan Organico\", detalle: \"Posventa\", subdetalle: \"Accesorios\", pilotCode: \"sitio_posventa_accesorios\" },\n    { origen: \"Internet\", suborigen: \"Sitio Nissan Organico\", detalle: \"Posventa\", subdetalle: \"Online booking\", pilotCode: \"sitio_posventa_onlinebooking\" },\n    { origen: \"Internet\", suborigen: \"Sitio Nissan Organico\", detalle: \"Posventa\", subdetalle: \"Posventa\", pilotCode: \"sitio_posventa_posventa\" },\n    { origen: \"Internet\", suborigen: \"Sitio Nissan Organico\", detalle: \"Venta\", subdetalle: \"Solicitar cotizacion\", pilotCode: \"sitio_venta_solicitarcotizacion\" },\n    { origen: \"Internet\", suborigen: \"WHATSAPP\", detalle: \"Offline Whatsapp\", subdetalle: \"Campaña RRSS\", pilotCode: \"whatsapp_offline\" },\n    { origen: \"Internet\", suborigen: \"WHATSAPP\", detalle: \"Online Whatsapp\", subdetalle: \"Campaña RRSS\", pilotCode: \"whatsapp_online\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Kait Brand\", pilotCode: \"meta_kait_brand\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Kait NPA\", pilotCode: \"meta_kait_npa\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Kait Retail\", pilotCode: \"meta_kait_retail\" },\n    { origen: \"VACIO\", suborigen: \"VACIO\", detalle: \"VACIO\", subdetalle: \"VACIO\", pilotCode: \"leads_nissan\" },\n];\n// ====================================\n// FUNCIONES AUXILIARES\n// ====================================\n\nfunction findDealerEmail(codigoDealer) {\n    for (const [email, codigos] of Object.entries(DEALER_ASSIGNMENTS)) {\n        if (codigos.includes(codigoDealer)) {\n            return email;\n        }\n    }\n    return null;\n}\n\n// ====================================\n// NORMALIZACIÓN DE CAMPOS\n// ====================================\n\n\nfunction normalizeField(value) {\n    const v = String(value || '').trim().toLowerCase();\n    return FIELD_ALIASES[v] ?? v;\n}\n\nfunction findPilotCode(origen, suborigen, detalle, subdetalle) {\n    const o  = normalizeField(origen);\n    const s  = normalizeField(suborigen);\n    const d  = normalizeField(detalle);\n    const sd = normalizeField(subdetalle);\n\n    // 1° intento: match exacto con los 4 campos (case-insensitive)\n    const exactMatch = ORIGEN_PILOT_MAP.find(item =>\n        normalizeField(item.origen)     === o  &&\n        normalizeField(item.suborigen)  === s  &&\n        normalizeField(item.detalle)    === d  &&\n        normalizeField(item.subdetalle) === sd\n    );\n    if (exactMatch) return exactMatch.pilotCode;\n\n    // 2° intento: match por origen, suborigen y subdetalle (ignorando detalle)\n    if (sd) {\n        const fallbackMatch = ORIGEN_PILOT_MAP.find(item =>\n            normalizeField(item.origen)     === o  &&\n            normalizeField(item.suborigen)  === s  &&\n            normalizeField(item.subdetalle) === sd\n        );\n        if (fallbackMatch) return fallbackMatch.pilotCode;\n    }\n\n    // 3° intento: match por origen, suborigen y detalle (ignorando subdetalle)\n    if (d) {\n        const detalleMatch = ORIGEN_PILOT_MAP.find(item =>\n            normalizeField(item.origen)    === o &&\n            normalizeField(item.suborigen) === s &&\n            normalizeField(item.detalle)   === d\n        );\n        if (detalleMatch) return detalleMatch.pilotCode;\n    }\n\n    // 4° intento: match solo por origen + suborigen (cuando detalle y subdetalle vienen vacíos)\n    const subOrigenMatch = ORIGEN_PILOT_MAP.find(item =>\n        normalizeField(item.origen)    === o &&\n        normalizeField(item.suborigen) === s\n    );\n    if (subOrigenMatch) return subOrigenMatch.pilotCode;\n\n    // 5° intento: default\n    return 'leads_nissan';\n}\n\nfunction getBusinessTypeId(tipoRegistro) {\n    if (tipoRegistro === \"ARG New Vehicle\") {\n        return 1;\n    } else if (tipoRegistro === \"ARG Savings Plan\" || tipoRegistro === \"ARG Saving Plan\") {\n        return 3;\n    }\n    return null;\n}\n\n// ====================================\n// PROCESAMIENTO PRINCIPAL\n// ====================================\n\n// Obtener el lead del nodo Loop Over Items\nconst lead = $('Loop Over Items').first().json;\n\n// Enriquecer el lead\nconst businesstypeid = getBusinessTypeId(lead.TIPO_DE_REGISTRO_DE_LEAD);\nconst dealerEmail = findDealerEmail(lead.CODIGO_DEL_DEALER);\nconst pilotCode = findPilotCode(lead.ORIGEN_DEL_LEAD, lead.SUB_ORIGEN,lead.DETALLE, lead.SUBDETALLE);\n\n// Retornar lead enriquecido\nreturn {\n    ...lead,\n    businesstypeid: businesstypeid,\n    dealerEmail: dealerEmail,\n    pilotCode: pilotCode\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3456,
+        784
+      ],
+      "id": "346269c2-b2ad-42ba-b3bc-53925111bd4b",
+      "name": "Code6"
+    },
+    {
+      "parameters": {
+        "url": "https://api.pilotsolution.net/webhooks/welcome.php",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "appkey",
+              "value": "=66477DB0-FC50-4DEC-BF96-67B7DB080B76"
+            },
+            {
+              "name": "pilot_firstname",
+              "value": "={{ $json.NOMBRE.split(' ')[0] }}"
+            },
+            {
+              "name": "pilot_cellphone",
+              "value": "={{ $json.CELULAR }}"
+            },
+            {
+              "name": "pilot_contact_type_id",
+              "value": "1"
+            },
+            {
+              "name": "pilot_suborigin_id",
+              "value": "={{ $json.pilotCode }}"
+            },
+            {
+              "name": "pilot_business_type_id",
+              "value": "={{$json.businesstypeid || 1}}"
+            },
+            {
+              "name": "pilot_notes",
+              "value": "=Grado de Interes: Cold | Resumen: Se requiere contacto desde el concesionario | Origen Salesforce: {{ $json.ORIGEN_DEL_LEAD || \"No especificado\"}} | SubOrigen Salesforce: {{ $json.SUB_ORIGEN || \"No especificado\"}} | Código Dealer: {{ $json.CODIGO_DEL_DEALER || \"No especificado\"}} | Detalle Salesforce: {{ $json.DETALLE || \"No especificado\"}} | SubDetalle Salesforce: {{ $json.SUBDETALLE || \"No especificado\"}}"
+            },
+            {
+              "name": "pilot_product_of_interest",
+              "value": "={{ $json.MODELO }}"
+            },
+            {
+              "name": "pilot_lastname",
+              "value": "={{ $json.NOMBRE.split(' ').slice(1).join(' ') }}"
+            },
+            {
+              "name": "pilot_email",
+              "value": "={{ $json[\"E-MAIL\"] }}"
+            },
+            {
+              "name": "document_number",
+              "value": "={{ $json.CUIL_CUIT_DNI }}"
+            },
+            {
+              "name": "pilot_client_identity_document",
+              "value": "={{ $json.CUIL_CUIT_DNI }}"
+            },
+            {
+              "name": "pilot_document_number",
+              "value": "={{ $json.CUIL_CUIT_DNI }}"
+            },
+            {
+              "name": "pilot_assigned_user",
+              "value": "={{ $json.dealerEmail || \"sendai@nissan.com\" }} "
+            },
+            {
+              "name": "pilot_provider_service",
+              "value": "={{ $json.CODIGO_DEL_DEALER }}"
+            },
+            {
+              "name": "pilot_tracking_id",
+              "value": "={{ $json.ID_LEAD }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "99ae07bb-1628-437d-8c1f-5fbe0937ac97",
+      "name": "HTTP Request1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3632,
+        784
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b223ceea-a793-41c8-8730-cce0790a5487",
+              "name": "token",
+              "value": "={{ $json.result.entitydata.accounts[0].token }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f9becfaa-f1db-438c-802a-1d82c8f5d76e",
+      "name": "Edit Fields2",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        3936,
+        784
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.pilotsolution.net/v1/users/authentication.php",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "options": {}
+      },
+      "id": "82287c37-de9a-4d1a-ac63-b4339068f645",
+      "name": "Login",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3776,
+        784
+      ],
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "jP4TWD9WrWhP4iTY",
+          "name": "API NISSAN"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://api.pilotsolution.net/v1/users/authorization.php",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "identity_token",
+              "value": "={{ $json.token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "9e777829-c7bd-4ea3-9d2d-c5081b08cae1",
+      "name": "Login1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4096,
+        784
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.pilotsolution.net/v1/welcomes/update.php",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"data\": {\n    \"id\": \"{{ $('HTTP Request1').item.json.data.welcome_guid }}\",\n    \"interest_level_code\": \"Cold\"\n  },\n  \"header\": {\n    \"FlowName\": \"update_prospect\",\n    \"SequenceId\": 1,\n    \"TimeStamp\": 1248377,\n    \"TrackingId\": \"FD1C4A1A-CAFB-467E-825B-7FFB86CC21E3\",\n    \"access_token\": \"{{ $('Login1').item.json.result.entitydata.session.identityToken }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "e5d360e3-979a-4179-9c3d-55b47a8b2c15",
+      "name": "updateLead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4544,
+        784
+      ]
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        4256,
+        784
+      ],
+      "id": "65a73b14-ccd3-4584-b097-115eb50bbfee",
+      "name": "Wait",
+      "webhookId": "9a5a5878-493a-466d-a4ba-bd596a9297fa"
+    },
+    {
+      "parameters": {
+        "content": "## PRODUCCION",
+        "height": 80,
+        "width": 192
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        3216,
+        1056
+      ],
+      "typeVersion": 1,
+      "id": "3f1f284b-ee79-47e0-b17d-10b891562c15",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "sendTo": "ijcabaleiro@gmail.com",
+        "subject": "Lead Inválido NISSAN",
+        "message": "=-{{ $json.ID_LEAD }}\n\n-{{ $json.CELULAR }}\n\n-{{ $json.MODELO }}\n\n-{{ $json.CODIGO_DEL_DEALER }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        3632,
+        624
+      ],
+      "id": "5b10530d-c0cd-4504-9d47-f502b46883e9",
+      "name": "Send a message",
+      "webhookId": "245ad24b-9ede-4762-9214-407b229e63b4",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "jwGXROodBSgsAjaM",
+          "name": "Gmail notificaciones IA"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "7003da5d-84cb-41c3-a249-337c0302aeca",
+              "leftValue": "={{ $json.error }}",
+              "rightValue": "",
+              "operator": {
+                "type": "object",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2704,
+        720
+      ],
+      "id": "5a37c21b-92aa-4de5-a2ab-003684862303",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "table": {
+          "__rl": true,
+          "value": "nissan_salesforce",
+          "mode": "list",
+          "cachedResultName": "nissan_salesforce"
+        },
+        "dataMode": "defineBelow",
+        "valuesToSend": {
+          "values": [
+            {
+              "column": "LeadId",
+              "value": "={{ $('Loop Over Items').item.json.ID_LEAD }}"
+            },
+            {
+              "column": "telefono",
+              "value": "={{ $('Loop Over Items').item.json.CELULAR.startsWith('+') ? $('Loop Over Items').item.json.CELULAR : '+' + $('Loop Over Items').item.json.CELULAR }}"
+            },
+            {
+              "column": "status",
+              "value": "={{\"failed\"}}"
+            },
+            {
+              "column": "created_at",
+              "value": "={{ $now.toUTC().toFormat('yyyy-MM-dd HH:mm:ss') }}"
+            },
+            {
+              "column": "updated_at",
+              "value": "={{ $now.toUTC().toFormat('yyyy-MM-dd HH:mm:ss') }}"
+            },
+            {
+              "column": "nombre",
+              "value": "={{ $('Loop Over Items').item.json.NOMBRE }}"
+            },
+            {
+              "column": "modelo",
+              "value": "={{ $('Loop Over Items').item.json.MODELO }}"
+            },
+            {
+              "column": "dealer",
+              "value": "={{ $('Loop Over Items').item.json.CODIGO_DEL_DEALER }}"
+            },
+            {
+              "column": "dni",
+              "value": "={{ $('Loop Over Items').item.json.CUIL_CUIT_DNI || \"No especificado\" }}"
+            },
+            {
+              "column": "mail",
+              "value": "={{ $('Loop Over Items').item.json[\"E-MAIL\"] || \"No especificado\"}}"
+            },
+            {
+              "column": "suborigen_salesforce",
+              "value": "={{ $('Loop Over Items').item.json.SUB_ORIGEN || \"No especificado\" }}"
+            },
+            {
+              "column": "detalle_salesforce",
+              "value": "={{ $('Loop Over Items').item.json.DETALLE || \"No especificado\"}}"
+            },
+            {
+              "column": "subdetalle_salesforce",
+              "value": "={{ $('Loop Over Items').item.json.SUBDETALLE || \"No especificado\"}}"
+            },
+            {
+              "column": "tipo_registro",
+              "value": "={{ $('Loop Over Items').item.json.TIPO_DE_REGISTRO_DE_LEAD || \"No especificado\"}}"
+            },
+            {
+              "column": "provincia",
+              "value": "={{ $('Loop Over Items').item.json.PROVINCIA ||  $('Loop Over Items').item.json.PCIA || \"No especificado\"}}"
+            },
+            {
+              "column": "origen_salesforce",
+              "value": "={{ $('Loop Over Items').item.json.ORIGEN_DEL_LEAD || \"No especificado\"}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        2928,
+        608
+      ],
+      "id": "43f35591-3b96-4f9c-ab5d-352fb783c141",
+      "name": "Insert rows in a table1",
+      "alwaysOutputData": true,
+      "executeOnce": false,
+      "credentials": {
+        "mySql": {
+          "id": "FezTcDnLo3SqPHvd",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "ignacio.cabaleiro@redoo.com.ar, francomartin.menna@nissan.com.ar",
+        "subject": "Error API Salesforce",
+        "emailType": "text",
+        "message": "=Hubo un error en la API de SALESFORCE. Error:  {{ $json.error.message }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1184,
+        1088
+      ],
+      "id": "43a24e0e-e424-4856-a037-6d22859bd3c5",
+      "name": "Send a message1",
+      "webhookId": "38be75a0-59a7-48f7-b207-768dafb9d4d7",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "jwGXROodBSgsAjaM",
+          "name": "Gmail notificaciones IA"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "table": {
+          "__rl": true,
+          "value": "nissan_salesforce",
+          "mode": "list",
+          "cachedResultName": "nissan_salesforce"
+        },
+        "dataMode": "defineBelow",
+        "columnToMatchOn": "LeadId",
+        "valueToMatchOn": "={{$('Code6').first().json.ID_LEAD}}",
+        "valuesToSend": {
+          "values": [
+            {
+              "column": "leadIdPilot",
+              "value": "={{ $('HTTP Request1').item.json.data.welcome_guid }}"
+            },
+            {
+              "column": "interes",
+              "value": "Cold"
+            },
+            {
+              "column": "origen_pilot",
+              "value": "={{$('Code6').first().json.pilotCode}}"
+            },
+            {
+              "column": "origen_salesforce",
+              "value": "={{$('Code6').first().json.ORIGEN_DEL_LEAD}}"
+            },
+            {
+              "column": "updated_at",
+              "value": "={{ $now.toUTC().toFormat('yyyy-MM-dd HH:mm:ss') }}"
+            },
+            {
+              "column": "productoInteres_pilot",
+              "value": "={{ $('Code6').item.json.MODELO }}"
+            },
+            {
+              "column": "dealer_pilot",
+              "value": "={{ $('Code6').item.json.CODIGO_DEL_DEALER }}"
+            },
+            {
+              "column": "id_pilot",
+              "value": "={{ $('HTTP Request1').item.json.data.welcome_id }}"
+            },
+            {
+              "column": "motivo",
+              "value": "Lead falló el envío"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        4400,
+        784
+      ],
+      "id": "16067035-4d6f-4b55-85c7-dbcf3149edd7",
+      "name": "savePilotID",
+      "credentials": {
+        "mySql": {
+          "id": "FezTcDnLo3SqPHvd",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "b145c0ad-1256-4bf7-89a9-962c65d3639e",
+              "leftValue": "={{$('Loop Over Items').item.json.SUB_ORIGEN}}",
+              "rightValue": "MERCADO LIBRE",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            },
+            {
+              "id": "58c47450-3795-428d-b3d2-dd3fb247c8a6",
+              "leftValue": "={{$('Loop Over Items').item.json.SUB_ORIGEN}}",
+              "rightValue": "WHATSAPP",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1888,
+        704
+      ],
+      "id": "ceeb2398-f8c9-404a-83af-8425491da337",
+      "name": "If3"
+    },
+    {
+      "parameters": {
+        "table": {
+          "__rl": true,
+          "value": "nissan_salesforce",
+          "mode": "list",
+          "cachedResultName": "nissan_salesforce"
+        },
+        "dataMode": "defineBelow",
+        "valuesToSend": {
+          "values": [
+            {
+              "column": "LeadId",
+              "value": "={{ $('Loop Over Items').item.json.ID_LEAD }}"
+            },
+            {
+              "column": "telefono",
+              "value": "={{ $('Loop Over Items').item.json.CELULAR.startsWith('+') ? $('Loop Over Items').item.json.CELULAR : '+' + $('Loop Over Items').item.json.CELULAR }}"
+            },
+            {
+              "column": "status",
+              "value": "=ml_wp"
+            },
+            {
+              "column": "created_at",
+              "value": "={{ $now.toUTC().toFormat('yyyy-MM-dd HH:mm:ss') }}"
+            },
+            {
+              "column": "updated_at",
+              "value": "={{ $now.toUTC().toFormat('yyyy-MM-dd HH:mm:ss') }}"
+            },
+            {
+              "column": "nombre",
+              "value": "={{ $('Loop Over Items').item.json.NOMBRE }}"
+            },
+            {
+              "column": "modelo",
+              "value": "={{ $('Loop Over Items').item.json.MODELO }}"
+            },
+            {
+              "column": "dealer",
+              "value": "={{ $('Loop Over Items').item.json.CODIGO_DEL_DEALER }}"
+            },
+            {
+              "column": "motivo",
+              "value": "Whatsapp"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        2208,
+        384
+      ],
+      "id": "04396f3f-5b33-4b81-9fc5-a912584d62c1",
+      "name": "Insert rows in a table2",
+      "alwaysOutputData": true,
+      "executeOnce": false,
+      "credentials": {
+        "mySql": {
+          "id": "FezTcDnLo3SqPHvd",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ====================================\n// MAPEO DE DEALERS Y CONFIGURACIÓN\n// ====================================\nconst FIELD_ALIASES = {\n    \"social media\":  \"media social\"\n};\n\nconst DEALER_ASSIGNMENTS = {\n    \"aika@nissan.com\": [\"230112\", \"230113\"],\n    \"aucam@nissan.com\": [\"230311\", \"230312\", \"230314\"],\n    \"autogen@nissan.com\": [\"230411\", \"230412\", \"230421\", \"230431\", \"230432\", \"230433\"],\n    \"autossan@nissan.com\": [\"230512\", \"230513\", \"230514\", \"230515\", \"230516\"],\n    \"tdfmotors@nissan.com\": [\"230611\", \"230612\", \"230622\"],\n    \"cityssan@nissan.com\": [\"230712\", \"230721\", \"230722\", \"230731\"],\n    \"egeoautomotores@nissan.com\": [\"230812\", \"230813\", \"230814\", \"230822\", \"230852\"],\n    \"femotors@nissan.com\": [\"230911\", \"230912\", \"230914\", \"230915\"],\n    \"sendai@nissan.com\": [\"231111\", \"231112\", \"231121\", \"231132\", \"231141\", \"231151\", \"231161\"],\n    \"kyotoautomotores@nissan.com\": [\"231311\", \"231312\", \"231313\", \"231314\", \"231316\", \"231317\"],\n    \"carone@nissan.com\": [\"231611\", \"231612\", \"231614\", \"231651\"],\n    \"nix@nissan.com\": [\"231911\", \"231921\", \"231931\"],\n    \"noale@nissan.com\": [\"232011\", \"232013\", \"232021\", \"232032\"],\n    \"senta@nissan.com\": [\"232311\", \"232312\", \"232313\", \"232314\"],\n    \"surisan@nissan.com\": [\"232521\", \"232522\", \"232531\", \"232532\", \"232541\"],\n    \"autoferro@nissan.com\": [\"232711\", \"232712\", \"232722\"],\n    \"fianiautomotores@nissan.com\": [\"232911\", \"232912\", \"232915\", \"232916\", \"232917\", \"232921\"],\n    \"yacopinimirai@nissan.com\": [\"233012\", \"233013\", \"233015\"],\n    \"neostar@nissan.com\": [\"233111\", \"233115\"],\n    \"capital@nissan.com\": [\"233211\", \"233212\", \"233213\", \"233214\"],\n    \"agnoa@nissan.com\": [\"235013\", \"235014\"]\n};\n\nconst ORIGEN_PILOT_MAP = [\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Frontier Brand\", pilotCode: \"mailing_frontierbrand_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Frontier NPA\", pilotCode: \"mailing_frontiernpa_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Frontier Retail\", pilotCode: \"mailing_frontierretail_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Kicks Play Brand\", pilotCode: \"mailing_kicksplaybrand_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Kicks Play NPA\", pilotCode: \"mailing_kicksplaynpa_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Kicks Play Retail\", pilotCode: \"mailing_kicksplayretail_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Nuevo Kicks Brand\", pilotCode: \"mailing_nuevokicksbrand_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Nuevo Kicks NPA\", pilotCode: \"mailing_nuevokicksnpa_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Nuevo Kicks Retail\", pilotCode: \"mailing_nuevokicksretail_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Sentra Brand\", pilotCode: \"mailing_sentrabrand_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Sentra Retail\", pilotCode: \"mailing_sentraretail_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Versa Brand\", pilotCode: \"mailing_versabrand_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Versa NPA\", pilotCode: \"mailing_versanpa_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"Versa Retail\", pilotCode: \"mailing_versaretail_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"X-Trail Brand\", pilotCode: \"mailing_xtrailbrand_campaigns\" },\n    { origen: \"Internet\", suborigen: \"CRM CAMPAIGNS\", detalle: \"Mailing\", subdetalle: \"X-Trail Retail\", pilotCode: \"mailing_xtrailretail_campaigns\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Frontier Brand\", pilotCode: \"meta_frontier_brand\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Frontier NPA\", pilotCode: \"meta_frontier_npa\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Frontier Retail\", pilotCode: \"meta_frontier_retail\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Kicks Play Brand\", pilotCode: \"meta_kicks_play_brand\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Kicks Play NPA\", pilotCode: \"meta_kicks_play_npa\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Kicks Play Retail\", pilotCode: \"meta_kicks_play_retail\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Nuevo Kicks Brand\", pilotCode: \"meta_nuevo_kicks_brand\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Nuevo Kicks Retail\", pilotCode: \"meta_nuevo_kicks_retail\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Nuevo kicks NPA\", pilotCode: \"meta_nuevo_kicks_npa\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Sentra Brand\", pilotCode: \"meta_sentra_brand\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Sentra Retail\", pilotCode: \"meta_sentra_retail\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Versa Brand\", pilotCode: \"meta_versa_brand\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Versa NPA\", pilotCode: \"meta_versa_npa\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Versa Retail\", pilotCode: \"meta_versa_retail\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"X-Trail Brand\", pilotCode: \"meta_xtrail_brand\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"X-Trail Retail\", pilotCode: \"meta_xtrail_retail\" },\n    { origen: \"Internet\", suborigen: \"MERCADO LIBRE\", detalle: \"Frontier\", subdetalle: \"Frontier Brand\", pilotCode: \"frontier_frontier_brand\" },\n    { origen: \"Internet\", suborigen: \"MERCADO LIBRE\", detalle: \"Frontier\", subdetalle: \"Frontier Retail\", pilotCode: \"meli_frontier_retail\" },\n    { origen: \"Internet\", suborigen: \"MERCADO LIBRE\", detalle: \"Kicks Play\", subdetalle: \"Kicks Play Brand\", pilotCode: \"kicksplay_kicksplay_brand\" },\n    { origen: \"Internet\", suborigen: \"MERCADO LIBRE\", detalle: \"Kicks Play\", subdetalle: \"Kicks Play Retail\", pilotCode: \"kicksplay_kicksplay_retail\" },\n    { origen: \"Internet\", suborigen: \"MERCADO LIBRE\", detalle: \"New Kicks\", subdetalle: \"Nuevo Kicks Brand\", pilotCode: \"newkicks_nuevokicks_brand\" },\n    { origen: \"Internet\", suborigen: \"MERCADO LIBRE\", detalle: \"New Kicks\", subdetalle: \"Nuevo Kicks Retail\", pilotCode: \"meli_nuevokicks_retail\" },\n    { origen: \"Internet\", suborigen: \"MERCADO LIBRE\", detalle: \"X-Gear\", subdetalle: \"X-Gear Brand\", pilotCode: \"xgear_xgear_brand\" },\n    { origen: \"Internet\", suborigen: \"MERCADO LIBRE\", detalle: \"X-Gear\", subdetalle: \"X-Gear Retail\", pilotCode: \"xgear_xgear_retail\" },\n    { origen: \"Internet\", suborigen: \"MERCADO LIBRE\", detalle: \"X-Trail\", subdetalle: \"X-Trail Brand\", pilotCode: \"xtrail_xtrail_brand\" },\n    { origen: \"Internet\", suborigen: \"MERCADO LIBRE\", detalle: \"X-Trail\", subdetalle: \"X-Trail Retail\", pilotCode: \"meli_xtrail_retail\" },\n    { origen: \"Internet\", suborigen: \"Sitio Nissan Organico\", detalle: \"Credinissan\", subdetalle: \"Credinissan Form\", pilotCode: \"sitio_credinissan\" },\n    { origen: \"Internet\", suborigen: \"Sitio Nissan Organico\", detalle: \"Plan de ahorro\", subdetalle: \"Plan de ahorro mas informacion\", pilotCode: \"sitio_npa\" },\n    { origen: \"Internet\", suborigen: \"Sitio Nissan Organico\", detalle: \"Posventa\", subdetalle: \"Accesorios\", pilotCode: \"sitio_posventa_accesorios\" },\n    { origen: \"Internet\", suborigen: \"Sitio Nissan Organico\", detalle: \"Posventa\", subdetalle: \"Online booking\", pilotCode: \"sitio_posventa_onlinebooking\" },\n    { origen: \"Internet\", suborigen: \"Sitio Nissan Organico\", detalle: \"Posventa\", subdetalle: \"Posventa\", pilotCode: \"sitio_posventa_posventa\" },\n    { origen: \"Internet\", suborigen: \"Sitio Nissan Organico\", detalle: \"Venta\", subdetalle: \"Solicitar cotizacion\", pilotCode: \"sitio_venta_solicitarcotizacion\" },\n    { origen: \"Internet\", suborigen: \"WHATSAPP\", detalle: \"Offline Whatsapp\", subdetalle: \"Campaña RRSS\", pilotCode: \"whatsapp_offline\" },\n    { origen: \"Internet\", suborigen: \"WHATSAPP\", detalle: \"Online Whatsapp\", subdetalle: \"Campaña RRSS\", pilotCode: \"whatsapp_online\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Kait Brand\", pilotCode: \"meta_kait_brand\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Kait NPA\", pilotCode: \"meta_kait_npa\" },\n    { origen: \"Internet\", suborigen: \"Media Social\", detalle: \"Meta\", subdetalle: \"Kait Retail\", pilotCode: \"meta_kait_retail\" },\n    { origen: \"VACIO\", suborigen: \"VACIO\", detalle: \"VACIO\", subdetalle: \"VACIO\", pilotCode: \"leads_nissan\" },\n];\n\n// ====================================\n// FUNCIONES AUXILIARES\n// ====================================\n\nfunction findDealerEmail(codigoDealer) {\n    for (const [email, codigos] of Object.entries(DEALER_ASSIGNMENTS)) {\n        if (codigos.includes(codigoDealer)) {\n            return email;\n        }\n    }\n    return null;\n}\n\nfunction normalizeField(value) {\n    const v = String(value || '').trim().toLowerCase();\n    return FIELD_ALIASES[v] ?? v;\n}\n\nfunction findPilotCode(origen, suborigen, detalle, subdetalle) {\n    const o  = normalizeField(origen);\n    const s  = normalizeField(suborigen);\n    const d  = normalizeField(detalle);\n    const sd = normalizeField(subdetalle);\n\n    // 1° intento: match exacto con los 4 campos (case-insensitive)\n    const exactMatch = ORIGEN_PILOT_MAP.find(item =>\n        normalizeField(item.origen)     === o  &&\n        normalizeField(item.suborigen)  === s  &&\n        normalizeField(item.detalle)    === d  &&\n        normalizeField(item.subdetalle) === sd\n    );\n    if (exactMatch) return exactMatch.pilotCode;\n\n    // 2° intento: match por origen, suborigen y subdetalle (ignorando detalle)\n    if (sd) {\n        const fallbackMatch = ORIGEN_PILOT_MAP.find(item =>\n            normalizeField(item.origen)     === o  &&\n            normalizeField(item.suborigen)  === s  &&\n            normalizeField(item.subdetalle) === sd\n        );\n        if (fallbackMatch) return fallbackMatch.pilotCode;\n    }\n\n    // 3° intento: match por origen, suborigen y detalle (ignorando subdetalle)\n    if (d) {\n        const detalleMatch = ORIGEN_PILOT_MAP.find(item =>\n            normalizeField(item.origen)    === o &&\n            normalizeField(item.suborigen) === s &&\n            normalizeField(item.detalle)   === d\n        );\n        if (detalleMatch) return detalleMatch.pilotCode;\n    }\n\n    // 4° intento: match solo por origen + suborigen (cuando detalle y subdetalle vienen vacíos)\n    const subOrigenMatch = ORIGEN_PILOT_MAP.find(item =>\n        normalizeField(item.origen)    === o &&\n        normalizeField(item.suborigen) === s\n    );\n    if (subOrigenMatch) return subOrigenMatch.pilotCode;\n\n    // 5° intento: default\n    return 'leads_nissan';\n}\n\nfunction getBusinessTypeId(tipoRegistro) {\n    if (tipoRegistro === \"ARG New Vehicle\") {\n        return 1;\n    } else if (tipoRegistro === \"ARG Savings Plan\" || tipoRegistro === \"ARG Saving Plan\") {\n        return 3;\n    }\n    return null;\n}\n\n// ====================================\n// PROCESAMIENTO PRINCIPAL\n// ====================================\n\nconst lead = $('Loop Over Items').first().json;\n\nconst businesstypeid = getBusinessTypeId(lead.TIPO_DE_REGISTRO_DE_LEAD);\nconst dealerEmail = findDealerEmail(lead.CODIGO_DEL_DEALER);\nconst pilotCode = findPilotCode(lead.ORIGEN_DEL_LEAD, lead.SUB_ORIGEN, lead.DETALLE, lead.SUBDETALLE);\n\nreturn {\n    ...lead,\n    businesstypeid: businesstypeid,\n    dealerEmail: dealerEmail,\n    pilotCode: pilotCode\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2352,
+        384
+      ],
+      "id": "4bbcd7a4-6d6c-4285-a369-93d1950478f5",
+      "name": "Code7"
+    },
+    {
+      "parameters": {
+        "url": "https://api.pilotsolution.net/webhooks/welcome.php",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "appkey",
+              "value": "=66477DB0-FC50-4DEC-BF96-67B7DB080B76"
+            },
+            {
+              "name": "pilot_firstname",
+              "value": "={{ $json.NOMBRE }}"
+            },
+            {
+              "name": "pilot_cellphone",
+              "value": "={{ $json.CELULAR }}"
+            },
+            {
+              "name": "pilot_contact_type_id",
+              "value": "1"
+            },
+            {
+              "name": "pilot_suborigin_id",
+              "value": "={{ $json.pilotCode }}"
+            },
+            {
+              "name": "pilot_business_type_id",
+              "value": "={{$json.businesstypeid || 1}}"
+            },
+            {
+              "name": "pilot_notes",
+              "value": "=Grado de Interes: Cold | Resumen: El mensaje no se envio ya que pertenece a un lead con suborigen MERCADO LIBRE o Whatsapp. | Origen Salesforce: {{ $json.ORIGEN_DEL_LEAD || \"No especificado\"}} | SubOrigen Salesforce: {{ $json.SUB_ORIGEN || \"No especificado\"}} | Código Dealer: {{ $json.CODIGO_DEL_DEALER || \"No especificado\"}}"
+            },
+            {
+              "name": "pilot_product_of_interest",
+              "value": "={{ $json.MODELO }}"
+            },
+            {
+              "name": "pilot_lastname",
+              "value": "={{ $json.NOMBRE }}"
+            },
+            {
+              "name": "pilot_email",
+              "value": "={{ $json[\"E-MAIL\"] }}"
+            },
+            {
+              "name": "document_number",
+              "value": "={{ $json.CUIL_CUIT_DNI }}"
+            },
+            {
+              "name": "pilot_client_identity_document",
+              "value": "={{ $json.CUIL_CUIT_DNI }}"
+            },
+            {
+              "name": "pilot_document_number",
+              "value": "={{ $json.CUIL_CUIT_DNI }}"
+            },
+            {
+              "name": "pilot_assigned_user",
+              "value": "={{ $json.dealerEmail || \"sendai@nissan.com\" }} "
+            },
+            {
+              "name": "pilot_provider_service",
+              "value": "={{ $json.CODIGO_DEL_DEALER }}"
+            },
+            {
+              "name": "pilot_tracking_id",
+              "value": "={{ $json.ID_LEAD }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "bccb3921-916e-4d0b-a8fc-f1da30347484",
+      "name": "HTTP Request",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2528,
+        384
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b223ceea-a793-41c8-8730-cce0790a5487",
+              "name": "token",
+              "value": "={{ $json.result.entitydata.accounts[0].token }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b430d0cb-1769-47ec-bbdb-0570949fa0d2",
+      "name": "Edit Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2832,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.pilotsolution.net/v1/users/authentication.php",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "options": {}
+      },
+      "id": "29c5686b-ca5a-4c94-a660-12e6fe428f3e",
+      "name": "Login2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2672,
+        384
+      ],
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "jP4TWD9WrWhP4iTY",
+          "name": "API NISSAN"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://api.pilotsolution.net/v1/users/authorization.php",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "identity_token",
+              "value": "={{ $json.token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f63fb180-95b7-4976-8174-6ef45fdef75d",
+      "name": "Login3",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2992,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.pilotsolution.net/v1/welcomes/update.php",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"data\": {\n    \"id\": \"{{ $('HTTP Request').item.json.data.welcome_guid }}\",\n    \"interest_level_code\": \"Cold\"\n  },\n  \"header\": {\n    \"FlowName\": \"update_prospect\",\n    \"SequenceId\": 1,\n    \"TimeStamp\": 1248377,\n    \"TrackingId\": \"FD1C4A1A-CAFB-467E-825B-7FFB86CC21E3\",\n    \"access_token\": \"{{ $('Login3').item.json.result.entitydata.session.identityToken }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "ee5038ef-bf69-4deb-84a8-91408d2a8236",
+      "name": "updateLead1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3440,
+        384
+      ]
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        3152,
+        384
+      ],
+      "id": "a985aa5d-e3bb-4f21-b1fd-772055bff137",
+      "name": "Wait1",
+      "webhookId": "9a5a5878-493a-466d-a4ba-bd596a9297fa"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "table": {
+          "__rl": true,
+          "value": "nissan_salesforce",
+          "mode": "list",
+          "cachedResultName": "nissan_salesforce"
+        },
+        "dataMode": "defineBelow",
+        "columnToMatchOn": "LeadId",
+        "valueToMatchOn": "={{$('Code7').first().json.ID_LEAD}}",
+        "valuesToSend": {
+          "values": [
+            {
+              "column": "leadIdPilot",
+              "value": "={{ $('HTTP Request').item.json.data.welcome_guid }}"
+            },
+            {
+              "column": "interes",
+              "value": "Cold"
+            },
+            {
+              "column": "origen_pilot",
+              "value": "={{$('Code7').first().json.pilotCode}}"
+            },
+            {
+              "column": "origen_salesforce",
+              "value": "={{$('Code7').first().json.ORIGEN_DEL_LEAD}}"
+            },
+            {
+              "column": "id_pilot",
+              "value": "={{ $('HTTP Request').item.json.data.welcome_id }}"
+            },
+            {
+              "column": "dealer_pilot",
+              "value": "={{ $('Code7').item.json.CODIGO_DEL_DEALER }}"
+            },
+            {
+              "column": "updated_at",
+              "value": "={{$now}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        3296,
+        384
+      ],
+      "id": "b9034a2d-2322-431a-8023-728510c2db1b",
+      "name": "savePilotID1",
+      "credentials": {
+        "mySql": {
+          "id": "FezTcDnLo3SqPHvd",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## Mercado libre o Whatsapp"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1824,
+        336
+      ],
+      "typeVersion": 1,
+      "id": "468bf1c8-5992-4e37-be89-e7c034bcf520",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 6
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        1184,
+        1248
+      ],
+      "id": "af102d5f-213e-4c89-9eed-fd7c95d1408c",
+      "name": "Schedule Trigger1",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "operation": "removeItemsSeenInPreviousExecutions",
+        "dedupeValue": "={{$json.ID_LEAD}}",
+        "options": {
+          "historySize": 100000000
+        }
+      },
+      "type": "n8n-nodes-base.removeDuplicates",
+      "typeVersion": 2,
+      "position": [
+        992,
+        784
+      ],
+      "id": "acd7bd0f-b8ed-4dd0-bf02-9afe246d445a",
+      "name": "Remove Duplicates"
+    },
+    {
+      "parameters": {
+        "table": {
+          "__rl": true,
+          "value": "nissan_salesforce",
+          "mode": "list",
+          "cachedResultName": "nissan_salesforce"
+        },
+        "dataMode": "defineBelow",
+        "valuesToSend": {
+          "values": [
+            {
+              "column": "LeadId",
+              "value": "={{ $('Loop Over Items').item.json.ID_LEAD }}"
+            },
+            {
+              "column": "telefono",
+              "value": "={{ $('Loop Over Items').item.json.CELULAR.startsWith('+') ? $('Loop Over Items').item.json.CELULAR : '+' + $('Loop Over Items').item.json.CELULAR }}"
+            },
+            {
+              "column": "status",
+              "value": "={{ $('getStatus').first().json.status || \"failed\"}}"
+            },
+            {
+              "column": "created_at",
+              "value": "={{ $now.toUTC().toFormat('yyyy-MM-dd HH:mm:ss') }}"
+            },
+            {
+              "column": "updated_at",
+              "value": "={{ $now.toUTC().toFormat('yyyy-MM-dd HH:mm:ss') }}"
+            },
+            {
+              "column": "nombre",
+              "value": "={{ $('Loop Over Items').item.json.NOMBRE }}"
+            },
+            {
+              "column": "modelo",
+              "value": "={{ $('Loop Over Items').item.json.MODELO }}"
+            },
+            {
+              "column": "dealer",
+              "value": "={{ $('Loop Over Items').item.json.CODIGO_DEL_DEALER }}"
+            },
+            {
+              "column": "dni",
+              "value": "={{ $('Loop Over Items').item.json.CUIL_CUIT_DNI || \"No especificado\" }}"
+            },
+            {
+              "column": "mail",
+              "value": "={{ $('Loop Over Items').item.json[\"E-MAIL\"] || \"No especificado\"}}"
+            },
+            {
+              "column": "suborigen_salesforce",
+              "value": "={{ $('Loop Over Items').item.json.SUB_ORIGEN || \"No especificado\" }}"
+            },
+            {
+              "column": "detalle_salesforce",
+              "value": "={{ $('Loop Over Items').item.json.DETALLE || \"No especificado\"}}"
+            },
+            {
+              "column": "subdetalle_salesforce",
+              "value": "={{ $('Loop Over Items').item.json.SUBDETALLE || \"No especificado\"}}"
+            },
+            {
+              "column": "tipo_registro",
+              "value": "={{ $('Loop Over Items').item.json.TIPO_DE_REGISTRO_DE_LEAD || \"No especificado\"}}"
+            },
+            {
+              "column": "provincia",
+              "value": "={{ $('Loop Over Items').item.json.PROVINCIA ||  $('Loop Over Items').item.json.PCIA || \"No especificado\"}}"
+            },
+            {
+              "column": "origen_salesforce",
+              "value": "={{ $('Loop Over Items').item.json.ORIGEN_DEL_LEAD || \"No especificado\"}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        3056,
+        800
+      ],
+      "id": "358eb0c2-2344-4d97-9c5b-ee5016d7e9e7",
+      "name": "Insert rows in a table3",
+      "alwaysOutputData": true,
+      "executeOnce": false,
+      "credentials": {
+        "mySql": {
+          "id": "FezTcDnLo3SqPHvd",
+          "name": "MySQL account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate"
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "qNzK3R6yfsDGEVJ5",
+      "projectId": "K8p6XEqA0L6D2uVt",
+      "createdAt": "2025-12-18T11:28:17.906Z",
+      "updatedAt": "2025-12-18T11:28:17.906Z"
+    }
+  ],
+  "staticData": {
+    "node:Schedule Trigger": {
+      "recurrenceRules": [
+        null
+      ],
+      "recurrenceRuleSignatures": [
+        null
+      ]
+    }
+  },
+  "tags": [
+    {
+      "id": "o06GHXtTLtAfQDke",
+      "name": "HUB",
+      "createdAt": "2026-02-03T14:47:40.022Z",
+      "updatedAt": "2026-02-03T14:47:40.022Z"
+    }
+  ],
+  "triggerCount": 2,
+  "updatedAt": "2026-11-06T11:55:43.105Z",
+  "versionId": "88ed17c2-9745-4f84-9852-cf50f329a583"
+}
