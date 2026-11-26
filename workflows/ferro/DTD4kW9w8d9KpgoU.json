@@ -1,0 +1,196 @@
+{
+  "active": false,
+  "connections": {
+    "get_tiempos1": {
+      "main": [
+        [
+          {
+            "node": "Get many events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code2": {
+      "main": [
+        [
+          {
+            "node": "Code1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "get_tiempos1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many events": {
+      "main": [
+        [
+          {
+            "node": "Code2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-03-17T15:17:38.353Z",
+  "id": "DTD4kW9w8d9KpgoU",
+  "isArchived": false,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "name": "get_tiempo-bahia1",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "// ==========================================\n// CONFIG\n// ==========================================\nconst OFFSET = \"-03:00\";\nconst TIMEZONE = \"America/Argentina/Buenos_Aires\";\n\nconst CONFIG = {\n  APERTURA: \"08:00\",\n  CIERRE: \"18:00\",\n  INICIO_ALMUERZO: \"12:00\",\n  FIN_ALMUERZO: \"13:00\",\n  TIEMPO_RECEPCION: 15,\n  TIEMPO_LAVADO: 30,\n  TIEMPO_PREPARACION: 15,\n  MIN_HORAS_TURNO: 18,\n  DIAS_LABORALES: [1,2,3,4,5],\n  MAX_DIAS_BUSQUEDA: 60\n};\n\n// ==========================================\n// TIEMPO SERVICIO\n// ==========================================\nconst tiempoNode = $('get_tiempos1').first().json;\n\nlet TIEMPO_SERVICIO = 45;\n\nif (tiempoNode?.tiempo) {\n  if (typeof tiempoNode.tiempo === \"string\" && tiempoNode.tiempo.includes(\":\")) {\n    const [h, m] = tiempoNode.tiempo.split(\":\").map(Number);\n    TIEMPO_SERVICIO = h * 60 + m;\n  } else {\n    TIEMPO_SERVICIO = parseInt(tiempoNode.tiempo) || 45;\n  }\n}\n\n// ==========================================\n// EVENTOS GOOGLE CALENDAR\n// ==========================================\nconst eventosPorDia = {};\n\nfor (const item of $input.all()) {\n  const fecha = item.json.date;\n  const eventos = item.json.events || [];\n\n  eventosPorDia[fecha] = eventos.map(e => {\n    let inicio, fin;\n    if (e.start?.dateTime) {\n      inicio = new Date(e.start.dateTime);\n      fin = new Date(e.end.dateTime);\n    } else {\n      inicio = new Date(`${fecha}T${e.start}:00${OFFSET}`);\n      fin = new Date(`${fecha}T${e.end}:00${OFFSET}`);\n    }\n    return { inicio, fin };\n  }).filter(e => e.inicio && e.fin);\n}\n\n// ==========================================\n// HELPERS\n// ==========================================\nfunction timeToMinutes(t) {\n  const [h, m] = t.split(\":\").map(Number);\n  return h * 60 + m;\n}\n\nfunction minutesToTime(min) {\n  const h = Math.floor(min / 60);\n  const m = min % 60;\n  return `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}`;\n}\n\nfunction formatoFechaCompleta(fechaStr) {\n  const dias = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];\n  const f = new Date(fechaStr + \"T00:00:00\" + OFFSET);\n  return `${dias[f.getDay()]} ${f.toLocaleDateString(\"es-AR\")}`;\n}\n\n// ==========================================\n// HORARIOS BASE\n// ==========================================\nconst apertura    = timeToMinutes(CONFIG.APERTURA);\nconst cierre      = timeToMinutes(CONFIG.CIERRE);\nconst almuerzoIni = timeToMinutes(CONFIG.INICIO_ALMUERZO);\nconst almuerzoFin = timeToMinutes(CONFIG.FIN_ALMUERZO);\n\n// ==========================================\n// BUSQUEDA\n// ==========================================\nconst ahora = new Date();\nconst fechaMinima = new Date(ahora.getTime() + CONFIG.MIN_HORAS_TURNO * 3600000);\n\n// Busca el primer slot libre a partir de `desde` hasta `hasta`\nfunction buscarDesde(fechaStr, desde, hasta, eventos) {\n  for (let hora = desde; hora + TIEMPO_SERVICIO <= hasta; hora += 15) {\n    const inicioDate = new Date(`${fechaStr}T${minutesToTime(hora)}:00${OFFSET}`);\n    if (inicioDate < fechaMinima) continue;\n\n    // No arrancar en almuerzo\n    if (hora >= almuerzoIni && hora < almuerzoFin) continue;\n\n    // No terminar pasando el cierre\n    if (hora + TIEMPO_SERVICIO > cierre) continue;\n\n    // Verificar contra eventos (solo TIEMPO_SERVICIO, sin extras)\n    const recepcion = new Date(`${fechaStr}T${minutesToTime(hora - CONFIG.TIEMPO_RECEPCION)}:00${OFFSET}`);\n    const finServicio = new Date(`${fechaStr}T${minutesToTime(hora + TIEMPO_SERVICIO)}:00${OFFSET}`);\n    const libre = !eventos.some(e => recepcion < e.fin && finServicio > e.inicio);\n\n    if (libre) return hora;\n  }\n  return null;\n}\n\nfunction construirTurno(fechaStr, hora) {\n  const finServicio = hora + TIEMPO_SERVICIO;\n  const llegada = hora - CONFIG.TIEMPO_RECEPCION;\n\n  // Entrega = fin servicio + lavado + preparacion, saltando almuerzo si aplica\n  let entrega = finServicio + CONFIG.TIEMPO_LAVADO + CONFIG.TIEMPO_PREPARACION;\n  if (finServicio <= almuerzoIni && entrega > almuerzoIni) {\n    entrega += (almuerzoFin - almuerzoIni);\n  }\n\n  return {\n    dia: fechaStr,\n    inicio: minutesToTime(hora),\n    final: minutesToTime(finServicio),\n    horarioLlegada: minutesToTime(llegada),\n    horarioEntrega: minutesToTime(entrega),\n    fechaFormato: formatoFechaCompleta(fechaStr),\n    Id_Calendario: \"a53b69d6815a2d4305369311426ce3576383afa505d99095c577f9646361a062@group.calendar.google.com\"\n  };\n}\n\n// Franjas horarias para rotar y dar variedad\nconst FRANJAS = [\n  { desde: timeToMinutes(\"08:00\"), hasta: timeToMinutes(\"10:00\") },\n  { desde: timeToMinutes(\"10:00\"), hasta: timeToMinutes(\"12:00\") },\n  { desde: timeToMinutes(\"13:00\"), hasta: timeToMinutes(\"15:30\") },\n  { desde: timeToMinutes(\"15:30\"), hasta: timeToMinutes(\"18:00\") },\n];\n\nlet turnosDisponibles = [];\nlet fecha = new Date();\nfecha.setDate(fecha.getDate() + 1);\nlet dias = 0;\nlet franjaIdx = 0;\n\nwhile (turnosDisponibles.length < 4 && dias < CONFIG.MAX_DIAS_BUSQUEDA) {\n\n  const fechaStr = fecha.toLocaleDateString(\"en-CA\", { timeZone: TIMEZONE });\n  const diaSemana = fecha.getDay();\n\n  if (CONFIG.DIAS_LABORALES.includes(diaSemana)) {\n    const eventos = eventosPorDia[fechaStr] || [];\n\n    // Intentar encontrar en la franja actual, si no hay, probar las demás\n    let encontrado = false;\n    for (let intento = 0; intento < FRANJAS.length; intento++) {\n      const franja = FRANJAS[(franjaIdx + intento) % FRANJAS.length];\n      const slot = buscarDesde(fechaStr, franja.desde, franja.hasta, eventos);\n      if (slot !== null) {\n        turnosDisponibles.push(construirTurno(fechaStr, slot));\n        franjaIdx = (franjaIdx + intento + 1) % FRANJAS.length; // avanzar franja para el próximo\n        encontrado = true;\n        break;\n      }\n    }\n  }\n\n  fecha.setDate(fecha.getDate() + 1);\n  dias++;\n}\n\n// ==========================================\n// ORDEN FINAL\n// ==========================================\nturnosDisponibles.sort((a, b) =>\n  a.dia === b.dia\n    ? a.inicio.localeCompare(b.inicio)\n    : new Date(a.dia) - new Date(b.dig)\n);\n\n// ==========================================\n// OUTPUT\n// ==========================================\nreturn [{\n  json: {\n    turnosDisponibles: turnosDisponibles.slice(0, 4),\n    tiempoServicio: TIEMPO_SERVICIO,\n    cantidad: turnosDisponibles.length\n  }\n}];"
+      },
+      "id": "7bc40a2f-557b-4531-ad64-185630236da4",
+      "name": "Code1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        992,
+        240
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1_6xCHlbg7FNU-uY1pqRGRcRBMscKBpUVViHk00Z81p4",
+          "mode": "list",
+          "cachedResultName": "FERRO AI",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1_6xCHlbg7FNU-uY1pqRGRcRBMscKBpUVViHk00Z81p4/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 170948931,
+          "mode": "list",
+          "cachedResultName": "Duracion",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1_6xCHlbg7FNU-uY1pqRGRcRBMscKBpUVViHk00Z81p4/edit#gid=170948931"
+        },
+        "options": {}
+      },
+      "id": "7fd7b752-7786-4044-8140-b75bf7845552",
+      "name": "get_tiempos1",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        352,
+        240
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "tyAaqTWROIXhon9B",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const grouped = {};\nconst seen = new Set();\n\nfor (const item of $input.all()) {\n\n  const event = item.json;\n\n  if (!event.start?.dateTime || !event.end?.dateTime) continue;\n\n  const date = event.start.dateTime.slice(0,10);\n  const start = event.start.dateTime.slice(11,16);\n  const end = event.end.dateTime.slice(11,16);\n  const summary = event.summary || \"\";\n\n  const key = `${date}_${start}_${end}_${summary}`;\n\n  // skip duplicates\n  if (seen.has(key)) continue;\n  seen.add(key);\n\n  if (!grouped[date]) {\n    grouped[date] = [];\n  }\n\n  grouped[date].push({\n    start,\n    end,\n    summary\n  });\n}\n\n// sort days and events\nreturn Object.keys(grouped)\n.sort()\n.map(date => ({\n  json: {\n    date,\n    events: grouped[date].sort((a,b)=>a.start.localeCompare(b.start))\n  }\n}));"
+      },
+      "id": "ae58dac0-5373-455e-8a64-5b680854a7f1",
+      "name": "Code2",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        768,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "modelo"
+            },
+            {
+              "name": "km"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        96,
+        224
+      ],
+      "id": "47bffbfc-1e11-4714-bc3a-4dd7defce127",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "=a53b69d6815a2d4305369311426ce3576383afa505d99095c577f9646361a062@group.calendar.google.com",
+          "mode": "id"
+        },
+        "limit": 150,
+        "options": {
+          "timeMin": "={{ $now }}",
+          "timeMax": "={{ $now.plus({ days: 15}) }}",
+          "singleEvents": true,
+          "orderBy": "startTime"
+        }
+      },
+      "id": "4300b009-23e1-4d93-8aa6-199e5e9881a7",
+      "name": "Get many events",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.2,
+      "position": [
+        544,
+        240
+      ],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "baAmEZpOHxqXjBfT",
+          "name": "Google Calendar account"
+        }
+      }
+    }
+  ],
+  "pinData": {
+    "When Executed by Another Workflow": [
+      {
+        "json": {
+          "modelo": "Yaris",
+          "km": "30000"
+        }
+      }
+    ]
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "createdAt": "2026-11-26T20:22:04.870Z",
+      "updatedAt": "2026-11-26T20:22:04.870Z",
+      "id": "OuociDzj6ZDKeZHL",
+      "name": "ferro"
+    }
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2026-11-26T20:22:05.000Z",
+  "versionId": "b25507ce-677b-4f20-a935-64f9c226960b"
+}
