@@ -1,0 +1,979 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "0f17f816-6e6c-4441-8a40-fd2fd92e14e8",
+    "workflowId": "99BjgqPrZiGK6Er4",
+    "nodes": [
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT * \nFROM mydatabase.token_agenda_ford\nWHERE company = 226\nORDER BY id DESC\nLIMIT 1;",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          -2208,
+          1248
+        ],
+        "id": "f85f0592-052c-47df-a51f-87bd78781580",
+        "name": "getToken",
+        "credentials": {
+          "mySql": {
+            "id": "MQsz7DhuX8KYe9DI",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "triggerAtHour": 11
+              }
+            ]
+          }
+        },
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          -2528,
+          1248
+        ],
+        "id": "370431dc-d912-465d-99d5-b508aca1c412",
+        "name": "Schedule Trigger"
+      },
+      {
+        "parameters": {
+          "jsCode": "const loopItem = $('Loop Over Items').first().json;\nconst personal = $('HTTP Request').first().json;\nconst q = $input.first().json?.response ?? {};\n\nconst services = [\n  ...(q.requestedItems?.services ?? []),\n  ...(q.recommendedItems?.services ?? []),\n  ...(q.complementaryBudget?.services ?? []),\n];\n\nconst pickup = services.find(s =>\n  s.status === 'A' && /pick\\s*up/i.test(`${s.categoryName ?? ''} ${s.serviceName ?? ''}`)\n);\n\nreturn [{\n  json: {\n    ...loopItem,\n    response: personal.response,   // lo que lee Code3 (datos del cliente)\n    cotizacion_ok: !!q.quotationId,\n    pickup: !!pickup,\n    pickup_servicio: pickup?.serviceName ?? '',\n    pickup_precio: pickup?.price ?? 0,\n    cotizacion_subtotal: q.subTotal ?? 0,\n  }\n}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -768,
+          976
+        ],
+        "name": "Marcar Pickup1",
+        "id": "3bf5da9b-a7b6-4389-8085-726669cc957e"
+      },
+      {
+        "parameters": {
+          "url": "=https://api.service.ford.com/agenda/manage-reservation-bff/reservations/ARG/74/{{ $('Loop Over Items').item.json.employee_id }}/{{ $('Loop Over Items').item.json.fecha }}/{{ String($('Loop Over Items').item.json.hora).replace(':', '') }}/details-quotation",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "countrycode",
+                "value": "ARG"
+              },
+              {
+                "name": "divisionCode",
+                "value": "1"
+              },
+              {
+                "name": "dealercode",
+                "value": "60439"
+              },
+              {
+                "name": "Accept",
+                "value": "application/json, text/plain, */*"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $('getToken').first().json.token }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -944,
+          976
+        ],
+        "name": "Ford - Detalle Reserva1",
+        "id": "ddc95f81-ce9b-4ec8-8783-aa0300ce7611",
+        "disabled": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "content": "## Rosario\n",
+          "height": 80,
+          "width": 176
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          -1616,
+          976
+        ],
+        "typeVersion": 1,
+        "id": "60cca965-b8ab-4bd6-8ca0-c68c68a492e0",
+        "name": "Sticky Note"
+      },
+      {
+        "parameters": {
+          "jsCode": "const inputData = $('Loop Over Items').first().json;\nconst cliente = $input.first().json;\n\nreturn [{\n  json: {\n    columnas: {\n      asesor:   String(inputData.asesor  ?? \"\"),\n      cliente:  String(inputData.cliente ?? \"\"),\n      fecha:    String(inputData.fecha   ?? \"\"),\n      hora:     String(inputData.hora    ?? \"\"),\n      patente:  String(inputData.patente ?? \"\"),\n      vin:      String(inputData.vin     ?? \"\"),\n      modelo:   String(inputData.modelo  ?? \"\"),\n      telefono: String(cliente.telefono_normalizado ?? \"\"),\n      telefono_original: String(cliente.telefono_original ?? \"\"),\n      sucursal: \"rosario\"\n    }\n  }\n}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -496,
+          976
+        ],
+        "id": "f17ed299-6608-4299-b11d-41502b0c3212",
+        "name": "Code4"
+      },
+      {
+        "parameters": {
+          "jsCode": "const res = $input.first().json.response ?? {};\n\n// Arma el WhatsApp (549 + 10 dígitos) a partir de lo que está cargado en Ford.\n// Corrige: área repetida dentro del número, \"15\" adelante o en el medio, número ya con 54/549.\n// Si no se puede armar un número válido devuelve null y el turno NO se envía.\nfunction normalizarTelefono(cityCode, phoneNumber) {\n  const area = String(cityCode ?? '').replace(/\\D/g, '').replace(/^0+/, '');\n  let num = String(phoneNumber ?? '').replace(/\\D/g, '').replace(/^0+/, '');\n  if (!num) return null;\n  // Ya viene con código de país\n  if (num.startsWith('549') && num.length === 13) return num;\n  if (num.startsWith('54') && num.length === 12) return '549' + num.slice(2);\n  let nacional;\n  if (num.length === 10 && num.startsWith('15') && area && area.length === 2) {\n    nacional = area + num.slice(2);                   // 15 + número con área de 2 dígitos (ej. 011)\n  } else if (num.length === 10) {\n    nacional = num;                                   // número completo, ya trae el área\n  } else if (area && num.length === 12 && num.startsWith(area) && num.slice(area.length, area.length + 2) === '15') {\n    nacional = area + num.slice(area.length + 2);     // área + 15 + número\n  } else {\n    if (num.startsWith('15') && area && (area.length + num.length - 2) === 10) num = num.slice(2); // 15 adelante\n    nacional = area + num;\n  }\n  if (nacional.length === 12 && area && nacional.slice(area.length, area.length + 2) === '15') {\n    nacional = area + nacional.slice(area.length + 2);\n  }\n  if (nacional.length === 12) {                      // un 15 metido en el medio (ej. área 3411 + 53477115)\n    const pos = [2, 3, 4].filter(p => nacional.slice(p, p + 2) === '15');\n    if (pos.length === 1) nacional = nacional.slice(0, pos[0]) + nacional.slice(pos[0] + 2);\n  }\n  return /^[1-9]\\d{9}$/.test(nacional) ? '549' + nacional : null;\n}\n\nconst telefonoNormalizado = normalizarTelefono(res.mobilePhone?.cityCode, res.mobilePhone?.phoneNumber);\n\nreturn [{\n  json: {\n    cliente_id:           res.id,\n    nombre:               res.firstName,\n    apellido:             res.lastName,\n    nombre_completo:      `${res.firstName ?? ''} ${res.lastName ?? ''}`.trim(),\n    dni:                  res.nationalId,\n    email:                res.email,\n    telefono_normalizado: telefonoNormalizado,\n    telefono_original:    `${res.mobilePhone?.cityCode ?? ''} ${res.mobilePhone?.phoneNumber ?? ''}`.trim(),\n  }\n}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -640,
+          976
+        ],
+        "id": "88663de8-2013-47d8-a8e2-9d120ea3838c",
+        "name": "Code2"
+      },
+      {
+        "parameters": {
+          "url": "=https://api.service.ford.com/agenda/manage-reservation-bff/reservations/personal-data",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "countrycode",
+                "value": "ARG"
+              },
+              {
+                "name": "dealercode",
+                "value": "74"
+              },
+              {
+                "name": "reservation",
+                "value": "={{ $json.id }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $('getToken').first().json.token }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -1088,
+          976
+        ],
+        "id": "71738657-27c1-4ac2-8d1e-52064a1577e9",
+        "name": "HTTP Request"
+      },
+      {
+        "parameters": {
+          "options": {}
+        },
+        "type": "n8n-nodes-base.splitInBatches",
+        "typeVersion": 3,
+        "position": [
+          -880,
+          1200
+        ],
+        "id": "0937a6ad-5181-4556-a6d7-e40cb8cd3408",
+        "name": "Loop Over Items"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://campaigns.redooconect.com.ar/api/v1/campaigns/6539/send-single",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-API-Key",
+                "value": "VALOR_OCULTO"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ phone_number: $json.columnas.telefono, sender_phone: '5493417439252', destination_country: 'AR', enqueue_if_no_credit: true, daily_envio: true, variables: { '1': $json.columnas.cliente, '2': String($json.columnas.fecha).split('-').reverse().join('/'), '3': $json.columnas.hora, '4': $json.columnas.modelo, '5': $json.columnas.patente, '6': $json.columnas.asesor, '7': 'Bruno_20261111_095358.png' } }) }}",
+          "options": {}
+        },
+        "id": "ff33b35a-f8b3-4f1c-a5c1-4e78d547be50",
+        "name": "Enviar confirmación (campaña 6539)",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -304,
+          976
+        ],
+        "alwaysOutputData": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Junta los turnos de todas las páginas (cada página llega como un item) y saca duplicados por id\nconst vistos = new Set();\nconst allItems = $input.all().flatMap(inputItem => {\n  const items = inputItem.json?.result?.items;\n  if (!items) return [];\n  return items;\n}).filter(item => {\n  if (!item?.id || vistos.has(item.id)) return false;\n  vistos.add(item.id);\n  return true;\n}).map(item => ({\n  json: {\n    id:           item.id,\n    fecha:        item.date?.slice(0, 10),\n    hora:         item.date?.slice(11, 16),\n    status:       item.status,\n    source:       item.source,\n    cliente:      `${item.conductorName?.firstName ?? ''} ${item.conductorName?.lastName ?? ''}`.trim(),\n    employee_id:  item.employee?.id ?? '',\n    asesor:       item.employee?.label ?? '',\n    vin:          item.vehicle?.vin ?? '',\n    patente:      item.vehicle?.plate ?? '',\n    modelo:       item.vehicle?.modelShortName ?? '',\n    modelo_full:  item.vehicle?.modelLongName ?? '',\n    km:           item.vehicle?.odometer ?? '',\n    revisado:     item.isReviewed ? 'Sí' : 'No',\n    recurrente:   item.recurringScheduleStatus === 'Y' ? 'Sí' : 'No',\n  }\n}));\n\nreturn allItems;"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -1168,
+          1232
+        ],
+        "id": "966f9de2-0d64-4679-923c-7c666a8cfba1",
+        "name": "Code",
+        "onError": "continueErrorOutput"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.service.ford.com/agenda/manage-reservation-bff/reservations",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "countrycode",
+                "value": "=ARG"
+              },
+              {
+                "name": "dealercode",
+                "value": "74"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $('getToken').first().json.token }}"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={\n  \"dealer\": \"74\",\n  \"country\": \"ARG\",\n  \"startDate\": \"{{ $now.plus(1,'days').format('yyyy-MM-dd') }}\",\n  \"endDate\": \"{{ $now.plus(1,'days').format('yyyy-MM-dd') }}\",\n  \"types\": [\"NORMAL\"]\n}",
+          "options": {
+            "pagination": {
+              "pagination": {
+                "paginationMode": "updateAParameterInEachRequest",
+                "parameters": {
+                  "parameters": [
+                    {
+                      "type": "qs",
+                      "name": "page",
+                      "value": "={{ $pageCount + 1 }}"
+                    }
+                  ]
+                },
+                "paginationCompleteWhen": "other",
+                "completeExpression": "={{ !$response.body?.result?.pagination || $response.body.result.pagination.currentPage >= $response.body.result.pagination.totalPages }}",
+                "limitPagesFetched": true,
+                "maxRequests": 30,
+                "requestInterval": 300
+              }
+            }
+          }
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -1584,
+          1120
+        ],
+        "id": "09fa5f99-f1b6-4fd3-9d6e-a7adfbffdacb",
+        "name": "Ford - Reservas del dia siguiente (todas las paginas)"
+      },
+      {
+        "id": "d3491737-2816-4e5b-8f83-064f1b65b585",
+        "name": "Telefono valido?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          -396,
+          1116
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "tel-valido",
+                "leftValue": "={{ $json.columnas.telefono }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "string",
+                  "operation": "notEmpty",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        }
+      }
+    ],
+    "connections": {
+      "Schedule Trigger": {
+        "main": [
+          [
+            {
+              "node": "getToken",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Marcar Pickup1": {
+        "main": [
+          [
+            {
+              "node": "Code2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ford - Detalle Reserva1": {
+        "main": [
+          [
+            {
+              "node": "Marcar Pickup1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code2": {
+        "main": [
+          [
+            {
+              "node": "Code4",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "HTTP Request": {
+        "main": [
+          [
+            {
+              "node": "Ford - Detalle Reserva1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Loop Over Items": {
+        "main": [
+          [],
+          [
+            {
+              "node": "HTTP Request",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code": {
+        "main": [
+          [
+            {
+              "node": "Loop Over Items",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "getToken": {
+        "main": [
+          [
+            {
+              "node": "Ford - Reservas del dia siguiente (todas las paginas)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Enviar confirmación (campaña 6539)": {
+        "main": [
+          [
+            {
+              "node": "Loop Over Items",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ford - Reservas del dia siguiente (todas las paginas)": {
+        "main": [
+          [
+            {
+              "node": "Code",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code4": {
+        "main": [
+          [
+            {
+              "node": "Telefono valido?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Telefono valido?": {
+        "main": [
+          [
+            {
+              "node": "Enviar confirmación (campaña 6539)",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Loop Over Items",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "Agente IA (via MCP)",
+    "name": "Added Telefono valido?; updated Code4, Code2",
+    "description": "Added nodes: Telefono valido?\nUpdated nodes: Code4, Code2\nConnections: 3 added, 1 removed",
+    "autosaved": false,
+    "createdAt": "2026-11-26T15:54:59.062Z",
+    "updatedAt": "2026-11-26T15:54:59.062Z"
+  },
+  "activeVersionId": "0f17f816-6e6c-4441-8a40-fd2fd92e14e8",
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "getToken",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marcar Pickup1": {
+      "main": [
+        [
+          {
+            "node": "Code2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ford - Detalle Reserva1": {
+      "main": [
+        [
+          {
+            "node": "Marcar Pickup1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code2": {
+      "main": [
+        [
+          {
+            "node": "Code4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Ford - Detalle Reserva1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "getToken": {
+      "main": [
+        [
+          {
+            "node": "Ford - Reservas del dia siguiente (todas las paginas)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar confirmación (campaña 6539)": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ford - Reservas del dia siguiente (todas las paginas)": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code4": {
+      "main": [
+        [
+          {
+            "node": "Telefono valido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telefono valido?": {
+      "main": [
+        [
+          {
+            "node": "Enviar confirmación (campaña 6539)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-11-03T12:16:49.675Z",
+  "id": "99BjgqPrZiGK6Er4",
+  "isArchived": false,
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "name": "Confirmación de turno",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * \nFROM mydatabase.token_agenda_ford\nWHERE company = 226\nORDER BY id DESC\nLIMIT 1;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        -2208,
+        1248
+      ],
+      "id": "f85f0592-052c-47df-a51f-87bd78781580",
+      "name": "getToken",
+      "credentials": {
+        "mySql": {
+          "id": "MQsz7DhuX8KYe9DI",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 11
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -2528,
+        1248
+      ],
+      "id": "370431dc-d912-465d-99d5-b508aca1c412",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "jsCode": "const loopItem = $('Loop Over Items').first().json;\nconst personal = $('HTTP Request').first().json;\nconst q = $input.first().json?.response ?? {};\n\nconst services = [\n  ...(q.requestedItems?.services ?? []),\n  ...(q.recommendedItems?.services ?? []),\n  ...(q.complementaryBudget?.services ?? []),\n];\n\nconst pickup = services.find(s =>\n  s.status === 'A' && /pick\\s*up/i.test(`${s.categoryName ?? ''} ${s.serviceName ?? ''}`)\n);\n\nreturn [{\n  json: {\n    ...loopItem,\n    response: personal.response,   // lo que lee Code3 (datos del cliente)\n    cotizacion_ok: !!q.quotationId,\n    pickup: !!pickup,\n    pickup_servicio: pickup?.serviceName ?? '',\n    pickup_precio: pickup?.price ?? 0,\n    cotizacion_subtotal: q.subTotal ?? 0,\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -768,
+        976
+      ],
+      "name": "Marcar Pickup1",
+      "id": "3bf5da9b-a7b6-4389-8085-726669cc957e"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.service.ford.com/agenda/manage-reservation-bff/reservations/ARG/74/{{ $('Loop Over Items').item.json.employee_id }}/{{ $('Loop Over Items').item.json.fecha }}/{{ String($('Loop Over Items').item.json.hora).replace(':', '') }}/details-quotation",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "countrycode",
+              "value": "ARG"
+            },
+            {
+              "name": "divisionCode",
+              "value": "1"
+            },
+            {
+              "name": "dealercode",
+              "value": "60439"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json, text/plain, */*"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('getToken').first().json.token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -944,
+        976
+      ],
+      "name": "Ford - Detalle Reserva1",
+      "id": "ddc95f81-ce9b-4ec8-8783-aa0300ce7611",
+      "disabled": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "content": "## Rosario\n",
+        "height": 80,
+        "width": 176
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1616,
+        976
+      ],
+      "typeVersion": 1,
+      "id": "60cca965-b8ab-4bd6-8ca0-c68c68a492e0",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "jsCode": "const inputData = $('Loop Over Items').first().json;\nconst cliente = $input.first().json;\n\nreturn [{\n  json: {\n    columnas: {\n      asesor:   String(inputData.asesor  ?? \"\"),\n      cliente:  String(inputData.cliente ?? \"\"),\n      fecha:    String(inputData.fecha   ?? \"\"),\n      hora:     String(inputData.hora    ?? \"\"),\n      patente:  String(inputData.patente ?? \"\"),\n      vin:      String(inputData.vin     ?? \"\"),\n      modelo:   String(inputData.modelo  ?? \"\"),\n      telefono: String(cliente.telefono_normalizado ?? \"\"),\n      telefono_original: String(cliente.telefono_original ?? \"\"),\n      sucursal: \"rosario\"\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -496,
+        976
+      ],
+      "id": "f17ed299-6608-4299-b11d-41502b0c3212",
+      "name": "Code4"
+    },
+    {
+      "parameters": {
+        "jsCode": "const res = $input.first().json.response ?? {};\n\n// Arma el WhatsApp (549 + 10 dígitos) a partir de lo que está cargado en Ford.\n// Corrige: área repetida dentro del número, \"15\" adelante o en el medio, número ya con 54/549.\n// Si no se puede armar un número válido devuelve null y el turno NO se envía.\nfunction normalizarTelefono(cityCode, phoneNumber) {\n  const area = String(cityCode ?? '').replace(/\\D/g, '').replace(/^0+/, '');\n  let num = String(phoneNumber ?? '').replace(/\\D/g, '').replace(/^0+/, '');\n  if (!num) return null;\n  // Ya viene con código de país\n  if (num.startsWith('549') && num.length === 13) return num;\n  if (num.startsWith('54') && num.length === 12) return '549' + num.slice(2);\n  let nacional;\n  if (num.length === 10 && num.startsWith('15') && area && area.length === 2) {\n    nacional = area + num.slice(2);                   // 15 + número con área de 2 dígitos (ej. 011)\n  } else if (num.length === 10) {\n    nacional = num;                                   // número completo, ya trae el área\n  } else if (area && num.length === 12 && num.startsWith(area) && num.slice(area.length, area.length + 2) === '15') {\n    nacional = area + num.slice(area.length + 2);     // área + 15 + número\n  } else {\n    if (num.startsWith('15') && area && (area.length + num.length - 2) === 10) num = num.slice(2); // 15 adelante\n    nacional = area + num;\n  }\n  if (nacional.length === 12 && area && nacional.slice(area.length, area.length + 2) === '15') {\n    nacional = area + nacional.slice(area.length + 2);\n  }\n  if (nacional.length === 12) {                      // un 15 metido en el medio (ej. área 3411 + 53477115)\n    const pos = [2, 3, 4].filter(p => nacional.slice(p, p + 2) === '15');\n    if (pos.length === 1) nacional = nacional.slice(0, pos[0]) + nacional.slice(pos[0] + 2);\n  }\n  return /^[1-9]\\d{9}$/.test(nacional) ? '549' + nacional : null;\n}\n\nconst telefonoNormalizado = normalizarTelefono(res.mobilePhone?.cityCode, res.mobilePhone?.phoneNumber);\n\nreturn [{\n  json: {\n    cliente_id:           res.id,\n    nombre:               res.firstName,\n    apellido:             res.lastName,\n    nombre_completo:      `${res.firstName ?? ''} ${res.lastName ?? ''}`.trim(),\n    dni:                  res.nationalId,\n    email:                res.email,\n    telefono_normalizado: telefonoNormalizado,\n    telefono_original:    `${res.mobilePhone?.cityCode ?? ''} ${res.mobilePhone?.phoneNumber ?? ''}`.trim(),\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -640,
+        976
+      ],
+      "id": "88663de8-2013-47d8-a8e2-9d120ea3838c",
+      "name": "Code2"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.service.ford.com/agenda/manage-reservation-bff/reservations/personal-data",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "countrycode",
+              "value": "ARG"
+            },
+            {
+              "name": "dealercode",
+              "value": "74"
+            },
+            {
+              "name": "reservation",
+              "value": "={{ $json.id }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('getToken').first().json.token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1088,
+        976
+      ],
+      "id": "71738657-27c1-4ac2-8d1e-52064a1577e9",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -880,
+        1200
+      ],
+      "id": "0937a6ad-5181-4556-a6d7-e40cb8cd3408",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://campaigns.redooconect.com.ar/api/v1/campaigns/6539/send-single",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "VALOR_OCULTO"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ phone_number: $json.columnas.telefono, sender_phone: '5493417439252', destination_country: 'AR', enqueue_if_no_credit: true, daily_envio: true, variables: { '1': $json.columnas.cliente, '2': String($json.columnas.fecha).split('-').reverse().join('/'), '3': $json.columnas.hora, '4': $json.columnas.modelo, '5': $json.columnas.patente, '6': $json.columnas.asesor, '7': 'Bruno_20261111_095358.png' } }) }}",
+        "options": {}
+      },
+      "id": "ff33b35a-f8b3-4f1c-a5c1-4e78d547be50",
+      "name": "Enviar confirmación (campaña 6539)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -304,
+        976
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Junta los turnos de todas las páginas (cada página llega como un item) y saca duplicados por id\nconst vistos = new Set();\nconst allItems = $input.all().flatMap(inputItem => {\n  const items = inputItem.json?.result?.items;\n  if (!items) return [];\n  return items;\n}).filter(item => {\n  if (!item?.id || vistos.has(item.id)) return false;\n  vistos.add(item.id);\n  return true;\n}).map(item => ({\n  json: {\n    id:           item.id,\n    fecha:        item.date?.slice(0, 10),\n    hora:         item.date?.slice(11, 16),\n    status:       item.status,\n    source:       item.source,\n    cliente:      `${item.conductorName?.firstName ?? ''} ${item.conductorName?.lastName ?? ''}`.trim(),\n    employee_id:  item.employee?.id ?? '',\n    asesor:       item.employee?.label ?? '',\n    vin:          item.vehicle?.vin ?? '',\n    patente:      item.vehicle?.plate ?? '',\n    modelo:       item.vehicle?.modelShortName ?? '',\n    modelo_full:  item.vehicle?.modelLongName ?? '',\n    km:           item.vehicle?.odometer ?? '',\n    revisado:     item.isReviewed ? 'Sí' : 'No',\n    recurrente:   item.recurringScheduleStatus === 'Y' ? 'Sí' : 'No',\n  }\n}));\n\nreturn allItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1168,
+        1232
+      ],
+      "id": "966f9de2-0d64-4679-923c-7c666a8cfba1",
+      "name": "Code",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.service.ford.com/agenda/manage-reservation-bff/reservations",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "countrycode",
+              "value": "=ARG"
+            },
+            {
+              "name": "dealercode",
+              "value": "74"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('getToken').first().json.token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"dealer\": \"74\",\n  \"country\": \"ARG\",\n  \"startDate\": \"{{ $now.plus(1,'days').format('yyyy-MM-dd') }}\",\n  \"endDate\": \"{{ $now.plus(1,'days').format('yyyy-MM-dd') }}\",\n  \"types\": [\"NORMAL\"]\n}",
+        "options": {
+          "pagination": {
+            "pagination": {
+              "paginationMode": "updateAParameterInEachRequest",
+              "parameters": {
+                "parameters": [
+                  {
+                    "type": "qs",
+                    "name": "page",
+                    "value": "={{ $pageCount + 1 }}"
+                  }
+                ]
+              },
+              "paginationCompleteWhen": "other",
+              "completeExpression": "={{ !$response.body?.result?.pagination || $response.body.result.pagination.currentPage >= $response.body.result.pagination.totalPages }}",
+              "limitPagesFetched": true,
+              "maxRequests": 30,
+              "requestInterval": 300
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1584,
+        1120
+      ],
+      "id": "09fa5f99-f1b6-4fd3-9d6e-a7adfbffdacb",
+      "name": "Ford - Reservas del dia siguiente (todas las paginas)"
+    },
+    {
+      "id": "d3491737-2816-4e5b-8f83-064f1b65b585",
+      "name": "Telefono valido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -396,
+        1116
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "tel-valido",
+              "leftValue": "={{ $json.columnas.telefono }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    }
+  ],
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "99BjgqPrZiGK6Er4",
+      "projectId": "5s6wO5v4dfUIGxbX",
+      "createdAt": "2026-11-03T12:16:49.682Z",
+      "updatedAt": "2026-11-03T12:16:49.682Z"
+    }
+  ],
+  "staticData": {
+    "node:Schedule Trigger": {
+      "recurrenceRules": [
+        null
+      ],
+      "recurrenceRuleSignatures": [
+        null
+      ]
+    }
+  },
+  "tags": [
+    {
+      "id": "nJNsJjk38a4FxZ0d",
+      "name": "fordgiorgi",
+      "createdAt": "2026-11-26T20:28:01.524Z",
+      "updatedAt": "2026-11-26T20:28:01.524Z"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-11-26T20:28:02.600Z",
+  "versionId": "0f17f816-6e6c-4441-8a40-fd2fd92e14e8"
+}
