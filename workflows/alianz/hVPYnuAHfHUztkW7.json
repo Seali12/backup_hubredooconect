@@ -1,0 +1,859 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "fe4cfb12-6b88-4aa4-82aa-6f246f348a35",
+    "workflowId": "hVPYnuAHfHUztkW7",
+    "nodes": [
+      {
+        "parameters": {
+          "operation": "getAll",
+          "calendar": {
+            "__rl": true,
+            "value": "99cfd1bbd22d883c2a6bad3f5e7c0bbf04434c8d049c919b94c59c5f4dd8811c@group.calendar.google.com",
+            "mode": "list",
+            "cachedResultName": "Alianz - Villa Mercedes"
+          },
+          "returnAll": true,
+          "options": {
+            "timeMin": "={{$now}}",
+            "timeMax": "={{ $json.sieteDias }}",
+            "singleEvents": true
+          }
+        },
+        "name": "obtenerTurnosOcupados",
+        "type": "n8n-nodes-base.googleCalendar",
+        "typeVersion": 1,
+        "position": [
+          832,
+          -32
+        ],
+        "alwaysOutputData": true,
+        "id": "a983fd61-f69e-45c6-9218-01ac486e04f4",
+        "retryOnFail": true,
+        "maxTries": 5,
+        "credentials": {
+          "googleCalendarOAuth2Api": {
+            "id": "cNQ1bJyV4lYs9qoV",
+            "name": "Google Calendar account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "outputFieldName": "hoy",
+          "options": {}
+        },
+        "id": "7e680ca4-11aa-4267-9da7-4d24c522e397",
+        "name": "hoy",
+        "type": "n8n-nodes-base.dateTime",
+        "typeVersion": 2,
+        "position": [
+          0,
+          80
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "addToDate",
+          "magnitude": "={{ $json.hoy}}",
+          "duration": 1,
+          "outputFieldName": "mañana",
+          "options": {}
+        },
+        "id": "ac24275a-56f6-4ef8-b486-8991cc805ead",
+        "name": "mañana",
+        "type": "n8n-nodes-base.dateTime",
+        "typeVersion": 2,
+        "position": [
+          144,
+          80
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\n\n// Función helper para redondear minutos en :45 a la hora siguiente (ej: \"07:45\" -> \"08:00\")\nfunction redondearHora(horaStr) {\n  if (!horaStr || !horaStr.includes(':')) return horaStr;\n  \n  let [horas, minutos] = horaStr.split(':').map(Number);\n  \n  if (minutos === 45) {\n    horas = (horas + 1) % 24;\n    minutos = 0;\n  }\n\n  const hh = String(horas).padStart(2, '0');\n  const mm = String(minutos).padStart(2, '0');\n  return `${hh}:${mm}`;\n}\n\n// Datos recibidos del trigger\nconst trigger = $('When Executed by Another Workflow').first().json;\nconst fechaBuscada = trigger.fecha;   // ej: \"2026-07-22\"\nconst horaOriginal = trigger.hora;    // ej: \"07:45\"\nconst horaBuscada = redondearHora(horaOriginal); // ej: \"08:00\"\nconst modeloBuscado = trigger.Modelo || trigger.modelo; // ej: \"Corolla\"\n\nif (!fechaBuscada || !horaBuscada) {\n  throw new Error('Buscar_Turno_Seleccionado: faltan los parámetros \"fecha\" y/o \"hora\" recibidos del workflow.');\n}\n\n// Obtención de la duración matcheando el modelo con la columna de Google Sheets\nconst dataSheet = $('Get row(s) in sheet').first().json;\nlet duracion = null;\n\nif (modeloBuscado && dataSheet) {\n  // 1. Intento de búsqueda directa (exacta)\n  duracion = dataSheet[modeloBuscado];\n\n  // 2. Respaldo insensible a mayúsculas/minúsculas\n  if (!duracion) {\n    const claveEncontrada = Object.keys(dataSheet).find(\n      key => key.toLowerCase().trim() === modeloBuscado.toLowerCase().trim()\n    );\n    if (claveEncontrada) {\n      duracion = dataSheet[claveEncontrada];\n    }\n  }\n}\n\nlet turnoEncontrado = null;\n\nif (items && items.length > 0) {\n  for (const item of items) {\n    if (!item || !item.json) continue;\n    const data = item.json;\n\n    let dia, inicio, fin;\n\n    if (data.start && data.start.dateTime && data.end && data.end.dateTime) {\n      // Estructura tipo evento de Google Calendar\n      dia = data.start.dateTime.split('T')[0];\n      inicio = data.start.dateTime.split('T')[1].substring(0, 5);\n      fin = data.end.dateTime.split('T')[1].substring(0, 5);\n    } else {\n      // Estructura tipo slot ya plano (dia/inicio/fin)\n      dia = data.dia;\n      inicio = data.inicio;\n      fin = data.fin;\n    }\n\n    // Se compara por horaLlegada si está disponible; si no, por inicio como respaldo\n    const horaLlegadaItem = data.horaLlegada || inicio;\n\n    if (dia === fechaBuscada && redondearHora(horaLlegadaItem) === horaBuscada) {\n      turnoEncontrado = {\n        dia: dia,\n        inicio: inicio,\n        fin: fin,\n        horaLlegada: data.horaLlegada || null,\n        finalizacionLavado: data.finalizacionLavado || null\n      };\n      break;\n    }\n  }\n}\n\nif (turnoEncontrado) {\n  // Se encontró un turno ocupado que coincide con fecha+hora → el slot NO está disponible\n  return [{\n    json: {\n      disponible: false,\n      mensaje: \"El turno seleccionado ya se encuentra ocupado.\",\n      duracion: duracion,\n      ...turnoEncontrado\n    }\n  }];\n} else {\n  // No se encontró ningún turno ocupado con esa fecha+hora → el slot SÍ está disponible\n  return [{\n    json: {\n      disponible: true,\n      mensaje: \"El turno está disponible.\",\n      duracion: duracion,\n      dia: fechaBuscada,\n      inicio: null,\n      fin: null,\n      horaLlegada: horaBuscada,\n      finalizacionLavado: null\n    }\n  }];\n}"
+        },
+        "id": "0a1d4c33-6312-4eaf-a30f-6da04b75eaca",
+        "name": "turnosOcupados",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1040,
+          -16
+        ],
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "jsCode": "function calcularSieteDiasLaborables() {\n  const hoy = new Date();\n  \n  // Lista de feriados\n  const feriados = [\n    // 2025\n    '2025-01-01', // Año Nuevo\n    '2025-03-03', // Carnaval\n    '2025-03-04', // Carnaval\n    '2025-03-24', // Día Nacional de la Memoria por la Verdad y la Justicia\n    '2025-04-18', // Viernes Santo\n    '2025-04-02', // Día del Veterano y de los Caídos en la Guerra de Malvinas\n    '2025-05-01', // Día del Trabajador\n    '2025-05-25', // Día de la Revolución de Mayo\n    '2025-06-20', // Paso a la Inmortalidad del General Manuel Belgrano\n    '2025-06-21', // Paso a la Inmortalidad del General Manuel Belgrano (trasladado)\n    '2025-06-22', // Paso a la Inmortalidad del General Manuel Belgrano (puente)\n    '2025-07-09', // Día de la Independencia\n    '2025-08-17', // Paso a la Inmortalidad del General José de San Martín\n    '2025-10-12', // Día del Respeto a la Diversidad Cultural\n    '2025-11-24', // Día de la Soberanía Nacional\n    '2025-12-08', // Inmaculada Concepción de María\n    '2025-12-25', // Navidad\n  ];\n  \n  let diasLaborablesEncontrados = 0;\n  let i = 1; // Empezar desde mañana\n  let fechaFinal = null;\n  \n  // Buscar hasta encontrar exactamente 7 días laborables\n  while (diasLaborablesEncontrados < 7) {\n    const fecha = new Date(hoy);\n    fecha.setDate(hoy.getDate() + i);\n    \n    const fechaFormateada = fecha.toISOString().split('T')[0];\n    const dayOfWeek = fecha.getDay(); // 0=domingo, 1=lunes, ..., 6=sábado\n    \n    // Verificar si es día laborable (lunes a viernes) y no es feriado\n    const esLaborable = dayOfWeek >= 1 && dayOfWeek <= 5; // lunes a viernes\n    const noEsFeriado = !feriados.includes(fechaFormateada);\n    \n    if (esLaborable && noEsFeriado) {\n      diasLaborablesEncontrados++;\n      if (diasLaborablesEncontrados === 7) {\n        // Establecer hora específica y formato completo\n        fecha.setHours(12, 44, 14, 1); // 12:44:14.001\n        fechaFinal = fecha.toISOString().replace('Z', '-04:00'); // Cambiar Z por -04:00\n      }\n    }\n    \n    i++;\n  }\n  \n  return fechaFinal;\n}\n\nconst sieteDias = calcularSieteDiasLaborables();\n\nreturn [{\n  json: {\n    sieteDias: sieteDias\n  }\n}];"
+        },
+        "id": "3b6d2ae1-3156-41a5-abea-56b185ab9681",
+        "name": "Code",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          288,
+          80
+        ]
+      },
+      {
+        "parameters": {
+          "content": "Se fija si sigue existiendo el turno ofrecio al cliente\n",
+          "height": 241.69481014663876,
+          "width": 1198.7483458459665
+        },
+        "id": "de2a475f-c725-4346-baab-18c3391b2548",
+        "name": "Sticky Note2",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          -416,
+          16
+        ]
+      },
+      {
+        "parameters": {
+          "workflowInputs": {
+            "values": [
+              {
+                "name": "fecha"
+              },
+              {
+                "name": "hora"
+              },
+              {
+                "name": "Sucursal"
+              },
+              {
+                "name": "Modelo"
+              },
+              {
+                "name": "km"
+              }
+            ]
+          }
+        },
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "typeVersion": 1.1,
+        "position": [
+          -560,
+          64
+        ],
+        "id": "34c21a8c-7a60-4d4e-942f-c7bbb90de94e",
+        "name": "When Executed by Another Workflow"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "0679a655-69df-4550-b4a9-5dd51d9430c0",
+                "leftValue": "={{ $('When Executed by Another Workflow').item.json.Sucursal }}",
+                "rightValue": "Villa Mercedes",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals",
+                  "name": "filter.operator.equals"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          496,
+          80
+        ],
+        "id": "3ab7a0a9-05b4-47b5-8101-126202ee0fe5",
+        "name": "If"
+      },
+      {
+        "parameters": {
+          "operation": "getAll",
+          "calendar": {
+            "__rl": true,
+            "value": "6b557d3408ee001ee7bebafd6952c92b106e6e6cb0946a019a86e252caea4a5d@group.calendar.google.com",
+            "mode": "list",
+            "cachedResultName": "Alianz - Ana luis"
+          },
+          "returnAll": true,
+          "options": {
+            "timeMin": "={{$now}}",
+            "timeMax": "={{ $json.sieteDias }}",
+            "singleEvents": true
+          }
+        },
+        "name": "obtenerTurnosOcupados1",
+        "type": "n8n-nodes-base.googleCalendar",
+        "typeVersion": 1,
+        "position": [
+          752,
+          160
+        ],
+        "alwaysOutputData": true,
+        "id": "5cf56d8b-c3a6-46ce-8d4b-6655858e238e",
+        "retryOnFail": true,
+        "maxTries": 5,
+        "credentials": {
+          "googleCalendarOAuth2Api": {
+            "id": "cNQ1bJyV4lYs9qoV",
+            "name": "Google Calendar account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\n\n// Función helper para redondear minutos en :45 a la hora siguiente (ej: \"07:45\" -> \"08:00\")\nfunction redondearHora(horaStr) {\n  if (!horaStr || !horaStr.includes(':')) return horaStr;\n  \n  let [horas, minutos] = horaStr.split(':').map(Number);\n  \n  if (minutos === 45) {\n    horas = (horas + 1) % 24;\n    minutos = 0;\n  }\n\n  const hh = String(horas).padStart(2, '0');\n  const mm = String(minutos).padStart(2, '0');\n  return `${hh}:${mm}`;\n}\n\n// Datos recibidos del trigger\nconst trigger = $('When Executed by Another Workflow').first().json;\nconst fechaBuscada = trigger.fecha;   // ej: \"2026-07-22\"\nconst horaOriginal = trigger.hora;    // ej: \"07:45\"\nconst horaBuscada = redondearHora(horaOriginal); // ej: \"08:00\"\nconst modeloBuscado = trigger.Modelo || trigger.modelo; // ej: \"Corolla\"\n\nif (!fechaBuscada || !horaBuscada) {\n  throw new Error('Buscar_Turno_Seleccionado: faltan los parámetros \"fecha\" y/o \"hora\" recibidos del workflow.');\n}\n\n// Obtención de la duración matcheando el modelo con la columna de Google Sheets\nconst dataSheet = $('Get row(s) in sheet').first().json;\nlet duracion = null;\n\nif (modeloBuscado && dataSheet) {\n  // 1. Intento de búsqueda directa (exacta)\n  duracion = dataSheet[modeloBuscado];\n\n  // 2. Respaldo insensible a mayúsculas/minúsculas\n  if (!duracion) {\n    const claveEncontrada = Object.keys(dataSheet).find(\n      key => key.toLowerCase().trim() === modeloBuscado.toLowerCase().trim()\n    );\n    if (claveEncontrada) {\n      duracion = dataSheet[claveEncontrada];\n    }\n  }\n}\n\nlet turnoEncontrado = null;\n\nif (items && items.length > 0) {\n  for (const item of items) {\n    if (!item || !item.json) continue;\n    const data = item.json;\n\n    let dia, inicio, fin;\n\n    if (data.start && data.start.dateTime && data.end && data.end.dateTime) {\n      // Estructura tipo evento de Google Calendar\n      dia = data.start.dateTime.split('T')[0];\n      inicio = data.start.dateTime.split('T')[1].substring(0, 5);\n      fin = data.end.dateTime.split('T')[1].substring(0, 5);\n    } else {\n      // Estructura tipo slot ya plano (dia/inicio/fin)\n      dia = data.dia;\n      inicio = data.inicio;\n      fin = data.fin;\n    }\n\n    // Se compara por horaLlegada si está disponible; si no, por inicio como respaldo\n    const horaLlegadaItem = data.horaLlegada || inicio;\n\n    if (dia === fechaBuscada && redondearHora(horaLlegadaItem) === horaBuscada) {\n      turnoEncontrado = {\n        dia: dia,\n        inicio: inicio,\n        fin: fin,\n        horaLlegada: data.horaLlegada || null,\n        finalizacionLavado: data.finalizacionLavado || null\n      };\n      break;\n    }\n  }\n}\n\nif (turnoEncontrado) {\n  // Se encontró un turno ocupado que coincide con fecha+hora → el slot NO está disponible\n  return [{\n    json: {\n      disponible: false,\n      mensaje: \"El turno seleccionado ya se encuentra ocupado.\",\n      duracion: duracion,\n      ...turnoEncontrado\n    }\n  }];\n} else {\n  // No se encontró ningún turno ocupado con esa fecha+hora → el slot SÍ está disponible\n  return [{\n    json: {\n      disponible: true,\n      mensaje: \"El turno está disponible.\",\n      duracion: duracion,\n      dia: fechaBuscada,\n      inicio: null,\n      fin: null,\n      horaLlegada: horaBuscada,\n      finalizacionLavado: null\n    }\n  }];\n}"
+        },
+        "id": "b4f4e765-4981-4794-8967-cbceaa76bd25",
+        "name": "turnosOcupados1",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          960,
+          176
+        ],
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "content": "Villa mercedes\n",
+          "height": 194,
+          "width": 591
+        },
+        "id": "6c42ffe8-845a-4aac-866c-e8ccacc42887",
+        "name": "Sticky Note",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          816,
+          -96
+        ]
+      },
+      {
+        "parameters": {
+          "content": "San luis\n",
+          "height": 194,
+          "width": 591
+        },
+        "id": "cdf3a839-ceac-47d2-a28d-738acb0e879b",
+        "name": "Sticky Note1",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          688,
+          112
+        ]
+      },
+      {
+        "parameters": {
+          "documentId": {
+            "__rl": true,
+            "value": "1rDATHkoxgH5GYkqzo3ereNi1W6zzTDKYMIMAyR3mmSo",
+            "mode": "list",
+            "cachedResultName": "Alianz MANTENIMIENTO",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1rDATHkoxgH5GYkqzo3ereNi1W6zzTDKYMIMAyR3mmSo/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": 1939395583,
+            "mode": "list",
+            "cachedResultName": "Tabla Tiempo Mantenimiento",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1rDATHkoxgH5GYkqzo3ereNi1W6zzTDKYMIMAyR3mmSo/edit#gid=1939395583"
+          },
+          "filtersUI": {
+            "values": [
+              {
+                "lookupColumn": "KM",
+                "lookupValue": "={{ $json.km }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.7,
+        "position": [
+          -256,
+          80
+        ],
+        "id": "cf96c636-4743-43c6-801b-5588f880b32a",
+        "name": "Get row(s) in sheet",
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "x7uIPa3IpQ8b4UgZ",
+            "name": "Google Sheets account"
+          }
+        }
+      }
+    ],
+    "connections": {
+      "obtenerTurnosOcupados": {
+        "main": [
+          [
+            {
+              "node": "turnosOcupados",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "hoy": {
+        "main": [
+          [
+            {
+              "node": "mañana",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "mañana": {
+        "main": [
+          [
+            {
+              "node": "Code",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "turnosOcupados": {
+        "main": [
+          []
+        ]
+      },
+      "Code": {
+        "main": [
+          [
+            {
+              "node": "If",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "When Executed by Another Workflow": {
+        "main": [
+          [
+            {
+              "node": "Get row(s) in sheet",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "If": {
+        "main": [
+          [
+            {
+              "node": "obtenerTurnosOcupados",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "obtenerTurnosOcupados1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "obtenerTurnosOcupados1": {
+        "main": [
+          [
+            {
+              "node": "turnosOcupados1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "turnosOcupados1": {
+        "main": [
+          []
+        ]
+      },
+      "Get row(s) in sheet": {
+        "main": [
+          [
+            {
+              "node": "hoy",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "system migration",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-11-11T13:45:30.653Z",
+    "updatedAt": "2026-11-11T13:45:30.653Z"
+  },
+  "activeVersionId": "fe4cfb12-6b88-4aa4-82aa-6f246f348a35",
+  "connections": {
+    "obtenerTurnosOcupados": {
+      "main": [
+        [
+          {
+            "node": "turnosOcupados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "hoy": {
+      "main": [
+        [
+          {
+            "node": "mañana",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "mañana": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "turnosOcupados": {
+      "main": [
+        []
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "obtenerTurnosOcupados",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "obtenerTurnosOcupados1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "obtenerTurnosOcupados1": {
+      "main": [
+        [
+          {
+            "node": "turnosOcupados1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "turnosOcupados1": {
+      "main": [
+        []
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "hoy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-07-20T19:04:16.017Z",
+  "id": "hVPYnuAHfHUztkW7",
+  "isArchived": false,
+  "meta": {},
+  "name": "Buscar turnos ocupados",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "99cfd1bbd22d883c2a6bad3f5e7c0bbf04434c8d049c919b94c59c5f4dd8811c@group.calendar.google.com",
+          "mode": "list",
+          "cachedResultName": "Alianz - Villa Mercedes"
+        },
+        "returnAll": true,
+        "options": {
+          "timeMin": "={{$now}}",
+          "timeMax": "={{ $json.sieteDias }}",
+          "singleEvents": true
+        }
+      },
+      "name": "obtenerTurnosOcupados",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [
+        832,
+        -32
+      ],
+      "alwaysOutputData": true,
+      "id": "a983fd61-f69e-45c6-9218-01ac486e04f4",
+      "retryOnFail": true,
+      "maxTries": 5,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "cNQ1bJyV4lYs9qoV",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "outputFieldName": "hoy",
+        "options": {}
+      },
+      "id": "7e680ca4-11aa-4267-9da7-4d24c522e397",
+      "name": "hoy",
+      "type": "n8n-nodes-base.dateTime",
+      "typeVersion": 2,
+      "position": [
+        0,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "addToDate",
+        "magnitude": "={{ $json.hoy}}",
+        "duration": 1,
+        "outputFieldName": "mañana",
+        "options": {}
+      },
+      "id": "ac24275a-56f6-4ef8-b486-8991cc805ead",
+      "name": "mañana",
+      "type": "n8n-nodes-base.dateTime",
+      "typeVersion": 2,
+      "position": [
+        144,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\n// Función helper para redondear minutos en :45 a la hora siguiente (ej: \"07:45\" -> \"08:00\")\nfunction redondearHora(horaStr) {\n  if (!horaStr || !horaStr.includes(':')) return horaStr;\n  \n  let [horas, minutos] = horaStr.split(':').map(Number);\n  \n  if (minutos === 45) {\n    horas = (horas + 1) % 24;\n    minutos = 0;\n  }\n\n  const hh = String(horas).padStart(2, '0');\n  const mm = String(minutos).padStart(2, '0');\n  return `${hh}:${mm}`;\n}\n\n// Datos recibidos del trigger\nconst trigger = $('When Executed by Another Workflow').first().json;\nconst fechaBuscada = trigger.fecha;   // ej: \"2026-07-22\"\nconst horaOriginal = trigger.hora;    // ej: \"07:45\"\nconst horaBuscada = redondearHora(horaOriginal); // ej: \"08:00\"\nconst modeloBuscado = trigger.Modelo || trigger.modelo; // ej: \"Corolla\"\n\nif (!fechaBuscada || !horaBuscada) {\n  throw new Error('Buscar_Turno_Seleccionado: faltan los parámetros \"fecha\" y/o \"hora\" recibidos del workflow.');\n}\n\n// Obtención de la duración matcheando el modelo con la columna de Google Sheets\nconst dataSheet = $('Get row(s) in sheet').first().json;\nlet duracion = null;\n\nif (modeloBuscado && dataSheet) {\n  // 1. Intento de búsqueda directa (exacta)\n  duracion = dataSheet[modeloBuscado];\n\n  // 2. Respaldo insensible a mayúsculas/minúsculas\n  if (!duracion) {\n    const claveEncontrada = Object.keys(dataSheet).find(\n      key => key.toLowerCase().trim() === modeloBuscado.toLowerCase().trim()\n    );\n    if (claveEncontrada) {\n      duracion = dataSheet[claveEncontrada];\n    }\n  }\n}\n\nlet turnoEncontrado = null;\n\nif (items && items.length > 0) {\n  for (const item of items) {\n    if (!item || !item.json) continue;\n    const data = item.json;\n\n    let dia, inicio, fin;\n\n    if (data.start && data.start.dateTime && data.end && data.end.dateTime) {\n      // Estructura tipo evento de Google Calendar\n      dia = data.start.dateTime.split('T')[0];\n      inicio = data.start.dateTime.split('T')[1].substring(0, 5);\n      fin = data.end.dateTime.split('T')[1].substring(0, 5);\n    } else {\n      // Estructura tipo slot ya plano (dia/inicio/fin)\n      dia = data.dia;\n      inicio = data.inicio;\n      fin = data.fin;\n    }\n\n    // Se compara por horaLlegada si está disponible; si no, por inicio como respaldo\n    const horaLlegadaItem = data.horaLlegada || inicio;\n\n    if (dia === fechaBuscada && redondearHora(horaLlegadaItem) === horaBuscada) {\n      turnoEncontrado = {\n        dia: dia,\n        inicio: inicio,\n        fin: fin,\n        horaLlegada: data.horaLlegada || null,\n        finalizacionLavado: data.finalizacionLavado || null\n      };\n      break;\n    }\n  }\n}\n\nif (turnoEncontrado) {\n  // Se encontró un turno ocupado que coincide con fecha+hora → el slot NO está disponible\n  return [{\n    json: {\n      disponible: false,\n      mensaje: \"El turno seleccionado ya se encuentra ocupado.\",\n      duracion: duracion,\n      ...turnoEncontrado\n    }\n  }];\n} else {\n  // No se encontró ningún turno ocupado con esa fecha+hora → el slot SÍ está disponible\n  return [{\n    json: {\n      disponible: true,\n      mensaje: \"El turno está disponible.\",\n      duracion: duracion,\n      dia: fechaBuscada,\n      inicio: null,\n      fin: null,\n      horaLlegada: horaBuscada,\n      finalizacionLavado: null\n    }\n  }];\n}"
+      },
+      "id": "0a1d4c33-6312-4eaf-a30f-6da04b75eaca",
+      "name": "turnosOcupados",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        -16
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "function calcularSieteDiasLaborables() {\n  const hoy = new Date();\n  \n  // Lista de feriados\n  const feriados = [\n    // 2025\n    '2025-01-01', // Año Nuevo\n    '2025-03-03', // Carnaval\n    '2025-03-04', // Carnaval\n    '2025-03-24', // Día Nacional de la Memoria por la Verdad y la Justicia\n    '2025-04-18', // Viernes Santo\n    '2025-04-02', // Día del Veterano y de los Caídos en la Guerra de Malvinas\n    '2025-05-01', // Día del Trabajador\n    '2025-05-25', // Día de la Revolución de Mayo\n    '2025-06-20', // Paso a la Inmortalidad del General Manuel Belgrano\n    '2025-06-21', // Paso a la Inmortalidad del General Manuel Belgrano (trasladado)\n    '2025-06-22', // Paso a la Inmortalidad del General Manuel Belgrano (puente)\n    '2025-07-09', // Día de la Independencia\n    '2025-08-17', // Paso a la Inmortalidad del General José de San Martín\n    '2025-10-12', // Día del Respeto a la Diversidad Cultural\n    '2025-11-24', // Día de la Soberanía Nacional\n    '2025-12-08', // Inmaculada Concepción de María\n    '2025-12-25', // Navidad\n  ];\n  \n  let diasLaborablesEncontrados = 0;\n  let i = 1; // Empezar desde mañana\n  let fechaFinal = null;\n  \n  // Buscar hasta encontrar exactamente 7 días laborables\n  while (diasLaborablesEncontrados < 7) {\n    const fecha = new Date(hoy);\n    fecha.setDate(hoy.getDate() + i);\n    \n    const fechaFormateada = fecha.toISOString().split('T')[0];\n    const dayOfWeek = fecha.getDay(); // 0=domingo, 1=lunes, ..., 6=sábado\n    \n    // Verificar si es día laborable (lunes a viernes) y no es feriado\n    const esLaborable = dayOfWeek >= 1 && dayOfWeek <= 5; // lunes a viernes\n    const noEsFeriado = !feriados.includes(fechaFormateada);\n    \n    if (esLaborable && noEsFeriado) {\n      diasLaborablesEncontrados++;\n      if (diasLaborablesEncontrados === 7) {\n        // Establecer hora específica y formato completo\n        fecha.setHours(12, 44, 14, 1); // 12:44:14.001\n        fechaFinal = fecha.toISOString().replace('Z', '-04:00'); // Cambiar Z por -04:00\n      }\n    }\n    \n    i++;\n  }\n  \n  return fechaFinal;\n}\n\nconst sieteDias = calcularSieteDiasLaborables();\n\nreturn [{\n  json: {\n    sieteDias: sieteDias\n  }\n}];"
+      },
+      "id": "3b6d2ae1-3156-41a5-abea-56b185ab9681",
+      "name": "Code",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        288,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "content": "Se fija si sigue existiendo el turno ofrecio al cliente\n",
+        "height": 241.69481014663876,
+        "width": 1198.7483458459665
+      },
+      "id": "de2a475f-c725-4346-baab-18c3391b2548",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -416,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "fecha"
+            },
+            {
+              "name": "hora"
+            },
+            {
+              "name": "Sucursal"
+            },
+            {
+              "name": "Modelo"
+            },
+            {
+              "name": "km"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -560,
+        64
+      ],
+      "id": "34c21a8c-7a60-4d4e-942f-c7bbb90de94e",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "0679a655-69df-4550-b4a9-5dd51d9430c0",
+              "leftValue": "={{ $('When Executed by Another Workflow').item.json.Sucursal }}",
+              "rightValue": "Villa Mercedes",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        496,
+        80
+      ],
+      "id": "3ab7a0a9-05b4-47b5-8101-126202ee0fe5",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "6b557d3408ee001ee7bebafd6952c92b106e6e6cb0946a019a86e252caea4a5d@group.calendar.google.com",
+          "mode": "list",
+          "cachedResultName": "Alianz - Ana luis"
+        },
+        "returnAll": true,
+        "options": {
+          "timeMin": "={{$now}}",
+          "timeMax": "={{ $json.sieteDias }}",
+          "singleEvents": true
+        }
+      },
+      "name": "obtenerTurnosOcupados1",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [
+        752,
+        160
+      ],
+      "alwaysOutputData": true,
+      "id": "5cf56d8b-c3a6-46ce-8d4b-6655858e238e",
+      "retryOnFail": true,
+      "maxTries": 5,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "cNQ1bJyV4lYs9qoV",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\n// Función helper para redondear minutos en :45 a la hora siguiente (ej: \"07:45\" -> \"08:00\")\nfunction redondearHora(horaStr) {\n  if (!horaStr || !horaStr.includes(':')) return horaStr;\n  \n  let [horas, minutos] = horaStr.split(':').map(Number);\n  \n  if (minutos === 45) {\n    horas = (horas + 1) % 24;\n    minutos = 0;\n  }\n\n  const hh = String(horas).padStart(2, '0');\n  const mm = String(minutos).padStart(2, '0');\n  return `${hh}:${mm}`;\n}\n\n// Datos recibidos del trigger\nconst trigger = $('When Executed by Another Workflow').first().json;\nconst fechaBuscada = trigger.fecha;   // ej: \"2026-07-22\"\nconst horaOriginal = trigger.hora;    // ej: \"07:45\"\nconst horaBuscada = redondearHora(horaOriginal); // ej: \"08:00\"\nconst modeloBuscado = trigger.Modelo || trigger.modelo; // ej: \"Corolla\"\n\nif (!fechaBuscada || !horaBuscada) {\n  throw new Error('Buscar_Turno_Seleccionado: faltan los parámetros \"fecha\" y/o \"hora\" recibidos del workflow.');\n}\n\n// Obtención de la duración matcheando el modelo con la columna de Google Sheets\nconst dataSheet = $('Get row(s) in sheet').first().json;\nlet duracion = null;\n\nif (modeloBuscado && dataSheet) {\n  // 1. Intento de búsqueda directa (exacta)\n  duracion = dataSheet[modeloBuscado];\n\n  // 2. Respaldo insensible a mayúsculas/minúsculas\n  if (!duracion) {\n    const claveEncontrada = Object.keys(dataSheet).find(\n      key => key.toLowerCase().trim() === modeloBuscado.toLowerCase().trim()\n    );\n    if (claveEncontrada) {\n      duracion = dataSheet[claveEncontrada];\n    }\n  }\n}\n\nlet turnoEncontrado = null;\n\nif (items && items.length > 0) {\n  for (const item of items) {\n    if (!item || !item.json) continue;\n    const data = item.json;\n\n    let dia, inicio, fin;\n\n    if (data.start && data.start.dateTime && data.end && data.end.dateTime) {\n      // Estructura tipo evento de Google Calendar\n      dia = data.start.dateTime.split('T')[0];\n      inicio = data.start.dateTime.split('T')[1].substring(0, 5);\n      fin = data.end.dateTime.split('T')[1].substring(0, 5);\n    } else {\n      // Estructura tipo slot ya plano (dia/inicio/fin)\n      dia = data.dia;\n      inicio = data.inicio;\n      fin = data.fin;\n    }\n\n    // Se compara por horaLlegada si está disponible; si no, por inicio como respaldo\n    const horaLlegadaItem = data.horaLlegada || inicio;\n\n    if (dia === fechaBuscada && redondearHora(horaLlegadaItem) === horaBuscada) {\n      turnoEncontrado = {\n        dia: dia,\n        inicio: inicio,\n        fin: fin,\n        horaLlegada: data.horaLlegada || null,\n        finalizacionLavado: data.finalizacionLavado || null\n      };\n      break;\n    }\n  }\n}\n\nif (turnoEncontrado) {\n  // Se encontró un turno ocupado que coincide con fecha+hora → el slot NO está disponible\n  return [{\n    json: {\n      disponible: false,\n      mensaje: \"El turno seleccionado ya se encuentra ocupado.\",\n      duracion: duracion,\n      ...turnoEncontrado\n    }\n  }];\n} else {\n  // No se encontró ningún turno ocupado con esa fecha+hora → el slot SÍ está disponible\n  return [{\n    json: {\n      disponible: true,\n      mensaje: \"El turno está disponible.\",\n      duracion: duracion,\n      dia: fechaBuscada,\n      inicio: null,\n      fin: null,\n      horaLlegada: horaBuscada,\n      finalizacionLavado: null\n    }\n  }];\n}"
+      },
+      "id": "b4f4e765-4981-4794-8967-cbceaa76bd25",
+      "name": "turnosOcupados1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        176
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "content": "Villa mercedes\n",
+        "height": 194,
+        "width": 591
+      },
+      "id": "6c42ffe8-845a-4aac-866c-e8ccacc42887",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        816,
+        -96
+      ]
+    },
+    {
+      "parameters": {
+        "content": "San luis\n",
+        "height": 194,
+        "width": 591
+      },
+      "id": "cdf3a839-ceac-47d2-a28d-738acb0e879b",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        688,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1rDATHkoxgH5GYkqzo3ereNi1W6zzTDKYMIMAyR3mmSo",
+          "mode": "list",
+          "cachedResultName": "Alianz MANTENIMIENTO",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1rDATHkoxgH5GYkqzo3ereNi1W6zzTDKYMIMAyR3mmSo/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1939395583,
+          "mode": "list",
+          "cachedResultName": "Tabla Tiempo Mantenimiento",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1rDATHkoxgH5GYkqzo3ereNi1W6zzTDKYMIMAyR3mmSo/edit#gid=1939395583"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "KM",
+              "lookupValue": "={{ $json.km }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -256,
+        80
+      ],
+      "id": "cf96c636-4743-43c6-801b-5588f880b32a",
+      "name": "Get row(s) in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "x7uIPa3IpQ8b4UgZ",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {
+    "When Executed by Another Workflow": [
+      {
+        "json": {
+          "fecha": "2026-07-23",
+          "hora": "07:45",
+          "Sucursal": "Villa Mercedes",
+          "Modelo": "Corolla",
+          "km": "150000"
+        }
+      }
+    ]
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "hVPYnuAHfHUztkW7",
+      "projectId": "sSMIUUZ5rPWEROjK",
+      "createdAt": "2026-07-20T19:04:16.023Z",
+      "updatedAt": "2026-07-20T19:04:16.023Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [
+    {
+      "id": "2wNITLDUR4FoIzlb",
+      "name": "alianz",
+      "createdAt": "2026-02-13T19:45:33.941Z",
+      "updatedAt": "2026-02-13T19:45:33.941Z"
+    }
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2026-11-24T18:55:50.838Z",
+  "versionId": "fe4cfb12-6b88-4aa4-82aa-6f246f348a35"
+}
