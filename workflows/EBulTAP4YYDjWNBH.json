@@ -1,0 +1,243 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "a956d1c4-e36c-4622-957e-fb4b253cbff1",
+    "workflowId": "EBulTAP4YYDjWNBH",
+    "nodes": [
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://mediterraneo.tecnomcrm.com/api/v1/webconnector/consultas/adf",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpBasicAuth",
+          "sendBody": true,
+          "contentType": "raw",
+          "rawContentType": "application/json",
+          "body": "={\n  \"prospect\": {\n    \"requestdate\": \"{{ $now.toISO() }}\",\n    \"customer\": {\n      \"comments\": \"El cliente selecciono: {{ $json.body.accion }} para la campaña prospeccion_servicios_abril_2026. Taller: {{ $json.body.suborigen }}. Sucursal: {{ $json.sucursal }} (por {{ $json.criterio_sucursal }})\",\n      \"contacts\": [\n        {\n          \"emails\": [\n            {\n              \"value\": \"{{  $json.email || 'Sin mail' }}\"\n            }\n          ],\n          \"names\": [\n            {\n              \"part\": \"first\",\n              \"value\": \"{{ $json.body.name }}\"\n            }\n          ],\n          \"phones\": [\n            {\n              \"type\": \"cellphone\",\n              \"value\": \"{{ $json.body.tel }}\"\n            }\n          ],\n          \"addresses\": []\n        }\n      ]\n    },\n    \"provider\": {\n      \"name\": {\n        \"value\": \"Masivo Redoo\"\n      },\n      \"service\": \"{{ $json.sub_origen }}\"\n    },\n    \"vendor\": {\n      \"contacts\": [],\n      \"vendorname\": {\n        \"value\": \"info@redoo.com.ar\"\n      }\n    }\n  }\n}",
+          "options": {}
+        },
+        "id": "ac5db044-b40f-4885-a34b-bc2f528f64c7",
+        "name": "Tecnom",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          140,
+          -112
+        ],
+        "credentials": {
+          "httpBasicAuth": {
+            "id": "EUujYbKPjV7bVX42",
+            "name": "Unnamed credential"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "f2317288-7ce3-4464-a16e-f941a59b2cf1",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.1,
+        "position": [
+          -256,
+          -112
+        ],
+        "id": "469dc882-0288-4f46-a118-1211ca613123",
+        "name": "Webhook",
+        "webhookId": "f2317288-7ce3-4464-a16e-f941a59b2cf1"
+      },
+      {
+        "id": "fb2f531b-1ce4-47fd-b809-b982b155fcfc",
+        "name": "mapeo",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -80,
+          -112
+        ],
+        "parameters": {
+          "jsCode": "// Asigna sucursal a los leads de servicios (Mendoza / Córdoba).\n// 1º asesor elegido (\"Chatear con Matías\" -> MZA, \"Chatear con Eugenia\" -> CBA),\n// 2º característica del teléfono del cliente, 3º taller elegido en el bot.\n// sub_origen = el texto exacto de las reglas de Tecnom (ticket 4324):\n// 'Mendoza Servicios Renault' (Redoo Mendoza Postventa) o\n// 'C. Barros Servicios Renault' (Redoo Córdoba Postventa). Sin sucursal: 'Servicios Renault'.\nconst CARACT_MENDOZA = ['261', '260', '263', '2622', '2623', '2624', '2625', '2626', '2627'];\nconst CARACT_CORDOBA = ['351', '352', '353', '354', '356', '357', '358', '3463', '3467', '3468', '3472'];\nconst SUBORIGEN = { MZA: 'Mendoza Servicios Renault', CBA: 'C. Barros Servicios Renault' };\n\nfunction numeroLocal(tel) {\n  // +54 9 263 475-6075 -> 2634756075\n  let d = String(tel || '').replace(/\\D/g, '');\n  if (d.startsWith('54')) d = d.slice(2);\n  if (d.startsWith('9')) d = d.slice(1);\n  if (d.startsWith('0')) d = d.slice(1);\n  return d;\n}\n\nreturn $input.all().map(item => {\n  const data = item.json;\n  const body = data.body || {};\n  const local = numeroLocal(body.tel || body.from);\n  const taller = String(body.suborigen || '').toLowerCase();\n  const accion = String(body.accion || '').toLowerCase();\n\n  let sucursal = '';\n  let criterio = '';\n\n  if (/mat[ií]as/.test(accion)) {\n    sucursal = 'MZA'; criterio = 'asesor elegido en el bot';\n  } else if (accion.includes('eugenia')) {\n    sucursal = 'CBA'; criterio = 'asesor elegido en el bot';\n  } else if (local.length === 10 && CARACT_MENDOZA.some(c => local.startsWith(c))) {\n    sucursal = 'MZA'; criterio = 'característica del teléfono';\n  } else if (local.length === 10 && CARACT_CORDOBA.some(c => local.startsWith(c))) {\n    sucursal = 'CBA'; criterio = 'característica del teléfono';\n  } else if (taller.includes('mendoza')) {\n    sucursal = 'MZA'; criterio = 'taller elegido en el bot';\n  } else if (taller.includes('barros')) {\n    sucursal = 'CBA'; criterio = 'taller elegido en el bot';\n  }\n\n  data.sub_origen = SUBORIGEN[sucursal] || 'Servicios Renault';\n  data.sucursal = sucursal === 'MZA' ? 'Mendoza' : sucursal === 'CBA' ? 'Córdoba' : 'Sin determinar';\n  data.criterio_sucursal = criterio || 'sin datos';\n  return item;\n});\n"
+        }
+      }
+    ],
+    "connections": {
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "mapeo",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "mapeo": {
+        "main": [
+          [
+            {
+              "node": "Tecnom",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "Agente Agente (via MCP)",
+    "name": "Suborigen con los textos de las reglas de Tecnom",
+    "description": "Ticket 4324: las reglas Redoo Mendoza/Córdoba Postventa esperan 'Mendoza Servicios Renault' y 'C. Barros Servicios Renault', no REDOO_MZA_SERV / REDOO_CBA_SERV.",
+    "autosaved": false,
+    "createdAt": "2026-11-26T18:22:42.471Z",
+    "updatedAt": "2026-11-26T18:22:42.471Z"
+  },
+  "activeVersionId": "a956d1c4-e36c-4622-957e-fb4b253cbff1",
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "mapeo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "mapeo": {
+      "main": [
+        [
+          {
+            "node": "Tecnom",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-04-24T22:21:30.740Z",
+  "id": "EBulTAP4YYDjWNBH",
+  "isArchived": false,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "name": "TECNOM",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://mediterraneo.tecnomcrm.com/api/v1/webconnector/consultas/adf",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={\n  \"prospect\": {\n    \"requestdate\": \"{{ $now.toISO() }}\",\n    \"customer\": {\n      \"comments\": \"El cliente selecciono: {{ $json.body.accion }} para la campaña prospeccion_servicios_abril_2026. Taller: {{ $json.body.suborigen }}. Sucursal: {{ $json.sucursal }} (por {{ $json.criterio_sucursal }})\",\n      \"contacts\": [\n        {\n          \"emails\": [\n            {\n              \"value\": \"{{  $json.email || 'Sin mail' }}\"\n            }\n          ],\n          \"names\": [\n            {\n              \"part\": \"first\",\n              \"value\": \"{{ $json.body.name }}\"\n            }\n          ],\n          \"phones\": [\n            {\n              \"type\": \"cellphone\",\n              \"value\": \"{{ $json.body.tel }}\"\n            }\n          ],\n          \"addresses\": []\n        }\n      ]\n    },\n    \"provider\": {\n      \"name\": {\n        \"value\": \"Masivo Redoo\"\n      },\n      \"service\": \"{{ $json.sub_origen }}\"\n    },\n    \"vendor\": {\n      \"contacts\": [],\n      \"vendorname\": {\n        \"value\": \"info@redoo.com.ar\"\n      }\n    }\n  }\n}",
+        "options": {}
+      },
+      "id": "ac5db044-b40f-4885-a34b-bc2f528f64c7",
+      "name": "Tecnom",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        140,
+        -112
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "EUujYbKPjV7bVX42",
+          "name": "Unnamed credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "f2317288-7ce3-4464-a16e-f941a59b2cf1",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -256,
+        -112
+      ],
+      "id": "469dc882-0288-4f46-a118-1211ca613123",
+      "name": "Webhook",
+      "webhookId": "f2317288-7ce3-4464-a16e-f941a59b2cf1"
+    },
+    {
+      "id": "fb2f531b-1ce4-47fd-b809-b982b155fcfc",
+      "name": "mapeo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -80,
+        -112
+      ],
+      "parameters": {
+        "jsCode": "// Asigna sucursal a los leads de servicios (Mendoza / Córdoba).\n// 1º asesor elegido (\"Chatear con Matías\" -> MZA, \"Chatear con Eugenia\" -> CBA),\n// 2º característica del teléfono del cliente, 3º taller elegido en el bot.\n// sub_origen = el texto exacto de las reglas de Tecnom (ticket 4324):\n// 'Mendoza Servicios Renault' (Redoo Mendoza Postventa) o\n// 'C. Barros Servicios Renault' (Redoo Córdoba Postventa). Sin sucursal: 'Servicios Renault'.\nconst CARACT_MENDOZA = ['261', '260', '263', '2622', '2623', '2624', '2625', '2626', '2627'];\nconst CARACT_CORDOBA = ['351', '352', '353', '354', '356', '357', '358', '3463', '3467', '3468', '3472'];\nconst SUBORIGEN = { MZA: 'Mendoza Servicios Renault', CBA: 'C. Barros Servicios Renault' };\n\nfunction numeroLocal(tel) {\n  // +54 9 263 475-6075 -> 2634756075\n  let d = String(tel || '').replace(/\\D/g, '');\n  if (d.startsWith('54')) d = d.slice(2);\n  if (d.startsWith('9')) d = d.slice(1);\n  if (d.startsWith('0')) d = d.slice(1);\n  return d;\n}\n\nreturn $input.all().map(item => {\n  const data = item.json;\n  const body = data.body || {};\n  const local = numeroLocal(body.tel || body.from);\n  const taller = String(body.suborigen || '').toLowerCase();\n  const accion = String(body.accion || '').toLowerCase();\n\n  let sucursal = '';\n  let criterio = '';\n\n  if (/mat[ií]as/.test(accion)) {\n    sucursal = 'MZA'; criterio = 'asesor elegido en el bot';\n  } else if (accion.includes('eugenia')) {\n    sucursal = 'CBA'; criterio = 'asesor elegido en el bot';\n  } else if (local.length === 10 && CARACT_MENDOZA.some(c => local.startsWith(c))) {\n    sucursal = 'MZA'; criterio = 'característica del teléfono';\n  } else if (local.length === 10 && CARACT_CORDOBA.some(c => local.startsWith(c))) {\n    sucursal = 'CBA'; criterio = 'característica del teléfono';\n  } else if (taller.includes('mendoza')) {\n    sucursal = 'MZA'; criterio = 'taller elegido en el bot';\n  } else if (taller.includes('barros')) {\n    sucursal = 'CBA'; criterio = 'taller elegido en el bot';\n  }\n\n  data.sub_origen = SUBORIGEN[sucursal] || 'Servicios Renault';\n  data.sucursal = sucursal === 'MZA' ? 'Mendoza' : sucursal === 'CBA' ? 'Córdoba' : 'Sin determinar';\n  data.criterio_sucursal = criterio || 'sin datos';\n  return item;\n});\n"
+      }
+    }
+  ],
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "headers": {
+            "host": "mediterraneo.redooconect.com.ar",
+            "content-type": "application/json",
+            "authorization": "f24c56ee-8f53-4d6e-8f06-8f8f1dcc1637",
+            "accept": "*/*",
+            "accept-language": "*",
+            "sec-fetch-mode": "cors",
+            "user-agent": "node",
+            "accept-encoding": "br, gzip, deflate",
+            "x-forwarded-for": "191.234.201.61",
+            "x-forwarded-host": "mediterraneo.redooconect.com.ar",
+            "x-forwarded-server": "mediterraneo.redooconect.com.ar",
+            "content-length": "207",
+            "connection": "Keep-Alive"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "name": "Nacho Cabaleiro",
+            "tel": "+5491150997009",
+            "to": "+5492604266488",
+            "firtMessage": "agendar turno",
+            "yaSaludo": false,
+            "idConversation": 705795,
+            "accion": "Agendar turno",
+            "suborigen": "Mendoza Servicios Renault"
+          },
+          "webhookUrl": "https://mediterraneo.redooconect.com.ar/webhook/f2317288-7ce3-4464-a16e-f941a59b2cf1",
+          "executionMode": "production"
+        }
+      }
+    ]
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "EBulTAP4YYDjWNBH",
+      "projectId": "BuscTHR67PYJgEXa",
+      "createdAt": "2026-04-24T22:21:30.742Z",
+      "updatedAt": "2026-04-24T22:21:30.742Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2026-11-26T18:22:42.419Z",
+  "versionId": "a956d1c4-e36c-4622-957e-fb4b253cbff1"
+}
