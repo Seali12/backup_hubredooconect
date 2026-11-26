@@ -1,0 +1,3396 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "7e382203-4390-4e25-bc58-5fc24697c6bf",
+    "workflowId": "vHYnerAaqyWy7nI4",
+    "nodes": [
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "minutes",
+                "minutesInterval": 15
+              }
+            ]
+          }
+        },
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          -3040,
+          -752
+        ],
+        "name": "Schedule Trigger",
+        "id": "63752cef-2804-429c-95db-a5a5c8bf05e7"
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "-- Ford: bienvenida + 1 recordatorio. Se cierra como good Frío:\n--  a) 2h despues del recordatorio sin respuesta (caso normal).\n--  b) cualquier lead enviado que quedo 24h sin cerrar: nunca recibio recordatorio\n--     (reenviado desde la cola fuera de la ventana) o contesto y dejo la charla a medias.\n-- Nunca con un recordatorio todavia en cola. LIMIT para que una corrida termine antes de la siguiente (cada 15 min).\nSELECT *\nFROM ford_colombia\nWHERE rechazo_template = 0\n  AND (`lead` IS NULL OR `lead` = '')\n  AND status <> 'encolado'\n  AND (envio_reason IS NULL OR envio_reason <> 'recordatorio_encolado')\n  AND (envio = 1 OR reenvio_1 = 1)\n  AND (\n        (contesto = 0 AND reenvio_1 = 1 AND status_changed_at <= UTC_TIMESTAMP() - INTERVAL 2 HOUR)\n     OR GREATEST(created_at, COALESCE(status_changed_at, created_at)) <= UTC_TIMESTAMP() - INTERVAL 24 HOUR\n  )\nORDER BY status_changed_at DESC\nLIMIT 40;\n",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          -2864,
+          -752
+        ],
+        "name": "Leads para cierre (+2h del 3er recordatorio)",
+        "id": "e99c5b87-58d6-4a3f-b1a9-13ce70cb56dc",
+        "credentials": {
+          "mySql": {
+            "id": "Vl0rIdPXBmN5yKfQ",
+            "name": "MSQL-FORD-COLOMBIA"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "options": {}
+        },
+        "type": "n8n-nodes-base.splitInBatches",
+        "typeVersion": 3,
+        "position": [
+          -2688,
+          -736
+        ],
+        "name": "Loop Over Items",
+        "id": "678295d0-3fd1-4c3e-9656-07cda804f7bb"
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "UPDATE ford_colombia\nSET status = 'bad_lead', `lead` = 'bad_lead', grado_interes = 'bad_lead',\n    reason = 'No se pudo entregar el mensaje (Twilio/Meta)', status_changed_at = NOW()\nWHERE id = $1;",
+          "options": {
+            "queryReplacement": "={{ String($('Loop Over Items').item.json.id) }}"
+          }
+        },
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          -1456,
+          -1136
+        ],
+        "name": "Marcar bad_lead",
+        "id": "734cbfc2-b381-4e1c-93a2-06d278866c73",
+        "credentials": {
+          "mySql": {
+            "id": "Vl0rIdPXBmN5yKfQ",
+            "name": "MSQL-FORD-COLOMBIA"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "-- Ford pasa a bienvenida + 1 recordatorio (2h despues del envio inicial). Ya no hay 2do ni 3er recordatorio.\nSELECT f.*, 1 AS reminder_number\nFROM ford_colombia f\nWHERE f.envio = 1\n  AND (f.envio_reason IS NULL OR f.envio_reason NOT IN ('encolado', 'recordatorio_encolado'))\n  AND f.contesto = 0\n  AND f.rechazo_template = 0\n  AND (f.status IS NULL OR f.status <> 'answered')\n  AND (f.`lead` IS NULL OR f.`lead` = '')\n  AND f.reenvio_1 = 0\n  -- 24 h desde el ultimo envio (no desde que se creo el lead), asi los que salen tarde de la cola tambien tienen su recordatorio\n  AND COALESCE(f.status_changed_at, f.created_at) > UTC_TIMESTAMP() - INTERVAL 24 HOUR\n  AND COALESCE(f.status_changed_at, f.created_at) <= UTC_TIMESTAMP() - INTERVAL 2 HOUR\n  AND NOT EXISTS (\n        SELECT 1 FROM ford_colombia b\n        WHERE b.pilot_cellphone = f.pilot_cellphone\n          AND b.contesto = 1\n          AND b.created_at >= f.created_at\n  );\n",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          -2880,
+          -336
+        ],
+        "name": "Leads para recordatorio (1, 2 y 3)",
+        "id": "cab4b9d6-d3ee-41c1-a7f2-16527096d589",
+        "credentials": {
+          "mySql": {
+            "id": "Vl0rIdPXBmN5yKfQ",
+            "name": "MSQL-FORD-COLOMBIA"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.twilio.com/2010-04-01/Accounts/TWILIO_SID_OCULTO/Messages.json",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpBasicAuth",
+          "sendBody": true,
+          "contentType": "multipart-form-data",
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "From",
+                "value": "=whatsapp:+15559562100"
+              },
+              {
+                "name": "To",
+                "value": "=whatsapp:+{{ String($json.pilot_cellphone).replace(/\\D/g, '') }}"
+              },
+              {
+                "name": "ContentSid",
+                "value": "HXb85c3300617b379cd9daad103f58e178"
+              },
+              {
+                "name": "ContentVariables",
+                "value": "={{ $json.ContentVariables }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -320,
+          -304
+        ],
+        "name": "Enviar recordatorio",
+        "alwaysOutputData": true,
+        "id": "cd39f18a-e5e2-4a00-baa6-82c5003a19cc",
+        "credentials": {
+          "httpBasicAuth": {
+            "id": "PJ6kN2pExPrUnwn0",
+            "name": "FORD COLOMBIA"
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "UPDATE ford_colombia\nSET reenvio_{{ Number($('Loop Over Items1').item.json.reminder_number) }} = 1,\n    status = '{{ $json.sid ? 'recontacted' : 'recontact_failed' }}',\n    status_changed_at = NOW()\nWHERE id = {{ Number($('Loop Over Items1').item.json.id) }};",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          -64,
+          -288
+        ],
+        "name": "Marcar recontacted",
+        "id": "a521ad6f-c736-4dfb-bce7-8d9fa5035823",
+        "credentials": {
+          "mySql": {
+            "id": "Vl0rIdPXBmN5yKfQ",
+            "name": "MSQL-FORD-COLOMBIA"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "minutes",
+                "minutesInterval": 15
+              }
+            ]
+          }
+        },
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          -3088,
+          -352
+        ],
+        "name": "Schedule Trigger1",
+        "id": "99b964a4-cc54-4476-bcaf-8b6ec7258543"
+      },
+      {
+        "parameters": {
+          "options": {}
+        },
+        "type": "n8n-nodes-base.splitInBatches",
+        "typeVersion": 3,
+        "position": [
+          -2400,
+          -272
+        ],
+        "name": "Loop Over Items1",
+        "id": "ebfdc965-07c3-4173-929b-81de68099233"
+      },
+      {
+        "parameters": {
+          "operation": "update",
+          "table": {
+            "__rl": true,
+            "value": "ford_colombia",
+            "mode": "list",
+            "cachedResultName": "ford_colombia"
+          },
+          "dataMode": "defineBelow",
+          "columnToMatchOn": "id",
+          "valueToMatchOn": "={{ $json.lead_id }}",
+          "valuesToSend": {
+            "values": [
+              {
+                "column": "status",
+                "value": "=rejected"
+              },
+              {
+                "column": "status_changed_at",
+                "value": "={{ $now }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          736,
+          -656
+        ],
+        "id": "fc4a39dd-c6fe-48ac-8a49-f727e83fc8f0",
+        "name": "Actualizar_lead1",
+        "credentials": {
+          "mySql": {
+            "id": "Vl0rIdPXBmN5yKfQ",
+            "name": "MSQL-FORD-COLOMBIA"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "b223ceea-a793-41c8-8730-cce0790a5487",
+                "name": "token",
+                "value": "={{ $json.result.entitydata.accounts[0].token }}",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "9194b722-f8dd-40d3-8fb0-59d9e964b520",
+        "name": "Edit Fields2",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [
+          -2336,
+          -704
+        ]
+      },
+      {
+        "parameters": {
+          "url": "=https://api.pilotsolution.net/v1/users/authentication.php",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpCustomAuth",
+          "options": {}
+        },
+        "id": "94e00a43-ac60-43ba-89f1-cb63c759ff6e",
+        "name": "Login",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -2512,
+          -704
+        ],
+        "credentials": {
+          "httpCustomAuth": {
+            "id": "NHXyrkv9ca6Njn8R",
+            "name": "PILOT FORD COLOMBIA"
+          }
+        },
+        "retryOnFail": true,
+        "maxTries": 5,
+        "waitBetweenTries": 5000
+      },
+      {
+        "parameters": {
+          "url": "=https://api.pilotsolution.net/v1/users/authorization.php",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "identity_token",
+                "value": "={{ $json.token }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "a4b16d69-1c2c-48d9-a1c0-f60f3a7337a7",
+        "name": "Login1",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -1904,
+          -736
+        ],
+        "retryOnFail": true,
+        "maxTries": 5,
+        "waitBetweenTries": 5000
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.pilotsolution.net/v1/welcomes/qualification/bad.php",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={\n  \"data\": {\n    \"id\": \"{{ $('Loop Over Items').item.json.pilot_tracking_id }}\",\n    \"desist_status_code\": \"badlead\",\n    \"desist_comments\": \"Imposible de contactar\"\n  },\n  \"header\": {\n    \"FlowName\": \"lead_bad\",\n    \"SequenceId\": 1,\n    \"TimeStamp\": 1248377,\n    \"TrackingId\": \"FD1C4A1A-CAFB-467E-825B-7FFB86CC21E3\",\n    \"access_token\": \"{{ $('Login1').item.json.result.entitydata.session.identityToken }}\"\n  }\n}",
+          "options": {}
+        },
+        "id": "caa00dc5-67c8-4113-bef6-4ad587ca7f98",
+        "name": "BADLead",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -1696,
+          -1136
+        ],
+        "retryOnFail": true,
+        "maxTries": 5,
+        "waitBetweenTries": 5000
+      },
+      {
+        "parameters": {
+          "content": "## actualizar el lead, campo comentario diciendo que NO RESPONDIO EL CONTATO. ES ACTUALIZAR, NO REEMPLAZAR",
+          "height": 144,
+          "width": 582
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          -2080,
+          -976
+        ],
+        "typeVersion": 1,
+        "id": "a40c0e7c-672f-4e1f-a8e6-c382407ecf32",
+        "name": "Sticky Note3"
+      },
+      {
+        "parameters": {
+          "content": "## RECHAZO",
+          "height": 224,
+          "width": 678
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          352,
+          -736
+        ],
+        "typeVersion": 1,
+        "id": "947c542c-60d0-4ae0-b712-f0c1cfcfe054",
+        "name": "Sticky Note"
+      },
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "8cea2dda-aec7-4fea-ae10-3cbf15915c0a",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.1,
+        "position": [
+          528,
+          -640
+        ],
+        "id": "d0161a08-67ef-48af-bedf-997e1c7775ef",
+        "name": "Webhook",
+        "webhookId": "8cea2dda-aec7-4fea-ae10-3cbf15915c0a"
+      },
+      {
+        "parameters": {},
+        "type": "n8n-nodes-base.manualTrigger",
+        "typeVersion": 1,
+        "position": [
+          -3200,
+          256
+        ],
+        "id": "65b3910f-3b87-4d36-a6aa-214848f8b2b0",
+        "name": "When clicking ‘Execute workflow’"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Obtenemos todos los items de entrada en el formato de n8n\nconst items = $input.all();\n\n// Objeto para llevar el registro del ID más alto por cada número de teléfono\nconst phoneMap = {};\n\nfor (const item of items) {\n  // Tomamos el celular; si está vacío, intentamos con el teléfono fijo.\n  // Si no hay ninguno, usamos el ID para no borrar leads sin teléfono.\n  const phone = item.json.pilot_cellphone || item.json.pilot_phone || `no-phone-${item.json.id}`;\n  \n  // Si el teléfono no está en el mapa, o el ID actual es mayor al que ya guardamos, lo actualizamos\n  if (!phoneMap[phone] || item.json.id > phoneMap[phone].json.id) {\n    phoneMap[phone] = item;\n  }\n}\n\n// Convertimos el mapa de vuelta al formato de array que requiere n8n\nreturn Object.values(phoneMap);"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -2624,
+          -272
+        ],
+        "id": "d7cc7bfe-7aca-4881-b376-11dcfa26f6e0",
+        "name": "Code"
+      },
+      {
+        "parameters": {
+          "jsCode": "const item = $(\"Loop Over Items1\").first().json;\n\n// --------------------------------------------------\n// NORMALIZAR TELÉFONO\n// --------------------------------------------------\nfunction normalizarTelefono(telefono) {\n  // Solo dígitos, sin el 00 internacional\n  let numero = String(telefono || \"\").replace(/\\D/g, \"\");\n  if (numero.startsWith(\"00\")) numero = numero.slice(2);\n\n  if (/^57\\d{10}$/.test(numero)) return numero;         // Colombia con código: 573163127436\n  if (/^3\\d{9}$/.test(numero)) return \"57\" + numero;    // Celular Colombia: 3163127436 -> 573163127436\n  if (/^54\\d{10,11}$/.test(numero)) return numero;      // Argentina con código (pruebas): 5491131438902\n  if (/^11\\d{8}$/.test(numero)) return \"549\" + numero;  // Argentina CABA sin código (pruebas): 1131438902\n\n  // Cualquier otro formato es inválido: no se inventa el país\n  return \"\";\n}\n\n// --------------------------------------------------\n// NORMALIZAR TELÉFONOS\n// --------------------------------------------------\nitem.pilot_phone = normalizarTelefono(item.pilot_phone);\nitem.pilot_cellphone = normalizarTelefono(item.pilot_cellphone);\n\n// --------------------------------------------------\n// DATOS\n// --------------------------------------------------\nconst nombre = item.pilot_firstname && item.pilot_lastname\n  ? `${item.pilot_firstname} ${item.pilot_lastname}`\n  : item.pilot_firstname || item.pilot_lastname || \"No aclarado\";\n\nconst modelo = item.pilot_product_of_interest || \"No aclarado\";\n\nconst imagen = \"ford_mensajeria_20261002_102302.jpg\";\n\nconst idQuery = String(item.id || \"0\");\n\n// --------------------------------------------------\n// CONTENT VARIABLES\n// --------------------------------------------------\nconst variables = {\n  \"1\": nombre,\n  \"2\": modelo,\n  \"3\": imagen,\n  \"4\": idQuery\n};\n\n// --------------------------------------------------\n// TEMPLATE\n// --------------------------------------------------\nconst template_id = \"HX7d117616da551b021f9c37b6b73b7257\";\n\n// --------------------------------------------------\n// DEVOLVER\n// --------------------------------------------------\nreturn [\n  {\n    json: {\n      ContentVariables: JSON.stringify(variables),\n      template_id: template_id,\n\n      // Mantener todos los datos originales\n      ...item,\n\n      debug: {\n        nombreOriginal: nombre,\n        modeloOriginal: modelo,\n        imagenSeleccionada: imagen,\n        idQuery: idQuery,\n        telefono: item.pilot_cellphone || item.pilot_phone || \"\"\n      }\n    }\n  }\n];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -560,
+          -304
+        ],
+        "id": "c81ff129-1190-4f9c-8d16-cfd624fd9f94",
+        "name": "Code1"
+      },
+      {
+        "parameters": {
+          "content": "## Codigo:\nSELECT *\nFROM ford_colombia\nWHERE status = 'sent'\n  AND COALESCE(status_changed_at, created_at) < UTC_TIMESTAMP() - INTERVAL 2 HOUR\n  AND COALESCE(status_changed_at, created_at) > UTC_TIMESTAMP() - INTERVAL 24 HOUR;\nCaso de prueba pra leads sin rta en 2 horas\n[\n  {\n    \"id\": 472,\n    \"action\": \"create\",\n    \"pilot_firstname\": \"Lichon\",\n    \"pilot_lastname\": \"Redoo\",\n    \"pilot_second_lastname\": \"\",\n    \"pilot_phone\": \"\",\n    \"pilot_cellphone\": \"3226514330\",\n    \"pilot_email\": \"juliana.sanchez.pilot@gmail.com\",\n    \"pilot_contact_type_id\": \"1\",\n    \"pilot_business_type_code\": \"ford_vehiculo\",\n    \"pilot_suborigin_id\": \"ec_otros\",\n    \"pilot_provider_service\": \"Autoland - San Diego\",\n    \"pilot_notes\": \"Notas:test//Campaña:Leads Redoo\",\n    \"pilot_product_of_interest\": \"Expedition\",\n    \"pilot_client_identity_document\": \"\",\n    \"pilot_tracking_id\": \"577929C2-0642-4EB8-AA09-6A79C9F9D007\",\n    \"status\": \"sent\",\n    \"status_changed_at\": null,\n    \"created_at\": \"2026-10-05 13:22:21\",\n    \"updated_at\": \"2026-10-05 13:22:21\"\n  }\n]\n",
+          "height": 352,
+          "width": 752
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          -2976,
+          208
+        ],
+        "id": "2b1eeda4-14ad-48bc-8813-499f0c124a11",
+        "name": "Sticky Note1"
+      },
+      {
+        "parameters": {
+          "content": "## datos de prueba:\n[\n  {\n    \"id\": 472,\n    \"action\": \"create\",\n    \"pilot_firstname\": \"Lichon\",\n    \"pilot_lastname\": \"Redoo\",\n    \"pilot_second_lastname\": \"\",\n    \"pilot_phone\": \"\",\n    \"pilot_cellphone\": \"3226514330\",\n    \"pilot_email\": \"juliana.sanchez.pilot@gmail.com\",\n    \"pilot_contact_type_id\": \"1\",\n    \"pilot_business_type_code\": \"ford_vehiculo\",\n    \"pilot_suborigin_id\": \"ec_otros\",\n    \"pilot_provider_service\": \"Autoland - San Diego\",\n    \"pilot_notes\": \"Notas:test//Campaña:Leads Redoo\",\n    \"pilot_product_of_interest\": \"Expedition\",\n    \"pilot_client_identity_document\": \"\",\n    \"pilot_tracking_id\": \"FBAFD810-08CD-4D74-A821-A20BB83EDB66\",\n    \"status\": \"recontacted\",\n    \"status_changed_at\": \"2026-10-05 13:46:55\",\n    \"created_at\": \"2026-10-05 13:22:21\",\n    \"updated_at\": \"2026-10-05 13:46:55\"\n  }\n]"
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          -2912,
+          -1008
+        ],
+        "id": "177bf818-e0e7-46f0-b962-b218ab1c6ad4",
+        "name": "Sticky Note2"
+      },
+      {
+        "parameters": {
+          "content": "## +2h despues del 3er recordatorio: cerrar y derivar al call center",
+          "height": 304,
+          "width": 3312,
+          "color": 3
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          -3152,
+          -832
+        ],
+        "id": "707bb7e5-b327-4ea4-8876-aae69d7f5686",
+        "name": "Sticky Note4"
+      },
+      {
+        "parameters": {
+          "content": "## Enviar Recordatorio",
+          "height": 560,
+          "width": 3280,
+          "color": 2
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          -3136,
+          -416
+        ],
+        "id": "fd9f7bf2-88b4-45ce-884a-de83af04aa2b",
+        "name": "Sticky Note5"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.pilotsolution.net/v1/welcomes/update.php",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={\n  \"data\": {\n    \"id\": \"{{ $('Loop Over Items').item.json.pilot_tracking_id }}\",\n    \"interest_level_code\": \"1\",\n    \"notes\": \"INTERES: Frío | Pilot Comentario: {{ $json.pilot_notes }}\"\n  },\n  \"header\": {\n    \"FlowName\": \"update_prospect\",\n    \"SequenceId\": 1,\n    \"TimeStamp\": 1248377,\n    \"TrackingId\": \"FD1C4A1A-CAFB-467E-825B-7FFB86CC21E3\",\n    \"access_token\": \"{{ $('Login1').item.json.result.entitydata.session.identityToken }}\"\n  }\n}",
+          "options": {}
+        },
+        "id": "0395c6bb-9f5d-4b45-8f6c-2d4743a24261",
+        "name": "updateLead",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -1536,
+          -736
+        ],
+        "retryOnFail": true,
+        "maxTries": 5,
+        "waitBetweenTries": 5000
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.pilotsolution.net/v1/welcomes/assign.php",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={\n  \"data\": {\n    \"id\": \"{{ $('Loop Over Items').item.json.pilot_tracking_id }}\",\n    \"to_type\": \"huntGroup\",\n    \"to_entity_id\": \"9214\",\n    \"comment\": \"Asignado por el bot tras calificar el lead\"\n  },\n  \"header\": {\n    \"FlowName\": \"lead_assign_to_huntgroup\",\n    \"SequenceId\": 1,\n    \"TimeStamp\": 1248377,\n    \"TrackingId\": \"FD1C4A1A-CAFB-467E-825B-7FFB86CC21E3\",\n    \"access_token\": \"{{ $('Login1').item.json.result.entitydata.session.identityToken }}\"\n  }\n}",
+          "options": {}
+        },
+        "id": "488efb41-c1bf-4278-b658-c529d063a656",
+        "name": "AsignarLead",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -672,
+          -736
+        ],
+        "retryOnFail": true,
+        "maxTries": 5,
+        "waitBetweenTries": 5000
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT *\nFROM ford_colombia\nWHERE asignacion IS NOT NULL\nORDER BY created_at DESC\nLIMIT 1;",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          -1344,
+          -736
+        ],
+        "id": "988a9298-73c8-407a-b01f-e65d89f0f218",
+        "name": "TRAER_lead4",
+        "alwaysOutputData": true,
+        "credentials": {
+          "mySql": {
+            "id": "Vl0rIdPXBmN5yKfQ",
+            "name": "MSQL-FORD-COLOMBIA"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\n\nreturn items.map(item => {\n  const data = item.json;\n\n  const contacto = 'contacto@grupoobc.com.co';\n  const contacto1 = 'contacto1@grupoobc.com.co';\n\n  // Si ya tiene asignación, alternar\n  if (data.asignacion === contacto) {\n    data.asignacion = contacto1;\n  } \n  else if (data.asignacion === contacto1) {\n    data.asignacion = contacto;\n  } \n  // Si es null, vacío o no existe, elegir aleatoriamente\n  else if (\n    data.asignacion === null ||\n    data.asignacion === undefined ||\n    String(data.asignacion).trim() === ''\n  ) {\n    data.asignacion = Math.random() < 0.5\n      ? contacto\n      : contacto1;\n  }\n\n  return {\n    json: data\n  };\n});"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -1120,
+          -736
+        ],
+        "id": "3df9b8e8-f459-4c59-b8cb-be63044681ba",
+        "name": "Code2"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.pilotsolution.net/v1/welcomes/read.php",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={\n  \"data\": {\n    \"id\": \"{{ $('Loop Over Items').item.json.pilot_tracking_id }}\"\n  },\n  \"header\": {\n    \"FlowName\": \"lead_read\",\n    \"SequenceId\": 1,\n    \"TimeStamp\": 1248377,\n    \"TrackingId\": \"FD1C4A1A-CAFB-467E-825B-7FFB86CC21E3\",\n    \"access_token\": \"{{ $('Login1').item.json.result.entitydata.session.identityToken }}\"\n  }\n}",
+          "options": {}
+        },
+        "id": "fb9f736b-f9e4-4ab0-a810-f7a45254b83e",
+        "name": "verLead-Asignado",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -512,
+          -736
+        ],
+        "retryOnFail": true,
+        "maxTries": 5,
+        "waitBetweenTries": 5000
+      },
+      {
+        "parameters": {
+          "operation": "update",
+          "table": {
+            "__rl": true,
+            "value": "ford_colombia",
+            "mode": "list",
+            "cachedResultName": "ford_colombia"
+          },
+          "dataMode": "defineBelow",
+          "columnToMatchOn": "id",
+          "valueToMatchOn": "={{ $('Loop Over Items').item.json.id }}",
+          "valuesToSend": {
+            "values": [
+              {
+                "column": "status",
+                "value": "good_lead"
+              },
+              {
+                "column": "status_changed_at",
+                "value": "={{ $now }}"
+              },
+              {
+                "column": "grado_interes",
+                "value": "Frío"
+              },
+              {
+                "column": "lead",
+                "value": "good_lead"
+              },
+              {
+                "column": "reason",
+                "value": "={{ $('Loop Over Items').item.json.contesto == 1 ? 'Respondió pero no terminó la conversación con el bot' : 'No respondio el recontacto' }}"
+              },
+              {
+                "column": "asignacion",
+                "value": "={{ $('Code2').item.json.asignacion }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          -352,
+          -736
+        ],
+        "name": "Actualizar Lead, con la asignacion",
+        "id": "5d666f39-a575-4bfd-a3b9-e24dae5a2282",
+        "credentials": {
+          "mySql": {
+            "id": "Vl0rIdPXBmN5yKfQ",
+            "name": "MSQL-FORD-COLOMBIA"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "number": [
+              {
+                "value1": "={{ $json.statusCode }}",
+                "operation": "equal",
+                "value2": 200
+              }
+            ]
+          }
+        },
+        "id": "5b5c8cc9-22f3-473b-b9cb-8db84967b3b5",
+        "name": "¿Hay saldo?1",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 1,
+        "position": [
+          -1424,
+          -288
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://api-redoo.up.railway.app/api/v1/companies/me/outbound-jobs",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-API-Key",
+                "value": "44a129c4ad2cb5b0d33e92c5c18437e487ccdc2ecb729fb35d95f5dc20ee5952"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ $json.body_string }}",
+          "options": {}
+        },
+        "id": "9d5f8b74-96e0-49ca-abfd-d93c8ec55da3",
+        "name": "Guardar job pendiente",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -560,
+          -80
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api-redoo.up.railway.app/api/v1/companies/me/messages-balance/consume",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-API-Key",
+                "value": "44a129c4ad2cb5b0d33e92c5c18437e487ccdc2ecb729fb35d95f5dc20ee5952"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({}) }}",
+          "options": {
+            "response": {
+              "response": {
+                "fullResponse": true,
+                "neverError": true
+              }
+            }
+          }
+        },
+        "id": "563e7fb7-fffc-4440-9a64-a7d8e3691106",
+        "name": "Consume − Envios",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -1712,
+          -256
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const item = $(\"Loop Over Items1\").first().json;\n\n// --------------------------------------------------\n// NORMALIZAR TELÉFONO\n// --------------------------------------------------\nfunction normalizarTelefono(telefono) {\n  // Solo dígitos, sin el 00 internacional\n  let numero = String(telefono || \"\").replace(/\\D/g, \"\");\n  if (numero.startsWith(\"00\")) numero = numero.slice(2);\n\n  if (/^57\\d{10}$/.test(numero)) return numero;         // Colombia con código: 573163127436\n  if (/^3\\d{9}$/.test(numero)) return \"57\" + numero;    // Celular Colombia: 3163127436 -> 573163127436\n  if (/^54\\d{10,11}$/.test(numero)) return numero;      // Argentina con código (pruebas): 5491131438902\n  if (/^11\\d{8}$/.test(numero)) return \"549\" + numero;  // Argentina CABA sin código (pruebas): 1131438902\n\n  // Cualquier otro formato es inválido: no se inventa el país\n  return \"\";\n}\n\nconst pilot_phone = normalizarTelefono(item.pilot_phone);\nconst pilot_cellphone = normalizarTelefono(item.pilot_cellphone);\n\n// --------------------------------------------------\n// DATOS\n// --------------------------------------------------\nconst nombre = item.pilot_firstname && item.pilot_lastname\n  ? `${item.pilot_firstname} ${item.pilot_lastname}`\n  : item.pilot_firstname || item.pilot_lastname || \"No aclarado\";\n\nconst modelo = item.pilot_product_of_interest || \"No aclarado\";\nconst imagen = \"ford_mensajeria_20261002_102302.jpg\";\nconst idQuery = String(item.id || \"0\");\n\n// --------------------------------------------------\n// CONTENT VARIABLES + TEMPLATE\n// --------------------------------------------------\nconst variables = {\n  \"1\": nombre,\n  \"2\": modelo,\n  \"3\": imagen,\n  \"4\": idQuery\n};\n\nconst template_id = \"HXb85c3300617b379cd9daad103f58e178\";\n\n// --------------------------------------------------\n// TELÉFONO DESTINO\n// --------------------------------------------------\nconst tel = String(pilot_cellphone || pilot_phone || \"\").replace(/^\\+/, \"\");\n\n// --------------------------------------------------\n// BODY FINAL\n// --------------------------------------------------\nconst body = {\n  channel: \"whatsapp\",\n  to_phone: \"+\" + tel,\n  from_phone: \"+15559562100\",\n  account_sid: \"TWILIO_SID_OCULTO\",\n  messaging_service_sid: \"MG5a0f4bf8dac1aed676cc847ca9334550\",\n  content_sid: template_id,\n  content_variables: JSON.stringify(variables),\n  twilio_credential_ref: \"FORD COLOMBIA\",\n  payload_json: {\n    lead_id: item.id,\n    action: item.action,\n    firstname: item.pilot_firstname,\n    lastname: item.pilot_lastname,\n    second_lastname: item.pilot_second_lastname,\n    phone: pilot_phone,\n    cellphone: pilot_cellphone,\n    email: item.pilot_email,\n    contact_type_id: item.pilot_contact_type_id,\n    business_type_code: item.pilot_business_type_code,\n    suborigin_id: item.pilot_suborigin_id,\n    provider_service: item.pilot_provider_service,\n    notes: item.pilot_notes,\n    product_of_interest: item.pilot_product_of_interest,\n    identity_document: item.pilot_client_identity_document,\n    tracking_id: item.pilot_tracking_id\n  },\n  source: \"ford_colombia_pilot_webhook\"\n};\n\n// --------------------------------------------------\n// DEVOLVER\n// --------------------------------------------------\nreturn [\n  {\n    json: {\n      body,                                // objeto listo para enviar\n      body_string: JSON.stringify(body),   // por si lo necesitas como string\n      template_id,\n      ContentVariables: JSON.stringify(variables),\n      ...item,\n      pilot_phone,\n      pilot_cellphone\n    }\n  }\n];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -928,
+          -144
+        ],
+        "id": "b755941e-d519-4bac-b3b1-9fdb104dda57",
+        "name": "Code3"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Nodo Code - Modo: \"Run Once for All Items\"\n// Quita comillas de pilot_notes y devuelve el resto igual\n\nconst limpiar = (texto) => {\n  if (typeof texto !== 'string') return texto;\n  return texto.replace(/[\"'“”‘’«»`´]/g, '');\n};\n\nreturn $('Loop Over Items').all().map(item => {\n  return {\n    json: {\n      ...item.json,\n      pilot_notes: limpiar(item.json.pilot_notes),\n    },\n  };\n});"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -1744,
+          -736
+        ],
+        "id": "49a13643-58b6-4429-b56f-5e43d58f8d03",
+        "name": "Code4"
+      },
+      {
+        "parameters": {
+          "amount": 3
+        },
+        "type": "n8n-nodes-base.wait",
+        "typeVersion": 1.1,
+        "position": [
+          -912,
+          -720
+        ],
+        "id": "9877baf7-8a10-4360-bb1d-185787d1bdd1",
+        "name": "Wait",
+        "webhookId": "eeb86416-795b-4a45-9da6-9e8c5cd578e0"
+      },
+      {
+        "parameters": {
+          "amount": 4
+        },
+        "type": "n8n-nodes-base.wait",
+        "typeVersion": 1.1,
+        "position": [
+          -2112,
+          -704
+        ],
+        "id": "405c2454-050e-4331-8eed-6d8732b47eeb",
+        "name": "Wait1",
+        "webhookId": "eeb86416-795b-4a45-9da6-9e8c5cd578e0"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://leads.redooconect.com.ar/api/v1/leads",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-API-KEY",
+                "value": "44a129c4ad2cb5b0d33e92c5c18437e487ccdc2ecb729fb35d95f5dc20ee5952"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={\n  \"first_name\": \"{{$('Code4').first().json.pilot_firstname  || 'No_ofrecido'}}\",\n  \"priority\": \"low\",\n  \"phone\": \"{{ $('Code4').item.json.pilot_cellphone }}\",\n  \"source\": \"good_lead\",\n  \"notes\": \"Frío - No respondio el recontacto\"\n}\n",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -176,
+          -736
+        ],
+        "id": "ba81424e-ae12-4347-ac00-ccd0b0be541a",
+        "name": "LEADS1",
+        "retryOnFail": false,
+        "onError": "continueErrorOutput"
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT f.id\nFROM ford_colombia f\nWHERE f.id = $1\n  AND f.envio = 1\n  AND (f.envio_reason IS NULL OR f.envio_reason NOT IN ('encolado', 'recordatorio_encolado'))\n  AND f.contesto = 0\n  AND f.rechazo_template = 0\n  AND (f.status IS NULL OR f.status <> 'answered')\n  AND NOT EXISTS (\n        SELECT 1 FROM ford_colombia b\n        WHERE b.pilot_cellphone = f.pilot_cellphone\n          AND b.contesto = 1\n          AND b.created_at >= f.created_at\n  );",
+          "options": {
+            "queryReplacement": "={{ String($('Loop Over Items1').item.json.id) }}"
+          }
+        },
+        "id": "c887222b-e38e-4daa-96ba-badf7b88165c",
+        "name": "Revalidar lead",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          -2160,
+          -256
+        ],
+        "alwaysOutputData": true,
+        "credentials": {
+          "mySql": {
+            "id": "Vl0rIdPXBmN5yKfQ",
+            "name": "MSQL-FORD-COLOMBIA"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "a1b2c3d4-0000-4000-8000-000000000001",
+                "leftValue": "={{ !!$json.id }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "d4c47585-7b7a-4e38-aa6e-4316577300cf",
+        "name": "¿Sigue sin contestar?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          -1984,
+          -240
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "UPDATE ford_colombia\nSET envio_reason = 'recordatorio_encolado', status = 'encolado', status_changed_at = NOW()\nWHERE id = $1;",
+          "options": {
+            "queryReplacement": "={{ String($('Loop Over Items1').item.json.id) }}"
+          }
+        },
+        "id": "84ea5a89-1264-4551-8b6a-ff98a403dbab",
+        "name": "Marcar recordatorio encolado",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          -384,
+          -80
+        ],
+        "credentials": {
+          "mySql": {
+            "id": "Vl0rIdPXBmN5yKfQ",
+            "name": "MSQL-FORD-COLOMBIA"
+          }
+        }
+      },
+      {
+        "id": "733743ad-7635-4454-bf61-86758ee5d370",
+        "name": "Cada 15 min (normalizar)",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          -3040,
+          -400
+        ],
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "minutes",
+                "minutesInterval": 15
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "9ba444c5-f9b4-4e6e-80c8-3006af91ada3",
+        "name": "Normalizar leads cerrados (formato reporte)",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          -2800,
+          -400
+        ],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "-- Deja los leads igual que el reporte de octubre cuando el recordatorio ya no los toca:\n-- status sent/failed, un solo 1 en envio/reenvio_1/2/3 (intento en que respondio o el ultimo enviado), reminder_count = ese intento - 1.\n-- bad_lead = no se le pudo enviar/entregar: siempre failed y sin envios marcados.\n-- Toma: cerrados (good/bad), los que respondieron y los que no cambian hace mas de 2 dias. Nunca los encolados.\n-- Se puede correr muchas veces: lo ya normalizado no cambia. El orden de los SET importa (MySQL usa los valores ya actualizados).\nUPDATE ford_colombia SET\n  status = IF(`lead` = 'bad_lead' OR (contesto = 0 AND envio = 0 AND reenvio_1 = 0 AND reenvio_2 = 0 AND reenvio_3 = 0), 'failed', 'sent'),\n  reminder_count = IF(`lead` = 'bad_lead', 0, CASE WHEN reenvio_3 = 1 THEN 3 WHEN reenvio_2 = 1 THEN 2 WHEN reenvio_1 = 1 THEN 1 ELSE 0 END),\n  envio     = IF(`lead` = 'bad_lead', 0, (envio = 1 OR contesto = 1) AND reenvio_1 = 0 AND reenvio_2 = 0 AND reenvio_3 = 0),\n  reenvio_1 = IF(`lead` = 'bad_lead', 0, reenvio_1 = 1 AND reenvio_2 = 0 AND reenvio_3 = 0),\n  reenvio_2 = IF(`lead` = 'bad_lead', 0, reenvio_2 = 1 AND reenvio_3 = 0),\n  reenvio_3 = IF(`lead` = 'bad_lead', 0, reenvio_3)\nWHERE status <> 'encolado'\n  AND (`lead` IN ('good_lead', 'bad_lead')\n       OR contesto = 1\n       OR COALESCE(status_changed_at, created_at) < UTC_TIMESTAMP() - INTERVAL 2 DAY);",
+          "options": {}
+        },
+        "credentials": {
+          "mySql": {
+            "id": "Vl0rIdPXBmN5yKfQ",
+            "name": "MSQL-FORD-COLOMBIA"
+          }
+        }
+      },
+      {
+        "id": "10dfc98e-12e7-4130-a831-2baacb7e775d",
+        "name": "Registrar SID para devolver crédito",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -100,
+          -84
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "https://api-redoo.up.railway.app/api/v1/companies/me/twilio-messages/track",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-API-Key",
+                "value": "44a129c4ad2cb5b0d33e92c5c18437e487ccdc2ecb729fb35d95f5dc20ee5952"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ twilio_sid: $json.sid }) }}",
+          "options": {
+            "response": {
+              "response": {
+                "fullResponse": true,
+                "neverError": true
+              }
+            }
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "id": "beca52c4-3d1f-4a7b-8aaa-2bf53abfa977",
+        "name": "Ver entrega en Twilio",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -1944,
+          -536
+        ],
+        "parameters": {
+          "url": "={{ 'https://api.twilio.com/2010-04-01/Accounts/TWILIO_SID_OCULTO/Messages.json?PageSize=20&To=' + encodeURIComponent('whatsapp:+' + ((d) => d.length === 10 ? '57' + d : d)(String($('Loop Over Items').item.json.pilot_cellphone || '').replace(/\\D/g, ''))) }}",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpBasicAuth",
+          "options": {}
+        },
+        "credentials": {
+          "httpBasicAuth": {
+            "id": "PJ6kN2pExPrUnwn0",
+            "name": "FORD COLOMBIA"
+          }
+        },
+        "onError": "continueRegularOutput",
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 3000
+      },
+      {
+        "id": "4648d0cf-ba25-40cf-ba63-db853665eb62",
+        "name": "¿Le llegó algún mensaje?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          -1744,
+          -536
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "b7c1e2a0-1111-4000-8000-000000000001",
+                "leftValue": "={{ !Array.isArray($json.messages) || $json.messages.some(m => ['sent', 'delivered', 'read'].includes(m.status)) }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "5a3fd670-5c53-4e26-aa0a-edcc1f54da06",
+        "name": "Marcar good lead en Pilot",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -432,
+          -560
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.pilotsolution.net/v1/welcomes/qualification/good.php",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={\n  \"data\": {\n    \"id\": \"{{ $('Loop Over Items').item.json.pilot_tracking_id }}\"\n  },\n  \"header\": {\n    \"FlowName\": \"lead_good\",\n    \"SequenceId\": 1,\n    \"TimeStamp\": 1248377,\n    \"TrackingId\": \"FD1C4A1A-CAFB-467E-825B-7FFB86CC21E3\",\n    \"access_token\": \"{{ $('Login1').item.json.result.entitydata.session.identityToken }}\"\n  }\n}",
+          "options": {}
+        },
+        "retryOnFail": true,
+        "maxTries": 5,
+        "waitBetweenTries": 5000
+      },
+      {
+        "id": "e02c57c8-de8b-4ad9-b438-57057ba96ebc",
+        "name": "¿Pilot confirmó?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          -352,
+          -560
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "pilot-ok-0001",
+                "leftValue": "={{ ($('updateLead').item.json.result || {}).status === 'success' && ($('AsignarLead').item.json.result || {}).status === 'success' && (($json.result || {}).status === 'success' || String(($json.result || {}).message || '').includes('ya se encuentra calificado')) }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "d8618395-3567-4ba4-89de-f19dcb811abd",
+        "name": "¿Reintentar Pilot?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          -160,
+          -400
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "pilot-retry-0001",
+                "leftValue": "={{ $runIndex < 2 }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "b5d7f3dd-e0e0-4399-9a40-d453c99fd4dd",
+        "name": "Esperar 65s (Pilot)",
+        "type": "n8n-nodes-base.wait",
+        "typeVersion": 1.1,
+        "position": [
+          32,
+          -400
+        ],
+        "parameters": {
+          "amount": 65
+        },
+        "webhookId": "ecd7d771-6139-4345-b88f-57a15622ca10"
+      },
+      {
+        "id": "27cb5be2-5fde-4988-b973-f7cfd63f411c",
+        "name": "Marcar error Pilot",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          32,
+          -240
+        ],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "UPDATE ford_colombia\nSET status = 'good_lead', `lead` = 'good_lead', grado_interes = 'Frío',\n    reason = 'Pilot no confirmó la calificación (Frío)', status_changed_at = NOW()\nWHERE id = $1;",
+          "options": {
+            "queryReplacement": "={{ String($('Loop Over Items').item.json.id) }}"
+          }
+        },
+        "credentials": {
+          "mySql": {
+            "id": "Vl0rIdPXBmN5yKfQ",
+            "name": "MSQL-FORD-COLOMBIA"
+          }
+        }
+      }
+    ],
+    "connections": {
+      "Schedule Trigger": {
+        "main": [
+          [
+            {
+              "node": "Leads para cierre (+2h del 3er recordatorio)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Loop Over Items": {
+        "main": [
+          [],
+          [
+            {
+              "node": "Login",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Enviar recordatorio": {
+        "main": [
+          [
+            {
+              "node": "Marcar recontacted",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Registrar SID para devolver crédito",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Marcar recontacted": {
+        "main": [
+          [
+            {
+              "node": "Loop Over Items1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Schedule Trigger1": {
+        "main": [
+          [
+            {
+              "node": "Leads para recordatorio (1, 2 y 3)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Edit Fields2": {
+        "main": [
+          [
+            {
+              "node": "Wait1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Login": {
+        "main": [
+          [
+            {
+              "node": "Edit Fields2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "BADLead": {
+        "main": [
+          [
+            {
+              "node": "Marcar bad_lead",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "Actualizar_lead1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code": {
+        "main": [
+          [
+            {
+              "node": "Loop Over Items1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code1": {
+        "main": [
+          [
+            {
+              "node": "Enviar recordatorio",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "updateLead": {
+        "main": [
+          [
+            {
+              "node": "TRAER_lead4",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "TRAER_lead4": {
+        "main": [
+          [
+            {
+              "node": "Code2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code2": {
+        "main": [
+          [
+            {
+              "node": "Wait",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "AsignarLead": {
+        "main": [
+          [
+            {
+              "node": "verLead-Asignado",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Actualizar Lead, con la asignacion": {
+        "main": [
+          [
+            {
+              "node": "LEADS1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "¿Hay saldo?1": {
+        "main": [
+          [
+            {
+              "node": "Code1",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Code3",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Consume − Envios": {
+        "main": [
+          [
+            {
+              "node": "¿Hay saldo?1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code3": {
+        "main": [
+          [
+            {
+              "node": "Guardar job pendiente",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Leads para recordatorio (1, 2 y 3)": {
+        "main": [
+          [
+            {
+              "node": "Code",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Leads para cierre (+2h del 3er recordatorio)": {
+        "main": [
+          [
+            {
+              "node": "Loop Over Items",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code4": {
+        "main": [
+          [
+            {
+              "node": "updateLead",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Wait": {
+        "main": [
+          [
+            {
+              "node": "AsignarLead",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Wait1": {
+        "main": [
+          [
+            {
+              "node": "Login1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "LEADS1": {
+        "main": [
+          [
+            {
+              "node": "Loop Over Items",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Loop Over Items",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Loop Over Items1": {
+        "main": [
+          null,
+          [
+            {
+              "node": "Revalidar lead",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Revalidar lead": {
+        "main": [
+          [
+            {
+              "node": "¿Sigue sin contestar?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "¿Sigue sin contestar?": {
+        "main": [
+          [
+            {
+              "node": "Consume − Envios",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Loop Over Items1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Guardar job pendiente": {
+        "main": [
+          [
+            {
+              "node": "Marcar recordatorio encolado",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Marcar recordatorio encolado": {
+        "main": [
+          [
+            {
+              "node": "Loop Over Items1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Cada 15 min (normalizar)": {
+        "main": [
+          [
+            {
+              "node": "Normalizar leads cerrados (formato reporte)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Login1": {
+        "main": [
+          [
+            {
+              "node": "Ver entrega en Twilio",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ver entrega en Twilio": {
+        "main": [
+          [
+            {
+              "node": "¿Le llegó algún mensaje?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "¿Le llegó algún mensaje?": {
+        "main": [
+          [
+            {
+              "node": "Code4",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "BADLead",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Marcar bad_lead": {
+        "main": [
+          [
+            {
+              "node": "Loop Over Items",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "verLead-Asignado": {
+        "main": [
+          [
+            {
+              "node": "Marcar good lead en Pilot",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Marcar good lead en Pilot": {
+        "main": [
+          [
+            {
+              "node": "¿Pilot confirmó?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "¿Pilot confirmó?": {
+        "main": [
+          [
+            {
+              "node": "Actualizar Lead, con la asignacion",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "¿Reintentar Pilot?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "¿Reintentar Pilot?": {
+        "main": [
+          [
+            {
+              "node": "Esperar 65s (Pilot)",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Marcar error Pilot",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Esperar 65s (Pilot)": {
+        "main": [
+          [
+            {
+              "node": "Login",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Marcar error Pilot": {
+        "main": [
+          [
+            {
+              "node": "Loop Over Items",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "MARCELO AGUSTIN DRI (via MCP)",
+    "name": "Pilot: 'ya calificado' cuenta como confirmado",
+    "description": "good.php devuelve error 'El Lead ya se encuentra calificado' en leads ya calificados; no es falla.",
+    "autosaved": false,
+    "createdAt": "2026-11-24T16:48:27.998Z",
+    "updatedAt": "2026-11-24T16:48:27.998Z"
+  },
+  "activeVersionId": "7e382203-4390-4e25-bc58-5fc24697c6bf",
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Leads para cierre (+2h del 3er recordatorio)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Login",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar recordatorio": {
+      "main": [
+        [
+          {
+            "node": "Marcar recontacted",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Registrar SID para devolver crédito",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marcar recontacted": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger1": {
+      "main": [
+        [
+          {
+            "node": "Leads para recordatorio (1, 2 y 3)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields2": {
+      "main": [
+        [
+          {
+            "node": "Wait1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Login": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BADLead": {
+      "main": [
+        [
+          {
+            "node": "Marcar bad_lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Actualizar_lead1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code1": {
+      "main": [
+        [
+          {
+            "node": "Enviar recordatorio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "updateLead": {
+      "main": [
+        [
+          {
+            "node": "TRAER_lead4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "TRAER_lead4": {
+      "main": [
+        [
+          {
+            "node": "Code2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code2": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AsignarLead": {
+      "main": [
+        [
+          {
+            "node": "verLead-Asignado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Actualizar Lead, con la asignacion": {
+      "main": [
+        [
+          {
+            "node": "LEADS1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Hay saldo?1": {
+      "main": [
+        [
+          {
+            "node": "Code1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consume − Envios": {
+      "main": [
+        [
+          {
+            "node": "¿Hay saldo?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code3": {
+      "main": [
+        [
+          {
+            "node": "Guardar job pendiente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leads para recordatorio (1, 2 y 3)": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leads para cierre (+2h del 3er recordatorio)": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code4": {
+      "main": [
+        [
+          {
+            "node": "updateLead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "AsignarLead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait1": {
+      "main": [
+        [
+          {
+            "node": "Login1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LEADS1": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items1": {
+      "main": [
+        null,
+        [
+          {
+            "node": "Revalidar lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Revalidar lead": {
+      "main": [
+        [
+          {
+            "node": "¿Sigue sin contestar?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Sigue sin contestar?": {
+      "main": [
+        [
+          {
+            "node": "Consume − Envios",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Over Items1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar job pendiente": {
+      "main": [
+        [
+          {
+            "node": "Marcar recordatorio encolado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marcar recordatorio encolado": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cada 15 min (normalizar)": {
+      "main": [
+        [
+          {
+            "node": "Normalizar leads cerrados (formato reporte)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Login1": {
+      "main": [
+        [
+          {
+            "node": "Ver entrega en Twilio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ver entrega en Twilio": {
+      "main": [
+        [
+          {
+            "node": "¿Le llegó algún mensaje?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Le llegó algún mensaje?": {
+      "main": [
+        [
+          {
+            "node": "Code4",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "BADLead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marcar bad_lead": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "verLead-Asignado": {
+      "main": [
+        [
+          {
+            "node": "Marcar good lead en Pilot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marcar good lead en Pilot": {
+      "main": [
+        [
+          {
+            "node": "¿Pilot confirmó?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Pilot confirmó?": {
+      "main": [
+        [
+          {
+            "node": "Actualizar Lead, con la asignacion",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "¿Reintentar Pilot?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Reintentar Pilot?": {
+      "main": [
+        [
+          {
+            "node": "Esperar 65s (Pilot)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Marcar error Pilot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Esperar 65s (Pilot)": {
+      "main": [
+        [
+          {
+            "node": "Login",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marcar error Pilot": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-10-02T19:14:46.191Z",
+  "id": "vHYnerAaqyWy7nI4",
+  "isArchived": false,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "name": "FORD COLOMBIA - recordatorio",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -3040,
+        -752
+      ],
+      "name": "Schedule Trigger",
+      "id": "63752cef-2804-429c-95db-a5a5c8bf05e7"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Ford: bienvenida + 1 recordatorio. Se cierra como good Frío:\n--  a) 2h despues del recordatorio sin respuesta (caso normal).\n--  b) cualquier lead enviado que quedo 24h sin cerrar: nunca recibio recordatorio\n--     (reenviado desde la cola fuera de la ventana) o contesto y dejo la charla a medias.\n-- Nunca con un recordatorio todavia en cola. LIMIT para que una corrida termine antes de la siguiente (cada 15 min).\nSELECT *\nFROM ford_colombia\nWHERE rechazo_template = 0\n  AND (`lead` IS NULL OR `lead` = '')\n  AND status <> 'encolado'\n  AND (envio_reason IS NULL OR envio_reason <> 'recordatorio_encolado')\n  AND (envio = 1 OR reenvio_1 = 1)\n  AND (\n        (contesto = 0 AND reenvio_1 = 1 AND status_changed_at <= UTC_TIMESTAMP() - INTERVAL 2 HOUR)\n     OR GREATEST(created_at, COALESCE(status_changed_at, created_at)) <= UTC_TIMESTAMP() - INTERVAL 24 HOUR\n  )\nORDER BY status_changed_at DESC\nLIMIT 40;\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        -2864,
+        -752
+      ],
+      "name": "Leads para cierre (+2h del 3er recordatorio)",
+      "id": "e99c5b87-58d6-4a3f-b1a9-13ce70cb56dc",
+      "credentials": {
+        "mySql": {
+          "id": "Vl0rIdPXBmN5yKfQ",
+          "name": "MSQL-FORD-COLOMBIA"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -2688,
+        -736
+      ],
+      "name": "Loop Over Items",
+      "id": "678295d0-3fd1-4c3e-9656-07cda804f7bb"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE ford_colombia\nSET status = 'bad_lead', `lead` = 'bad_lead', grado_interes = 'bad_lead',\n    reason = 'No se pudo entregar el mensaje (Twilio/Meta)', status_changed_at = NOW()\nWHERE id = $1;",
+        "options": {
+          "queryReplacement": "={{ String($('Loop Over Items').item.json.id) }}"
+        }
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        -1456,
+        -1136
+      ],
+      "name": "Marcar bad_lead",
+      "id": "734cbfc2-b381-4e1c-93a2-06d278866c73",
+      "credentials": {
+        "mySql": {
+          "id": "Vl0rIdPXBmN5yKfQ",
+          "name": "MSQL-FORD-COLOMBIA"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Ford pasa a bienvenida + 1 recordatorio (2h despues del envio inicial). Ya no hay 2do ni 3er recordatorio.\nSELECT f.*, 1 AS reminder_number\nFROM ford_colombia f\nWHERE f.envio = 1\n  AND (f.envio_reason IS NULL OR f.envio_reason NOT IN ('encolado', 'recordatorio_encolado'))\n  AND f.contesto = 0\n  AND f.rechazo_template = 0\n  AND (f.status IS NULL OR f.status <> 'answered')\n  AND (f.`lead` IS NULL OR f.`lead` = '')\n  AND f.reenvio_1 = 0\n  -- 24 h desde el ultimo envio (no desde que se creo el lead), asi los que salen tarde de la cola tambien tienen su recordatorio\n  AND COALESCE(f.status_changed_at, f.created_at) > UTC_TIMESTAMP() - INTERVAL 24 HOUR\n  AND COALESCE(f.status_changed_at, f.created_at) <= UTC_TIMESTAMP() - INTERVAL 2 HOUR\n  AND NOT EXISTS (\n        SELECT 1 FROM ford_colombia b\n        WHERE b.pilot_cellphone = f.pilot_cellphone\n          AND b.contesto = 1\n          AND b.created_at >= f.created_at\n  );\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        -2880,
+        -336
+      ],
+      "name": "Leads para recordatorio (1, 2 y 3)",
+      "id": "cab4b9d6-d3ee-41c1-a7f2-16527096d589",
+      "credentials": {
+        "mySql": {
+          "id": "Vl0rIdPXBmN5yKfQ",
+          "name": "MSQL-FORD-COLOMBIA"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.twilio.com/2010-04-01/Accounts/TWILIO_SID_OCULTO/Messages.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "From",
+              "value": "=whatsapp:+15559562100"
+            },
+            {
+              "name": "To",
+              "value": "=whatsapp:+{{ String($json.pilot_cellphone).replace(/\\D/g, '') }}"
+            },
+            {
+              "name": "ContentSid",
+              "value": "HXb85c3300617b379cd9daad103f58e178"
+            },
+            {
+              "name": "ContentVariables",
+              "value": "={{ $json.ContentVariables }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -320,
+        -304
+      ],
+      "name": "Enviar recordatorio",
+      "alwaysOutputData": true,
+      "id": "cd39f18a-e5e2-4a00-baa6-82c5003a19cc",
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "PJ6kN2pExPrUnwn0",
+          "name": "FORD COLOMBIA"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE ford_colombia\nSET reenvio_{{ Number($('Loop Over Items1').item.json.reminder_number) }} = 1,\n    status = '{{ $json.sid ? 'recontacted' : 'recontact_failed' }}',\n    status_changed_at = NOW()\nWHERE id = {{ Number($('Loop Over Items1').item.json.id) }};",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        -64,
+        -288
+      ],
+      "name": "Marcar recontacted",
+      "id": "a521ad6f-c736-4dfb-bce7-8d9fa5035823",
+      "credentials": {
+        "mySql": {
+          "id": "Vl0rIdPXBmN5yKfQ",
+          "name": "MSQL-FORD-COLOMBIA"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -3088,
+        -352
+      ],
+      "name": "Schedule Trigger1",
+      "id": "99b964a4-cc54-4476-bcaf-8b6ec7258543"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -2400,
+        -272
+      ],
+      "name": "Loop Over Items1",
+      "id": "ebfdc965-07c3-4173-929b-81de68099233"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "table": {
+          "__rl": true,
+          "value": "ford_colombia",
+          "mode": "list",
+          "cachedResultName": "ford_colombia"
+        },
+        "dataMode": "defineBelow",
+        "columnToMatchOn": "id",
+        "valueToMatchOn": "={{ $json.lead_id }}",
+        "valuesToSend": {
+          "values": [
+            {
+              "column": "status",
+              "value": "=rejected"
+            },
+            {
+              "column": "status_changed_at",
+              "value": "={{ $now }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        736,
+        -656
+      ],
+      "id": "fc4a39dd-c6fe-48ac-8a49-f727e83fc8f0",
+      "name": "Actualizar_lead1",
+      "credentials": {
+        "mySql": {
+          "id": "Vl0rIdPXBmN5yKfQ",
+          "name": "MSQL-FORD-COLOMBIA"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b223ceea-a793-41c8-8730-cce0790a5487",
+              "name": "token",
+              "value": "={{ $json.result.entitydata.accounts[0].token }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "9194b722-f8dd-40d3-8fb0-59d9e964b520",
+      "name": "Edit Fields2",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -2336,
+        -704
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.pilotsolution.net/v1/users/authentication.php",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "options": {}
+      },
+      "id": "94e00a43-ac60-43ba-89f1-cb63c759ff6e",
+      "name": "Login",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -2512,
+        -704
+      ],
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "NHXyrkv9ca6Njn8R",
+          "name": "PILOT FORD COLOMBIA"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "url": "=https://api.pilotsolution.net/v1/users/authorization.php",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "identity_token",
+              "value": "={{ $json.token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a4b16d69-1c2c-48d9-a1c0-f60f3a7337a7",
+      "name": "Login1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1904,
+        -736
+      ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.pilotsolution.net/v1/welcomes/qualification/bad.php",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"data\": {\n    \"id\": \"{{ $('Loop Over Items').item.json.pilot_tracking_id }}\",\n    \"desist_status_code\": \"badlead\",\n    \"desist_comments\": \"Imposible de contactar\"\n  },\n  \"header\": {\n    \"FlowName\": \"lead_bad\",\n    \"SequenceId\": 1,\n    \"TimeStamp\": 1248377,\n    \"TrackingId\": \"FD1C4A1A-CAFB-467E-825B-7FFB86CC21E3\",\n    \"access_token\": \"{{ $('Login1').item.json.result.entitydata.session.identityToken }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "caa00dc5-67c8-4113-bef6-4ad587ca7f98",
+      "name": "BADLead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1696,
+        -1136
+      ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "content": "## actualizar el lead, campo comentario diciendo que NO RESPONDIO EL CONTATO. ES ACTUALIZAR, NO REEMPLAZAR",
+        "height": 144,
+        "width": 582
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -2080,
+        -976
+      ],
+      "typeVersion": 1,
+      "id": "a40c0e7c-672f-4e1f-a8e6-c382407ecf32",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "## RECHAZO",
+        "height": 224,
+        "width": 678
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        352,
+        -736
+      ],
+      "typeVersion": 1,
+      "id": "947c542c-60d0-4ae0-b712-f0c1cfcfe054",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "8cea2dda-aec7-4fea-ae10-3cbf15915c0a",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        528,
+        -640
+      ],
+      "id": "d0161a08-67ef-48af-bedf-997e1c7775ef",
+      "name": "Webhook",
+      "webhookId": "8cea2dda-aec7-4fea-ae10-3cbf15915c0a"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -3200,
+        256
+      ],
+      "id": "65b3910f-3b87-4d36-a6aa-214848f8b2b0",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Obtenemos todos los items de entrada en el formato de n8n\nconst items = $input.all();\n\n// Objeto para llevar el registro del ID más alto por cada número de teléfono\nconst phoneMap = {};\n\nfor (const item of items) {\n  // Tomamos el celular; si está vacío, intentamos con el teléfono fijo.\n  // Si no hay ninguno, usamos el ID para no borrar leads sin teléfono.\n  const phone = item.json.pilot_cellphone || item.json.pilot_phone || `no-phone-${item.json.id}`;\n  \n  // Si el teléfono no está en el mapa, o el ID actual es mayor al que ya guardamos, lo actualizamos\n  if (!phoneMap[phone] || item.json.id > phoneMap[phone].json.id) {\n    phoneMap[phone] = item;\n  }\n}\n\n// Convertimos el mapa de vuelta al formato de array que requiere n8n\nreturn Object.values(phoneMap);"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2624,
+        -272
+      ],
+      "id": "d7cc7bfe-7aca-4881-b376-11dcfa26f6e0",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $(\"Loop Over Items1\").first().json;\n\n// --------------------------------------------------\n// NORMALIZAR TELÉFONO\n// --------------------------------------------------\nfunction normalizarTelefono(telefono) {\n  // Solo dígitos, sin el 00 internacional\n  let numero = String(telefono || \"\").replace(/\\D/g, \"\");\n  if (numero.startsWith(\"00\")) numero = numero.slice(2);\n\n  if (/^57\\d{10}$/.test(numero)) return numero;         // Colombia con código: 573163127436\n  if (/^3\\d{9}$/.test(numero)) return \"57\" + numero;    // Celular Colombia: 3163127436 -> 573163127436\n  if (/^54\\d{10,11}$/.test(numero)) return numero;      // Argentina con código (pruebas): 5491131438902\n  if (/^11\\d{8}$/.test(numero)) return \"549\" + numero;  // Argentina CABA sin código (pruebas): 1131438902\n\n  // Cualquier otro formato es inválido: no se inventa el país\n  return \"\";\n}\n\n// --------------------------------------------------\n// NORMALIZAR TELÉFONOS\n// --------------------------------------------------\nitem.pilot_phone = normalizarTelefono(item.pilot_phone);\nitem.pilot_cellphone = normalizarTelefono(item.pilot_cellphone);\n\n// --------------------------------------------------\n// DATOS\n// --------------------------------------------------\nconst nombre = item.pilot_firstname && item.pilot_lastname\n  ? `${item.pilot_firstname} ${item.pilot_lastname}`\n  : item.pilot_firstname || item.pilot_lastname || \"No aclarado\";\n\nconst modelo = item.pilot_product_of_interest || \"No aclarado\";\n\nconst imagen = \"ford_mensajeria_20261002_102302.jpg\";\n\nconst idQuery = String(item.id || \"0\");\n\n// --------------------------------------------------\n// CONTENT VARIABLES\n// --------------------------------------------------\nconst variables = {\n  \"1\": nombre,\n  \"2\": modelo,\n  \"3\": imagen,\n  \"4\": idQuery\n};\n\n// --------------------------------------------------\n// TEMPLATE\n// --------------------------------------------------\nconst template_id = \"HX7d117616da551b021f9c37b6b73b7257\";\n\n// --------------------------------------------------\n// DEVOLVER\n// --------------------------------------------------\nreturn [\n  {\n    json: {\n      ContentVariables: JSON.stringify(variables),\n      template_id: template_id,\n\n      // Mantener todos los datos originales\n      ...item,\n\n      debug: {\n        nombreOriginal: nombre,\n        modeloOriginal: modelo,\n        imagenSeleccionada: imagen,\n        idQuery: idQuery,\n        telefono: item.pilot_cellphone || item.pilot_phone || \"\"\n      }\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -560,
+        -304
+      ],
+      "id": "c81ff129-1190-4f9c-8d16-cfd624fd9f94",
+      "name": "Code1"
+    },
+    {
+      "parameters": {
+        "content": "## Codigo:\nSELECT *\nFROM ford_colombia\nWHERE status = 'sent'\n  AND COALESCE(status_changed_at, created_at) < UTC_TIMESTAMP() - INTERVAL 2 HOUR\n  AND COALESCE(status_changed_at, created_at) > UTC_TIMESTAMP() - INTERVAL 24 HOUR;\nCaso de prueba pra leads sin rta en 2 horas\n[\n  {\n    \"id\": 472,\n    \"action\": \"create\",\n    \"pilot_firstname\": \"Lichon\",\n    \"pilot_lastname\": \"Redoo\",\n    \"pilot_second_lastname\": \"\",\n    \"pilot_phone\": \"\",\n    \"pilot_cellphone\": \"3226514330\",\n    \"pilot_email\": \"juliana.sanchez.pilot@gmail.com\",\n    \"pilot_contact_type_id\": \"1\",\n    \"pilot_business_type_code\": \"ford_vehiculo\",\n    \"pilot_suborigin_id\": \"ec_otros\",\n    \"pilot_provider_service\": \"Autoland - San Diego\",\n    \"pilot_notes\": \"Notas:test//Campaña:Leads Redoo\",\n    \"pilot_product_of_interest\": \"Expedition\",\n    \"pilot_client_identity_document\": \"\",\n    \"pilot_tracking_id\": \"577929C2-0642-4EB8-AA09-6A79C9F9D007\",\n    \"status\": \"sent\",\n    \"status_changed_at\": null,\n    \"created_at\": \"2026-10-05 13:22:21\",\n    \"updated_at\": \"2026-10-05 13:22:21\"\n  }\n]\n",
+        "height": 352,
+        "width": 752
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -2976,
+        208
+      ],
+      "id": "2b1eeda4-14ad-48bc-8813-499f0c124a11",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "## datos de prueba:\n[\n  {\n    \"id\": 472,\n    \"action\": \"create\",\n    \"pilot_firstname\": \"Lichon\",\n    \"pilot_lastname\": \"Redoo\",\n    \"pilot_second_lastname\": \"\",\n    \"pilot_phone\": \"\",\n    \"pilot_cellphone\": \"3226514330\",\n    \"pilot_email\": \"juliana.sanchez.pilot@gmail.com\",\n    \"pilot_contact_type_id\": \"1\",\n    \"pilot_business_type_code\": \"ford_vehiculo\",\n    \"pilot_suborigin_id\": \"ec_otros\",\n    \"pilot_provider_service\": \"Autoland - San Diego\",\n    \"pilot_notes\": \"Notas:test//Campaña:Leads Redoo\",\n    \"pilot_product_of_interest\": \"Expedition\",\n    \"pilot_client_identity_document\": \"\",\n    \"pilot_tracking_id\": \"FBAFD810-08CD-4D74-A821-A20BB83EDB66\",\n    \"status\": \"recontacted\",\n    \"status_changed_at\": \"2026-10-05 13:46:55\",\n    \"created_at\": \"2026-10-05 13:22:21\",\n    \"updated_at\": \"2026-10-05 13:46:55\"\n  }\n]"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -2912,
+        -1008
+      ],
+      "id": "177bf818-e0e7-46f0-b962-b218ab1c6ad4",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "## +2h despues del 3er recordatorio: cerrar y derivar al call center",
+        "height": 304,
+        "width": 3312,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -3152,
+        -832
+      ],
+      "id": "707bb7e5-b327-4ea4-8876-aae69d7f5686",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "content": "## Enviar Recordatorio",
+        "height": 560,
+        "width": 3280,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -3136,
+        -416
+      ],
+      "id": "fd9f7bf2-88b4-45ce-884a-de83af04aa2b",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.pilotsolution.net/v1/welcomes/update.php",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"data\": {\n    \"id\": \"{{ $('Loop Over Items').item.json.pilot_tracking_id }}\",\n    \"interest_level_code\": \"1\",\n    \"notes\": \"INTERES: Frío | Pilot Comentario: {{ $json.pilot_notes }}\"\n  },\n  \"header\": {\n    \"FlowName\": \"update_prospect\",\n    \"SequenceId\": 1,\n    \"TimeStamp\": 1248377,\n    \"TrackingId\": \"FD1C4A1A-CAFB-467E-825B-7FFB86CC21E3\",\n    \"access_token\": \"{{ $('Login1').item.json.result.entitydata.session.identityToken }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "0395c6bb-9f5d-4b45-8f6c-2d4743a24261",
+      "name": "updateLead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1536,
+        -736
+      ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.pilotsolution.net/v1/welcomes/assign.php",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"data\": {\n    \"id\": \"{{ $('Loop Over Items').item.json.pilot_tracking_id }}\",\n    \"to_type\": \"huntGroup\",\n    \"to_entity_id\": \"9214\",\n    \"comment\": \"Asignado por el bot tras calificar el lead\"\n  },\n  \"header\": {\n    \"FlowName\": \"lead_assign_to_huntgroup\",\n    \"SequenceId\": 1,\n    \"TimeStamp\": 1248377,\n    \"TrackingId\": \"FD1C4A1A-CAFB-467E-825B-7FFB86CC21E3\",\n    \"access_token\": \"{{ $('Login1').item.json.result.entitydata.session.identityToken }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "488efb41-c1bf-4278-b658-c529d063a656",
+      "name": "AsignarLead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -672,
+        -736
+      ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT *\nFROM ford_colombia\nWHERE asignacion IS NOT NULL\nORDER BY created_at DESC\nLIMIT 1;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        -1344,
+        -736
+      ],
+      "id": "988a9298-73c8-407a-b01f-e65d89f0f218",
+      "name": "TRAER_lead4",
+      "alwaysOutputData": true,
+      "credentials": {
+        "mySql": {
+          "id": "Vl0rIdPXBmN5yKfQ",
+          "name": "MSQL-FORD-COLOMBIA"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nreturn items.map(item => {\n  const data = item.json;\n\n  const contacto = 'contacto@grupoobc.com.co';\n  const contacto1 = 'contacto1@grupoobc.com.co';\n\n  // Si ya tiene asignación, alternar\n  if (data.asignacion === contacto) {\n    data.asignacion = contacto1;\n  } \n  else if (data.asignacion === contacto1) {\n    data.asignacion = contacto;\n  } \n  // Si es null, vacío o no existe, elegir aleatoriamente\n  else if (\n    data.asignacion === null ||\n    data.asignacion === undefined ||\n    String(data.asignacion).trim() === ''\n  ) {\n    data.asignacion = Math.random() < 0.5\n      ? contacto\n      : contacto1;\n  }\n\n  return {\n    json: data\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1120,
+        -736
+      ],
+      "id": "3df9b8e8-f459-4c59-b8cb-be63044681ba",
+      "name": "Code2"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.pilotsolution.net/v1/welcomes/read.php",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"data\": {\n    \"id\": \"{{ $('Loop Over Items').item.json.pilot_tracking_id }}\"\n  },\n  \"header\": {\n    \"FlowName\": \"lead_read\",\n    \"SequenceId\": 1,\n    \"TimeStamp\": 1248377,\n    \"TrackingId\": \"FD1C4A1A-CAFB-467E-825B-7FFB86CC21E3\",\n    \"access_token\": \"{{ $('Login1').item.json.result.entitydata.session.identityToken }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "fb9f736b-f9e4-4ab0-a810-f7a45254b83e",
+      "name": "verLead-Asignado",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -512,
+        -736
+      ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "table": {
+          "__rl": true,
+          "value": "ford_colombia",
+          "mode": "list",
+          "cachedResultName": "ford_colombia"
+        },
+        "dataMode": "defineBelow",
+        "columnToMatchOn": "id",
+        "valueToMatchOn": "={{ $('Loop Over Items').item.json.id }}",
+        "valuesToSend": {
+          "values": [
+            {
+              "column": "status",
+              "value": "good_lead"
+            },
+            {
+              "column": "status_changed_at",
+              "value": "={{ $now }}"
+            },
+            {
+              "column": "grado_interes",
+              "value": "Frío"
+            },
+            {
+              "column": "lead",
+              "value": "good_lead"
+            },
+            {
+              "column": "reason",
+              "value": "={{ $('Loop Over Items').item.json.contesto == 1 ? 'Respondió pero no terminó la conversación con el bot' : 'No respondio el recontacto' }}"
+            },
+            {
+              "column": "asignacion",
+              "value": "={{ $('Code2').item.json.asignacion }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        -352,
+        -736
+      ],
+      "name": "Actualizar Lead, con la asignacion",
+      "id": "5d666f39-a575-4bfd-a3b9-e24dae5a2282",
+      "credentials": {
+        "mySql": {
+          "id": "Vl0rIdPXBmN5yKfQ",
+          "name": "MSQL-FORD-COLOMBIA"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.statusCode }}",
+              "operation": "equal",
+              "value2": 200
+            }
+          ]
+        }
+      },
+      "id": "5b5c8cc9-22f3-473b-b9cb-8db84967b3b5",
+      "name": "¿Hay saldo?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -1424,
+        -288
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api-redoo.up.railway.app/api/v1/companies/me/outbound-jobs",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "44a129c4ad2cb5b0d33e92c5c18437e487ccdc2ecb729fb35d95f5dc20ee5952"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.body_string }}",
+        "options": {}
+      },
+      "id": "9d5f8b74-96e0-49ca-abfd-d93c8ec55da3",
+      "name": "Guardar job pendiente",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -560,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api-redoo.up.railway.app/api/v1/companies/me/messages-balance/consume",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "44a129c4ad2cb5b0d33e92c5c18437e487ccdc2ecb729fb35d95f5dc20ee5952"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({}) }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "563e7fb7-fffc-4440-9a64-a7d8e3691106",
+      "name": "Consume − Envios",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1712,
+        -256
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $(\"Loop Over Items1\").first().json;\n\n// --------------------------------------------------\n// NORMALIZAR TELÉFONO\n// --------------------------------------------------\nfunction normalizarTelefono(telefono) {\n  // Solo dígitos, sin el 00 internacional\n  let numero = String(telefono || \"\").replace(/\\D/g, \"\");\n  if (numero.startsWith(\"00\")) numero = numero.slice(2);\n\n  if (/^57\\d{10}$/.test(numero)) return numero;         // Colombia con código: 573163127436\n  if (/^3\\d{9}$/.test(numero)) return \"57\" + numero;    // Celular Colombia: 3163127436 -> 573163127436\n  if (/^54\\d{10,11}$/.test(numero)) return numero;      // Argentina con código (pruebas): 5491131438902\n  if (/^11\\d{8}$/.test(numero)) return \"549\" + numero;  // Argentina CABA sin código (pruebas): 1131438902\n\n  // Cualquier otro formato es inválido: no se inventa el país\n  return \"\";\n}\n\nconst pilot_phone = normalizarTelefono(item.pilot_phone);\nconst pilot_cellphone = normalizarTelefono(item.pilot_cellphone);\n\n// --------------------------------------------------\n// DATOS\n// --------------------------------------------------\nconst nombre = item.pilot_firstname && item.pilot_lastname\n  ? `${item.pilot_firstname} ${item.pilot_lastname}`\n  : item.pilot_firstname || item.pilot_lastname || \"No aclarado\";\n\nconst modelo = item.pilot_product_of_interest || \"No aclarado\";\nconst imagen = \"ford_mensajeria_20261002_102302.jpg\";\nconst idQuery = String(item.id || \"0\");\n\n// --------------------------------------------------\n// CONTENT VARIABLES + TEMPLATE\n// --------------------------------------------------\nconst variables = {\n  \"1\": nombre,\n  \"2\": modelo,\n  \"3\": imagen,\n  \"4\": idQuery\n};\n\nconst template_id = \"HXb85c3300617b379cd9daad103f58e178\";\n\n// --------------------------------------------------\n// TELÉFONO DESTINO\n// --------------------------------------------------\nconst tel = String(pilot_cellphone || pilot_phone || \"\").replace(/^\\+/, \"\");\n\n// --------------------------------------------------\n// BODY FINAL\n// --------------------------------------------------\nconst body = {\n  channel: \"whatsapp\",\n  to_phone: \"+\" + tel,\n  from_phone: \"+15559562100\",\n  account_sid: \"TWILIO_SID_OCULTO\",\n  messaging_service_sid: \"MG5a0f4bf8dac1aed676cc847ca9334550\",\n  content_sid: template_id,\n  content_variables: JSON.stringify(variables),\n  twilio_credential_ref: \"FORD COLOMBIA\",\n  payload_json: {\n    lead_id: item.id,\n    action: item.action,\n    firstname: item.pilot_firstname,\n    lastname: item.pilot_lastname,\n    second_lastname: item.pilot_second_lastname,\n    phone: pilot_phone,\n    cellphone: pilot_cellphone,\n    email: item.pilot_email,\n    contact_type_id: item.pilot_contact_type_id,\n    business_type_code: item.pilot_business_type_code,\n    suborigin_id: item.pilot_suborigin_id,\n    provider_service: item.pilot_provider_service,\n    notes: item.pilot_notes,\n    product_of_interest: item.pilot_product_of_interest,\n    identity_document: item.pilot_client_identity_document,\n    tracking_id: item.pilot_tracking_id\n  },\n  source: \"ford_colombia_pilot_webhook\"\n};\n\n// --------------------------------------------------\n// DEVOLVER\n// --------------------------------------------------\nreturn [\n  {\n    json: {\n      body,                                // objeto listo para enviar\n      body_string: JSON.stringify(body),   // por si lo necesitas como string\n      template_id,\n      ContentVariables: JSON.stringify(variables),\n      ...item,\n      pilot_phone,\n      pilot_cellphone\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -928,
+        -144
+      ],
+      "id": "b755941e-d519-4bac-b3b1-9fdb104dda57",
+      "name": "Code3"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Nodo Code - Modo: \"Run Once for All Items\"\n// Quita comillas de pilot_notes y devuelve el resto igual\n\nconst limpiar = (texto) => {\n  if (typeof texto !== 'string') return texto;\n  return texto.replace(/[\"'“”‘’«»`´]/g, '');\n};\n\nreturn $('Loop Over Items').all().map(item => {\n  return {\n    json: {\n      ...item.json,\n      pilot_notes: limpiar(item.json.pilot_notes),\n    },\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1744,
+        -736
+      ],
+      "id": "49a13643-58b6-4429-b56f-5e43d58f8d03",
+      "name": "Code4"
+    },
+    {
+      "parameters": {
+        "amount": 3
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -912,
+        -720
+      ],
+      "id": "9877baf7-8a10-4360-bb1d-185787d1bdd1",
+      "name": "Wait",
+      "webhookId": "eeb86416-795b-4a45-9da6-9e8c5cd578e0"
+    },
+    {
+      "parameters": {
+        "amount": 4
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -2112,
+        -704
+      ],
+      "id": "405c2454-050e-4331-8eed-6d8732b47eeb",
+      "name": "Wait1",
+      "webhookId": "eeb86416-795b-4a45-9da6-9e8c5cd578e0"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://leads.redooconect.com.ar/api/v1/leads",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-KEY",
+              "value": "44a129c4ad2cb5b0d33e92c5c18437e487ccdc2ecb729fb35d95f5dc20ee5952"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"first_name\": \"{{$('Code4').first().json.pilot_firstname  || 'No_ofrecido'}}\",\n  \"priority\": \"low\",\n  \"phone\": \"{{ $('Code4').item.json.pilot_cellphone }}\",\n  \"source\": \"good_lead\",\n  \"notes\": \"Frío - No respondio el recontacto\"\n}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -176,
+        -736
+      ],
+      "id": "ba81424e-ae12-4347-ac00-ccd0b0be541a",
+      "name": "LEADS1",
+      "retryOnFail": false,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT f.id\nFROM ford_colombia f\nWHERE f.id = $1\n  AND f.envio = 1\n  AND (f.envio_reason IS NULL OR f.envio_reason NOT IN ('encolado', 'recordatorio_encolado'))\n  AND f.contesto = 0\n  AND f.rechazo_template = 0\n  AND (f.status IS NULL OR f.status <> 'answered')\n  AND NOT EXISTS (\n        SELECT 1 FROM ford_colombia b\n        WHERE b.pilot_cellphone = f.pilot_cellphone\n          AND b.contesto = 1\n          AND b.created_at >= f.created_at\n  );",
+        "options": {
+          "queryReplacement": "={{ String($('Loop Over Items1').item.json.id) }}"
+        }
+      },
+      "id": "c887222b-e38e-4daa-96ba-badf7b88165c",
+      "name": "Revalidar lead",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        -2160,
+        -256
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "mySql": {
+          "id": "Vl0rIdPXBmN5yKfQ",
+          "name": "MSQL-FORD-COLOMBIA"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a1b2c3d4-0000-4000-8000-000000000001",
+              "leftValue": "={{ !!$json.id }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "d4c47585-7b7a-4e38-aa6e-4316577300cf",
+      "name": "¿Sigue sin contestar?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1984,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE ford_colombia\nSET envio_reason = 'recordatorio_encolado', status = 'encolado', status_changed_at = NOW()\nWHERE id = $1;",
+        "options": {
+          "queryReplacement": "={{ String($('Loop Over Items1').item.json.id) }}"
+        }
+      },
+      "id": "84ea5a89-1264-4551-8b6a-ff98a403dbab",
+      "name": "Marcar recordatorio encolado",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        -384,
+        -80
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "Vl0rIdPXBmN5yKfQ",
+          "name": "MSQL-FORD-COLOMBIA"
+        }
+      }
+    },
+    {
+      "id": "733743ad-7635-4454-bf61-86758ee5d370",
+      "name": "Cada 15 min (normalizar)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -3040,
+        -400
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "9ba444c5-f9b4-4e6e-80c8-3006af91ada3",
+      "name": "Normalizar leads cerrados (formato reporte)",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        -2800,
+        -400
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Deja los leads igual que el reporte de octubre cuando el recordatorio ya no los toca:\n-- status sent/failed, un solo 1 en envio/reenvio_1/2/3 (intento en que respondio o el ultimo enviado), reminder_count = ese intento - 1.\n-- bad_lead = no se le pudo enviar/entregar: siempre failed y sin envios marcados.\n-- Toma: cerrados (good/bad), los que respondieron y los que no cambian hace mas de 2 dias. Nunca los encolados.\n-- Se puede correr muchas veces: lo ya normalizado no cambia. El orden de los SET importa (MySQL usa los valores ya actualizados).\nUPDATE ford_colombia SET\n  status = IF(`lead` = 'bad_lead' OR (contesto = 0 AND envio = 0 AND reenvio_1 = 0 AND reenvio_2 = 0 AND reenvio_3 = 0), 'failed', 'sent'),\n  reminder_count = IF(`lead` = 'bad_lead', 0, CASE WHEN reenvio_3 = 1 THEN 3 WHEN reenvio_2 = 1 THEN 2 WHEN reenvio_1 = 1 THEN 1 ELSE 0 END),\n  envio     = IF(`lead` = 'bad_lead', 0, (envio = 1 OR contesto = 1) AND reenvio_1 = 0 AND reenvio_2 = 0 AND reenvio_3 = 0),\n  reenvio_1 = IF(`lead` = 'bad_lead', 0, reenvio_1 = 1 AND reenvio_2 = 0 AND reenvio_3 = 0),\n  reenvio_2 = IF(`lead` = 'bad_lead', 0, reenvio_2 = 1 AND reenvio_3 = 0),\n  reenvio_3 = IF(`lead` = 'bad_lead', 0, reenvio_3)\nWHERE status <> 'encolado'\n  AND (`lead` IN ('good_lead', 'bad_lead')\n       OR contesto = 1\n       OR COALESCE(status_changed_at, created_at) < UTC_TIMESTAMP() - INTERVAL 2 DAY);",
+        "options": {}
+      },
+      "credentials": {
+        "mySql": {
+          "id": "Vl0rIdPXBmN5yKfQ",
+          "name": "MSQL-FORD-COLOMBIA"
+        }
+      }
+    },
+    {
+      "id": "10dfc98e-12e7-4130-a831-2baacb7e775d",
+      "name": "Registrar SID para devolver crédito",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -100,
+        -84
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api-redoo.up.railway.app/api/v1/companies/me/twilio-messages/track",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "44a129c4ad2cb5b0d33e92c5c18437e487ccdc2ecb729fb35d95f5dc20ee5952"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ twilio_sid: $json.sid }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "beca52c4-3d1f-4a7b-8aaa-2bf53abfa977",
+      "name": "Ver entrega en Twilio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1944,
+        -536
+      ],
+      "parameters": {
+        "url": "={{ 'https://api.twilio.com/2010-04-01/Accounts/TWILIO_SID_OCULTO/Messages.json?PageSize=20&To=' + encodeURIComponent('whatsapp:+' + ((d) => d.length === 10 ? '57' + d : d)(String($('Loop Over Items').item.json.pilot_cellphone || '').replace(/\\D/g, ''))) }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "options": {}
+      },
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "PJ6kN2pExPrUnwn0",
+          "name": "FORD COLOMBIA"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "id": "4648d0cf-ba25-40cf-ba63-db853665eb62",
+      "name": "¿Le llegó algún mensaje?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -1744,
+        -536
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "b7c1e2a0-1111-4000-8000-000000000001",
+              "leftValue": "={{ !Array.isArray($json.messages) || $json.messages.some(m => ['sent', 'delivered', 'read'].includes(m.status)) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "5a3fd670-5c53-4e26-aa0a-edcc1f54da06",
+      "name": "Marcar good lead en Pilot",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -432,
+        -560
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.pilotsolution.net/v1/welcomes/qualification/good.php",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"data\": {\n    \"id\": \"{{ $('Loop Over Items').item.json.pilot_tracking_id }}\"\n  },\n  \"header\": {\n    \"FlowName\": \"lead_good\",\n    \"SequenceId\": 1,\n    \"TimeStamp\": 1248377,\n    \"TrackingId\": \"FD1C4A1A-CAFB-467E-825B-7FFB86CC21E3\",\n    \"access_token\": \"{{ $('Login1').item.json.result.entitydata.session.identityToken }}\"\n  }\n}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "e02c57c8-de8b-4ad9-b438-57057ba96ebc",
+      "name": "¿Pilot confirmó?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -352,
+        -560
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "pilot-ok-0001",
+              "leftValue": "={{ ($('updateLead').item.json.result || {}).status === 'success' && ($('AsignarLead').item.json.result || {}).status === 'success' && (($json.result || {}).status === 'success' || String(($json.result || {}).message || '').includes('ya se encuentra calificado')) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d8618395-3567-4ba4-89de-f19dcb811abd",
+      "name": "¿Reintentar Pilot?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -160,
+        -400
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "pilot-retry-0001",
+              "leftValue": "={{ $runIndex < 2 }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "b5d7f3dd-e0e0-4399-9a40-d453c99fd4dd",
+      "name": "Esperar 65s (Pilot)",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        32,
+        -400
+      ],
+      "parameters": {
+        "amount": 65
+      },
+      "webhookId": "ecd7d771-6139-4345-b88f-57a15622ca10"
+    },
+    {
+      "id": "27cb5be2-5fde-4988-b973-f7cfd63f411c",
+      "name": "Marcar error Pilot",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        32,
+        -240
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE ford_colombia\nSET status = 'good_lead', `lead` = 'good_lead', grado_interes = 'Frío',\n    reason = 'Pilot no confirmó la calificación (Frío)', status_changed_at = NOW()\nWHERE id = $1;",
+        "options": {
+          "queryReplacement": "={{ String($('Loop Over Items').item.json.id) }}"
+        }
+      },
+      "credentials": {
+        "mySql": {
+          "id": "Vl0rIdPXBmN5yKfQ",
+          "name": "MSQL-FORD-COLOMBIA"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate"
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "vHYnerAaqyWy7nI4",
+      "projectId": "K8p6XEqA0L6D2uVt",
+      "createdAt": "2026-10-02T19:14:46.194Z",
+      "updatedAt": "2026-10-02T19:14:46.194Z"
+    }
+  ],
+  "staticData": {
+    "node:Schedule Trigger": {
+      "recurrenceRules": [
+        null
+      ],
+      "recurrenceRuleSignatures": [
+        null
+      ]
+    },
+    "node:Schedule Trigger1": {
+      "recurrenceRules": [
+        null
+      ],
+      "recurrenceRuleSignatures": [
+        null
+      ]
+    },
+    "node:Cada 15 min (normalizar)": {
+      "recurrenceRules": [
+        null
+      ],
+      "recurrenceRuleSignatures": [
+        null
+      ]
+    }
+  },
+  "tags": [
+    {
+      "id": "GFL2qtCXT5OvIino",
+      "name": "Ford-colombia",
+      "createdAt": "2026-10-26T17:11:25.676Z",
+      "updatedAt": "2026-10-26T17:11:25.676Z"
+    },
+    {
+      "id": "o06GHXtTLtAfQDke",
+      "name": "HUB",
+      "createdAt": "2026-02-03T14:47:40.022Z",
+      "updatedAt": "2026-02-03T14:47:40.022Z"
+    }
+  ],
+  "triggerCount": 4,
+  "updatedAt": "2026-11-24T16:48:27.909Z",
+  "versionId": "7e382203-4390-4e25-bc58-5fc24697c6bf"
+}
