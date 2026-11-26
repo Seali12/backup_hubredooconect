@@ -1,0 +1,1491 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "bdddeab5-6061-4cec-a764-42284b0a4f71",
+    "workflowId": "uBEHwr8R4pEKXUPX",
+    "nodes": [
+      {
+        "parameters": {
+          "workflowInputs": {
+            "values": [
+              {
+                "name": "Id_Calendario"
+              },
+              {
+                "name": "Fecha"
+              },
+              {
+                "name": "hora_inicio"
+              },
+              {
+                "name": "hora_fin"
+              },
+              {
+                "name": "duracion_servicio"
+              },
+              {
+                "name": "Descripcion"
+              },
+              {
+                "name": "Titulo"
+              },
+              {
+                "name": "Fin"
+              },
+              {
+                "name": "Modelo"
+              },
+              {
+                "name": "Tiempo_Modelo"
+              },
+              {
+                "name": "Calendar"
+              },
+              {
+                "name": "idConversation"
+              },
+              {
+                "name": "Fallback_Aplicado"
+              }
+            ]
+          }
+        },
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "typeVersion": 1.1,
+        "position": [
+          -528,
+          928
+        ],
+        "id": "3d744312-c63f-49d1-8244-af50aba16a4b",
+        "name": "When Executed by Another Workflow"
+      },
+      {
+        "parameters": {
+          "jsCode": "function timeToMinutes(t) {\n  const [h, m] = t.split(':').map(Number);\n  return h * 60 + m;\n}\nfunction minutesToTime(min) {\n  const h = Math.floor(min / 60).toString().padStart(2, '0');\n  const m = (min % 60).toString().padStart(2, '0');\n  return `${h}:${m}`;\n}\n\n// El horario calculado por el AI Agent corresponde a la llegada del cliente;\n// el turno real en la agenda arranca y termina 15 minutos después (tiempo de recepción)\nconst data = $input.first().json.output || $input.first().json;\n\nconst fechaParte = data.Fecha.split('T')[0];\nconst horaInicio = data.Fecha.split('T')[1].substring(0, 5);\nconst horaFin = data.Fin.split('T')[1].substring(0, 5);\n\nconst nuevaHoraInicio = minutesToTime(timeToMinutes(horaInicio) + 15);\nconst nuevaHoraFin = minutesToTime(timeToMinutes(horaFin) + 15);\n\nconst nuevaFecha = `${fechaParte}T${nuevaHoraInicio}:00`;\nconst nuevoFin = `${fechaParte}T${nuevaHoraFin}:00`;\n\nreturn [{\n  json: {\n    output: {\n      ...data,\n      Fecha: nuevaFecha,\n      Fin: nuevoFin,\n      hora_inicio: nuevaHoraInicio,\n      hora_fin: nuevaHoraFin\n    }\n  }\n}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          448,
+          1056
+        ],
+        "id": "5717a298-cc5a-45f5-9155-58d50fc2944c",
+        "name": "Sumar 15min Recepcion"
+      },
+      {
+        "parameters": {
+          "calendar": {
+            "__rl": true,
+            "value": "={{ $json.Calendar }}",
+            "mode": "id"
+          },
+          "start": "={{ $json.Fecha }}",
+          "end": "={{ $json.Fin }}",
+          "additionalFields": {
+            "description": "={{ $json.Descripcion }}",
+            "summary": "={{ $json.Titulo }}"
+          }
+        },
+        "type": "n8n-nodes-base.googleCalendar",
+        "typeVersion": 1.3,
+        "position": [
+          400,
+          720
+        ],
+        "id": "fbf6e6f8-7068-4af9-bde7-ff4f6f7806cb",
+        "name": "Create an event2",
+        "credentials": {
+          "googleCalendarOAuth2Api": {
+            "id": "QOb8WX49Qkxe1yfG",
+            "name": "Google Calendar account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "documentId": {
+            "__rl": true,
+            "value": "1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM",
+            "mode": "list",
+            "cachedResultName": "Del Pilar MANTENIMIENTO",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": 323427792,
+            "mode": "list",
+            "cachedResultName": "Tabla Horarios Taller",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM/edit#gid=323427792"
+          },
+          "filtersUI": {
+            "values": [
+              {
+                "lookupColumn": "Taller",
+                "lookupValue": "NORDELTA"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.7,
+        "position": [
+          -80,
+          720
+        ],
+        "id": "1a1bf2d7-dc1a-41de-a14e-fc23ca30758b",
+        "name": "Get_Reglas1",
+        "retryOnFail": true,
+        "maxTries": 5,
+        "waitBetweenTries": 5000,
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "ZDmT59glKYmZVPyM",
+            "name": "Google Sheets account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "// 🔧 Utilidades\nfunction sumarMinutos(fechaStr, minutos) {\n  const fecha = new Date(fechaStr);\n  if (isNaN(fecha)) throw new Error(`Fecha inválida: ${fechaStr}`);\n  fecha.setMinutes(fecha.getMinutes() + minutos);\n  const [fechaPart, horaPart] = fecha.toISOString().split(\"T\");\n  const horaLocal = horaPart.substring(0, 5);\n  return `${fechaPart}T${horaLocal}:00`;\n}\n\nfunction tiempoAHorasMinutos(tiempoStr) {\n  const [h, m, s] = (tiempoStr || \"0:30:00\").split(\":\").map(Number);\n  return (h * 60) + (m || 0);\n}\n\n// 🧩 Obtener datos desde nodos\nconst raw = $(\"When Executed by Another Workflow\").all();\nconst modelo = $(\"Code7\").first()?.json?.modelo || null;\nconst tiempos = $(\"Get_Tiempo1\").first()?.json || {};\nconst reglas = $(\"Get_Reglas1\").first()?.json || {};\n\n// 🧹 Extraer correctamente los datos\nlet solicitud;\nif (Array.isArray(raw)) {\n  const first = raw[0];\n  solicitud = first.json?.query ? JSON.parse(first.json.query) : first.json;\n} else {\n  solicitud = raw.json?.query ? JSON.parse(raw.json.query) : raw;\n}\n\n// 🧩 Reconstruir Fecha y Fin si faltan\nif (!solicitud.Fin && solicitud.Fecha && solicitud.hora_fin) {\n  solicitud.Fin = `${solicitud.Fecha}T${solicitud.hora_fin}:00`;\n}\nif (!solicitud.hora_inicio && solicitud.Fecha && solicitud.hora_inicio) {\n  solicitud.Fecha = `${solicitud.Fecha}T${solicitud.hora_inicio}:00`;\n} else if (!solicitud.Fecha.includes(\"T\") && solicitud.hora_inicio) {\n  solicitud.Fecha = `${solicitud.Fecha}T${solicitud.hora_inicio}:00`;\n}\n\n// 🚨 Validar\nif (!solicitud.Fecha || !solicitud.Fin) {\n  return [{\n    json: {\n      error: \"Faltan campos requeridos\",\n      solicitud,\n      tieneFecha: !!solicitud.Fecha,\n      tieneFin: !!solicitud.Fin,\n    },\n  }];\n}\n\n// 🕐 Calcular tiempos\nconst tiempoModeloStr = modelo && tiempos[modelo] ? tiempos[modelo] : \"0:30:00\";\nconst minutosModelo = tiempoAHorasMinutos(tiempoModeloStr) || 30;\n\n// Nueva hora de inicio (+15 min de recepción)\nconst nuevaFechaInicio = sumarMinutos(solicitud.Fecha, 15);\n\n// Nuevo fin (+tiempo del modelo)\nlet nuevoFin = sumarMinutos(nuevaFechaInicio, minutosModelo);\n\n// ✅ Devolver resultado final\nreturn [{\n  json: {\n    ...solicitud,\n    Fecha: nuevaFechaInicio,\n    Fin: nuevoFin,\n    Modelo: modelo || \"Desconocido\",\n    Tiempo_Modelo: tiempoModeloStr,\n    Calendar: reglas.Id_Calendario || \"54e76531d432c15df73ed90e6cca47c95605c52085b9f491bb1b0ddac0fd7818@group.calendar.google.com\",\n    Fallback_Aplicado: !modelo || !tiempos[modelo],\n  },\n}];\n"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          272,
+          720
+        ],
+        "id": "cd5a1b6d-15e4-4792-a426-b12321564d02",
+        "name": "Code6"
+      },
+      {
+        "parameters": {
+          "documentId": {
+            "__rl": true,
+            "value": "1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM",
+            "mode": "list",
+            "cachedResultName": "Del Pilar MANTENIMIENTO",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": 1939395583,
+            "mode": "list",
+            "cachedResultName": "Tabla Tiempo Mantenimiento",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM/edit#gid=1939395583"
+          },
+          "filtersUI": {
+            "values": [
+              {
+                "lookupColumn": "KM",
+                "lookupValue": "={{ $json.kilometraje }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.7,
+        "position": [
+          160,
+          720
+        ],
+        "id": "e4010c16-f387-4dc7-b2cf-40ec2e17d1b3",
+        "name": "Get_Tiempo1",
+        "retryOnFail": true,
+        "waitBetweenTries": 5000,
+        "maxTries": 5,
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "ZDmT59glKYmZVPyM",
+            "name": "Google Sheets account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "// 🚗 Lista de modelos posibles\nconst MODELOS = [\n  \"Etios\",\n  \"Yaris\",\n  \"Yaris GR\",\n  \"Corolla\",\n  \"Prius\",\n  \"Rav4\",\n  \"Innova\",\n  \"Hilux\",\n  \"SW4\",\n  \"Hiace\",\n  \"CH-R\",\n  \"Camry\",\n  \"Land Cruiser\"\n];\n\n// 🧩 Función para extraer datos del nodo anterior\nfunction extraerDatos(input) {\n  let datos;\n\n  // si viene en formato array con .json.query\n  if (Array.isArray(input)) {\n    const first = input[0];\n    if (first.json?.query) {\n      datos = typeof first.json.query === \"string\" ? JSON.parse(first.json.query) : first.json.query;\n    } else if (first.json) {\n      datos = first.json;\n    } else {\n      datos = first;\n    }\n  } else if (input.json?.query) {\n    datos = typeof input.json.query === \"string\" ? JSON.parse(input.json.query) : input.json.query;\n  } else if (input.query) {\n    datos = typeof input.query === \"string\" ? JSON.parse(input.query) : input.query;\n  } else {\n    datos = input;\n  }\n\n  return datos;\n}\n\n// 🧮 Buscar modelo en texto\nfunction detectarModelo(texto) {\n  for (const modelo of MODELOS) {\n    const regex = new RegExp(`\\\\b${modelo}\\\\b`, \"i\");\n    if (regex.test(texto)) return modelo;\n  }\n  return null;\n}\n\n// 🧮 Buscar kilometraje en texto\nfunction detectarKilometraje(texto) {\n  const match = texto.match(/(\\d{1,3}(?:\\.\\d{3})*|\\d+)\\s*km/i);\n  if (match) {\n    const km = match[1].replace(/\\./g, \"\");\n    return parseInt(km, 10);\n  }\n  return null;\n}\n\n// 🔹 Obtener datos correctamente desde el nodo anterior\nconst raw = $(\"When Executed by Another Workflow\").all();\nconst solicitud = extraerDatos(raw);\n\n// 🔍 Buscar modelo y km\nconst textoBusqueda = `${solicitud.Descripcion || \"\"} ${solicitud.Titulo || \"\"}`;\nconst modeloDetectado = detectarModelo(textoBusqueda);\nconst kmDetectado = detectarKilometraje(textoBusqueda);\n\n// 🧾 Devolver resultado\nreturn [\n  {\n    json: {\n      modelo: modeloDetectado,\n      kilometraje: kmDetectado,\n      textoAnalizado: textoBusqueda // 👈 útil para debug\n    },\n  },\n];\n"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          32,
+          720
+        ],
+        "id": "46c1ad3c-bf1e-40a7-9a04-354e0469f5be",
+        "name": "Code7"
+      },
+      {
+        "parameters": {
+          "jsCode": "return [{\n  json: {\n    id_turno: $input.first().json.id,\n    id_calendario: $input.first().json.organizer.email,\n  }\n}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          528,
+          720
+        ],
+        "id": "8da5f0d0-f7e5-4f04-851d-2c142378d81f",
+        "name": "Code8"
+      },
+      {
+        "parameters": {
+          "operation": "removeItemsSeenInPreviousExecutions",
+          "dedupeValue": "={{ $json.idConversation }}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.removeDuplicates",
+        "typeVersion": 2,
+        "position": [
+          -272,
+          752
+        ],
+        "id": "0ffba160-ea5f-422c-a512-11ced8f23ce9",
+        "name": "Remove Duplicates2"
+      },
+      {
+        "parameters": {
+          "promptType": "define",
+          "text": "=recibis el turno a agendar: {{ $('When Executed by Another Workflow').item.json.Descripcion }}",
+          "hasOutputParser": true,
+          "needsFallback": true,
+          "options": {
+            "systemMessage": "=Recibís un turno de taller en formato JSON.\n\nTu tarea es ajustar el horario del turno utilizando las herramientas disponibles.\n\nRecibís estos campos:\n\nFecha del turno: {{ $('When Executed by Another Workflow').first().json.Fecha }}\n\nHora de inicio del turno: {{ $('When Executed by Another Workflow').first().json.hora_inicio }}\n\nHora de fin: {{ $('When Executed by Another Workflow').first().json.hora_fin }}\n\nduracion_servicio (este valor puede ser incorrecto y debe corroborarse con la tool): {{ $('When Executed by Another Workflow').first().json.duracion_servicio }}\n\nDescripcion: {{ $('When Executed by Another Workflow').first().json.Descripcion }}\n\nTitulo: {{ $('When Executed by Another Workflow').first().json.Titulo }}\n\nModelo de vehiculo: {{ $('When Executed by Another Workflow').first().json.Modelo }}\n\nTiempo de modelo: {{ $('When Executed by Another Workflow').first().json.Tiempo_Modelo }}\n\nId_Calendario: {{ $('When Executed by Another Workflow').first().json.Id_Calendario }}\n\nCalendar: {{ $('When Executed by Another Workflow').first().json.Calendar }}\n\nidConversation: {{ $('When Executed by Another Workflow').first().json.idConversation }}\n\nReglas:\n\n1. Extraé el kilometraje únicamente desde el campo \"Descripcion\".\n\nEjemplo:\n\n\"Kilometraje: 72000 km\"\n\n→ kilometraje = 72000\n\nNunca inventes kilometrajes.\n\nNunca utilices otro valor distinto al encontrado en Descripcion.\n\n2. Ejecutá la herramienta \"Get_reglas\".\n\nGuardá los datos devueltos.\n\n3. Ejecutá la herramienta \"Get_tiempos\" enviando el kilometraje extraído.\n\nDebés buscar exactamente el kilometraje obtenido de la descripción.\n\n4. Del resultado obtenido identificá el tiempo correspondiente al modelo indicado en el campo \"Modelo\".\n\nLa comparación debe ser exacta.\n\n5. Aplicá los siguientes cálculos:\n\n* Mantener exactamente la Fecha original recibida.\n* Mantener exactamente la hora_inicio original recibida.\n* Mantener exactamente todos los demás campos recibidos, salvo los que deban recalcularse.\n\nIMPORTANTE:\n\nLa hora de referencia para realizar los cálculos es SIEMPRE la hora incluida dentro del campo Fecha.\n\nNO utilizar hora_inicio para realizar cálculos.\n\nEjemplo:\n\nFecha = 2026-06-26T15:15:00\n\nTiempo_Modelo = 0:30:00\n\nResultado:\n\nFin = 2026-06-26T15:45:00\n\nhora_fin = 15:45\n\n6. Recalcular:\n\n* duracion_servicio\n* Fin\n* hora_fin\n\nutilizando exclusivamente el Tiempo_Modelo obtenido desde Get_tiempos.\n\n7. Fórmulas:\n\nduracion_servicio = minutos equivalentes al Tiempo_Modelo\n\nFin = Fecha + Tiempo_Modelo\n\nhora_fin = hora obtenida desde Fin en formato HH:mm\n\n8. Si no encontrás tiempo para el modelo:\n\n* usar Tiempo_Modelo = \"0:30:00\"\n* duracion_servicio = 30\n* Fallback_Aplicado = true\n\n9. Si encontrás tiempo para el modelo:\n\nFallback_Aplicado = false\n\n10. Calendar debe tomar el valor devuelto por Get_reglas.\n\nSi Get_reglas no devuelve Calendar válido, conservar el Calendar original.\n\n11. Id_Calendario y Calendar son campos distintos.\n\n* Nunca copiar Calendar dentro de Id_Calendario.\n* Nunca copiar Id_Calendario dentro de Calendar.\n* Id_Calendario debe conservar exactamente el valor recibido.\n* Calendar debe usar el valor obtenido desde Get_reglas o el original si no existe reemplazo.\n\n12. Conservar exactamente:\n\n* Fecha\n* hora_inicio\n* Descripcion\n* Titulo\n* Modelo\n* idConversation\n* Id_Calendario\n\n13. Devolver exclusivamente un objeto JSON válido.\n\nNo agregar explicaciones.\n\nNo agregar markdown.\n\nNo agregar texto adicional.\n\nEstructura obligatoria:\n\n{\n\"Id_Calendario\": \"{{ $('When Executed by Another Workflow').first().json.Id_Calendario }}\",\n\"Fecha\": \"{{ $('When Executed by Another Workflow').first().json.Fecha }}\",\n\"hora_inicio\": \"...\",\n\"hora_fin\": \"...\",\n\"duracion_servicio\": ...,\n\"Descripcion\": \"{{ $('When Executed by Another Workflow').first().json.Descripcion }}\",\n\"Titulo\": \"{{ $('When Executed by Another Workflow').first().json.Titulo }}\",\n\"Fin\": \"...\",\n\"Modelo\": \"{{ $('When Executed by Another Workflow').first().json.Modelo }}\",\n\"Tiempo_Modelo\": \"...\",\n\"Calendar\": \"...\",\n\"idConversation\": \"{{ $('When Executed by Another Workflow').first().json.idConversation }}\",\n\"Fallback_Aplicado\": true\n}\n\nValidaciones finales obligatorias antes de responder:\n\n* Verificar que el kilometraje fue extraído desde Descripcion.\n* Verificar que Get_reglas fue ejecutado antes que Get_tiempos.\n* Verificar que Tiempo_Modelo corresponde al kilometraje encontrado.\n* Verificar que Fin = Fecha + Tiempo_Modelo.\n* Verificar que hora_fin coincide con la hora resultante de Fin.\n* Verificar que hora_inicio no fue utilizada para los cálculos.\n* Verificar que Id_Calendario conserva exactamente el valor original.\n* Verificar que la salida es únicamente un JSON válido.\n",
+            "maxIterations": 6
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.agent",
+        "typeVersion": 2.2,
+        "position": [
+          -128,
+          944
+        ],
+        "id": "e9420341-93cf-46da-a3d0-57bfeb28f3a0",
+        "name": "AI Agent1",
+        "retryOnFail": true,
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "model": {
+            "__rl": true,
+            "value": "gpt-4o",
+            "mode": "list",
+            "cachedResultName": "gpt-4o"
+          },
+          "options": {
+            "temperature": 0.2
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1.2,
+        "position": [
+          -352,
+          1152
+        ],
+        "id": "7b9b6e71-12cd-4fbc-8cd8-c6ccd3b4b2af",
+        "name": "OpenAI Chat Model3",
+        "credentials": {
+          "openAiApi": {
+            "id": "aDI3wnbufE0mPuCr",
+            "name": "OpenAi account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "model": {
+            "__rl": true,
+            "value": "gpt-4o",
+            "mode": "list",
+            "cachedResultName": "gpt-4o"
+          },
+          "options": {
+            "temperature": 0.2
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1.2,
+        "position": [
+          -208,
+          1184
+        ],
+        "id": "17b5bc97-2ce9-4847-8f28-2c3eed0bfeea",
+        "name": "OpenAI Chat Model4",
+        "credentials": {
+          "openAiApi": {
+            "id": "aDI3wnbufE0mPuCr",
+            "name": "OpenAi account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "sessionIdType": "customKey",
+          "sessionKey": "={{ $('When Executed by Another Workflow').first().json.idConversation }}"
+        },
+        "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+        "typeVersion": 1.3,
+        "position": [
+          -112,
+          1168
+        ],
+        "id": "de5d4c28-9ad5-4e3d-9528-6b387f26ed17",
+        "name": "Simple Memory1"
+      },
+      {
+        "parameters": {
+          "documentId": {
+            "__rl": true,
+            "value": "1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM",
+            "mode": "list",
+            "cachedResultName": "Del Pilar MANTENIMIENTO",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": 323427792,
+            "mode": "list",
+            "cachedResultName": "Tabla Horarios Taller",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM/edit#gid=323427792"
+          },
+          "filtersUI": {
+            "values": [
+              {
+                "lookupColumn": "Taller",
+                "lookupValue": "NORDELTA"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleSheetsTool",
+        "typeVersion": 4.7,
+        "position": [
+          0,
+          1232
+        ],
+        "id": "54604ff8-2841-4c0c-abc8-2438f58471f3",
+        "name": "Get_reglas1",
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "ZDmT59glKYmZVPyM",
+            "name": "Google Sheets account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsonSchemaExample": "  {\n    \"Id_Calendario\": \"6\",\n    \"Fecha\": \"2026-07-01T11:00:00\",\n    \"hora_inicio\": \"10:45\",\n    \"hora_fin\": \"12:15\",\n    \"duracion_servicio\": 90,\n    \"Descripcion\": \"Mantenimiento 70000 km - Corolla\\nPatente: AF559VB\\nNombre: Hugo Enrique Perdomo\\nSucursal: Tigre\\nKilometraje: 72000 km\\nPrecio: $419.600\",\n    \"Titulo\": \"2026-07-01 - Turno Agendado en Sucursal Tigre - AF559VB - Hugo Enrique Perdomo\",\n    \"Fin\": \"2026-07-01T11:30:00\",\n    \"Modelo\": \"Corolla\",\n    \"Tiempo_Modelo\": \"0:30:00\",\n    \"Calendar\": \"54e76531d432c15df73ed90e6cca47c95605c52085b9f491bb1b0ddac0fd7818@group.calendar.google.com\",\n\"idConversation\": \n\"907459\",\n    \"Fallback_Aplicado\": false\n  }\n",
+          "autoFix": true
+        },
+        "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+        "typeVersion": 1.3,
+        "position": [
+          224,
+          1184
+        ],
+        "id": "08bd9f3d-9d42-443e-8eb1-0a231a5d7a01",
+        "name": "Structured Output Parser1",
+        "notesInFlow": false
+      },
+      {
+        "parameters": {
+          "model": {
+            "__rl": true,
+            "mode": "list",
+            "value": "gpt-4.1-mini"
+          },
+          "options": {
+            "temperature": 0.1
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1.2,
+        "position": [
+          288,
+          1312
+        ],
+        "id": "74175a55-eeef-47a2-b1e2-4859ba3ad135",
+        "name": "OpenAI Chat Model5",
+        "credentials": {
+          "openAiApi": {
+            "id": "aDI3wnbufE0mPuCr",
+            "name": "OpenAi account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "documentId": {
+            "__rl": true,
+            "value": "1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM",
+            "mode": "list",
+            "cachedResultName": "Del Pilar MANTENIMIENTO",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": 1939395583,
+            "mode": "list",
+            "cachedResultName": "Tabla Tiempo Mantenimiento",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM/edit#gid=1939395583"
+          },
+          "filtersUI": {
+            "values": [
+              {
+                "lookupColumn": "KM",
+                "lookupValue": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('values0_Value', `Kilometraje del turno a agendar del usuario, no usar ningun otro valor, siempre usar el valor del kilometraje`, 'string') }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleSheetsTool",
+        "typeVersion": 4.7,
+        "position": [
+          112,
+          1232
+        ],
+        "id": "ac8eb776-fa7f-4d7e-94e3-d1bed488469f",
+        "name": "Get_tiempos1",
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "ZDmT59glKYmZVPyM",
+            "name": "Google Sheets account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "calendar": {
+            "__rl": true,
+            "value": "={{ $json.output.Calendar || $json.output.Id_Calendario   }} ",
+            "mode": "id"
+          },
+          "start": "={{ $json.output.Fecha }}",
+          "end": "={{ $json.output.Fin }}",
+          "additionalFields": {
+            "description": "={{ $json.output.Descripcion }}",
+            "summary": "={{ $json.output.Titulo }}"
+          }
+        },
+        "type": "n8n-nodes-base.googleCalendar",
+        "typeVersion": 1.3,
+        "position": [
+          608,
+          1056
+        ],
+        "id": "231589a3-bc08-47c0-b3d9-9f5e29ead409",
+        "name": "Create an event3",
+        "credentials": {
+          "googleCalendarOAuth2Api": {
+            "id": "QOb8WX49Qkxe1yfG",
+            "name": "Google Calendar account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "return [{\n  json: {\n    id_turno: $input.first().json.id,\n    id_calendario: $input.first().json.organizer.email,\n  }\n}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          832,
+          1056
+        ],
+        "id": "f0880b75-169d-407d-9697-721800c5ba49",
+        "name": "Code1"
+      },
+      {
+        "parameters": {
+          "operation": "removeItemsSeenInPreviousExecutions",
+          "dedupeValue": "={{ $json.Fecha }}_{{ $json.idConversation }}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.removeDuplicates",
+        "typeVersion": 2,
+        "position": [
+          -336,
+          928
+        ],
+        "id": "3d6ef070-c3cc-4f69-990e-ed24aad7dbbe",
+        "name": "Remove Duplicates3"
+      }
+    ],
+    "connections": {
+      "When Executed by Another Workflow": {
+        "main": [
+          [
+            {
+              "node": "Remove Duplicates3",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Sumar 15min Recepcion": {
+        "main": [
+          [
+            {
+              "node": "Create an event3",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Create an event2": {
+        "main": [
+          [
+            {
+              "node": "Code8",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get_Reglas1": {
+        "main": [
+          [
+            {
+              "node": "Code7",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code6": {
+        "main": [
+          [
+            {
+              "node": "Create an event2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get_Tiempo1": {
+        "main": [
+          [
+            {
+              "node": "Code6",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code7": {
+        "main": [
+          [
+            {
+              "node": "Get_Tiempo1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Remove Duplicates2": {
+        "main": [
+          [
+            {
+              "node": "Get_Reglas1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "AI Agent1": {
+        "main": [
+          [
+            {
+              "node": "Sumar 15min Recepcion",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "OpenAI Chat Model3": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "AI Agent1",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "OpenAI Chat Model4": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "AI Agent1",
+              "type": "ai_languageModel",
+              "index": 1
+            }
+          ]
+        ]
+      },
+      "Simple Memory1": {
+        "ai_memory": [
+          [
+            {
+              "node": "AI Agent1",
+              "type": "ai_memory",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get_reglas1": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent1",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Structured Output Parser1": {
+        "ai_outputParser": [
+          [
+            {
+              "node": "AI Agent1",
+              "type": "ai_outputParser",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "OpenAI Chat Model5": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "Structured Output Parser1",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get_tiempos1": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent1",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Create an event3": {
+        "main": [
+          [
+            {
+              "node": "Code1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Remove Duplicates3": {
+        "main": [
+          [
+            {
+              "node": "AI Agent1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "system migration",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-11-16T12:59:54.712Z",
+    "updatedAt": "2026-11-16T12:59:54.712Z"
+  },
+  "activeVersionId": "bdddeab5-6061-4cec-a764-42284b0a4f71",
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Remove Duplicates3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sumar 15min Recepcion": {
+      "main": [
+        [
+          {
+            "node": "Create an event3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create an event2": {
+      "main": [
+        [
+          {
+            "node": "Code8",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get_Reglas1": {
+      "main": [
+        [
+          {
+            "node": "Code7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code6": {
+      "main": [
+        [
+          {
+            "node": "Create an event2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get_Tiempo1": {
+      "main": [
+        [
+          {
+            "node": "Code6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code7": {
+      "main": [
+        [
+          {
+            "node": "Get_Tiempo1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remove Duplicates2": {
+      "main": [
+        [
+          {
+            "node": "Get_Reglas1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent1": {
+      "main": [
+        [
+          {
+            "node": "Sumar 15min Recepcion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model3": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model4": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Simple Memory1": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get_reglas1": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser1": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model5": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Structured Output Parser1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get_tiempos1": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create an event3": {
+      "main": [
+        [
+          {
+            "node": "Code1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remove Duplicates3": {
+      "main": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2025-09-23T19:34:24.387Z",
+  "id": "uBEHwr8R4pEKXUPX",
+  "isArchived": false,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "name": "SET_CALENDARIO_NORDELTA",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "Id_Calendario"
+            },
+            {
+              "name": "Fecha"
+            },
+            {
+              "name": "hora_inicio"
+            },
+            {
+              "name": "hora_fin"
+            },
+            {
+              "name": "duracion_servicio"
+            },
+            {
+              "name": "Descripcion"
+            },
+            {
+              "name": "Titulo"
+            },
+            {
+              "name": "Fin"
+            },
+            {
+              "name": "Modelo"
+            },
+            {
+              "name": "Tiempo_Modelo"
+            },
+            {
+              "name": "Calendar"
+            },
+            {
+              "name": "idConversation"
+            },
+            {
+              "name": "Fallback_Aplicado"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -528,
+        928
+      ],
+      "id": "3d744312-c63f-49d1-8244-af50aba16a4b",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "jsCode": "function timeToMinutes(t) {\n  const [h, m] = t.split(':').map(Number);\n  return h * 60 + m;\n}\nfunction minutesToTime(min) {\n  const h = Math.floor(min / 60).toString().padStart(2, '0');\n  const m = (min % 60).toString().padStart(2, '0');\n  return `${h}:${m}`;\n}\n\n// El horario calculado por el AI Agent corresponde a la llegada del cliente;\n// el turno real en la agenda arranca y termina 15 minutos después (tiempo de recepción)\nconst data = $input.first().json.output || $input.first().json;\n\nconst fechaParte = data.Fecha.split('T')[0];\nconst horaInicio = data.Fecha.split('T')[1].substring(0, 5);\nconst horaFin = data.Fin.split('T')[1].substring(0, 5);\n\nconst nuevaHoraInicio = minutesToTime(timeToMinutes(horaInicio) + 15);\nconst nuevaHoraFin = minutesToTime(timeToMinutes(horaFin) + 15);\n\nconst nuevaFecha = `${fechaParte}T${nuevaHoraInicio}:00`;\nconst nuevoFin = `${fechaParte}T${nuevaHoraFin}:00`;\n\nreturn [{\n  json: {\n    output: {\n      ...data,\n      Fecha: nuevaFecha,\n      Fin: nuevoFin,\n      hora_inicio: nuevaHoraInicio,\n      hora_fin: nuevaHoraFin\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        1056
+      ],
+      "id": "5717a298-cc5a-45f5-9155-58d50fc2944c",
+      "name": "Sumar 15min Recepcion"
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "value": "={{ $json.Calendar }}",
+          "mode": "id"
+        },
+        "start": "={{ $json.Fecha }}",
+        "end": "={{ $json.Fin }}",
+        "additionalFields": {
+          "description": "={{ $json.Descripcion }}",
+          "summary": "={{ $json.Titulo }}"
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        400,
+        720
+      ],
+      "id": "fbf6e6f8-7068-4af9-bde7-ff4f6f7806cb",
+      "name": "Create an event2",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "QOb8WX49Qkxe1yfG",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM",
+          "mode": "list",
+          "cachedResultName": "Del Pilar MANTENIMIENTO",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 323427792,
+          "mode": "list",
+          "cachedResultName": "Tabla Horarios Taller",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM/edit#gid=323427792"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Taller",
+              "lookupValue": "NORDELTA"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -80,
+        720
+      ],
+      "id": "1a1bf2d7-dc1a-41de-a14e-fc23ca30758b",
+      "name": "Get_Reglas1",
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "ZDmT59glKYmZVPyM",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 🔧 Utilidades\nfunction sumarMinutos(fechaStr, minutos) {\n  const fecha = new Date(fechaStr);\n  if (isNaN(fecha)) throw new Error(`Fecha inválida: ${fechaStr}`);\n  fecha.setMinutes(fecha.getMinutes() + minutos);\n  const [fechaPart, horaPart] = fecha.toISOString().split(\"T\");\n  const horaLocal = horaPart.substring(0, 5);\n  return `${fechaPart}T${horaLocal}:00`;\n}\n\nfunction tiempoAHorasMinutos(tiempoStr) {\n  const [h, m, s] = (tiempoStr || \"0:30:00\").split(\":\").map(Number);\n  return (h * 60) + (m || 0);\n}\n\n// 🧩 Obtener datos desde nodos\nconst raw = $(\"When Executed by Another Workflow\").all();\nconst modelo = $(\"Code7\").first()?.json?.modelo || null;\nconst tiempos = $(\"Get_Tiempo1\").first()?.json || {};\nconst reglas = $(\"Get_Reglas1\").first()?.json || {};\n\n// 🧹 Extraer correctamente los datos\nlet solicitud;\nif (Array.isArray(raw)) {\n  const first = raw[0];\n  solicitud = first.json?.query ? JSON.parse(first.json.query) : first.json;\n} else {\n  solicitud = raw.json?.query ? JSON.parse(raw.json.query) : raw;\n}\n\n// 🧩 Reconstruir Fecha y Fin si faltan\nif (!solicitud.Fin && solicitud.Fecha && solicitud.hora_fin) {\n  solicitud.Fin = `${solicitud.Fecha}T${solicitud.hora_fin}:00`;\n}\nif (!solicitud.hora_inicio && solicitud.Fecha && solicitud.hora_inicio) {\n  solicitud.Fecha = `${solicitud.Fecha}T${solicitud.hora_inicio}:00`;\n} else if (!solicitud.Fecha.includes(\"T\") && solicitud.hora_inicio) {\n  solicitud.Fecha = `${solicitud.Fecha}T${solicitud.hora_inicio}:00`;\n}\n\n// 🚨 Validar\nif (!solicitud.Fecha || !solicitud.Fin) {\n  return [{\n    json: {\n      error: \"Faltan campos requeridos\",\n      solicitud,\n      tieneFecha: !!solicitud.Fecha,\n      tieneFin: !!solicitud.Fin,\n    },\n  }];\n}\n\n// 🕐 Calcular tiempos\nconst tiempoModeloStr = modelo && tiempos[modelo] ? tiempos[modelo] : \"0:30:00\";\nconst minutosModelo = tiempoAHorasMinutos(tiempoModeloStr) || 30;\n\n// Nueva hora de inicio (+15 min de recepción)\nconst nuevaFechaInicio = sumarMinutos(solicitud.Fecha, 15);\n\n// Nuevo fin (+tiempo del modelo)\nlet nuevoFin = sumarMinutos(nuevaFechaInicio, minutosModelo);\n\n// ✅ Devolver resultado final\nreturn [{\n  json: {\n    ...solicitud,\n    Fecha: nuevaFechaInicio,\n    Fin: nuevoFin,\n    Modelo: modelo || \"Desconocido\",\n    Tiempo_Modelo: tiempoModeloStr,\n    Calendar: reglas.Id_Calendario || \"54e76531d432c15df73ed90e6cca47c95605c52085b9f491bb1b0ddac0fd7818@group.calendar.google.com\",\n    Fallback_Aplicado: !modelo || !tiempos[modelo],\n  },\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        272,
+        720
+      ],
+      "id": "cd5a1b6d-15e4-4792-a426-b12321564d02",
+      "name": "Code6"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM",
+          "mode": "list",
+          "cachedResultName": "Del Pilar MANTENIMIENTO",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1939395583,
+          "mode": "list",
+          "cachedResultName": "Tabla Tiempo Mantenimiento",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM/edit#gid=1939395583"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "KM",
+              "lookupValue": "={{ $json.kilometraje }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        160,
+        720
+      ],
+      "id": "e4010c16-f387-4dc7-b2cf-40ec2e17d1b3",
+      "name": "Get_Tiempo1",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "maxTries": 5,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "ZDmT59glKYmZVPyM",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 🚗 Lista de modelos posibles\nconst MODELOS = [\n  \"Etios\",\n  \"Yaris\",\n  \"Yaris GR\",\n  \"Corolla\",\n  \"Prius\",\n  \"Rav4\",\n  \"Innova\",\n  \"Hilux\",\n  \"SW4\",\n  \"Hiace\",\n  \"CH-R\",\n  \"Camry\",\n  \"Land Cruiser\"\n];\n\n// 🧩 Función para extraer datos del nodo anterior\nfunction extraerDatos(input) {\n  let datos;\n\n  // si viene en formato array con .json.query\n  if (Array.isArray(input)) {\n    const first = input[0];\n    if (first.json?.query) {\n      datos = typeof first.json.query === \"string\" ? JSON.parse(first.json.query) : first.json.query;\n    } else if (first.json) {\n      datos = first.json;\n    } else {\n      datos = first;\n    }\n  } else if (input.json?.query) {\n    datos = typeof input.json.query === \"string\" ? JSON.parse(input.json.query) : input.json.query;\n  } else if (input.query) {\n    datos = typeof input.query === \"string\" ? JSON.parse(input.query) : input.query;\n  } else {\n    datos = input;\n  }\n\n  return datos;\n}\n\n// 🧮 Buscar modelo en texto\nfunction detectarModelo(texto) {\n  for (const modelo of MODELOS) {\n    const regex = new RegExp(`\\\\b${modelo}\\\\b`, \"i\");\n    if (regex.test(texto)) return modelo;\n  }\n  return null;\n}\n\n// 🧮 Buscar kilometraje en texto\nfunction detectarKilometraje(texto) {\n  const match = texto.match(/(\\d{1,3}(?:\\.\\d{3})*|\\d+)\\s*km/i);\n  if (match) {\n    const km = match[1].replace(/\\./g, \"\");\n    return parseInt(km, 10);\n  }\n  return null;\n}\n\n// 🔹 Obtener datos correctamente desde el nodo anterior\nconst raw = $(\"When Executed by Another Workflow\").all();\nconst solicitud = extraerDatos(raw);\n\n// 🔍 Buscar modelo y km\nconst textoBusqueda = `${solicitud.Descripcion || \"\"} ${solicitud.Titulo || \"\"}`;\nconst modeloDetectado = detectarModelo(textoBusqueda);\nconst kmDetectado = detectarKilometraje(textoBusqueda);\n\n// 🧾 Devolver resultado\nreturn [\n  {\n    json: {\n      modelo: modeloDetectado,\n      kilometraje: kmDetectado,\n      textoAnalizado: textoBusqueda // 👈 útil para debug\n    },\n  },\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        32,
+        720
+      ],
+      "id": "46c1ad3c-bf1e-40a7-9a04-354e0469f5be",
+      "name": "Code7"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    id_turno: $input.first().json.id,\n    id_calendario: $input.first().json.organizer.email,\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        528,
+        720
+      ],
+      "id": "8da5f0d0-f7e5-4f04-851d-2c142378d81f",
+      "name": "Code8"
+    },
+    {
+      "parameters": {
+        "operation": "removeItemsSeenInPreviousExecutions",
+        "dedupeValue": "={{ $json.idConversation }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.removeDuplicates",
+      "typeVersion": 2,
+      "position": [
+        -272,
+        752
+      ],
+      "id": "0ffba160-ea5f-422c-a512-11ced8f23ce9",
+      "name": "Remove Duplicates2"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=recibis el turno a agendar: {{ $('When Executed by Another Workflow').item.json.Descripcion }}",
+        "hasOutputParser": true,
+        "needsFallback": true,
+        "options": {
+          "systemMessage": "=Recibís un turno de taller en formato JSON.\n\nTu tarea es ajustar el horario del turno utilizando las herramientas disponibles.\n\nRecibís estos campos:\n\nFecha del turno: {{ $('When Executed by Another Workflow').first().json.Fecha }}\n\nHora de inicio del turno: {{ $('When Executed by Another Workflow').first().json.hora_inicio }}\n\nHora de fin: {{ $('When Executed by Another Workflow').first().json.hora_fin }}\n\nduracion_servicio (este valor puede ser incorrecto y debe corroborarse con la tool): {{ $('When Executed by Another Workflow').first().json.duracion_servicio }}\n\nDescripcion: {{ $('When Executed by Another Workflow').first().json.Descripcion }}\n\nTitulo: {{ $('When Executed by Another Workflow').first().json.Titulo }}\n\nModelo de vehiculo: {{ $('When Executed by Another Workflow').first().json.Modelo }}\n\nTiempo de modelo: {{ $('When Executed by Another Workflow').first().json.Tiempo_Modelo }}\n\nId_Calendario: {{ $('When Executed by Another Workflow').first().json.Id_Calendario }}\n\nCalendar: {{ $('When Executed by Another Workflow').first().json.Calendar }}\n\nidConversation: {{ $('When Executed by Another Workflow').first().json.idConversation }}\n\nReglas:\n\n1. Extraé el kilometraje únicamente desde el campo \"Descripcion\".\n\nEjemplo:\n\n\"Kilometraje: 72000 km\"\n\n→ kilometraje = 72000\n\nNunca inventes kilometrajes.\n\nNunca utilices otro valor distinto al encontrado en Descripcion.\n\n2. Ejecutá la herramienta \"Get_reglas\".\n\nGuardá los datos devueltos.\n\n3. Ejecutá la herramienta \"Get_tiempos\" enviando el kilometraje extraído.\n\nDebés buscar exactamente el kilometraje obtenido de la descripción.\n\n4. Del resultado obtenido identificá el tiempo correspondiente al modelo indicado en el campo \"Modelo\".\n\nLa comparación debe ser exacta.\n\n5. Aplicá los siguientes cálculos:\n\n* Mantener exactamente la Fecha original recibida.\n* Mantener exactamente la hora_inicio original recibida.\n* Mantener exactamente todos los demás campos recibidos, salvo los que deban recalcularse.\n\nIMPORTANTE:\n\nLa hora de referencia para realizar los cálculos es SIEMPRE la hora incluida dentro del campo Fecha.\n\nNO utilizar hora_inicio para realizar cálculos.\n\nEjemplo:\n\nFecha = 2026-06-26T15:15:00\n\nTiempo_Modelo = 0:30:00\n\nResultado:\n\nFin = 2026-06-26T15:45:00\n\nhora_fin = 15:45\n\n6. Recalcular:\n\n* duracion_servicio\n* Fin\n* hora_fin\n\nutilizando exclusivamente el Tiempo_Modelo obtenido desde Get_tiempos.\n\n7. Fórmulas:\n\nduracion_servicio = minutos equivalentes al Tiempo_Modelo\n\nFin = Fecha + Tiempo_Modelo\n\nhora_fin = hora obtenida desde Fin en formato HH:mm\n\n8. Si no encontrás tiempo para el modelo:\n\n* usar Tiempo_Modelo = \"0:30:00\"\n* duracion_servicio = 30\n* Fallback_Aplicado = true\n\n9. Si encontrás tiempo para el modelo:\n\nFallback_Aplicado = false\n\n10. Calendar debe tomar el valor devuelto por Get_reglas.\n\nSi Get_reglas no devuelve Calendar válido, conservar el Calendar original.\n\n11. Id_Calendario y Calendar son campos distintos.\n\n* Nunca copiar Calendar dentro de Id_Calendario.\n* Nunca copiar Id_Calendario dentro de Calendar.\n* Id_Calendario debe conservar exactamente el valor recibido.\n* Calendar debe usar el valor obtenido desde Get_reglas o el original si no existe reemplazo.\n\n12. Conservar exactamente:\n\n* Fecha\n* hora_inicio\n* Descripcion\n* Titulo\n* Modelo\n* idConversation\n* Id_Calendario\n\n13. Devolver exclusivamente un objeto JSON válido.\n\nNo agregar explicaciones.\n\nNo agregar markdown.\n\nNo agregar texto adicional.\n\nEstructura obligatoria:\n\n{\n\"Id_Calendario\": \"{{ $('When Executed by Another Workflow').first().json.Id_Calendario }}\",\n\"Fecha\": \"{{ $('When Executed by Another Workflow').first().json.Fecha }}\",\n\"hora_inicio\": \"...\",\n\"hora_fin\": \"...\",\n\"duracion_servicio\": ...,\n\"Descripcion\": \"{{ $('When Executed by Another Workflow').first().json.Descripcion }}\",\n\"Titulo\": \"{{ $('When Executed by Another Workflow').first().json.Titulo }}\",\n\"Fin\": \"...\",\n\"Modelo\": \"{{ $('When Executed by Another Workflow').first().json.Modelo }}\",\n\"Tiempo_Modelo\": \"...\",\n\"Calendar\": \"...\",\n\"idConversation\": \"{{ $('When Executed by Another Workflow').first().json.idConversation }}\",\n\"Fallback_Aplicado\": true\n}\n\nValidaciones finales obligatorias antes de responder:\n\n* Verificar que el kilometraje fue extraído desde Descripcion.\n* Verificar que Get_reglas fue ejecutado antes que Get_tiempos.\n* Verificar que Tiempo_Modelo corresponde al kilometraje encontrado.\n* Verificar que Fin = Fecha + Tiempo_Modelo.\n* Verificar que hora_fin coincide con la hora resultante de Fin.\n* Verificar que hora_inicio no fue utilizada para los cálculos.\n* Verificar que Id_Calendario conserva exactamente el valor original.\n* Verificar que la salida es únicamente un JSON válido.\n",
+          "maxIterations": 6
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        -128,
+        944
+      ],
+      "id": "e9420341-93cf-46da-a3d0-57bfeb28f3a0",
+      "name": "AI Agent1",
+      "retryOnFail": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "gpt-4o"
+        },
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -352,
+        1152
+      ],
+      "id": "7b9b6e71-12cd-4fbc-8cd8-c6ccd3b4b2af",
+      "name": "OpenAI Chat Model3",
+      "credentials": {
+        "openAiApi": {
+          "id": "aDI3wnbufE0mPuCr",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "gpt-4o"
+        },
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -208,
+        1184
+      ],
+      "id": "17b5bc97-2ce9-4847-8f28-2c3eed0bfeea",
+      "name": "OpenAI Chat Model4",
+      "credentials": {
+        "openAiApi": {
+          "id": "aDI3wnbufE0mPuCr",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('When Executed by Another Workflow').first().json.idConversation }}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        -112,
+        1168
+      ],
+      "id": "de5d4c28-9ad5-4e3d-9528-6b387f26ed17",
+      "name": "Simple Memory1"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM",
+          "mode": "list",
+          "cachedResultName": "Del Pilar MANTENIMIENTO",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 323427792,
+          "mode": "list",
+          "cachedResultName": "Tabla Horarios Taller",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM/edit#gid=323427792"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Taller",
+              "lookupValue": "NORDELTA"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        0,
+        1232
+      ],
+      "id": "54604ff8-2841-4c0c-abc8-2438f58471f3",
+      "name": "Get_reglas1",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "ZDmT59glKYmZVPyM",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "  {\n    \"Id_Calendario\": \"6\",\n    \"Fecha\": \"2026-07-01T11:00:00\",\n    \"hora_inicio\": \"10:45\",\n    \"hora_fin\": \"12:15\",\n    \"duracion_servicio\": 90,\n    \"Descripcion\": \"Mantenimiento 70000 km - Corolla\\nPatente: AF559VB\\nNombre: Hugo Enrique Perdomo\\nSucursal: Tigre\\nKilometraje: 72000 km\\nPrecio: $419.600\",\n    \"Titulo\": \"2026-07-01 - Turno Agendado en Sucursal Tigre - AF559VB - Hugo Enrique Perdomo\",\n    \"Fin\": \"2026-07-01T11:30:00\",\n    \"Modelo\": \"Corolla\",\n    \"Tiempo_Modelo\": \"0:30:00\",\n    \"Calendar\": \"54e76531d432c15df73ed90e6cca47c95605c52085b9f491bb1b0ddac0fd7818@group.calendar.google.com\",\n\"idConversation\": \n\"907459\",\n    \"Fallback_Aplicado\": false\n  }\n",
+        "autoFix": true
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        224,
+        1184
+      ],
+      "id": "08bd9f3d-9d42-443e-8eb1-0a231a5d7a01",
+      "name": "Structured Output Parser1",
+      "notesInFlow": false
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4.1-mini"
+        },
+        "options": {
+          "temperature": 0.1
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        288,
+        1312
+      ],
+      "id": "74175a55-eeef-47a2-b1e2-4859ba3ad135",
+      "name": "OpenAI Chat Model5",
+      "credentials": {
+        "openAiApi": {
+          "id": "aDI3wnbufE0mPuCr",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM",
+          "mode": "list",
+          "cachedResultName": "Del Pilar MANTENIMIENTO",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1939395583,
+          "mode": "list",
+          "cachedResultName": "Tabla Tiempo Mantenimiento",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM/edit#gid=1939395583"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "KM",
+              "lookupValue": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('values0_Value', `Kilometraje del turno a agendar del usuario, no usar ningun otro valor, siempre usar el valor del kilometraje`, 'string') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        112,
+        1232
+      ],
+      "id": "ac8eb776-fa7f-4d7e-94e3-d1bed488469f",
+      "name": "Get_tiempos1",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "ZDmT59glKYmZVPyM",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "value": "={{ $json.output.Calendar || $json.output.Id_Calendario   }} ",
+          "mode": "id"
+        },
+        "start": "={{ $json.output.Fecha }}",
+        "end": "={{ $json.output.Fin }}",
+        "additionalFields": {
+          "description": "={{ $json.output.Descripcion }}",
+          "summary": "={{ $json.output.Titulo }}"
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        608,
+        1056
+      ],
+      "id": "231589a3-bc08-47c0-b3d9-9f5e29ead409",
+      "name": "Create an event3",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "QOb8WX49Qkxe1yfG",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    id_turno: $input.first().json.id,\n    id_calendario: $input.first().json.organizer.email,\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        832,
+        1056
+      ],
+      "id": "f0880b75-169d-407d-9697-721800c5ba49",
+      "name": "Code1"
+    },
+    {
+      "parameters": {
+        "operation": "removeItemsSeenInPreviousExecutions",
+        "dedupeValue": "={{ $json.Fecha }}_{{ $json.idConversation }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.removeDuplicates",
+      "typeVersion": 2,
+      "position": [
+        -336,
+        928
+      ],
+      "id": "3d6ef070-c3cc-4f69-990e-ed24aad7dbbe",
+      "name": "Remove Duplicates3"
+    }
+  ],
+  "pinData": {
+    "When Executed by Another Workflow": [
+      {
+        "json": {
+          "Id_Calendario": "6",
+          "Fecha": "2026-07-01T11:00:00",
+          "hora_inicio": "10:45",
+          "hora_fin": "12:15",
+          "duracion_servicio": 90,
+          "Descripcion": "Mantenimiento 70000 km - Corolla\nPatente: AF559VB\nNombre: Hugo Enrique Perdomo\nSucursal: Tigre\nKilometraje: 72000 km\nPrecio: $419.600",
+          "Titulo": "2026-07-01 - Turno Agendado en Sucursal Tigre - AF559VB - Hugo Enrique Perdomo",
+          "Fin": "2026-07-01T11:30:00",
+          "Modelo": "Corolla",
+          "Tiempo_Modelo": "0:30:00",
+          "Calendar": "54e76531d432c15df73ed90e6cca47c95605c52085b9f491bb1b0ddac0fd7818@group.calendar.google.com",
+          "idConversation": "907459",
+          "Fallback_Aplicado": false
+        }
+      }
+    ]
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "uBEHwr8R4pEKXUPX",
+      "projectId": "QDE2NLjJUSw6ETz9",
+      "createdAt": "2025-09-23T19:34:24.392Z",
+      "updatedAt": "2025-09-23T19:34:24.392Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [
+    {
+      "id": "Zt74TZhLsYEx7COH",
+      "name": "delpilar",
+      "createdAt": "2025-09-03T18:36:10.973Z",
+      "updatedAt": "2026-02-27T20:41:31.103Z"
+    }
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2026-11-16T13:24:58.462Z",
+  "versionId": "bdddeab5-6061-4cec-a764-42284b0a4f71"
+}
