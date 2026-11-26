@@ -1,0 +1,317 @@
+{
+  "active": false,
+  "activeVersion": null,
+  "activeVersionId": null,
+  "connections": {
+    "Casos a consultar": {
+      "main": [
+        [
+          {
+            "node": "Ford Revision v2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ford Revision v2": {
+      "main": [
+        [
+          {
+            "node": "Resumen revisiones",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resumen revisiones": {
+      "main": [
+        [
+          {
+            "node": "Catalogo servicios concesionario",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "getToken",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "getToken": {
+      "main": [
+        [
+          {
+            "node": "Casos a consultar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Catalogo servicios concesionario": {
+      "main": [
+        [
+          {
+            "node": "Casos presupuesto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Casos presupuesto": {
+      "main": [
+        [
+          {
+            "node": "Budget recalculate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-11-06T14:31:23.091Z",
+  "id": "3XrLUx6yIqW9lDW2",
+  "isArchived": true,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "name": "TEMP lectura Ford fuera de plan (borrar)",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "id": "a08742af-6c55-4e23-99e7-5dc1d26755a0",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "ad0ca42c-20b1-4608-ab4e-f68cecd53bf8",
+      "name": "Casos a consultar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const vins = [\n ['8AFBR01B6SJ491162','RANGER P703 200k'],\n ['8AFAR23K5PJ303050','RANGER 2023 165k'],\n ['8AFAR22J0GJ365724','RANGER 2016 230k'],\n ['3FTTW8F92NRA35288','MAVERICK 2022 120k'],\n ['WF0DTTVGXTU021660','TRANSIT 100k']\n];\nconst meses = [12, 72, 84, 96, 108, 120, 132];\nconst out = [];\nfor (const [vin, caso] of vins) for (const m of meses) out.push({ json: { vin, caso, months: m } });\nreturn out;"
+      }
+    },
+    {
+      "id": "27b9bffd-32de-41e1-bccd-31a20784d8c2",
+      "name": "Ford Revision v2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        448,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.service.ford.com/agenda/gateway/transformation/api/internal/revision/v2",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "accept",
+              "value": "application/json, text/plain, */*"
+            },
+            {
+              "name": "country",
+              "value": "ARG"
+            },
+            {
+              "name": "countrycode",
+              "value": "ARG"
+            },
+            {
+              "name": "dealer",
+              "value": "244"
+            },
+            {
+              "name": "dealercode",
+              "value": "244"
+            },
+            {
+              "name": "divisioncode",
+              "value": "1"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ vin: $json.vin, country: \"ARG\", division: 1, revisionMonths: $json.months }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "jXzonHTBszDvh6kA",
+          "name": "Bearer Auth account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "0d7268b1-4653-4ec4-884c-962e10ab3c01",
+      "name": "Resumen revisiones",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const casos = $('Casos a consultar').all();\nreturn $input.all().map((it, i) => { const r = (it.json.response || []); const s = r[r.length-1] || {}; return { json: { caso: casos[i].json.caso, vin: casos[i].json.vin, months: casos[i].json.months, n: r.length, service: s.service || null, serviceId: s.serviceId || null, desc: s.serviceDescription || null, motor: s.motorDescription || null, tma: s.tma || null, price: s.price || null, error: it.json.error ? JSON.stringify(it.json.error).slice(0,200) : null } }; });"
+      }
+    },
+    {
+      "id": "f3594364-3027-4249-aaac-79b7e442bd5d",
+      "name": "Catalogo servicios concesionario",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        896,
+        0
+      ],
+      "parameters": {
+        "url": "https://api.service.ford.com/agenda/gateway/transformation/api/internal/offeredservices/by-dealer-with-model",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "countrycode",
+              "value": "ARG"
+            },
+            {
+              "name": "dealercode",
+              "value": "60834"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "jXzonHTBszDvh6kA",
+          "name": "Bearer Auth account"
+        }
+      },
+      "executeOnce": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "6f398194-b124-4c2f-9a5b-521385e7c3ea",
+      "name": "getToken",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        200,
+        -200
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * \nFROM mydatabase.token_agenda_ford\nWHERE company = 2\nORDER BY id DESC\nLIMIT 1;",
+        "options": {}
+      },
+      "credentials": {
+        "mySql": {
+          "id": "MYmGGfM8lz7xrUC9",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "id": "d02a9efa-61db-44c8-91cb-b11376333d20",
+      "name": "Casos presupuesto",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1400,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const casos = [\n {vin:'8AFBR01B6SJ491162', model:'RANGER (P703)', svc:1412, caso:'P703 10a (en plan)'},\n {vin:'8AFBR01B6SJ491162', model:'RANGER (P703)', svc:1415, caso:'P703 13a'},\n {vin:'8AFBR01B6SJ491162', model:'RANGER (P703)', svc:1447, caso:'P703 cambio aceite'},\n {vin:'8AFAR22J0GJ365724', model:'RANGER', svc:1422, caso:'Ranger 2016 20a'},\n {vin:'8AFAR22J0GJ365724', model:'RANGER', svc:1447, caso:'Ranger 2016 cambio aceite'},\n {vin:'3FTTW8F92NRA35288', model:'MAVERICK', svc:1410, caso:'Maverick 8a'}\n];\nreturn casos.map(c => ({ json: c }));"
+      }
+    },
+    {
+      "id": "a4fc4542-f4a3-49e9-bb5a-46d892389a74",
+      "name": "Budget recalculate",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1600,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.service.ford.com/agenda/manage-reservation-bff/workshop/budget-recalculate",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "countrycode",
+              "value": "ARG"
+            },
+            {
+              "name": "dealercode",
+              "value": "60834"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ vin: $json.vin, dealer: '60834', division: 1, country: 'ARG', scheduleDate: '2026-11-20', scheduleHour: '0830', fordProtectPlanType: null, group: 14, hasFordProtectCoverage: false, iolmParts: [], isIOLM: false, model: $json.model, offeredServices: [$json.svc], recallVOs: [], scheduleOrigin: 'D', vehicleModelYear: null }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "jXzonHTBszDvh6kA",
+          "name": "Bearer Auth account"
+        }
+      }
+    }
+  ],
+  "pinData": null,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "3XrLUx6yIqW9lDW2",
+      "projectId": "uctBMgzvi5ZzGu3j",
+      "createdAt": "2026-11-06T14:31:23.097Z",
+      "updatedAt": "2026-11-06T14:31:23.097Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2026-11-06T15:16:15.000Z",
+  "versionId": "586dd847-acc2-4a8b-ae45-381033ba43c9"
+}
