@@ -1,0 +1,209 @@
+{
+  "active": false,
+  "activeVersion": null,
+  "activeVersionId": null,
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Lead en base",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lead en base": {
+      "main": [
+        [
+          {
+            "node": "Login",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Login": {
+      "main": [
+        [
+          {
+            "node": "Auth",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auth": {
+      "main": [
+        [
+          {
+            "node": "Leer lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer lead": {
+      "main": [
+        [
+          {
+            "node": "Cerrar perdido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-11-26T13:44:19.585Z",
+  "id": "x3Be2BtItcKBOnPa",
+  "isArchived": true,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "name": "PRUEBA lead 5488593 Pilot (solo lectura)",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "id": "0b8ff269-d088-4b45-b300-504d14fb0e9a",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "ea933006-50f8-4d4c-9dc2-b577fb595408",
+      "name": "Lead en base",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        200,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, LeadId, nombre, telefono, status, interes, motivo, leadIdPilot, id_pilot, dealer_pilot, tipo_registro, created_at, updated_at FROM nissan_salesforce WHERE LeadId = '5488593';",
+        "options": {}
+      },
+      "credentials": {
+        "mySql": {
+          "id": "FezTcDnLo3SqPHvd",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "id": "005830f0-802e-43cb-a7f5-af0d07fcf199",
+      "name": "Login",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        400,
+        0
+      ],
+      "parameters": {
+        "url": "https://api.pilotsolution.net/v1/users/authentication.php",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "options": {}
+      },
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "jP4TWD9WrWhP4iTY",
+          "name": "API NISSAN"
+        }
+      },
+      "executeOnce": true
+    },
+    {
+      "id": "829cf852-9c5c-495e-8176-0ba1e5d0ef43",
+      "name": "Auth",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        600,
+        0
+      ],
+      "parameters": {
+        "url": "https://api.pilotsolution.net/v1/users/authorization.php",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "identity_token",
+              "value": "={{ $json.result.entitydata.accounts[0].token }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "7266a0a1-25b0-42c7-a87f-6eef800594fd",
+      "name": "Leer lead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        800,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.pilotsolution.net/v1/welcomes/read.php",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ data: { id: \"0BAF027A-3DB9-4F7E-9FDA-BE9AC549C2A9\" }, header: { FlowName: \"read_lead\", SequenceId: 1, TimeStamp: 1248377, TrackingId: \"FD1C4A1A-CAFB-467E-825B-7FFB86CC21E3\", access_token: $(\"Auth\").first().json.result.entitydata.session.identityToken } }) }}",
+        "options": {}
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "bb74974d-278b-490c-948e-e6ec96bd56b0",
+      "name": "Cerrar perdido",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1000,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.pilotsolution.net/v1/welcomes/close.php",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ data: { id: \"0BAF027A-3DB9-4F7E-9FDA-BE9AC549C2A9\", desist_status_code: \"perdido\", desist_comments: \"Cerrado a pedido de Nissan\" }, header: { FlowName: \"LEAD_CLOSE_PILOT\", SequenceId: 1, TimeStamp: 1248377, TrackingId: \"FD1C4A1A-CAFB-467E-825B-7FFB86CC21E3\", access_token: $(\"Auth\").first().json.result.entitydata.session.identityToken } }) }}",
+        "options": {}
+      },
+      "onError": "continueRegularOutput",
+      "disabled": false
+    }
+  ],
+  "pinData": null,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "x3Be2BtItcKBOnPa",
+      "projectId": "K8p6XEqA0L6D2uVt",
+      "createdAt": "2026-11-26T13:44:19.591Z",
+      "updatedAt": "2026-11-26T13:44:19.591Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2026-11-26T14:15:24.000Z",
+  "versionId": "4ac5c883-8bd8-43e3-9d76-95207439619e"
+}
