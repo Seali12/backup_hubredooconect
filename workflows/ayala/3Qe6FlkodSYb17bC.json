@@ -1,0 +1,682 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "f50d781e-b4f1-468e-8964-f69470af4c24",
+    "workflowId": "3Qe6FlkodSYb17bC",
+    "nodes": [
+      {
+        "parameters": {
+          "workflowInputs": {
+            "values": [
+              {
+                "name": "modelo",
+                "type": "any"
+              }
+            ]
+          }
+        },
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "typeVersion": 1.1,
+        "position": [
+          -640,
+          352
+        ],
+        "id": "51004a7c-6228-4304-a417-edb2f92b09fc",
+        "name": "When Executed by Another Workflow"
+      },
+      {
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "b223ceea-a793-41c8-8730-cce0790a5487",
+                "name": "token",
+                "value": "={{ $json.result.entitydata.accounts[0].token }}",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "95e148e1-874b-45de-8896-e1ca125ed8f6",
+        "name": "Edit Fields2",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [
+          -256,
+          176
+        ]
+      },
+      {
+        "parameters": {
+          "url": "=https://api.pilotsolution.net/v1/users/authentication.php",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpCustomAuth",
+          "options": {}
+        },
+        "id": "390928b3-26c6-4bf8-bdbe-11aa0f2abc0f",
+        "name": "Login",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -400,
+          176
+        ],
+        "credentials": {
+          "httpCustomAuth": {
+            "id": "XbIPUcWKdSWgyumH",
+            "name": "Custom Auth account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "url": "=https://api.pilotsolution.net/v1/users/authorization.php",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "identity_token",
+                "value": "={{ $json.token }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "68ea26d6-191e-4b57-86f7-fc9af56a2f3d",
+        "name": "Login1",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -128,
+          176
+        ]
+      },
+      {
+        "parameters": {},
+        "type": "n8n-nodes-base.manualTrigger",
+        "typeVersion": 1,
+        "position": [
+          -640,
+          16
+        ],
+        "id": "2e9d078b-e183-4bd2-8fed-fb48e8b0d350",
+        "name": "When clicking ‘Execute workflow’",
+        "disabled": true
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.pilotsolution.net/v1/stock/list.php",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={\n\t\"data\": {\n\n\t\t\"filters\": [\n\t\t],\n\t\t\"sort\": [\n\t\t\t{\n\t\t\t\t\"field\": \"updated\",\n\t\t\t\t\"order\": \"DESC\"\n\t\t\t}\n\t\t],\n\t\t\"limit\": 100,\n\t\t\"page\": 1\n\t},\n\t\"header\": {\n\t\t\"FlowName\": \"stock_list\",\n        \"SequenceId\": 1,\n        \"TimeStamp\": 1248377,\n        \"TrackingId\": \"55A6BCD4-0857-4A86-85FB-09A228B641B4\",\n    \t\"access_token\":\"{{ $json.result.entitydata.session.identityToken }}\"\n    }\n\n}",
+          "options": {}
+        },
+        "id": "9faacaa5-b146-4112-86cd-4a363daa91d1",
+        "name": "getPrecios",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          0,
+          176
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// -------------------------------------------------\n// 1. DATOS DE ENTRADA\n// -------------------------------------------------\nconst entitydata = $input.first().json?.result?.entitydata || [];\n// -------------------------------------------------\n// 2. SOLO PUBLICADOS EN WEB Y NO VENDIDOS\n// -------------------------------------------------\nconst publicados = entitydata.filter(v => {\n  const isPublished = v.published_in_web === \"1\";\n  const isNotSold = v.availability_status?.code !== \"3\" && \n                    v.availability_status?.code !== 3;  // Por si viene como número\n  return isPublished && isNotSold;\n});\n// -------------------------------------------------\n// 3. FORMATEAR VEHÍCULOS\n// -------------------------------------------------\nconst formateados = publicados.map(v => {\n  const prices = Array.isArray(v.prices) ? v.prices : [];\n  const salePrice = prices.find(p => p.type === 'SALE_COST');\n  return {\n    id: v.id || null,\n    marca: v.brand || '',\n    modelo: v.model || '',\n    version: v.version || '',\n    anio: v.year || null,\n    tipo: v.type?.code || '',\n    combustible: v.fuel || '',\n    transmision: v.transmission || '',\n    kilometros: v.odometer || 0,\n    color: v.color || '',\n    estado: v.availability_status?.name || '',\n    precio: salePrice ? Number(salePrice.value) : null,\n    moneda: salePrice?.currency || 'ARS',\n    publicado_web: true\n  };\n});\n// -------------------------------------------------\n// 4. AGRUPAR POR MARCA\n// -------------------------------------------------\nconst porMarca = formateados.reduce((acc, v) => {\n  if (!acc[v.marca]) {\n    acc[v.marca] = [];\n  }\n  acc[v.marca].push(v);\n  return acc;\n}, {});\n// -------------------------------------------------\n// 5. DEVOLVER RESULTADO\n// -------------------------------------------------\nreturn [\n  {\n    json: {\n      total_modelos: formateados.length,\n      marcas: Object.keys(porMarca),\n      modelos_por_marca: porMarca\n    }\n  }\n];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          480,
+          176
+        ],
+        "id": "66cc4ffc-fdaa-46cc-ab7c-4c8c8f3e5dde",
+        "name": "Code"
+      },
+      {
+        "parameters": {
+          "promptType": "define",
+          "text": "=El usuario va a preguntar por un modelo: {{$('When Executed by Another Workflow').first().json.modelo}}\" pero es posible que venga vacio, en ese caso devolver todos los modelos para que elija uno",
+          "hasOutputParser": true,
+          "options": {
+            "systemMessage": "=Contexto:\nSos un agente encargado de brindar información de vehículos.\nToda la información disponible sobre marcas, modelos, versiones y precios\nproviene EXCLUSIVAMENTE de una consulta a una API externa.\n\nLos datos disponibles están en el siguiente JSON:\n\n{{ JSON.stringify($json.modelos_por_marca, null, 2) }}\n\nReglas IMPORTANTES:\n- NO inventes información.\n- NO completes datos faltantes.\n- NO asumas marcas ni versiones.\n- Usá únicamente los datos presentes en el JSON.\n- Tené en cuenta que las marcas pueden repetirse con diferencias de mayúsculas, minúsculas o espacios (ej: \"Honda\", \"HONDA\", \"Honda \").\n- La búsqueda del modelo debe ser flexible: ignorar mayúsculas/minúsculas y espacios extra.\n- Si un modelo existe en varias marcas o versiones, devolver TODAS las coincidencias.\n- Si el precio es 0 o null, indicarlo como \"Precio no informado\".\n\nTarea:\nVas a recibir del cliente el nombre de un MODELO de vehículo.\nDebés buscar ese modelo dentro de TODOS los modelos disponibles en el JSON,\nsin importar la marca ni el formato del texto.\n\nRespuesta:\n- Si encontrás el modelo:\n  - Devolver TODAS las versiones disponibles.\n  - Incluir marca, modelo, versión, año, color y precio.\n- Si NO encontrás el modelo solicitado:\n  - Responder exactamente: \"No tengo el modelo solicitado\".\n\nFormato de salida (único permitido):\n\n{\n  \"Informacion del modelo\": [\n    {\n      \"marca\": \"...\",\n      \"modelo\": \"...\",\n      \"version\": \"...\",\n      \"anio\": \"...\",\n      \"color\": \"...\",\n      \"precio\": \"...\"\n    }\n  ]\n}\n"
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.agent",
+        "typeVersion": 2.2,
+        "position": [
+          608,
+          176
+        ],
+        "id": "a1df74b2-91a2-4dbc-8189-eb2f9a4a6ebb",
+        "name": "AI Agent"
+      },
+      {
+        "parameters": {
+          "model": {
+            "__rl": true,
+            "value": "gpt-4.1",
+            "mode": "list",
+            "cachedResultName": "gpt-4.1"
+          },
+          "options": {}
+        },
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1.2,
+        "position": [
+          608,
+          368
+        ],
+        "id": "d8f317df-686c-4f2b-820c-8a45b906abcd",
+        "name": "OpenAI Chat Model",
+        "credentials": {
+          "openAiApi": {
+            "id": "TOIrmcOlayuwA9Lg",
+            "name": "OpenAi account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsonSchemaExample": "\n{\n  \"Informacion del modelo\": [\n    {\n      \"marca\": \"VOLKSWAGEN\",\n      \"modelo\": \"JETTA\",\n      \"version\": \"TRENDLINE\",\n      \"anio\": \"2019\",\n      \"color\": \"GRIS\",\n      \"moneda\":\"MXN\",\n      \"precio\": \"289000\"\n    }\n  ]\n}\n"
+        },
+        "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+        "typeVersion": 1.3,
+        "position": [
+          752,
+          368
+        ],
+        "id": "a7c8072c-216c-4e8c-a9ca-5b8700df3e8a",
+        "name": "Structured Output Parser"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.pilotsolution.net/v1/catalog/product/read.php",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={\n  \"data\": {\n    \"id\": \"45\"\n  },\n\t\"header\": {\n\t\t\"FlowName\": \"product_catalog_read\",\n        \"SequenceId\": 1,\n        \"TimeStamp\": 1248377,\n        \"TrackingId\": \"55A6BCD4-0857-4A86-85FB-09A228B641B4\",\n    \t\"access_token\":\"{{ $json.result.entitydata.session.identityToken }}\"\n    }\n\n}\n\n",
+          "options": {}
+        },
+        "id": "89906ae1-a05b-4595-9eae-1b7a6cb1400c",
+        "name": "getPrecios1",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          0,
+          0
+        ]
+      }
+    ],
+    "connections": {
+      "When Executed by Another Workflow": {
+        "main": [
+          [
+            {
+              "node": "Login",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Edit Fields2": {
+        "main": [
+          [
+            {
+              "node": "Login1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Login": {
+        "main": [
+          [
+            {
+              "node": "Edit Fields2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Login1": {
+        "main": [
+          [
+            {
+              "node": "getPrecios",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "getPrecios1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "When clicking ‘Execute workflow’": {
+        "main": [
+          [
+            {
+              "node": "Login",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "getPrecios": {
+        "main": [
+          [
+            {
+              "node": "Code",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code": {
+        "main": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "OpenAI Chat Model": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Structured Output Parser": {
+        "ai_outputParser": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_outputParser",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "system migration",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-11-26T19:53:19.107Z",
+    "updatedAt": "2026-11-26T19:53:19.107Z"
+  },
+  "activeVersionId": "f50d781e-b4f1-468e-8964-f69470af4c24",
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Login",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields2": {
+      "main": [
+        [
+          {
+            "node": "Login1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Login": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Login1": {
+      "main": [
+        [
+          {
+            "node": "getPrecios",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "getPrecios1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Login",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "getPrecios": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-06-16T18:59:58.282Z",
+  "id": "3Qe6FlkodSYb17bC",
+  "isArchived": false,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "name": "Pilot - Get stock",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "modelo",
+              "type": "any"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -640,
+        352
+      ],
+      "id": "51004a7c-6228-4304-a417-edb2f92b09fc",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b223ceea-a793-41c8-8730-cce0790a5487",
+              "name": "token",
+              "value": "={{ $json.result.entitydata.accounts[0].token }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "95e148e1-874b-45de-8896-e1ca125ed8f6",
+      "name": "Edit Fields2",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -256,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.pilotsolution.net/v1/users/authentication.php",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "options": {}
+      },
+      "id": "390928b3-26c6-4bf8-bdbe-11aa0f2abc0f",
+      "name": "Login",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -400,
+        176
+      ],
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "XbIPUcWKdSWgyumH",
+          "name": "Custom Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://api.pilotsolution.net/v1/users/authorization.php",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "identity_token",
+              "value": "={{ $json.token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "68ea26d6-191e-4b57-86f7-fc9af56a2f3d",
+      "name": "Login1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -128,
+        176
+      ]
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -640,
+        16
+      ],
+      "id": "2e9d078b-e183-4bd2-8fed-fb48e8b0d350",
+      "name": "When clicking ‘Execute workflow’",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.pilotsolution.net/v1/stock/list.php",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n\t\"data\": {\n\n\t\t\"filters\": [\n\t\t],\n\t\t\"sort\": [\n\t\t\t{\n\t\t\t\t\"field\": \"updated\",\n\t\t\t\t\"order\": \"DESC\"\n\t\t\t}\n\t\t],\n\t\t\"limit\": 100,\n\t\t\"page\": 1\n\t},\n\t\"header\": {\n\t\t\"FlowName\": \"stock_list\",\n        \"SequenceId\": 1,\n        \"TimeStamp\": 1248377,\n        \"TrackingId\": \"55A6BCD4-0857-4A86-85FB-09A228B641B4\",\n    \t\"access_token\":\"{{ $json.result.entitydata.session.identityToken }}\"\n    }\n\n}",
+        "options": {}
+      },
+      "id": "9faacaa5-b146-4112-86cd-4a363daa91d1",
+      "name": "getPrecios",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// -------------------------------------------------\n// 1. DATOS DE ENTRADA\n// -------------------------------------------------\nconst entitydata = $input.first().json?.result?.entitydata || [];\n// -------------------------------------------------\n// 2. SOLO PUBLICADOS EN WEB Y NO VENDIDOS\n// -------------------------------------------------\nconst publicados = entitydata.filter(v => {\n  const isPublished = v.published_in_web === \"1\";\n  const isNotSold = v.availability_status?.code !== \"3\" && \n                    v.availability_status?.code !== 3;  // Por si viene como número\n  return isPublished && isNotSold;\n});\n// -------------------------------------------------\n// 3. FORMATEAR VEHÍCULOS\n// -------------------------------------------------\nconst formateados = publicados.map(v => {\n  const prices = Array.isArray(v.prices) ? v.prices : [];\n  const salePrice = prices.find(p => p.type === 'SALE_COST');\n  return {\n    id: v.id || null,\n    marca: v.brand || '',\n    modelo: v.model || '',\n    version: v.version || '',\n    anio: v.year || null,\n    tipo: v.type?.code || '',\n    combustible: v.fuel || '',\n    transmision: v.transmission || '',\n    kilometros: v.odometer || 0,\n    color: v.color || '',\n    estado: v.availability_status?.name || '',\n    precio: salePrice ? Number(salePrice.value) : null,\n    moneda: salePrice?.currency || 'ARS',\n    publicado_web: true\n  };\n});\n// -------------------------------------------------\n// 4. AGRUPAR POR MARCA\n// -------------------------------------------------\nconst porMarca = formateados.reduce((acc, v) => {\n  if (!acc[v.marca]) {\n    acc[v.marca] = [];\n  }\n  acc[v.marca].push(v);\n  return acc;\n}, {});\n// -------------------------------------------------\n// 5. DEVOLVER RESULTADO\n// -------------------------------------------------\nreturn [\n  {\n    json: {\n      total_modelos: formateados.length,\n      marcas: Object.keys(porMarca),\n      modelos_por_marca: porMarca\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        176
+      ],
+      "id": "66cc4ffc-fdaa-46cc-ab7c-4c8c8f3e5dde",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=El usuario va a preguntar por un modelo: {{$('When Executed by Another Workflow').first().json.modelo}}\" pero es posible que venga vacio, en ese caso devolver todos los modelos para que elija uno",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "=Contexto:\nSos un agente encargado de brindar información de vehículos.\nToda la información disponible sobre marcas, modelos, versiones y precios\nproviene EXCLUSIVAMENTE de una consulta a una API externa.\n\nLos datos disponibles están en el siguiente JSON:\n\n{{ JSON.stringify($json.modelos_por_marca, null, 2) }}\n\nReglas IMPORTANTES:\n- NO inventes información.\n- NO completes datos faltantes.\n- NO asumas marcas ni versiones.\n- Usá únicamente los datos presentes en el JSON.\n- Tené en cuenta que las marcas pueden repetirse con diferencias de mayúsculas, minúsculas o espacios (ej: \"Honda\", \"HONDA\", \"Honda \").\n- La búsqueda del modelo debe ser flexible: ignorar mayúsculas/minúsculas y espacios extra.\n- Si un modelo existe en varias marcas o versiones, devolver TODAS las coincidencias.\n- Si el precio es 0 o null, indicarlo como \"Precio no informado\".\n\nTarea:\nVas a recibir del cliente el nombre de un MODELO de vehículo.\nDebés buscar ese modelo dentro de TODOS los modelos disponibles en el JSON,\nsin importar la marca ni el formato del texto.\n\nRespuesta:\n- Si encontrás el modelo:\n  - Devolver TODAS las versiones disponibles.\n  - Incluir marca, modelo, versión, año, color y precio.\n- Si NO encontrás el modelo solicitado:\n  - Responder exactamente: \"No tengo el modelo solicitado\".\n\nFormato de salida (único permitido):\n\n{\n  \"Informacion del modelo\": [\n    {\n      \"marca\": \"...\",\n      \"modelo\": \"...\",\n      \"version\": \"...\",\n      \"anio\": \"...\",\n      \"color\": \"...\",\n      \"precio\": \"...\"\n    }\n  ]\n}\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        608,
+        176
+      ],
+      "id": "a1df74b2-91a2-4dbc-8189-eb2f9a4a6ebb",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4.1",
+          "mode": "list",
+          "cachedResultName": "gpt-4.1"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        608,
+        368
+      ],
+      "id": "d8f317df-686c-4f2b-820c-8a45b906abcd",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "TOIrmcOlayuwA9Lg",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "\n{\n  \"Informacion del modelo\": [\n    {\n      \"marca\": \"VOLKSWAGEN\",\n      \"modelo\": \"JETTA\",\n      \"version\": \"TRENDLINE\",\n      \"anio\": \"2019\",\n      \"color\": \"GRIS\",\n      \"moneda\":\"MXN\",\n      \"precio\": \"289000\"\n    }\n  ]\n}\n"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        752,
+        368
+      ],
+      "id": "a7c8072c-216c-4e8c-a9ca-5b8700df3e8a",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.pilotsolution.net/v1/catalog/product/read.php",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"data\": {\n    \"id\": \"45\"\n  },\n\t\"header\": {\n\t\t\"FlowName\": \"product_catalog_read\",\n        \"SequenceId\": 1,\n        \"TimeStamp\": 1248377,\n        \"TrackingId\": \"55A6BCD4-0857-4A86-85FB-09A228B641B4\",\n    \t\"access_token\":\"{{ $json.result.entitydata.session.identityToken }}\"\n    }\n\n}\n\n",
+        "options": {}
+      },
+      "id": "89906ae1-a05b-4595-9eae-1b7a6cb1400c",
+      "name": "getPrecios1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        0
+      ]
+    }
+  ],
+  "pinData": {
+    "When Executed by Another Workflow": [
+      {
+        "json": {
+          "modelo": "Ranger LTD"
+        }
+      }
+    ]
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "3Qe6FlkodSYb17bC",
+      "projectId": "pydFAB8KkMQFZ937",
+      "createdAt": "2026-06-16T18:59:58.345Z",
+      "updatedAt": "2026-06-16T18:59:58.345Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [
+    {
+      "id": "A4bjtCXYt2sYrTqG",
+      "name": "strianese",
+      "createdAt": "2026-06-16T18:57:44.035Z",
+      "updatedAt": "2026-06-16T18:57:44.035Z"
+    }
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2026-06-16T18:59:58.282Z",
+  "versionId": "f50d781e-b4f1-468e-8964-f69470af4c24"
+}
