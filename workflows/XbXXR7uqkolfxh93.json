@@ -1,0 +1,297 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "88ac4d3e-e951-4379-847c-ceb55603cc24",
+    "workflowId": "XbXXR7uqkolfxh93",
+    "nodes": [
+      {
+        "id": "fc195ab0-6b25-4971-bcaa-0b43998f4350",
+        "name": "Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.1,
+        "position": [
+          0,
+          0
+        ],
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "bcf725ed-bba1-4b68-a4aa-2d268f4a67fb",
+          "options": {}
+        },
+        "webhookId": "42f43763-ac2a-4c23-90ed-7beadc9f8dc1"
+      },
+      {
+        "id": "98c41b94-b60e-4304-b07e-29b5dd55d240",
+        "name": "Preparar datos",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          224,
+          0
+        ],
+        "parameters": {
+          "jsCode": "function normalizarTelefonoArgentina(numero) {\n  if (!numero) return null;\n  let d = String(numero).replace(/\\D/g, '');\n  if (d.startsWith('549') && d.length === 13) return d;\n  if (d.startsWith('54') && d.length === 12) return '549' + d.slice(2);\n  if (d.startsWith('0')) d = d.slice(1);\n  if (d.startsWith('1115') && d.length === 12) d = '11' + d.slice(4);\n  if (d.length === 10) return '549' + d;\n  return null;\n}\nconst norm = s => String(s || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toUpperCase().replace(/\\s+/g, ' ').trim();\n\n// Webhook entregas -> Entregas 0km (nombre, marca, sucursal, fecha y hora)\nconst body = $input.first().json.body || {};\nconst nombre = String(body.Nombre_Cliente || '').trim();\nconst marca = String(body.Marca || '').trim();\nconst sucursal = String(body.Sucursal || '').trim();\nconst fecha = String(body['Fecha y Hora Aproximada '] || body['Fecha y Hora Aproximada'] || '').trim();\nconst telefono = String(body.Celular || '').trim() || String(body.Telefono || '').trim() || null;\nconst phone = normalizarTelefonoArgentina(telefono);\n// Igual que el workflow actual: solo FIAT y PEUGEOT.\nconst marcaOk = ['FIAT', 'PEUGEOT'].includes(norm(marca));\n\nreturn [{ json: {\n  valido: Boolean(phone && nombre && marcaOk && sucursal && fecha),\n  campaign_id: 5967,\n  campana: 'Entregas 0km',\n  phone_number: phone,\n  telefono_original: telefono,\n  variables: { '1': nombre, '2': marca, '3': sucursal, '4': fecha },\n} }];\n"
+        }
+      },
+      {
+        "id": "2c3c5883-8b10-4453-997a-e7aba6cc98aa",
+        "name": "¿Datos OK?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          448,
+          0
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose"
+            },
+            "conditions": [
+              {
+                "leftValue": "={{ $json.valido }}",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                },
+                "rightValue": ""
+              }
+            ],
+            "combinator": "and"
+          }
+        }
+      },
+      {
+        "id": "565dea4b-305c-492e-a183-bf5d21385048",
+        "name": "Enviar campaña suite",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          672,
+          0
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "=https://campaigns.redooconect.com.ar/api/v1/campaigns/{{ $json.campaign_id }}/send-single",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-API-Key",
+                "value": "6955995d-7c77-4c76-a029-f2bc3acbc579"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ phone_number: $json.phone_number, sender_phone: '5491125599175', destination_country: 'AR', enqueue_if_no_credit: true, variables: $json.variables }) }}",
+          "options": {}
+        },
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
+      }
+    ],
+    "connections": {
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "Preparar datos",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Preparar datos": {
+        "main": [
+          [
+            {
+              "node": "¿Datos OK?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "¿Datos OK?": {
+        "main": [
+          [
+            {
+              "node": "Enviar campaña suite",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "Redoo Desarrollo (via MCP)",
+    "name": "Pase a producción: path del webhook viejo",
+    "description": "Updated nodes: Webhook",
+    "autosaved": false,
+    "createdAt": "2026-10-29T21:43:31.922Z",
+    "updatedAt": "2026-10-29T21:43:31.922Z"
+  },
+  "activeVersionId": "88ac4d3e-e951-4379-847c-ceb55603cc24",
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Preparar datos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar datos": {
+      "main": [
+        [
+          {
+            "node": "¿Datos OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Datos OK?": {
+      "main": [
+        [
+          {
+            "node": "Enviar campaña suite",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-10-29T21:24:09.499Z",
+  "id": "XbXXR7uqkolfxh93",
+  "isArchived": false,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "name": "[SUITE] PILOT - Entregas 0km",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "id": "fc195ab0-6b25-4971-bcaa-0b43998f4350",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "bcf725ed-bba1-4b68-a4aa-2d268f4a67fb",
+        "options": {}
+      },
+      "webhookId": "42f43763-ac2a-4c23-90ed-7beadc9f8dc1"
+    },
+    {
+      "id": "98c41b94-b60e-4304-b07e-29b5dd55d240",
+      "name": "Preparar datos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ],
+      "parameters": {
+        "jsCode": "function normalizarTelefonoArgentina(numero) {\n  if (!numero) return null;\n  let d = String(numero).replace(/\\D/g, '');\n  if (d.startsWith('549') && d.length === 13) return d;\n  if (d.startsWith('54') && d.length === 12) return '549' + d.slice(2);\n  if (d.startsWith('0')) d = d.slice(1);\n  if (d.startsWith('1115') && d.length === 12) d = '11' + d.slice(4);\n  if (d.length === 10) return '549' + d;\n  return null;\n}\nconst norm = s => String(s || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toUpperCase().replace(/\\s+/g, ' ').trim();\n\n// Webhook entregas -> Entregas 0km (nombre, marca, sucursal, fecha y hora)\nconst body = $input.first().json.body || {};\nconst nombre = String(body.Nombre_Cliente || '').trim();\nconst marca = String(body.Marca || '').trim();\nconst sucursal = String(body.Sucursal || '').trim();\nconst fecha = String(body['Fecha y Hora Aproximada '] || body['Fecha y Hora Aproximada'] || '').trim();\nconst telefono = String(body.Celular || '').trim() || String(body.Telefono || '').trim() || null;\nconst phone = normalizarTelefonoArgentina(telefono);\n// Igual que el workflow actual: solo FIAT y PEUGEOT.\nconst marcaOk = ['FIAT', 'PEUGEOT'].includes(norm(marca));\n\nreturn [{ json: {\n  valido: Boolean(phone && nombre && marcaOk && sucursal && fecha),\n  campaign_id: 5967,\n  campana: 'Entregas 0km',\n  phone_number: phone,\n  telefono_original: telefono,\n  variables: { '1': nombre, '2': marca, '3': sucursal, '4': fecha },\n} }];\n"
+      }
+    },
+    {
+      "id": "2c3c5883-8b10-4453-997a-e7aba6cc98aa",
+      "name": "¿Datos OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.valido }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "565dea4b-305c-492e-a183-bf5d21385048",
+      "name": "Enviar campaña suite",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        672,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://campaigns.redooconect.com.ar/api/v1/campaigns/{{ $json.campaign_id }}/send-single",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "6955995d-7c77-4c76-a029-f2bc3acbc579"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ phone_number: $json.phone_number, sender_phone: '5491125599175', destination_country: 'AR', enqueue_if_no_credit: true, variables: $json.variables }) }}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    }
+  ],
+  "pinData": null,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "XbXXR7uqkolfxh93",
+      "projectId": "XDNGkKAM4jxvPjG8",
+      "createdAt": "2026-10-29T21:24:09.505Z",
+      "updatedAt": "2026-10-29T21:24:09.505Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2026-10-29T21:43:31.921Z",
+  "versionId": "88ac4d3e-e951-4379-847c-ceb55603cc24"
+}
