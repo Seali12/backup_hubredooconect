@@ -1,0 +1,794 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "05116e92-789f-440c-ab68-bbd516a4b4d3",
+    "workflowId": "4WEEIeL9sqdQIeov",
+    "nodes": [
+      {
+        "parameters": {
+          "pollTimes": {
+            "item": [
+              {
+                "mode": "everyMinute"
+              }
+            ]
+          },
+          "simple": false,
+          "filters": {},
+          "options": {}
+        },
+        "id": "8884397a-9a74-40a8-9059-a62b19b8878f",
+        "name": "Gmail Trigger",
+        "type": "n8n-nodes-base.gmailTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          64,
+          128
+        ],
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "D4wRRlKo49JWZmwZ",
+            "name": "Gmail redooencuestas"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "let rawText = $('Gmail Trigger').first().json.text;\n\n// 1. Quitar saltos de línea y espacios extra\nlet cleaned = rawText.replace(/\\n/g, \"\").trim();\n\n// 2. Quitar el link de Mandrill\ncleaned = cleaned.replace(/\\[https:\\/\\/mandrillapp\\.com\\/track\\/open\\.php\\?u=\\d+&id=[a-z0-9]+\\]/, \"\");\ncleaned = cleaned.replace(/\\[.*\\]$/, \"\");\n\n// 3. Eliminar coma extra antes de la llave de cierre }\ncleaned = cleaned.replace(/,(\\s*})/, '$1');\n\n// 4. También limpiar comas extra en otras posiciones si las hay\ncleaned = cleaned.replace(/,(\\s*,)/g, ','); // comas duplicadas\ncleaned = cleaned.replace(/,(\\s*])/g, '$1'); // coma antes de ]\n\nconsole.log('Texto limpiado:', cleaned);\n\n// 5. Convertir a objeto JSON PRIMERO (con las comillas en las keys)\ntry {\n    let jsonObject = JSON.parse(cleaned);\n    console.log('JSON parseado exitosamente:', jsonObject);\n    \n    // 6. Revisar y normalizar el campo \"telefono\"\n    if (jsonObject.telefono) {\n        let rawTel = String(jsonObject.telefono).trim();\n        console.log('Tel original (raw):', rawTel);\n        \n        // DEBUG: imprime códigos de caracteres\n        const codes = Array.from(rawTel).map(ch => ch.charCodeAt(0));\n        console.log('Char codes del telefono:', codes);\n        \n        // Extraer sólo dígitos (eliminar +, espacios, guiones, NBSP, etc.)\n        let digits = rawTel.replace(/\\D/g, '');\n        console.log('Solo dígitos:', digits);\n        \n        // Normalizar prefijos\n        if (digits.startsWith('+54915')) {\n            // Caso: 54915 -> 54911\n            digits = '54911' + digits.slice(5);\n            console.log('✓ Corregido 54915 -> 54911:', digits);\n        } else if (digits.startsWith('915')) {\n            // Caso: 915 sin country code -> 54911\n            digits = '54911' + digits.slice(3);\n            console.log('✓ Corregido 915 -> 54911:', digits);\n        } else if (digits.startsWith('11')) {\n            // Caso: 11 sin country code -> 54911\n            digits = '54911' + digits.slice(2);\n            console.log('✓ Agregado country code a 11:', digits);\n        } else if (!digits.startsWith('549')) {\n            // Caso: no tiene 549 al inicio -> agregar\n            digits = '549' + digits;\n            console.log('✓ Agregado 549 al inicio:', digits);\n        }\n        \n        // Formatear con +\n        jsonObject.telefono = '+' + digits;\n        console.log('Telefono final normalizado:', jsonObject.telefono);\n    }\n    \n    console.log('Objeto final con telefono normalizado:', jsonObject);\n    return jsonObject;\n    \n} catch (error) {\n    console.error('Error al parsear JSON:', error);\n    console.error('Texto problemático:', cleaned);\n    \n    // Si falla, intentar con eval() como alternativa (menos seguro pero funcional)\n    try {\n        console.log('Intentando con eval...');\n        let evalResult = eval('(' + cleaned + ')');\n        \n        // Normalizamos telefono también aquí\n        if (evalResult.telefono) {\n            let rawTel = String(evalResult.telefono).trim();\n            let digits = rawTel.replace(/\\D/g, '');\n            \n            if (digits.startsWith('54915')) {\n                digits = '54911' + digits.slice(5);\n            } else if (digits.startsWith('915')) {\n                digits = '54911' + digits.slice(3);\n            } else if (digits.startsWith('11')) {\n                digits = '54911' + digits.slice(2);\n            } else if (!digits.startsWith('549')) {\n                digits = '549' + digits;\n            }\n            \n            evalResult.telefono = '+' + digits;\n            console.log('Telefono normalizado (eval):', evalResult.telefono);\n        }\n        \n        return evalResult;\n        \n    } catch (evalError) {\n        console.error('Error con eval también:', evalError);\n        return null;\n    }\n}"
+        },
+        "id": "0f18d587-01ec-4156-bc49-ce3838e7ecb3",
+        "name": "Code",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          544,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.twilio.com/2010-04-01/Accounts/TWILIO_SID_OCULTO/Messages.json",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpBasicAuth",
+          "sendBody": true,
+          "contentType": "form-urlencoded",
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "To",
+                "value": "=whatsapp:{{ $json.telefono.replace(' ', '').replace('54915', '54911') }}"
+              },
+              {
+                "name": "MessagingServiceSid",
+                "value": "MG0ef976891426933b0a8ab4623a517074"
+              },
+              {
+                "name": "From",
+                "value": "whatsapp:+5491125243344"
+              },
+              {
+                "name": "ContentSid",
+                "value": "HXec53fc87ef873c8b9235968d4043fd3c"
+              },
+              {
+                "name": "ContentVariables",
+                "value": "={\"1\":\"{{ $json.nombre }}\", \"2\":\"{{ $json.concesionario }}\", \"3\":\"{{ $json.fecha }}\", \"4\":\"KIA\", \"5\":\"{{ $json.vehiculo }}\", \"6\":\"{{ $json.VIN || 'no-data' }}\", \"7\":\"{{ $json.dominio }}\", \"8\":\"{{ $json.asesor || 'no-data' }}\", \"9\":\"?{{ $json.link.split('?')[1] }}\"}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "c28c8ded-ba95-4f77-92d3-1ee7194dbc0d",
+        "name": "HTTP Request",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          752,
+          0
+        ],
+        "credentials": {
+          "httpBasicAuth": {
+            "id": "eEWfBe3ak5DIpwJ5",
+            "name": "TWILIO KIA"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "content": "## Salida de encuestas",
+          "height": 315
+        },
+        "id": "70395edd-0deb-4968-8f45-9b25aa88bb81",
+        "name": "Sticky Note",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          0,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "let rawText = $('Gmail Trigger').first().json.text;\n\n// 1. Quitar saltos de línea y espacios extra\nlet cleaned = rawText.replace(/\\n/g, \"\").trim();\n\n// 2. Quitar el link de Mandrill\ncleaned = cleaned.replace(/\\[https:\\/\\/mandrillapp\\.com\\/track\\/open\\.php\\?u=\\d+&id=[a-z0-9]+\\]/, \"\");\ncleaned = cleaned.replace(/\\[.*\\]$/, \"\");\n\n// 3. Eliminar coma extra antes de la llave de cierre }\ncleaned = cleaned.replace(/,(\\s*})/, '$1');\n\n// 4. También limpiar comas extra en otras posiciones si las hay\ncleaned = cleaned.replace(/,(\\s*,)/g, ','); // comas duplicadas\ncleaned = cleaned.replace(/,(\\s*])/g, '$1'); // coma antes de ]\n\nconsole.log('Texto limpiado:', cleaned);\n\n// 5. Convertir a objeto JSON PRIMERO (con las comillas en las keys)\ntry {\n    let jsonObject = JSON.parse(cleaned);\n    console.log('JSON parseado exitosamente:', jsonObject);\n    \n    // 6. Revisar y normalizar el campo \"telefono\"\n    if (jsonObject.telefono) {\n        // Si no empieza con +549, lo agregamos\n        if (!jsonObject.telefono.startsWith('+549')) {\n            // Limpiamos posibles espacios al inicio\n            jsonObject.telefono = '+549' + jsonObject.telefono.replace(/^\\+?/, '');\n        }\n    }\n\n    console.log('Objeto final con telefono normalizado:', jsonObject);\n    return jsonObject;\n    \n} catch (error) {\n    console.error('Error al parsear JSON:', error);\n    console.error('Texto problemático:', cleaned);\n    \n    // Si falla, intentar con eval() como alternativa (menos seguro pero funcional)\n    try {\n        console.log('Intentando con eval...');\n        let evalResult = eval('(' + cleaned + ')');\n\n        // Normalizamos telefono también aquí\n        if (evalResult.telefono) {\n            if (!evalResult.telefono.startsWith('+549')) {\n                evalResult.telefono = '+549' + evalResult.telefono.replace(/^\\+?/, '');\n            }\n        }\n\n        return evalResult;\n    } catch (evalError) {\n        console.error('Error con eval también:', evalError);\n        return null;\n    }\n}\n"
+        },
+        "id": "ac49281e-5a62-4cd4-a0fa-2602527cb394",
+        "name": "Code1",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          544,
+          192
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.twilio.com/2010-04-01/Accounts/TWILIO_SID_OCULTO/Messages.json",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpBasicAuth",
+          "sendBody": true,
+          "contentType": "form-urlencoded",
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "To",
+                "value": "=whatsapp:{{ $json.telefono.replace(' ', '') }}"
+              },
+              {
+                "name": "MessagingServiceSid",
+                "value": "MG0ef976891426933b0a8ab4623a517074"
+              },
+              {
+                "name": "From",
+                "value": "whatsapp:+5491125243344"
+              },
+              {
+                "name": "ContentSid",
+                "value": "HX90db13b564df591dfb86f593cfa9ab3b"
+              },
+              {
+                "name": "ContentVariables",
+                "value": "={\"1\":\"{{ $json.nombre }}\", \"2\":\"{{ $json.concesionario }}\", \"3\":\"{{ $json.fecha }}\", \"4\":\"{{ $json.vehiculo }}\", \"5\":\"{{ $json.vin || 'no-data' }}\", \"6\":\"{{ $json.asesor || 'no-data' }}\", \"7\":\"?{{ $json.link.split('?')[1] }}\"}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "94b6dadc-dafc-4196-8dbb-4ee6111bdbb0",
+        "name": "HTTP Request1",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          752,
+          192
+        ],
+        "credentials": {
+          "httpBasicAuth": {
+            "id": "eEWfBe3ak5DIpwJ5",
+            "name": "TWILIO KIA"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "rules": {
+            "values": [
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 2
+                  },
+                  "conditions": [
+                    {
+                      "leftValue": "={{ $json.subject.toLowerCase() }}",
+                      "rightValue": "encuesta creada",
+                      "operator": {
+                        "type": "string",
+                        "operation": "contains"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                }
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 2
+                  },
+                  "conditions": [
+                    {
+                      "id": "f673b91a-3003-462d-91a0-f009edc132f4",
+                      "leftValue": "={{ $json.subject.toLowerCase() }}",
+                      "rightValue": "encuesta ventas",
+                      "operator": {
+                        "type": "string",
+                        "operation": "contains"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                }
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "36c13b0b-c1e7-42c8-9ab8-5a6ee8fcf0c8",
+        "name": "Switch",
+        "type": "n8n-nodes-base.switch",
+        "typeVersion": 3.2,
+        "position": [
+          288,
+          128
+        ]
+      }
+    ],
+    "connections": {
+      "Gmail Trigger": {
+        "main": [
+          [
+            {
+              "node": "Switch",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code": {
+        "main": [
+          [
+            {
+              "node": "HTTP Request",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code1": {
+        "main": [
+          [
+            {
+              "node": "HTTP Request1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Switch": {
+        "main": [
+          [
+            {
+              "node": "Code",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Code1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "MARCELO AGUSTIN DRI",
+    "name": "Version 05116e92",
+    "description": "",
+    "autosaved": true,
+    "createdAt": "2026-11-04T20:17:56.629Z",
+    "updatedAt": "2026-11-04T20:18:03.000Z"
+  },
+  "activeVersionId": "05116e92-789f-440c-ab68-bbd516a4b4d3",
+  "connections": {
+    "Gmail Trigger": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code1": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-11-04T20:17:56.622Z",
+  "id": "4WEEIeL9sqdQIeov",
+  "isArchived": false,
+  "meta": null,
+  "name": "KIA-EMAILS",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "simple": false,
+        "filters": {},
+        "options": {}
+      },
+      "id": "8884397a-9a74-40a8-9059-a62b19b8878f",
+      "name": "Gmail Trigger",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        64,
+        128
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "D4wRRlKo49JWZmwZ",
+          "name": "Gmail redooencuestas"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "let rawText = $('Gmail Trigger').first().json.text;\n\n// 1. Quitar saltos de línea y espacios extra\nlet cleaned = rawText.replace(/\\n/g, \"\").trim();\n\n// 2. Quitar el link de Mandrill\ncleaned = cleaned.replace(/\\[https:\\/\\/mandrillapp\\.com\\/track\\/open\\.php\\?u=\\d+&id=[a-z0-9]+\\]/, \"\");\ncleaned = cleaned.replace(/\\[.*\\]$/, \"\");\n\n// 3. Eliminar coma extra antes de la llave de cierre }\ncleaned = cleaned.replace(/,(\\s*})/, '$1');\n\n// 4. También limpiar comas extra en otras posiciones si las hay\ncleaned = cleaned.replace(/,(\\s*,)/g, ','); // comas duplicadas\ncleaned = cleaned.replace(/,(\\s*])/g, '$1'); // coma antes de ]\n\nconsole.log('Texto limpiado:', cleaned);\n\n// 5. Convertir a objeto JSON PRIMERO (con las comillas en las keys)\ntry {\n    let jsonObject = JSON.parse(cleaned);\n    console.log('JSON parseado exitosamente:', jsonObject);\n    \n    // 6. Revisar y normalizar el campo \"telefono\"\n    if (jsonObject.telefono) {\n        let rawTel = String(jsonObject.telefono).trim();\n        console.log('Tel original (raw):', rawTel);\n        \n        // DEBUG: imprime códigos de caracteres\n        const codes = Array.from(rawTel).map(ch => ch.charCodeAt(0));\n        console.log('Char codes del telefono:', codes);\n        \n        // Extraer sólo dígitos (eliminar +, espacios, guiones, NBSP, etc.)\n        let digits = rawTel.replace(/\\D/g, '');\n        console.log('Solo dígitos:', digits);\n        \n        // Normalizar prefijos\n        if (digits.startsWith('+54915')) {\n            // Caso: 54915 -> 54911\n            digits = '54911' + digits.slice(5);\n            console.log('✓ Corregido 54915 -> 54911:', digits);\n        } else if (digits.startsWith('915')) {\n            // Caso: 915 sin country code -> 54911\n            digits = '54911' + digits.slice(3);\n            console.log('✓ Corregido 915 -> 54911:', digits);\n        } else if (digits.startsWith('11')) {\n            // Caso: 11 sin country code -> 54911\n            digits = '54911' + digits.slice(2);\n            console.log('✓ Agregado country code a 11:', digits);\n        } else if (!digits.startsWith('549')) {\n            // Caso: no tiene 549 al inicio -> agregar\n            digits = '549' + digits;\n            console.log('✓ Agregado 549 al inicio:', digits);\n        }\n        \n        // Formatear con +\n        jsonObject.telefono = '+' + digits;\n        console.log('Telefono final normalizado:', jsonObject.telefono);\n    }\n    \n    console.log('Objeto final con telefono normalizado:', jsonObject);\n    return jsonObject;\n    \n} catch (error) {\n    console.error('Error al parsear JSON:', error);\n    console.error('Texto problemático:', cleaned);\n    \n    // Si falla, intentar con eval() como alternativa (menos seguro pero funcional)\n    try {\n        console.log('Intentando con eval...');\n        let evalResult = eval('(' + cleaned + ')');\n        \n        // Normalizamos telefono también aquí\n        if (evalResult.telefono) {\n            let rawTel = String(evalResult.telefono).trim();\n            let digits = rawTel.replace(/\\D/g, '');\n            \n            if (digits.startsWith('54915')) {\n                digits = '54911' + digits.slice(5);\n            } else if (digits.startsWith('915')) {\n                digits = '54911' + digits.slice(3);\n            } else if (digits.startsWith('11')) {\n                digits = '54911' + digits.slice(2);\n            } else if (!digits.startsWith('549')) {\n                digits = '549' + digits;\n            }\n            \n            evalResult.telefono = '+' + digits;\n            console.log('Telefono normalizado (eval):', evalResult.telefono);\n        }\n        \n        return evalResult;\n        \n    } catch (evalError) {\n        console.error('Error con eval también:', evalError);\n        return null;\n    }\n}"
+      },
+      "id": "0f18d587-01ec-4156-bc49-ce3838e7ecb3",
+      "name": "Code",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        544,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.twilio.com/2010-04-01/Accounts/TWILIO_SID_OCULTO/Messages.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "To",
+              "value": "=whatsapp:{{ $json.telefono.replace(' ', '').replace('54915', '54911') }}"
+            },
+            {
+              "name": "MessagingServiceSid",
+              "value": "MG0ef976891426933b0a8ab4623a517074"
+            },
+            {
+              "name": "From",
+              "value": "whatsapp:+5491125243344"
+            },
+            {
+              "name": "ContentSid",
+              "value": "HXec53fc87ef873c8b9235968d4043fd3c"
+            },
+            {
+              "name": "ContentVariables",
+              "value": "={\"1\":\"{{ $json.nombre }}\", \"2\":\"{{ $json.concesionario }}\", \"3\":\"{{ $json.fecha }}\", \"4\":\"KIA\", \"5\":\"{{ $json.vehiculo }}\", \"6\":\"{{ $json.VIN || 'no-data' }}\", \"7\":\"{{ $json.dominio }}\", \"8\":\"{{ $json.asesor || 'no-data' }}\", \"9\":\"?{{ $json.link.split('?')[1] }}\"}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c28c8ded-ba95-4f77-92d3-1ee7194dbc0d",
+      "name": "HTTP Request",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        752,
+        0
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "eEWfBe3ak5DIpwJ5",
+          "name": "TWILIO KIA"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## Salida de encuestas",
+        "height": 315
+      },
+      "id": "70395edd-0deb-4968-8f45-9b25aa88bb81",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "let rawText = $('Gmail Trigger').first().json.text;\n\n// 1. Quitar saltos de línea y espacios extra\nlet cleaned = rawText.replace(/\\n/g, \"\").trim();\n\n// 2. Quitar el link de Mandrill\ncleaned = cleaned.replace(/\\[https:\\/\\/mandrillapp\\.com\\/track\\/open\\.php\\?u=\\d+&id=[a-z0-9]+\\]/, \"\");\ncleaned = cleaned.replace(/\\[.*\\]$/, \"\");\n\n// 3. Eliminar coma extra antes de la llave de cierre }\ncleaned = cleaned.replace(/,(\\s*})/, '$1');\n\n// 4. También limpiar comas extra en otras posiciones si las hay\ncleaned = cleaned.replace(/,(\\s*,)/g, ','); // comas duplicadas\ncleaned = cleaned.replace(/,(\\s*])/g, '$1'); // coma antes de ]\n\nconsole.log('Texto limpiado:', cleaned);\n\n// 5. Convertir a objeto JSON PRIMERO (con las comillas en las keys)\ntry {\n    let jsonObject = JSON.parse(cleaned);\n    console.log('JSON parseado exitosamente:', jsonObject);\n    \n    // 6. Revisar y normalizar el campo \"telefono\"\n    if (jsonObject.telefono) {\n        // Si no empieza con +549, lo agregamos\n        if (!jsonObject.telefono.startsWith('+549')) {\n            // Limpiamos posibles espacios al inicio\n            jsonObject.telefono = '+549' + jsonObject.telefono.replace(/^\\+?/, '');\n        }\n    }\n\n    console.log('Objeto final con telefono normalizado:', jsonObject);\n    return jsonObject;\n    \n} catch (error) {\n    console.error('Error al parsear JSON:', error);\n    console.error('Texto problemático:', cleaned);\n    \n    // Si falla, intentar con eval() como alternativa (menos seguro pero funcional)\n    try {\n        console.log('Intentando con eval...');\n        let evalResult = eval('(' + cleaned + ')');\n\n        // Normalizamos telefono también aquí\n        if (evalResult.telefono) {\n            if (!evalResult.telefono.startsWith('+549')) {\n                evalResult.telefono = '+549' + evalResult.telefono.replace(/^\\+?/, '');\n            }\n        }\n\n        return evalResult;\n    } catch (evalError) {\n        console.error('Error con eval también:', evalError);\n        return null;\n    }\n}\n"
+      },
+      "id": "ac49281e-5a62-4cd4-a0fa-2602527cb394",
+      "name": "Code1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        544,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.twilio.com/2010-04-01/Accounts/TWILIO_SID_OCULTO/Messages.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "To",
+              "value": "=whatsapp:{{ $json.telefono.replace(' ', '') }}"
+            },
+            {
+              "name": "MessagingServiceSid",
+              "value": "MG0ef976891426933b0a8ab4623a517074"
+            },
+            {
+              "name": "From",
+              "value": "whatsapp:+5491125243344"
+            },
+            {
+              "name": "ContentSid",
+              "value": "HX90db13b564df591dfb86f593cfa9ab3b"
+            },
+            {
+              "name": "ContentVariables",
+              "value": "={\"1\":\"{{ $json.nombre }}\", \"2\":\"{{ $json.concesionario }}\", \"3\":\"{{ $json.fecha }}\", \"4\":\"{{ $json.vehiculo }}\", \"5\":\"{{ $json.vin || 'no-data' }}\", \"6\":\"{{ $json.asesor || 'no-data' }}\", \"7\":\"?{{ $json.link.split('?')[1] }}\"}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "94b6dadc-dafc-4196-8dbb-4ee6111bdbb0",
+      "name": "HTTP Request1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        752,
+        192
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "eEWfBe3ak5DIpwJ5",
+          "name": "TWILIO KIA"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.subject.toLowerCase() }}",
+                    "rightValue": "encuesta creada",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "f673b91a-3003-462d-91a0-f009edc132f4",
+                    "leftValue": "={{ $json.subject.toLowerCase() }}",
+                    "rightValue": "encuesta ventas",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "36c13b0b-c1e7-42c8-9ab8-5a6ee8fcf0c8",
+      "name": "Switch",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        288,
+        128
+      ]
+    }
+  ],
+  "pinData": {
+    "Gmail Trigger": [
+      {
+        "json": {
+          "id": "19c9ef6573d62c1b",
+          "threadId": "19c9ef6573d62c1b",
+          "labelIds": [
+            "UNREAD",
+            "CATEGORY_UPDATES",
+            "INBOX"
+          ],
+          "sizeEstimate": 6803,
+          "headers": {
+            "delivered-to": "Delivered-To: redooencuestas@gmail.com",
+            "received": "Received: from [52.5.77.151] by mandrillapp.com id 9b49a89fffdc46f2836e192620efdb10; Fri, 27 Feb 2026 11:57:49 +0000",
+            "x-received": "X-Received: by 2002:a05:690c:360b:b0:796:3dce:d098 with SMTP id 00721157ae682-7988547f4a4mr25620457b3.17.1772193470136;\r\n        Fri, 27 Feb 2026 03:57:50 -0800 (PST)",
+            "arc-seal": "ARC-Seal: i=1; a=rsa-sha256; t=1772193470; cv=none;\r\n        d=google.com; s=arc-20240605;\r\n        b=X5qzdcVqyBSxAMJMtnzy6u+mSXYeSFgIDI4dOxDW0kJqBc59Ig4rBujG9JsmeD4dWO\r\n         bkgwrZlf4DkKfqe97WGmlhPIYSwKQdQBq9AFUvBFMpQq4UQvWHPwmvBX+0zH/9AGkSrl\r\n         fIfXfDXKkdnNegVvYnADVI6iMKMQ6sZs/uvY3Lj7n23IifH3qTQnu0AyFL/OIgB8KYCq\r\n         NCP6U7LL3fxkIf9kBfCBctWuUpwLeOOHquAicT/tucFMS4NGKoVP+2uGFuIRGjo6eGPU\r\n         8YsavuIYH29Hgd8uv22Br0TScEaxRLsyoaTt400vviDc1Ooc3DKtWs/MZTTCwgGmAX8U\r\n         cslw==",
+            "arc-message-signature": "ARC-Message-Signature: i=1; a=rsa-sha256; c=relaxed/relaxed; d=google.com; s=arc-20240605;\r\n        h=content-transfer-encoding:mime-version:date:message-id:feedback-id\r\n         :to:reply-to:subject:from:dkim-signature:dkim-signature;\r\n        bh=1FbgtNETxlpDG6eQ7BoX3IJmOGjMM/26izUEQ5uOy2E=;\r\n        fh=Dz0KNj/uaYP8CQsNrdNZbkp9VbDUjzQlKdDGmu5iJCw=;\r\n        b=ZPDSiwPnoTslCpB0/MHq7bHdMDIEyhP7v2N5AbfWlYs5Cxe5MLETwJBzQIKhF8gIxi\r\n         /qpq31BPxlmsFxd3PpPlye5s+I+M1wDRxQZoyJGxOIDjfHnUhZahAChip/9bNTiPG4oT\r\n         V4f6SRbj2Qzf508yGsS6VGatH4v/axMOp17rvbbvDBXtZTqbgzhw/6pEaF/qnULYSBM3\r\n         RjQlJAOW0tKGzsgh5xg+yPfSvjR0DbQf3S1+znzZPzkigBuHdKHsqEivQVWP6h036+9F\r\n         VUGqYs7ppi7DyjPY4ivqaZQ2uGehPgOeAM3YZ9A8YgHmGhPPomEfWN8XljFXEGrRD0Gs\r\n         SC0Q==;\r\n        dara=google.com",
+            "arc-authentication-results": "ARC-Authentication-Results: i=1; mx.google.com;\r\n       dkim=pass header.i=@mandrillapp.com header.s=mte1 header.b=Ytm+l8i4;\r\n       dkim=pass header.i=@crm.pilotsolution.com.ar header.s=mte1 header.b=pdGbmijF;\r\n       spf=pass (google.com: domain of bounce-md_12383463.69a186bd.v1-9b49a89fffdc46f2836e192620efdb10@mandrillapp.com designates 198.2.179.143 as permitted sender) smtp.mailfrom=bounce-md_12383463.69a186bd.v1-9b49a89fffdc46f2836e192620efdb10@mandrillapp.com;\r\n       dmarc=pass (p=NONE sp=NONE dis=NONE) header.from=crm.pilotsolution.com.ar",
+            "return-path": "Return-Path: <bounce-md_12383463.69a186bd.v1-9b49a89fffdc46f2836e192620efdb10@mandrillapp.com>",
+            "received-spf": "Received-SPF: pass (google.com: domain of bounce-md_12383463.69a186bd.v1-9b49a89fffdc46f2836e192620efdb10@mandrillapp.com designates 198.2.179.143 as permitted sender) client-ip=198.2.179.143;",
+            "authentication-results": "Authentication-Results: mx.google.com;\r\n       dkim=pass header.i=@mandrillapp.com header.s=mte1 header.b=Ytm+l8i4;\r\n       dkim=pass header.i=@crm.pilotsolution.com.ar header.s=mte1 header.b=pdGbmijF;\r\n       spf=pass (google.com: domain of bounce-md_12383463.69a186bd.v1-9b49a89fffdc46f2836e192620efdb10@mandrillapp.com designates 198.2.179.143 as permitted sender) smtp.mailfrom=bounce-md_12383463.69a186bd.v1-9b49a89fffdc46f2836e192620efdb10@mandrillapp.com;\r\n       dmarc=pass (p=NONE sp=NONE dis=NONE) header.from=crm.pilotsolution.com.ar",
+            "dkim-signature": "DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;\r\n\td=crm.pilotsolution.com.ar; s=mte1; t=1772193469; x=1772453969;\r\n\ti=notifications@crm.pilotsolution.com.ar;\r\n\tbh=1FbgtNETxlpDG6eQ7BoX3IJmOGjMM/26izUEQ5uOy2E=;\r\n\th=From:Subject:Reply-To:To:Feedback-ID:Message-Id:Date:MIME-Version:\r\n\t Content-Type:Content-Transfer-Encoding:CC:Date:Subject:From;\r\n\tb=pdGbmijFc3cuyaJ5VIeIByLHJ3kmoTvjbxuOENmSFSgHWK/bdvrXOEPcJcqYgrTnj\r\n\t lSrbew43WJh9Qht0zvHCoLmex+cIXmcZ3sttF4Idl2SAfIXjNF0RZp5twuA0+bK8Ir\r\n\t nEeCIH3mN7vvSa+xuJDxZizKHLSHmDBcFsvHxM1gh6GHFErfHs6Pee5wKFBkn/Jucz\r\n\t QXxPxm4SXS1Los4xr1Z4gdgeitwzJl7437D/oXj7rF0kiWAIKPOr0lAqcX9IY2igyn\r\n\t ECAgOR7pPmu+oYexgJU+WMwU2SDKgTi+8dqaX7eoGyYUBMRXS87lcBQL4F3YumQOQE\r\n\t OpuUfpeAzA4BQ==",
+            "from": "From: noreplay <notifications@crm.pilotsolution.com.ar>",
+            "subject": "Subject: =?utf-8?Q?Pilot:=20Encuesta=20Ventas?=",
+            "reply-to": "Reply-To: noreplay@pilotsolution.net",
+            "to": "To: redooencuestas@gmail.com",
+            "x-native-encoded": "X-Native-Encoded: 1",
+            "x-report-abuse": "X-Report-Abuse: =?UTF-8?Q?Please=20forward=20a=20copy=20of=20this=20message,=20including=20all=20headers,=20to=20abuse@mandrill.com.=20You=20can=20also=20report=20abuse=20here:=20https://mandrillapp.com/contact/abuse=3Fid=3D12383463.9b49a89fffdc46f2836e192620efdb10?=",
+            "x-mandrill-user": "X-Mandrill-User: md_12383463",
+            "feedback-id": "Feedback-ID: 12383463:12383463.20260227:md",
+            "message-id": "Message-Id: <12383463.20260227115749.69a186bd8ddf04.72209050@crm.pilotsolution.com.ar>",
+            "date": "Date: Fri, 27 Feb 2026 11:57:49 +0000",
+            "mime-version": "MIME-Version: 1.0",
+            "content-type": "Content-Type: text/html; charset=utf-8",
+            "content-transfer-encoding": "Content-Transfer-Encoding: 7bit"
+          },
+          "html": "<p>{</p><p>&nbsp; &nbsp; \"id\": \"37787\",</p><p>&nbsp; &nbsp; \"nombre\": \"JUAN CARLOS DILEO\",</p><p>&nbsp; &nbsp; \"apellido\": \"N/A\",</p><p>&nbsp; &nbsp; \"telefono\": \"2616809213\",</p><p>&nbsp; &nbsp; \"fecha\": \"08/01/2026\",</p><p>&nbsp; &nbsp; \"vehiculo\": \"KIA K3\",</p><p>&nbsp; &nbsp; \"concesionario\": \"NEOSTAR\",</p><p>&nbsp; &nbsp; \"vin\": \"\",</p><p>&nbsp; &nbsp; \"asesor\": \"\",</p><p>&nbsp; &nbsp; \"link\": \"https://app.pilotsolution.com.ar/surveys/form_render_survey_mail.php?t=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJhcHBrZXkiOiIyRjFCNzU3Ri0yQzI5LTQ4NUEtOUEwRi1GODFFMkJEN0Y2RkIiLCJlbnRpdHlfZ3VpZCI6IjNDODI1NUFCLTFFQzQtNDdFNy1CM0M0LTY3OTBEQTg2QkE4NSIsImVudGl0eSI6IlNVUlZFWSIsInRzIjoxNzcyMTkzNDYzLCJleHBpcmVzIjoxNzczNDAzMDYzfQ.OoABdB1w80rZtVcPO_BBbmLB6_0opqSfOrGhObEueFk&layoutheader_visible=false&footer_visible=false\"</p><p>}</p><img src=\"https://mandrillapp.com/track/open.php?u=12383463&id=9b49a89fffdc46f2836e192620efdb10\" height=\"1\" width=\"1\" alt=\"\">\n",
+          "text": "{\n\n    \"id\": \"37787\",\n\n    \"nombre\": \"JUAN CARLOS DILEO\",\n\n    \"apellido\": \"N/A\",\n\n    \"telefono\": \"2616809213\",\n\n    \"fecha\": \"08/01/2026\",\n\n    \"vehiculo\": \"KIA K3\",\n\n    \"concesionario\": \"NEOSTAR\",\n\n    \"vin\": \"\",\n\n    \"asesor\": \"\",\n\n    \"link\":\n\"https://app.pilotsolution.com.ar/surveys/form_render_survey_mail.php?t=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJhcHBrZXkiOiIyRjFCNzU3Ri0yQzI5LTQ4NUEtOUEwRi1GODFFMkJEN0Y2RkIiLCJlbnRpdHlfZ3VpZCI6IjNDODI1NUFCLTFFQzQtNDdFNy1CM0M0LTY3OTBEQTg2QkE4NSIsImVudGl0eSI6IlNVUlZFWSIsInRzIjoxNzcyMTkzNDYzLCJleHBpcmVzIjoxNzczNDAzMDYzfQ.OoABdB1w80rZtVcPO_BBbmLB6_0opqSfOrGhObEueFk&layoutheader_visible=false&footer_visible=false\"\n\n}\n\n[https://mandrillapp.com/track/open.php?u=12383463&id=9b49a89fffdc46f2836e192620efdb10]",
+          "textAsHtml": "<p>{</p><p>&nbsp; &nbsp; &quot;id&quot;: &quot;37787&quot;,</p><p>&nbsp; &nbsp; &quot;nombre&quot;: &quot;JUAN CARLOS DILEO&quot;,</p><p>&nbsp; &nbsp; &quot;apellido&quot;: &quot;N/A&quot;,</p><p>&nbsp; &nbsp; &quot;telefono&quot;: &quot;3415903286&quot;,</p><p>&nbsp; &nbsp; &quot;fecha&quot;: &quot;08/01/2026&quot;,</p><p>&nbsp; &nbsp; &quot;vehiculo&quot;: &quot;KIA K3&quot;,</p><p>&nbsp; &nbsp; &quot;concesionario&quot;: &quot;NEOSTAR&quot;,</p><p>&nbsp; &nbsp; &quot;vin&quot;: &quot;&quot;,</p><p>&nbsp; &nbsp; &quot;asesor&quot;: &quot;&quot;,</p><p>&nbsp; &nbsp; &quot;link&quot;:<br/>&quot;<a href=\"https://app.pilotsolution.com.ar/surveys/form_render_survey_mail.php?t=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJhcHBrZXkiOiIyRjFCNzU3Ri0yQzI5LTQ4NUEtOUEwRi1GODFFMkJEN0Y2RkIiLCJlbnRpdHlfZ3VpZCI6IjNDODI1NUFCLTFFQzQtNDdFNy1CM0M0LTY3OTBEQTg2QkE4NSIsImVudGl0eSI6IlNVUlZFWSIsInRzIjoxNzcyMTkzNDYzLCJleHBpcmVzIjoxNzczNDAzMDYzfQ.OoABdB1w80rZtVcPO_BBbmLB6_0opqSfOrGhObEueFk&layoutheader_visible=false&footer_visible=false\">https://app.pilotsolution.com.ar/surveys/form_render_survey_mail.php?t=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJhcHBrZXkiOiIyRjFCNzU3Ri0yQzI5LTQ4NUEtOUEwRi1GODFFMkJEN0Y2RkIiLCJlbnRpdHlfZ3VpZCI6IjNDODI1NUFCLTFFQzQtNDdFNy1CM0M0LTY3OTBEQTg2QkE4NSIsImVudGl0eSI6IlNVUlZFWSIsInRzIjoxNzcyMTkzNDYzLCJleHBpcmVzIjoxNzczNDAzMDYzfQ.OoABdB1w80rZtVcPO_BBbmLB6_0opqSfOrGhObEueFk&layoutheader_visible=false&footer_visible=false</a>&quot;</p><p>}</p><p>[<a href=\"https://mandrillapp.com/track/open.php?u=12383463&id=9b49a89fffdc46f2836e192620efdb10\">https://mandrillapp.com/track/open.php?u=12383463&id=9b49a89fffdc46f2836e192620efdb10</a>]</p>",
+          "subject": "Pilot: Encuesta Ventas",
+          "date": "2026-02-27T11:57:49.000Z",
+          "to": {
+            "value": [
+              {
+                "address": "redooencuestas@gmail.com",
+                "name": ""
+              }
+            ],
+            "html": "<span class=\"mp_address_group\"><a href=\"mailto:redooencuestas@gmail.com\" class=\"mp_address_email\">redooencuestas@gmail.com</a></span>",
+            "text": "redooencuestas@gmail.com"
+          },
+          "from": {
+            "value": [
+              {
+                "address": "notifications@crm.pilotsolution.com.ar",
+                "name": "noreplay"
+              }
+            ],
+            "html": "<span class=\"mp_address_group\"><span class=\"mp_address_name\">noreplay</span> &lt;<a href=\"mailto:notifications@crm.pilotsolution.com.ar\" class=\"mp_address_email\">notifications@crm.pilotsolution.com.ar</a>&gt;</span>",
+            "text": "\"noreplay\" <notifications@crm.pilotsolution.com.ar>"
+          },
+          "messageId": "<12383463.20260227115749.69a186bd8ddf04.72209050@crm.pilotsolution.com.ar>",
+          "replyTo": {
+            "value": [
+              {
+                "address": "noreplay@pilotsolution.net",
+                "name": ""
+              }
+            ],
+            "html": "<span class=\"mp_address_group\"><a href=\"mailto:noreplay@pilotsolution.net\" class=\"mp_address_email\">noreplay@pilotsolution.net</a></span>",
+            "text": "noreplay@pilotsolution.net"
+          }
+        }
+      }
+    ]
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "4WEEIeL9sqdQIeov",
+      "projectId": "OjoycfAYfUwEBKbV",
+      "createdAt": "2026-11-04T20:17:56.627Z",
+      "updatedAt": "2026-11-04T20:17:56.627Z"
+    }
+  ],
+  "staticData": {
+    "node:Gmail Trigger": {
+      "Gmail Trigger": {
+        "lastTimeChecked": 1794406119,
+        "possibleDuplicates": [
+          "1a1caf077ef32d98",
+          "1a1caf076162fcf1",
+          "1a1caf075c3e7e6c",
+          "1a1caf074b471fc1",
+          "1a1caf074b0c932d",
+          "1a1cae2f297d2fb1",
+          "1a1cae2a9e07021a",
+          "1a1cae2a8f788151",
+          "1a1cae2a6ad923a7",
+          "1a1cae2a66901141",
+          "1a1cae2a62f9f089",
+          "1a1cae2a4fcc968b",
+          "1a1cae2a48cb2f2f",
+          "1a1cad4f41460f11",
+          "1a1cad4f25e94e3a",
+          "1a1cad4f19d46533",
+          "1a1cad4f1093eabb",
+          "1a1cad4f035e0395",
+          "1a1cad4eee8ff642",
+          "1a1cad4ee86e9649",
+          "1a1cad4ed3aa1565",
+          "1a1cad4ecc9c2db6",
+          "1a1cac719bd90712",
+          "1a1cac717afcc2c0",
+          "1a1cac7177ff677d",
+          "1a1cac7154c8aee6",
+          "1a1cac714aa0c571",
+          "1a1cac71425583d2",
+          "1a1cac7139c5fe8c",
+          "1a1cac7131048316",
+          "1a1cac7130e246be",
+          "1a1cab9f9dd87532",
+          "1a1cab9f8ae32ef0",
+          "1a1cab9f8a5b1e7d",
+          "1a1cab9f7c71c3f5",
+          "1a1cab9f5827d589",
+          "1a1cab9f55dee05d",
+          "1a1cab9f36095a81",
+          "1a1cab9f33ca7787",
+          "1a1cab9f159a9192",
+          "1a1cab9f0ef7aa53",
+          "1a1cab9ef04eb5d8",
+          "1a1cab5ba387a597",
+          "1a1cab4f112d5858",
+          "1a1cab2383d0832f",
+          "1a1cab147ed691fe",
+          "1a1caad20ffb124d",
+          "1a1caad1e7f6f64d",
+          "1a1caad1e435f58f",
+          "1a1caad1d2d145f6",
+          "1a1caad1c1154f78",
+          "1a1ca9195368432a",
+          "1a1ca9193fec7f40",
+          "1a1ca9193eed532c",
+          "1a1ca68277689094",
+          "1a1ca5a89fb361a0",
+          "1a1ca5a87bc66ada",
+          "1a1ca5a85fbc00b8",
+          "1a1ca5a84fb7e8f0",
+          "1a1ca4c8bd9eec11",
+          "1a1ca4c89db6d243",
+          "1a1c85d35e923d02",
+          "1a1c7fa05e793e4b",
+          "1a1c7816b4e4cd10",
+          "1a1c77cdc76be915",
+          "1a1c767323e0c636",
+          "1a1c750da171aada",
+          "1a1c74ea3dc534f7",
+          "1a1c74ab3bb33772",
+          "1a1c74ab2f280f43",
+          "1a1c74ab0e2f4ea8",
+          "1a1c74a1d86999a0",
+          "1a1c73ce6842b077",
+          "1a1c73ce48c16123",
+          "1a1c733f1f47ffa4",
+          "1a1c7326951d0f80",
+          "1a1c7312d74f1298",
+          "1a1c730e7b8240c4",
+          "1a1c72f394007d9d",
+          "1a1c72f37befadd8",
+          "1a1c705f31e2f29d",
+          "1a1c705f0031caee",
+          "1a1c6f810437d816",
+          "1a1c6f80f49b0a78",
+          "1a1c6f80c76169d3",
+          "1a1c6f80a678e4d4",
+          "1a1c6ea4e69f8574",
+          "1a1c6ea4c2b3eb1f",
+          "1a1c6ea4ad556a0c",
+          "1a1c6ea4a3087c49",
+          "1a1c6dcf2d18a907",
+          "1a1c6dcf27218332",
+          "1a1c6dcf1c9c672f",
+          "1a1c6dcf05e8fd8b",
+          "1a1c6cf35cd7ae30",
+          "1a1c6cf2d557c8cf",
+          "1a1c6cf299666f6b",
+          "1a1c6cf29833f289",
+          "1a1c6cf28604d80d",
+          "1a1c6c16eeda1dab"
+        ]
+      }
+    }
+  },
+  "tags": [
+    {
+      "id": "jKv9VKkoB3ayT1io",
+      "name": "kia",
+      "createdAt": "2025-07-28T14:17:54.908Z",
+      "updatedAt": "2025-07-28T14:17:54.908Z"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-11-04T20:18:30.290Z",
+  "versionId": "05116e92-789f-440c-ab68-bbd516a4b4d3"
+}
