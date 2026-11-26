@@ -1,0 +1,352 @@
+{
+  "active": false,
+  "activeVersion": null,
+  "activeVersionId": null,
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait1": {
+      "main": [
+        [
+          {
+            "node": "post_message",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "pilot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTML": {
+      "main": [
+        [
+          {
+            "node": "Convert HTML to PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert HTML to PDF": {
+      "main": [
+        [
+          {
+            "node": "Wait1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-03-05T12:29:38.299Z",
+  "id": "OoGicRwsNVARLfx1",
+  "isArchived": false,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "name": "enviar_pdf",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "telefono_cliente",
+              "type": "any"
+            },
+            {
+              "name": "nombre_cliente",
+              "type": "any"
+            },
+            {
+              "name": "cuenta",
+              "type": "any"
+            },
+            {
+              "name": "localidad",
+              "type": "any"
+            },
+            {
+              "name": "provincia",
+              "type": "any"
+            },
+            {
+              "name": "telefono_vendedor",
+              "type": "any"
+            },
+            {
+              "name": "vendedor",
+              "type": "any"
+            },
+            {
+              "name": "medio_contacto",
+              "type": "any"
+            },
+            {
+              "name": "fecha",
+              "type": "any"
+            },
+            {
+              "name": "modelo",
+              "type": "any"
+            },
+            {
+              "name": "kit",
+              "type": "any"
+            },
+            {
+              "name": "descripcion_kit",
+              "type": "any"
+            },
+            {
+              "name": "complementos",
+              "type": "any"
+            },
+            {
+              "name": "precios",
+              "type": "any"
+            },
+            {
+              "name": "observaciones",
+              "type": "any"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        176,
+        -16
+      ],
+      "id": "70566af6-60b0-431f-adf4-a0ed59d32597",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "jsCode": "// CODE NODE n8n - Preparar datos para HTML cotización AKRON\n// Estructura esperada:\n// - complementos: string JSON con array de nombres\n// - precios: string JSON con:\n//   {\n//     modelo,\n//     kit,\n//     descripcion,\n//     precio_total_sin_iva,\n//     precio_total_con_iva,\n//     valor_cheque_total\n//   }\n\nconst raw = $input.first().json;\n\n// ────────────────────────────────────────────────────────────────\n// HELPERS\n// ────────────────────────────────────────────────────────────────\nfunction safeJsonParse(value, fallback) {\n  if (value === null || value === undefined || value === '') return fallback;\n  if (typeof value === 'object') return value;\n  try {\n    return JSON.parse(value);\n  } catch (e) {\n    return fallback;\n  }\n}\n\nfunction formatFecha(iso) {\n  if (!iso) return '-';\n  const d = new Date(iso);\n  if (Number.isNaN(d.getTime())) return iso;\n  return d.toLocaleDateString('es-AR', {\n    day: '2-digit',\n    month: '2-digit',\n    year: 'numeric',\n  });\n}\n\nfunction formatUSD(num) {\n  if (num === null || num === undefined || num === '' || Number.isNaN(Number(num))) {\n    return '-';\n  }\n\n  return 'US$ ' + Number(num).toLocaleString('es-AR', {\n    minimumFractionDigits: 0,\n    maximumFractionDigits: 2,\n  });\n}\n\n// Convierte \"USD 55.448.-\" a \"US$ 55.448\"\nfunction normalizeUsdString(value) {\n  if (!value) return '-';\n\n  const num = parseUsdString(value);\n  if (num === null) return String(value);\n\n  return formatUSD(num);\n}\n\nfunction parseUsdString(value) {\n  if (value === null || value === undefined || value === '') return null;\n  if (typeof value === 'number') return value;\n\n  let str = String(value).trim();\n\n  str = str\n    .replace(/USD/gi, '')\n    .replace(/US\\$/gi, '')\n    .replace(/\\.\\-/g, '')\n    .replace(/\\s+/g, '')\n    .trim();\n\n  if (str.includes(',') && str.includes('.')) {\n    str = str.replace(/\\./g, '').replace(',', '.');\n  } else if (str.includes(',')) {\n    str = str.replace(',', '.');\n  } else {\n    const dotCount = (str.match(/\\./g) || []).length;\n    if (dotCount >= 1) {\n      str = str.replace(/\\./g, '');\n    }\n  }\n\n  const n = Number(str);\n  return Number.isNaN(n) ? null : n;\n}\n\n// ────────────────────────────────────────────────────────────────\n// INPUT NORMALIZADO\n// ────────────────────────────────────────────────────────────────\nconst input = {\n  ...raw,\n  complementos: safeJsonParse(raw.complementos, []),\n  precios: safeJsonParse(raw.precios, {}),\n};\n\nconst complementos = Array.isArray(input.complementos) ? input.complementos : [];\nconst precios = input.precios || {};\n\n// ────────────────────────────────────────────────────────────────\n// ITEMS DEL KIT\n// ────────────────────────────────────────────────────────────────\nconst KIT_ITEMS = {\n  'AGRAS T100': {\n    'KIT 1': [\n      { texto: '3 (TRES) BATERIAS MODELO DB2160 PARA DJI T100 CON SU RESPECTIVO ENFRIADOR.', aplica: true },\n      { texto: 'DEPOSITO DE LIQUIDOS DE 100 LITROS PARA PULVERIZACIÓN', aplica: true },\n      { texto: 'CONTROL REMOTO, MAS 1 (UNA) BATERIA EXTRA CON HUB DE CARGA.', aplica: true },\n      { texto: 'GENERADOR DJI D14000iE.', aplica: false },\n      { texto: 'TANQUE ESPARCIDOR DE SOLIDOS DE 100 KG.', aplica: false },\n      { texto: 'KIT DE 2 (DOS) ASPERSORES EXTRA DE PULVERIZACIÓN.', aplica: false },\n      { texto: 'ANTENA RTK.', aplica: false },\n      { texto: 'MAVIC 3 MULTISPECTRAL (maletin, dron, bateria control, cargador mas kit de 3 baterias con hub de carga.)', aplica: false },\n      { texto: 'CAPACITACIÓN PARA LA LICENCIA DE PILOTO CLASE D (CURSO DICTADO POR DRONES VIP).', aplica: true },\n      { texto: 'CURSO DE AGRICULTURA AVANZADA DICTADO POR DRONES VIP.', aplica: true },\n    ],\n    'KIT 2': [\n      { texto: '3 (TRES) BATERIAS MODELO DB2160 PARA DJI T100 CON SU RESPECTIVO ENFRIADOR.', aplica: true },\n      { texto: 'DEPOSITO DE LIQUIDOS DE 100 LITROS PARA PULVERIZACIÓN', aplica: true },\n      { texto: 'CONTROL REMOTO, MAS 1 (UNA) BATERIA EXTRA CON HUB DE CARGA.', aplica: true },\n      { texto: 'GENERADOR DJI D14000iE.', aplica: true },\n      { texto: 'TANQUE ESPARCIDOR DE SOLIDOS DE 100 KG.', aplica: false },\n      { texto: 'KIT DE 2 (DOS) ASPERSORES EXTRA DE PULVERIZACIÓN.', aplica: false },\n      { texto: 'ANTENA RTK.', aplica: false },\n      { texto: 'MAVIC 3 MULTISPECTRAL (maletin, dron, bateria control, cargador mas kit de 3 baterias con hub de carga.)', aplica: false },\n      { texto: 'CAPACITACIÓN PARA LA LICENCIA DE PILOTO CLASE D (CURSO DICTADO POR DRONES VIP).', aplica: true },\n      { texto: 'CURSO DE AGRICULTURA AVANZADA DICTADO POR DRONES VIP.', aplica: true },\n    ],\n    'KIT 3': [\n      { texto: '3 (TRES) BATERIAS MODELO DB2160 PARA DJI T100 CON SU RESPECTIVO ENFRIADOR.', aplica: true },\n      { texto: 'DEPOSITO DE LIQUIDOS DE 100 LITROS PARA PULVERIZACIÓN', aplica: true },\n      { texto: 'CONTROL REMOTO, MAS 1 (UNA) BATERIA EXTRA CON HUB DE CARGA.', aplica: true },\n      { texto: 'GENERADOR DJI D14000iE.', aplica: true },\n      { texto: 'TANQUE ESPARCIDOR DE SOLIDOS DE 100 KG.', aplica: false },\n      { texto: 'KIT DE 2 (DOS) ASPERSORES EXTRA DE PULVERIZACIÓN.', aplica: false },\n      { texto: 'ANTENA RTK.', aplica: false },\n      { texto: 'MAVIC 3 MULTISPECTRAL (maletin, dron, bateria control, cargador mas kit de 3 baterias con hub de carga.)', aplica: true },\n      { texto: 'CAPACITACIÓN PARA LA LICENCIA DE PILOTO CLASE D (CURSO DICTADO POR DRONES VIP).', aplica: true },\n      { texto: 'CURSO DE AGRICULTURA AVANZADA DICTADO POR DRONES VIP.', aplica: true },\n    ],\n  },\n\n  'AGRAS T70P': {\n    'KIT 1': [\n      { texto: '3 (TRES) BATERIAS PARA AGRAS T70P CON SU RESPECTIVO CARGADOR/ENFRIADOR.', aplica: true },\n      { texto: 'CONTROL REMOTO, MAS 1 (UNA) BATERIA EXTRA CON HUB DE CARGA.', aplica: true },\n      { texto: 'CARGADOR.', aplica: true },\n      { texto: 'GENERADOR DJI.', aplica: false },\n      { texto: 'MAVIC 3 MULTISPECTRAL.', aplica: false },\n      { texto: 'CAPACITACIÓN PARA LA LICENCIA DE PILOTO CLASE D (CURSO DICTADO POR DRONES VIP).', aplica: true },\n      { texto: 'CURSO DE AGRICULTURA AVANZADA DICTADO POR DRONES VIP.', aplica: true },\n    ],\n    'KIT 2': [\n      { texto: '3 (TRES) BATERIAS PARA AGRAS T70P CON SU RESPECTIVO CARGADOR/ENFRIADOR.', aplica: true },\n      { texto: 'CONTROL REMOTO, MAS 1 (UNA) BATERIA EXTRA CON HUB DE CARGA.', aplica: true },\n      { texto: 'GENERADOR DJI.', aplica: true },\n      { texto: 'MAVIC 3 MULTISPECTRAL.', aplica: false },\n      { texto: 'CAPACITACIÓN PARA LA LICENCIA DE PILOTO CLASE D (CURSO DICTADO POR DRONES VIP).', aplica: true },\n      { texto: 'CURSO DE AGRICULTURA AVANZADA DICTADO POR DRONES VIP.', aplica: true },\n    ],\n    'KIT 3': [\n      { texto: '3 (TRES) BATERIAS PARA AGRAS T70P CON SU RESPECTIVO CARGADOR/ENFRIADOR.', aplica: true },\n      { texto: 'CONTROL REMOTO, MAS 1 (UNA) BATERIA EXTRA CON HUB DE CARGA.', aplica: true },\n      { texto: 'GENERADOR DJI.', aplica: true },\n      { texto: 'MAVIC 3 MULTISPECTRAL.', aplica: true },\n      { texto: 'CAPACITACIÓN PARA LA LICENCIA DE PILOTO CLASE D (CURSO DICTADO POR DRONES VIP).', aplica: true },\n      { texto: 'CURSO DE AGRICULTURA AVANZADA DICTADO POR DRONES VIP.', aplica: true },\n    ],\n  },\n\n  'AGRAS T25P': {\n    'KIT 1': [\n      { texto: '3 (TRES) BATERIAS PARA AGRAS T25P CON SU RESPECTIVO CARGADOR/ENFRIADOR.', aplica: true },\n      { texto: 'CONTROL REMOTO, MAS 1 (UNA) BATERIA EXTRA CON HUB DE CARGA.', aplica: true },\n      { texto: 'CARGADOR.', aplica: true },\n      { texto: 'GENERADOR DJI.', aplica: false },\n      { texto: 'CAPACITACIÓN PARA LA LICENCIA DE PILOTO CLASE D (CURSO DICTADO POR DRONES VIP).', aplica: true },\n      { texto: 'CURSO DE AGRICULTURA AVANZADA DICTADO POR DRONES VIP.', aplica: true },\n    ],\n    'KIT 2': [\n      { texto: '3 (TRES) BATERIAS PARA AGRAS T25P CON SU RESPECTIVO CARGADOR/ENFRIADOR.', aplica: true },\n      { texto: 'CONTROL REMOTO, MAS 1 (UNA) BATERIA EXTRA CON HUB DE CARGA.', aplica: true },\n      { texto: 'GENERADOR DJI.', aplica: true },\n      { texto: 'CAPACITACIÓN PARA LA LICENCIA DE PILOTO CLASE D (CURSO DICTADO POR DRONES VIP).', aplica: true },\n      { texto: 'CURSO DE AGRICULTURA AVANZADA DICTADO POR DRONES VIP.', aplica: true },\n    ],\n  },\n};\n\nfunction getItemsKit(modelo, kit, descripcionKit) {\n  const items = KIT_ITEMS[modelo]?.[kit];\n\n  if (!items) {\n    return `<li class=\"kit-item\"><span class=\"icon\">▶</span>${descripcionKit || ''}</li>`;\n  }\n\n  return items.map(item => {\n    if (item.aplica) {\n      return `<li class=\"kit-item\"><span class=\"icon\">▶</span>${item.texto}</li>`;\n    }\n    return `<li class=\"kit-item no-aplica\"><span class=\"icon\">✗</span>${item.texto} <strong>(NO APLICA)</strong></li>`;\n  }).join('\\n');\n}\n\n// ────────────────────────────────────────────────────────────────\n// COMPLEMENTOS HTML\n// ────────────────────────────────────────────────────────────────\nfunction normalizeComplementoLabel(value) {\n  if (!value) return '-';\n\n  const s = String(value).trim().toLowerCase();\n\n  if (s === 'antena rtk 2') return 'Antena RTK 2';\n  if (s === 'dji relay') return 'DJI Relay';\n  if (s === 'mezclador 600l') return 'Mezclador 600L';\n  if (s === 'mezclador 320l') return 'Mezclador 320L';\n\n  return String(value);\n}\n\nfunction getComplementosHtml(complementosList) {\n  if (!Array.isArray(complementosList) || complementosList.length === 0) return '';\n\n  const items = complementosList.map(c => {\n    const descripcion = normalizeComplementoLabel(c);\n    return `<div class=\"complemento-item\"><span class=\"icon\">▶</span>${descripcion}</div>`;\n  }).join('\\n');\n\n  return `\n    <div class=\"complementos-section\">\n      <strong style=\"font-size:10px;text-transform:uppercase;\">Complementos:</strong>\n      ${items}\n    </div>\n  `;\n}\n\n// ────────────────────────────────────────────────────────────────\n// PRECIOS\n// ────────────────────────────────────────────────────────────────\nconst sinIva = normalizeUsdString(precios.precio_total_sin_iva);\nconst conIva = normalizeUsdString(precios.precio_total_con_iva);\nconst cheque12 = formatUSD(precios.valor_cheque_total);\n\n// ────────────────────────────────────────────────────────────────\n// OUTPUT\n// ────────────────────────────────────────────────────────────────\nreturn [\n  {\n    json: {\n      nombre_cliente: input.nombre_cliente || '-',\n      cuenta: '',\n      localidad: input.localidad || '-',\n      provincia: input.provincia || '-',\n      telefono_cliente: input.telefono_cliente || '-',\n      fecha: formatFecha(input.fecha),\n      vendedor: input.vendedor || '-',\n      telefono_vendedor: input.telefono_vendedor || '-',\n      medio_contacto: input.medio_contacto || '-',\n\n      modelo: input.modelo || '',\n      kit: input.kit || '',\n\n      items_kit: getItemsKit(input.modelo, input.kit, input.descripcion_kit),\n      complementos_html: getComplementosHtml(complementos),\n\n      sin_iva: sinIva,\n      con_iva: conIva,\n      cheque_12: cheque12,\n\n      observaciones: input.observaciones || '.',\n    },\n  },\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        -16
+      ],
+      "id": "0c1866d7-6e40-492a-ab8f-23b4ea0bd422",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "html": "<!DOCTYPE html>\n<html lang=\"es\">\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n<title>Cotización AKRON</title>\n<style>\n  * { margin: 0; padding: 0; box-sizing: border-box; }\n\n  body {\n    font-family: Arial, sans-serif;\n    font-size: 11px;\n    color: #1a1a1a;\n    background: #fff;\n    width: 794px;\n    margin: 0 auto;\n  }\n\n  /* HEADER */\n  .header-img {\n    width: 100%;\n    display: block;\n  }\n\n  .container {\n    padding: 16px 28px 28px 28px;\n  }\n\n  /* SECCIONES */\n  .section-title {\n    font-size: 15px;\n    font-weight: bold;\n    letter-spacing: 0.5px;\n    margin-bottom: 8px;\n    margin-top: 14px;\n    text-transform: uppercase;\n  }\n\n  .divider {\n    border: none;\n    border-top: 1.5px solid #1a1a1a;\n    margin-bottom: 10px;\n  }\n\n  /* GRID DE DATOS */\n  .data-grid {\n    display: grid;\n    grid-template-columns: 1fr 1fr;\n    gap: 2px 0;\n    margin-bottom: 4px;\n  }\n\n  .data-row {\n    display: contents;\n  }\n\n  .data-label {\n    font-size: 10px;\n    color: #333;\n    text-transform: uppercase;\n    letter-spacing: 0.3px;\n    padding: 2px 0;\n    display: flex;\n    align-items: flex-end;\n    gap: 4px;\n  }\n\n  .data-label::after {\n    content: '';\n    flex: 1;\n    border-bottom: 0.8px solid #999;\n    margin-bottom: 2px;\n  }\n\n  .data-value {\n    font-size: 10px;\n    padding: 2px 0 2px 8px;\n    font-weight: 600;\n    display: flex;\n    align-items: flex-end;\n  }\n\n  /* PRODUCTO */\n  .product-title {\n    font-size: 20px;\n    font-weight: bold;\n    text-transform: uppercase;\n    margin: 18px 0 6px 0;\n    letter-spacing: 0.5px;\n  }\n\n  .product-subtitle {\n    font-size: 12px;\n    font-weight: bold;\n    text-transform: uppercase;\n    margin-bottom: 10px;\n  }\n\n  /* LISTA DE ITEMS DEL KIT */\n  .kit-items {\n    list-style: none;\n    margin-bottom: 8px;\n  }\n\n  .kit-item {\n    display: flex;\n    align-items: flex-start;\n    gap: 6px;\n    padding: 2px 0;\n    font-size: 10.5px;\n  }\n\n  .kit-item .icon {\n    flex-shrink: 0;\n    font-size: 10px;\n    margin-top: 1px;\n    color: #1a1a1a;\n  }\n\n  .kit-item.no-aplica {\n    color: #555;\n  }\n\n  .kit-item.no-aplica .icon {\n    color: #555;\n  }\n\n  /* COMPLEMENTOS */\n  .complementos-section {\n    margin-top: 10px;\n    margin-bottom: 4px;\n  }\n\n  .complemento-item {\n    display: flex;\n    align-items: center;\n    gap: 6px;\n    font-size: 10.5px;\n    padding: 2px 0;\n  }\n\n  /* CONDICIONES COMERCIALES */\n  .comercial-header {\n    display: flex;\n    justify-content: flex-start;\n    align-items: center;\n    margin-top: 18px;\n    margin-bottom: 6px;\n  }\n\n  .comercial-header .section-title {\n    margin: 0;\n  }\n\n  .contado-box {\n    display: flex;\n    align-items: center;\n    gap: 0;\n    margin-bottom: 8px;\n    border: 1px solid #ccc;\n  }\n\n  .contado-label {\n    background: #f0f0f0;\n    padding: 8px 14px;\n    font-size: 9px;\n    text-transform: uppercase;\n    letter-spacing: 0.3px;\n    font-weight: bold;\n    border-right: 1px solid #ccc;\n    white-space: nowrap;\n  }\n\n  .contado-precio {\n    font-size: 22px;\n    font-weight: bold;\n    padding: 4px 20px;\n    flex: 1;\n  }\n\n  .contado-extra {\n    padding: 4px 14px;\n    font-size: 10px;\n    border-left: 1px solid #ccc;\n    flex: 1;\n    text-align: center;\n    color: #555;\n  }\n\n  .validez {\n    font-size: 8px;\n    color: #666;\n    margin-bottom: 10px;\n    line-height: 1.4;\n  }\n\n  /* TABLA DE FINANCIACIÓN */\n  .financiacion-table {\n    width: 100%;\n    border-collapse: collapse;\n    margin-bottom: 16px;\n  }\n\n  .financiacion-table td {\n    border: 1px solid #ccc;\n    padding: 0;\n    vertical-align: middle;\n  }\n\n  .fin-letra {\n    width: 32px;\n    text-align: center;\n    font-weight: bold;\n    font-size: 13px;\n    padding: 10px 0;\n    border-right: 1px solid #ccc;\n  }\n\n  .fin-desc {\n    padding: 6px 10px;\n    font-size: 9.5px;\n    font-weight: bold;\n    text-transform: uppercase;\n    border-right: 1px solid #ccc;\n  }\n\n  .fin-sub {\n    font-size: 8px;\n    font-weight: normal;\n    text-transform: uppercase;\n    color: #555;\n    display: block;\n    margin-top: 2px;\n  }\n\n  .fin-valor {\n    text-align: center;\n    font-size: 14px;\n    font-weight: bold;\n    padding: 10px 14px;\n    white-space: nowrap;\n  }\n\n  .fin-qr {\n    width: 100px;\n    text-align: center;\n    vertical-align: middle;\n    border-left: 1px solid #ccc;\n    padding: 6px;\n  }\n\n  .fin-qr img {\n    width: 80px;\n    height: 80px;\n  }\n\n  /* OBSERVACIONES */\n  .obs-section {\n    margin-top: 10px;\n  }\n\n  .obs-content {\n    min-height: 30px;\n    font-size: 10px;\n    color: #555;\n  }\n\n  /* VISITANOS */\n  .visitanos {\n    font-size: 8px;\n    text-transform: uppercase;\n    letter-spacing: 0.5px;\n    text-align: center;\n    font-weight: bold;\n    display: block;\n    margin-bottom: 4px;\n  }\n</style>\n</head>\n<body>\n\n<!-- HEADER IMAGE -->\n<img class=\"header-img\" src=\"https://redoo.com.ar/apis/images_upload/uploads/tekron/header2.jpeg\" alt=\"AKRON Header\">\n\n<div class=\"container\">\n\n  <!-- DATOS DEL CLIENTE -->\n  <div class=\"section-title\">Datos del Cliente</div>\n  <hr class=\"divider\">\n\n  <div class=\"data-grid\">\n    <div class=\"data-label\">Nombre y Apellido</div>\n    <div class=\"data-value\">{{ $json.nombre_cliente }}</div>\n\n    <div class=\"data-label\">Cuenta</div>\n    <div class=\"data-value\"></div>\n\n    <div class=\"data-label\">Localidad</div>\n    <div class=\"data-value\">{{ $json.localidad }}</div>\n\n    <div class=\"data-label\">Provincia</div>\n    <div class=\"data-value\">{{ $json.provincia }}</div>\n\n    <div class=\"data-label\">Número de Teléfono</div>\n    <div class=\"data-value\">{{ $json.telefono_cliente }}</div>\n  </div>\n\n  <!-- DATOS DE CONTACTO -->\n  <div class=\"section-title\">Datos de Contacto</div>\n  <hr class=\"divider\">\n\n  <div class=\"data-grid\">\n    <div class=\"data-label\">Fecha</div>\n    <div class=\"data-value\">{{ $json.fecha }}</div>\n\n    <div class=\"data-label\">Cotizado Por</div>\n    <div class=\"data-value\">{{ $json.vendedor }}</div>\n\n    <div class=\"data-label\">Número de Teléfono</div>\n    <div class=\"data-value\"></div>\n\n    <div class=\"data-label\">Vendedor de Zona</div>\n    <div class=\"data-value\"></div>\n\n    <div class=\"data-label\">Medio de Contacto</div>\n    <div class=\"data-value\">{{ $json.medio_contacto }}</div>\n  </div>\n\n  <!-- PRODUCTO -->\n  <div class=\"product-title\">Producto Cotizado: {{ $json.modelo }} {{ $json.kit }}</div>\n  <hr class=\"divider\">\n\n  <div class=\"product-subtitle\">La siguiente cotización incluye</div>\n\n  <ul class=\"kit-items\">\n    {{ $json.items_kit }}\n  </ul>\n\n  {{ $json.complementos_html }}\n\n  <!-- CONDICIONES COMERCIALES -->\n  <div class=\"comercial-header\">\n    <div class=\"section-title\">Condiciones Comerciales</div>\n  </div>\n  <hr class=\"divider\">\n\n  <div class=\"contado-box\">\n    <div class=\"contado-label\">Contado (No incluye IVA)</div>\n    <div class=\"contado-precio\">{{ $json.sin_iva }}</div>\n    <div class=\"contado-extra\">-</div>\n  </div>\n\n  <div class=\"validez\">\n    VALIDEZ DE OFERTA: VALIDEZ 7 DÍAS HÁBILES<br>\n    PRECIOS Y CONDICIONES SUJETOS A VARIACIÓN SIN PREVIO AVISO\n  </div>\n\n  <!-- TABLA FINANCIACIÓN -->\n  <table class=\"financiacion-table\">\n    <tr>\n      <td class=\"fin-letra\">A</td>\n      <td class=\"fin-desc\">\n        Precio contado IVA incluido\n        <span class=\"fin-sub\">Precio IVA incluido</span>\n      </td>\n      <td class=\"fin-valor\">{{ $json.con_iva }}</td>\n      <td class=\"fin-qr\" rowspan=\"2\">\n        <span class=\"visitanos\">Visitanos</span>\n        <img src=\"https://redoo.com.ar/apis/images_upload/uploads/tekron/7u23Lj.jpg\" alt=\"QR\">\n      </td>\n    </tr>\n    <tr>\n      <td class=\"fin-letra\">B</td>\n      <td class=\"fin-desc\">\n        12 valores de 0 a 330 días de:\n        <span class=\"fin-sub\">Valor fijo por cuota</span>\n      </td>\n      <td class=\"fin-valor\">{{ $json.cheque_12 }}</td>\n    </tr>\n  </table>\n\n  <!-- OBSERVACIONES -->\n  <div class=\"obs-section\">\n    <div class=\"section-title\">Observaciones</div>\n    <hr class=\"divider\">\n    <div class=\"obs-content\">{{ $json.observaciones }}</div>\n  </div>\n\n</div>\n</body>\n</html>"
+      },
+      "type": "n8n-nodes-base.html",
+      "typeVersion": 1.2,
+      "position": [
+        624,
+        -16
+      ],
+      "id": "65fa97f9-ad73-4470-ba33-95314334fe74",
+      "name": "HTML"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://191.234.201.61:3200/v1/messages",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n \"number\": \"{{ (n => n.startsWith('+') ? n : '+' + n)( ( $('When Executed by Another Workflow').first().json.telefono_vendedor ?? '' ).toString().trim() ) }}\",\n \"message\": \"Envío la cotización\", \n \"urlMedia\":\"{{ $json.pdf_url.replace('http://', 'https://') }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1296,
+        -16
+      ],
+      "id": "1e6492b4-09c0-4daa-8cc5-5d0ce53d1085",
+      "name": "post_message"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1072,
+        -16
+      ],
+      "id": "f2889ce7-53a7-4947-b472-55baa36380fc",
+      "name": "Wait1",
+      "webhookId": "c865dff5-7c8b-4ef5-8676-d96794d67b27"
+    },
+    {
+      "parameters": {
+        "html_content": "={{ $json.html }}",
+        "viewPortWidth": 794,
+        "viewPortHeight": 1123,
+        "dynamic_params": {
+          "params": [
+            {
+              "key": "paper_size",
+              "value": "letter"
+            },
+            {
+              "key": "margin_top",
+              "value": "0"
+            },
+            {
+              "key": "margin_bottom",
+              "value": "0"
+            },
+            {
+              "key": "margin_left",
+              "value": "0"
+            },
+            {
+              "key": "margin_right",
+              "value": "0"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-htmlcsstopdf.htmlcsstopdf",
+      "typeVersion": 1,
+      "position": [
+        848,
+        -16
+      ],
+      "id": "d291bbf1-2f30-48ae-9638-0cf9f158ccde",
+      "name": "Convert HTML to PDF",
+      "credentials": {
+        "htmlcsstopdfApi": {
+          "id": "IGm0lYqzsjrzaVlm",
+          "name": "HTML to PDF account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://api.pilotsolution.net/webhooks/welcome.php",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "appkey",
+              "value": "=65C1AE8B-A547-4877-9663-37169E44A41A"
+            },
+            {
+              "name": "pilot_firstname",
+              "value": "={{ $('When Executed by Another Workflow').item.json.nombre_cliente }}"
+            },
+            {
+              "name": "pilot_cellphone",
+              "value": "={{ $('When Executed by Another Workflow').item.json.telefono_cliente }}"
+            },
+            {
+              "name": "pilot_contact_type_id",
+              "value": "1"
+            },
+            {
+              "name": "pilot_suborigin_id",
+              "value": "=G25RJ0K59BY74K8WG"
+            },
+            {
+              "name": "pilot_business_type_id",
+              "value": "=1"
+            },
+            {
+              "name": "pilot_notes",
+              "value": "={{ $('When Executed by Another Workflow').item.json.descripcion_kit }} - Presupuesto Generado: {{ $json.pdf_url.replace('http://', 'https://') }}"
+            },
+            {
+              "name": "pilot_product_of_interest",
+              "value": "={{ $('When Executed by Another Workflow').item.json.modelo }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "44cf6cd2-b388-44a8-8bb2-da95330396d1",
+      "name": "pilot",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1296,
+        192
+      ],
+      "executeOnce": true
+    }
+  ],
+  "pinData": {
+    "When Executed by Another Workflow": [
+      {
+        "json": {
+          "telefono_cliente": "54111111111",
+          "nombre_cliente": "Roberto Perez",
+          "cuenta": "Nacho Cabaleiro",
+          "localidad": "-",
+          "provincia": "bsas",
+          "telefono_vendedor": "+5491150997009",
+          "vendedor": "Nacho Cabaleiro",
+          "medio_contacto": "Whatsapp",
+          "fecha": "2026-03-09",
+          "modelo": "AGRAS T25P",
+          "kit": "KIT 1",
+          "descripcion_kit": "Dron, 3 baterias, cargador y bateria externa con hub de carga de CR + Antena RTK 2 (Tripode, base, dos baterias y hub de carga) + DJI Relay",
+          "complementos": "[\"Antena RTK 2\",\"DJI Relay\"]",
+          "precios": "{\"modelo\":\"AGRAS T25P\",\"kit\":\"KIT 1\",\"descripcion\":\"Dron, 3 baterias, cargador y bateria externa con hub de carga de CR + Antena RTK 2 (Tripode, base, dos baterias y hub de carga) + DJI Relay\",\"precio_total_sin_iva\":\"USD 19.180.-\",\"precio_total_con_iva\":\"USD 20.994.-\",\"valor_cheque_total\":2041.69}",
+          "observaciones": ""
+        }
+      }
+    ]
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "shared": [
+    {
+      "updatedAt": "2026-03-05T12:29:38.302Z",
+      "createdAt": "2026-03-05T12:29:38.302Z",
+      "role": "workflow:owner",
+      "workflowId": "OoGicRwsNVARLfx1",
+      "projectId": "9yhNOuMy7X39UVXI"
+    }
+  ],
+  "staticData": null,
+  "tags": [
+    {
+      "updatedAt": "2026-03-09T12:39:38.787Z",
+      "createdAt": "2026-03-09T12:39:38.787Z",
+      "id": "neqmAMnHPwc1ZKsm",
+      "name": "TEKRON"
+    }
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2026-03-09T15:44:25.180Z",
+  "versionId": "4b3f7316-7045-460b-b4a5-ffb22687ac45"
+}
