@@ -1,0 +1,941 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "a9ab2199-d2e3-42a9-9b8f-9701410eae00",
+    "workflowId": "Pmfnlq3zspbz8IUT",
+    "nodes": [
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "minutes",
+                "minutesInterval": 10
+              }
+            ]
+          }
+        },
+        "id": "7db7cdc9-9db2-455b-a798-e8b3f0f64202",
+        "name": "⏰ Schedule Trigger",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          48,
+          240
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT l.*, t.access_token, i.destino, i.destino_config, i.origen_sf \nFROM meli_leads l \nJOIN meli_tokens t ON l.user_id = t.user_id \nJOIN meli_integraciones i ON l.user_id = i.user_id \nWHERE l.status = 'active' \nAND l.buyer_id IS NOT NULL \nAND l.buyer_id != 0\nAND l.buyer_nombre IS NOT NULL\nAND l.user_id IN (1130842676) \nAND l.bot_uploaded = 0\nAND l.received_at <= DATE_SUB(NOW(), INTERVAL 1 HOUR)\nLIMIT 100",
+          "options": {}
+        },
+        "id": "52158c89-2b1e-4dd2-b985-2b6e029a5982",
+        "name": "🗄️ Buscar leads pending",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          224,
+          240
+        ],
+        "credentials": {
+          "mySql": {
+            "id": "FezTcDnLo3SqPHvd",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {},
+            "conditions": [
+              {
+                "leftValue": "={{ $input.all().length }}",
+                "rightValue": 0,
+                "operator": {
+                  "type": "number",
+                  "operation": "gt"
+                }
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "637a95a5-208b-4f8f-b1b2-1705ed668e4b",
+        "name": "🔍 Hay leads?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          448,
+          240
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT * FROM meli_asesores \nWHERE user_id = {{ $json.user_id }} \nAND (\n  RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo1 }}'\n  OR RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo2 }}'\n  OR telefono IS NULL\n  OR telefono = ''\n)\nORDER BY \n  CASE \n    WHEN RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo1 }}' THEN 0\n    WHEN RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo2 }}' THEN 1\n    ELSE 2 \n  END\nLIMIT 1",
+          "options": {}
+        },
+        "id": "99dce4ad-5e30-45e4-bb51-e8bce97d5e6e",
+        "name": "🗄️ Buscar asesor",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          1056,
+          240
+        ],
+        "alwaysOutputData": true,
+        "credentials": {
+          "mySql": {
+            "id": "FezTcDnLo3SqPHvd",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "leftValue": "={{ $json.destino }}",
+                "rightValue": "pilot",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals"
+                },
+                "id": "bc74d2f0-c4d2-458c-9eba-f8482032f809"
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "023a93c6-a4fc-4479-b720-8f8c526bb9fa",
+        "name": "🔍 Destino?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          1520,
+          240
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "{{ $json.query }}",
+          "options": {}
+        },
+        "id": "fd7dc773-83b1-4022-b4cd-b5e8942bd35a",
+        "name": "💾 Update status MySQL",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          2416,
+          224
+        ],
+        "credentials": {
+          "mySql": {
+            "id": "FezTcDnLo3SqPHvd",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "UPDATE meli_leads SET status = 'skipped' WHERE id = '{{ $('Loop leads').item.json.id }}'",
+          "options": {}
+        },
+        "id": "275f9757-a059-4474-9d63-c22f992d8dfb",
+        "name": "💾 Marcar skipped",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          1824,
+          432
+        ],
+        "credentials": {
+          "mySql": {
+            "id": "FezTcDnLo3SqPHvd",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "parameters": {},
+        "id": "45234bb9-4472-4499-be06-a07b32ec58aa",
+        "name": "✅ Volver al loop",
+        "type": "n8n-nodes-base.noOp",
+        "typeVersion": 1,
+        "position": [
+          2016,
+          432
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const data = $input.item.json;\n\nconst pilotLeadId = data.pilot_lead_id ? `'${data.pilot_lead_id}'` : 'NULL';\nconst pilotResponse = (data.pilot_response || '').replace(/'/g, \"''\");\n\nreturn {\n  json: {\n    query: `UPDATE meli_leads SET status = '${data.new_status}', pilot_lead_id = ${pilotLeadId}, sf_response = '${pilotResponse}' WHERE id = '${data.lead_id}'`\n  }\n};"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2224,
+          224
+        ],
+        "id": "0a21d5b6-27b9-48ad-95dd-0fa027f4d749",
+        "name": "⚙️ Preparar query update"
+      },
+      {
+        "parameters": {
+          "options": {}
+        },
+        "id": "9638bad4-16fa-49a4-8f74-d91b211e5046",
+        "name": "Loop leads",
+        "type": "n8n-nodes-base.splitInBatches",
+        "typeVersion": 3,
+        "position": [
+          704,
+          224
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const lead = $('🔀 Resolver Asesor/Marca').item.json;\n\nconst CONTACT_TYPE_ID = 1;\nconst appkey = 'C13E65C9-12BE-4C82-BB10-C2D8B5A18483';\n\nconst name = (lead.buyer_nombre || '').trim();\nconst cellphone = lead.buyer_phone || '';\nconst notes = `Publicación: ${lead.item_id} | Precio: ${lead.item_precio} | Link: ${lead.item_permalink || ''} | Asesor: ${lead.asesor_nombre_match || ''} | Teléfono asesor: ${lead.asesor_phone || ''}`;\n\nconst url = `https://api.pilotsolution.net/webhooks/welcome.php?action=create&appkey=${appkey}&pilot_firstname=${encodeURIComponent(name)}&pilot_cellphone=${encodeURIComponent(cellphone)}&pilot_contact_type_id=${CONTACT_TYPE_ID}&pilot_business_type_id=${lead.pilot_business_type_id}&pilot_notes=${encodeURIComponent(notes)}&pilot_suborigin_id=${lead.pilot_origin}&pilot_product_of_interest=${encodeURIComponent(lead.item_titulo || '')}`;\n\nreturn {\n  json: {\n    lead_id: lead.id,\n    user_id: lead.user_id,\n    destino: lead.destino,\n    url,\n    pilot_origin: lead.pilot_origin,\n    pilot_business_type_id: lead.pilot_business_type_id\n  }\n};"
+        },
+        "id": "275f5d49-736d-456b-abeb-c14c6e357578",
+        "name": "PayloadPilot",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1376,
+          240
+        ]
+      },
+      {
+        "parameters": {
+          "url": "={{ $('PayloadPilot').item.json.url }}",
+          "options": {}
+        },
+        "id": "1772fad9-8c56-4baa-b275-1cb3cc418de6",
+        "name": "🚀 POST Pilot",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1824,
+          224
+        ],
+        "alwaysOutputData": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "const lead = $input.item.json;\nconst normalizarTel = (tel) => {\n  if (!tel) return null;\n  const digits = tel.toString().replace(/\\D/g, '');\n  return digits.slice(-8);\n};\nconst normalizarBuyerPhone = (tel) => {\n  if (!tel) return null;\n  let digits = tel.toString().replace(/\\D/g, '');\n  if (digits.startsWith('549')) return '+' + digits;\n  if (digits.startsWith('54')) return '+549' + digits.slice(2);\n  if (digits.startsWith('9') && digits.length >= 10) return '+54' + digits;\n  return '+549' + digits;\n};\nconst sufijo1 = normalizarTel(lead.asesor_phone);\nconst sufijo2 = normalizarTel(lead.asesor_phone2);\nreturn {\n  json: {\n    ...lead,\n    buyer_phone: normalizarBuyerPhone(lead.buyer_phone),\n    asesor_sufijo1: sufijo1 || '',\n    asesor_sufijo2: sufijo2 || ''\n  }\n};"
+        },
+        "id": "7d966edf-0209-428c-896b-abe26d4f01ef",
+        "name": "Normalizar teléfonos",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          896,
+          240
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const lead = $('Normalizar teléfonos').item.json;\nconst asesor = $('🗄️ Buscar asesor').item.json;\n\nreturn {\n  json: {\n    ...lead,\n    pilot_assigned_user: asesor?.email || null,\n    asesor_nombre_match: asesor?.nombre || null,\n    marca_detectada: 'SANZARI',\n    pilot_origin: 'FTRCELHZXWQ30WWZK',\n    pilot_business_type_id: 1\n  }\n};"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1216,
+          240
+        ],
+        "id": "948924b2-8c5b-4a96-b9eb-eb2f5800c254",
+        "name": "🔀 Resolver Asesor/Marca"
+      },
+      {
+        "parameters": {
+          "jsCode": "const pilotResponse = $input.item.json;\nconst prev = $('PayloadPilot').item.json;\n\nconst pilotLeadId = pilotResponse?.data?.welcome_id || null;\nconst success = pilotResponse.success && !pilotResponse.error && !pilotResponse.message?.toLowerCase().includes('error');\n\nreturn {\n  json: {\n    lead_id: prev.lead_id,\n    pilot_lead_id: pilotLeadId,\n    new_status: success ? 'sent' : 'error',\n    pilot_response: JSON.stringify(pilotResponse)\n  }\n};"
+        },
+        "id": "49f20483-2f7c-4f36-b5b5-692cb9b9ca23",
+        "name": "Procesar respuesta Pilot",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2016,
+          224
+        ]
+      }
+    ],
+    "connections": {
+      "⏰ Schedule Trigger": {
+        "main": [
+          [
+            {
+              "node": "🗄️ Buscar leads pending",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🗄️ Buscar leads pending": {
+        "main": [
+          [
+            {
+              "node": "🔍 Hay leads?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🔍 Hay leads?": {
+        "main": [
+          [
+            {
+              "node": "Loop leads",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🗄️ Buscar asesor": {
+        "main": [
+          [
+            {
+              "node": "🔀 Resolver Asesor/Marca",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🔍 Destino?": {
+        "main": [
+          [
+            {
+              "node": "🚀 POST Pilot",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "💾 Marcar skipped",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "💾 Update status MySQL": {
+        "main": [
+          [
+            {
+              "node": "Loop leads",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "💾 Marcar skipped": {
+        "main": [
+          [
+            {
+              "node": "✅ Volver al loop",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "✅ Volver al loop": {
+        "main": [
+          [
+            {
+              "node": "Loop leads",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "⚙️ Preparar query update": {
+        "main": [
+          [
+            {
+              "node": "💾 Update status MySQL",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Loop leads": {
+        "main": [
+          [],
+          [
+            {
+              "node": "Normalizar teléfonos",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "PayloadPilot": {
+        "main": [
+          [
+            {
+              "node": "🔍 Destino?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🚀 POST Pilot": {
+        "main": [
+          [
+            {
+              "node": "Procesar respuesta Pilot",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Normalizar teléfonos": {
+        "main": [
+          [
+            {
+              "node": "🗄️ Buscar asesor",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🔀 Resolver Asesor/Marca": {
+        "main": [
+          [
+            {
+              "node": "PayloadPilot",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Procesar respuesta Pilot": {
+        "main": [
+          [
+            {
+              "node": "⚙️ Preparar query update",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "system migration",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-10-26T17:05:09.982Z",
+    "updatedAt": "2026-10-26T17:05:09.982Z"
+  },
+  "activeVersionId": "a9ab2199-d2e3-42a9-9b8f-9701410eae00",
+  "connections": {
+    "⏰ Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "🗄️ Buscar leads pending",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🗄️ Buscar leads pending": {
+      "main": [
+        [
+          {
+            "node": "🔍 Hay leads?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔍 Hay leads?": {
+      "main": [
+        [
+          {
+            "node": "Loop leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🗄️ Buscar asesor": {
+      "main": [
+        [
+          {
+            "node": "🔀 Resolver Asesor/Marca",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔍 Destino?": {
+      "main": [
+        [
+          {
+            "node": "🚀 POST Pilot",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "💾 Marcar skipped",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "💾 Update status MySQL": {
+      "main": [
+        [
+          {
+            "node": "Loop leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "💾 Marcar skipped": {
+      "main": [
+        [
+          {
+            "node": "✅ Volver al loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "✅ Volver al loop": {
+      "main": [
+        [
+          {
+            "node": "Loop leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⚙️ Preparar query update": {
+      "main": [
+        [
+          {
+            "node": "💾 Update status MySQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop leads": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Normalizar teléfonos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PayloadPilot": {
+      "main": [
+        [
+          {
+            "node": "🔍 Destino?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🚀 POST Pilot": {
+      "main": [
+        [
+          {
+            "node": "Procesar respuesta Pilot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar teléfonos": {
+      "main": [
+        [
+          {
+            "node": "🗄️ Buscar asesor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔀 Resolver Asesor/Marca": {
+      "main": [
+        [
+          {
+            "node": "PayloadPilot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Procesar respuesta Pilot": {
+      "main": [
+        [
+          {
+            "node": "⚙️ Preparar query update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-09-09T12:39:37.806Z",
+  "id": "Pmfnlq3zspbz8IUT",
+  "isArchived": false,
+  "meta": null,
+  "name": "SANZARI MELI",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 10
+            }
+          ]
+        }
+      },
+      "id": "7db7cdc9-9db2-455b-a798-e8b3f0f64202",
+      "name": "⏰ Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        48,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT l.*, t.access_token, i.destino, i.destino_config, i.origen_sf \nFROM meli_leads l \nJOIN meli_tokens t ON l.user_id = t.user_id \nJOIN meli_integraciones i ON l.user_id = i.user_id \nWHERE l.status = 'active' \nAND l.buyer_id IS NOT NULL \nAND l.buyer_id != 0\nAND l.buyer_nombre IS NOT NULL\nAND l.user_id IN (1130842676) \nAND l.bot_uploaded = 0\nAND l.received_at <= DATE_SUB(NOW(), INTERVAL 1 HOUR)\nLIMIT 100",
+        "options": {}
+      },
+      "id": "52158c89-2b1e-4dd2-b985-2b6e029a5982",
+      "name": "🗄️ Buscar leads pending",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        224,
+        240
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "FezTcDnLo3SqPHvd",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {},
+          "conditions": [
+            {
+              "leftValue": "={{ $input.all().length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "637a95a5-208b-4f8f-b1b2-1705ed668e4b",
+      "name": "🔍 Hay leads?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM meli_asesores \nWHERE user_id = {{ $json.user_id }} \nAND (\n  RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo1 }}'\n  OR RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo2 }}'\n  OR telefono IS NULL\n  OR telefono = ''\n)\nORDER BY \n  CASE \n    WHEN RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo1 }}' THEN 0\n    WHEN RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo2 }}' THEN 1\n    ELSE 2 \n  END\nLIMIT 1",
+        "options": {}
+      },
+      "id": "99dce4ad-5e30-45e4-bb51-e8bce97d5e6e",
+      "name": "🗄️ Buscar asesor",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        1056,
+        240
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "mySql": {
+          "id": "FezTcDnLo3SqPHvd",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.destino }}",
+              "rightValue": "pilot",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "id": "bc74d2f0-c4d2-458c-9eba-f8482032f809"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "023a93c6-a4fc-4479-b720-8f8c526bb9fa",
+      "name": "🔍 Destino?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1520,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "{{ $json.query }}",
+        "options": {}
+      },
+      "id": "fd7dc773-83b1-4022-b4cd-b5e8942bd35a",
+      "name": "💾 Update status MySQL",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        2416,
+        224
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "FezTcDnLo3SqPHvd",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE meli_leads SET status = 'skipped' WHERE id = '{{ $('Loop leads').item.json.id }}'",
+        "options": {}
+      },
+      "id": "275f9757-a059-4474-9d63-c22f992d8dfb",
+      "name": "💾 Marcar skipped",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        1824,
+        432
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "FezTcDnLo3SqPHvd",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "45234bb9-4472-4499-be06-a07b32ec58aa",
+      "name": "✅ Volver al loop",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        2016,
+        432
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.item.json;\n\nconst pilotLeadId = data.pilot_lead_id ? `'${data.pilot_lead_id}'` : 'NULL';\nconst pilotResponse = (data.pilot_response || '').replace(/'/g, \"''\");\n\nreturn {\n  json: {\n    query: `UPDATE meli_leads SET status = '${data.new_status}', pilot_lead_id = ${pilotLeadId}, sf_response = '${pilotResponse}' WHERE id = '${data.lead_id}'`\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2224,
+        224
+      ],
+      "id": "0a21d5b6-27b9-48ad-95dd-0fa027f4d749",
+      "name": "⚙️ Preparar query update"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "9638bad4-16fa-49a4-8f74-d91b211e5046",
+      "name": "Loop leads",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        704,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $('🔀 Resolver Asesor/Marca').item.json;\n\nconst CONTACT_TYPE_ID = 1;\nconst appkey = 'C13E65C9-12BE-4C82-BB10-C2D8B5A18483';\n\nconst name = (lead.buyer_nombre || '').trim();\nconst cellphone = lead.buyer_phone || '';\nconst notes = `Publicación: ${lead.item_id} | Precio: ${lead.item_precio} | Link: ${lead.item_permalink || ''} | Asesor: ${lead.asesor_nombre_match || ''} | Teléfono asesor: ${lead.asesor_phone || ''}`;\n\nconst url = `https://api.pilotsolution.net/webhooks/welcome.php?action=create&appkey=${appkey}&pilot_firstname=${encodeURIComponent(name)}&pilot_cellphone=${encodeURIComponent(cellphone)}&pilot_contact_type_id=${CONTACT_TYPE_ID}&pilot_business_type_id=${lead.pilot_business_type_id}&pilot_notes=${encodeURIComponent(notes)}&pilot_suborigin_id=${lead.pilot_origin}&pilot_product_of_interest=${encodeURIComponent(lead.item_titulo || '')}`;\n\nreturn {\n  json: {\n    lead_id: lead.id,\n    user_id: lead.user_id,\n    destino: lead.destino,\n    url,\n    pilot_origin: lead.pilot_origin,\n    pilot_business_type_id: lead.pilot_business_type_id\n  }\n};"
+      },
+      "id": "275f5d49-736d-456b-abeb-c14c6e357578",
+      "name": "PayloadPilot",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1376,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $('PayloadPilot').item.json.url }}",
+        "options": {}
+      },
+      "id": "1772fad9-8c56-4baa-b275-1cb3cc418de6",
+      "name": "🚀 POST Pilot",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1824,
+        224
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $input.item.json;\nconst normalizarTel = (tel) => {\n  if (!tel) return null;\n  const digits = tel.toString().replace(/\\D/g, '');\n  return digits.slice(-8);\n};\nconst normalizarBuyerPhone = (tel) => {\n  if (!tel) return null;\n  let digits = tel.toString().replace(/\\D/g, '');\n  if (digits.startsWith('549')) return '+' + digits;\n  if (digits.startsWith('54')) return '+549' + digits.slice(2);\n  if (digits.startsWith('9') && digits.length >= 10) return '+54' + digits;\n  return '+549' + digits;\n};\nconst sufijo1 = normalizarTel(lead.asesor_phone);\nconst sufijo2 = normalizarTel(lead.asesor_phone2);\nreturn {\n  json: {\n    ...lead,\n    buyer_phone: normalizarBuyerPhone(lead.buyer_phone),\n    asesor_sufijo1: sufijo1 || '',\n    asesor_sufijo2: sufijo2 || ''\n  }\n};"
+      },
+      "id": "7d966edf-0209-428c-896b-abe26d4f01ef",
+      "name": "Normalizar teléfonos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $('Normalizar teléfonos').item.json;\nconst asesor = $('🗄️ Buscar asesor').item.json;\n\nreturn {\n  json: {\n    ...lead,\n    pilot_assigned_user: asesor?.email || null,\n    asesor_nombre_match: asesor?.nombre || null,\n    marca_detectada: 'SANZARI',\n    pilot_origin: 'FTRCELHZXWQ30WWZK',\n    pilot_business_type_id: 1\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1216,
+        240
+      ],
+      "id": "948924b2-8c5b-4a96-b9eb-eb2f5800c254",
+      "name": "🔀 Resolver Asesor/Marca"
+    },
+    {
+      "parameters": {
+        "jsCode": "const pilotResponse = $input.item.json;\nconst prev = $('PayloadPilot').item.json;\n\nconst pilotLeadId = pilotResponse?.data?.welcome_id || null;\nconst success = pilotResponse.success && !pilotResponse.error && !pilotResponse.message?.toLowerCase().includes('error');\n\nreturn {\n  json: {\n    lead_id: prev.lead_id,\n    pilot_lead_id: pilotLeadId,\n    new_status: success ? 'sent' : 'error',\n    pilot_response: JSON.stringify(pilotResponse)\n  }\n};"
+      },
+      "id": "49f20483-2f7c-4f36-b5b5-692cb9b9ca23",
+      "name": "Procesar respuesta Pilot",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2016,
+        224
+      ]
+    }
+  ],
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "Pmfnlq3zspbz8IUT",
+      "projectId": "K8p6XEqA0L6D2uVt",
+      "createdAt": "2026-09-09T12:39:37.811Z",
+      "updatedAt": "2026-09-09T12:39:37.811Z"
+    }
+  ],
+  "staticData": {
+    "node:⏰ Schedule Trigger": {
+      "recurrenceRules": [
+        null
+      ],
+      "recurrenceRuleSignatures": [
+        null
+      ]
+    }
+  },
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2026-10-26T17:06:13.535Z",
+  "versionId": "a9ab2199-d2e3-42a9-9b8f-9701410eae00"
+}
