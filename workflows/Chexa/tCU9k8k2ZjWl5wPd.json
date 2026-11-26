@@ -1,0 +1,713 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "6a938d4e-756e-4a31-aadd-46b2d3f0d35f",
+    "workflowId": "tCU9k8k2ZjWl5wPd",
+    "nodes": [
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\nconst returnItems = [];\n\n// Verificar si hay items\nif (!items || items.length === 0) {\n  return [];\n}\n\n// Función para determinar la bahía según diferentes criterios\nfunction determinarBahia(data) {\n  // OPCIÓN 1: Por ID del calendario (reemplaza con los IDs reales)\n  if (data.organizer && data.organizer.email) {\n    if (data.organizer.email.includes('bahia1') || data.organizer.email === 'id_calendario_bahia1@gmail.com') {\n      return 'Bahías 1';\n    }\n    if (data.organizer.email.includes('bahia2') || data.organizer.email === 'id_calendario_bahia2@gmail.com') {\n      return 'Bahías 2';\n    }\n  }\n  \n  // OPCIÓN 2: Por título/resumen del evento\n  if (data.summary) {\n    if (data.summary.toLowerCase().includes('bahía 1') || data.summary.toLowerCase().includes('bahia 1')) {\n      return 'Bahías 1';\n    }\n    if (data.summary.toLowerCase().includes('bahía 2') || data.summary.toLowerCase().includes('bahia 2')) {\n      return 'Bahías 2';\n    }\n  }\n  \n  // OPCIÓN 3: Obtener desde el loop context (si viene del Excel)\n  try {\n    const loopItem = $(\"Loop Over Items\").item.json;\n    if (loopItem.Bahias || loopItem.bahias || loopItem.Bahía || loopItem.bahía) {\n      const bahiaValue = loopItem.Bahias || loopItem.bahias || loopItem.Bahía || loopItem.bahía;\n      return bahiaValue == 1 ? 'Bahías 1' : 'Bahías 2';\n    }\n    if (loopItem.Taller) {\n      // Si el campo se llama \"Taller\" en tu Excel\n      return loopItem.Bahias.includes('1') ? 'Bahías 1' : 'Bahías 2';\n    }\n  } catch (error) {\n    // No se pudo obtener del loop context\n  }\n  \n  // OPCIÓN 4: Por defecto, intentar deducir por otros campos\n  return 'Bahía no identificada';\n}\n\nfor (const item of items) {\n  // Verificar que el item tenga la estructura correcta\n  if (!item || !item.json) {\n    continue; // Saltar este item si no tiene la estructura correcta\n  }\n  \n  let data = item.json;\n  const bahia = determinarBahia(data);\n  \n  // Verificar si tiene dateTime (eventos con hora específica)\n  if (data.start && data.start.dateTime && data.end && data.end.dateTime) {\n    const dia = data.start.dateTime.split('T')[0];\n    const inicio = data.start.dateTime.split('T')[1].substring(0, 5);\n    const final = data.end.dateTime.split('T')[1].substring(0, 5);\n    \n    returnItems.push({\n      json: {\n        dia: dia,\n        inicio: inicio, \n        final: final,\n        tipo: 'evento_con_hora',\n        titulo: data.summary || 'Sin título',\n        bahia: bahia,\n        calendario_email: data.organizer?.email || 'No disponible'\n      }\n    });\n  }\n  // Verificar si tiene date (eventos de día completo, como feriados)\n  else if (data.start && data.start.date) {\n    const dia = data.start.date;\n    \n    returnItems.push({\n      json: {\n        dia: dia,\n        inicio: '00:00', \n        final: '23:59',\n        tipo: 'evento_dia_completo',\n        titulo: data.summary || 'Sin título',\n        bahia: bahia,\n        calendario_email: data.organizer?.email || 'No disponible'\n      }\n    });\n  }\n}\n\nreturn returnItems;"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1344,
+          112
+        ],
+        "id": "a4665555-b2e4-4694-ace6-d51c8253156e",
+        "name": "Code",
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "inputSource": "passthrough"
+        },
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "typeVersion": 1.1,
+        "position": [
+          -320,
+          192
+        ],
+        "id": "21410642-d3ba-4540-b59c-a3075496e5f0",
+        "name": "When Executed by Another Workflow"
+      },
+      {
+        "parameters": {
+          "documentId": {
+            "__rl": true,
+            "value": "1eyskisSR3eCYLDfIxicAF605LrlwKBu8D8iweqnSt00",
+            "mode": "list",
+            "cachedResultName": "CHEXA MANTENIMIENTO",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1eyskisSR3eCYLDfIxicAF605LrlwKBu8D8iweqnSt00/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": 323427792,
+            "mode": "list",
+            "cachedResultName": "Tabla Horarios Taller",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM/edit#gid=323427792"
+          },
+          "filtersUI": {
+            "values": [
+              {
+                "lookupColumn": "Taller",
+                "lookupValue": "={{ $('When Executed by Another Workflow').first().json.query }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.7,
+        "position": [
+          768,
+          112
+        ],
+        "id": "8e841d55-5eb4-407a-b423-a3baa8c4689b",
+        "name": "Get row(s) in sheet",
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "mydWwvSbUgk78Yn0",
+            "name": "Google Sheets account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "options": {}
+        },
+        "type": "n8n-nodes-base.splitInBatches",
+        "typeVersion": 3,
+        "position": [
+          976,
+          112
+        ],
+        "id": "a0dbad1f-ce8f-4689-9ae8-e400b4f2535a",
+        "name": "Loop Over Items"
+      },
+      {
+        "parameters": {
+          "operation": "getAll",
+          "calendar": {
+            "__rl": true,
+            "value": "={{ $(\"Loop Over Items\").item.json.Id_Calendario }}",
+            "mode": "id"
+          },
+          "timeMax": "={{ $now.plus({ week: 2}) }}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleCalendar",
+        "typeVersion": 1.3,
+        "position": [
+          1152,
+          208
+        ],
+        "id": "23fa03b3-07fa-4467-8af1-ff0c6d8c4aff",
+        "name": "Get many events1",
+        "alwaysOutputData": true,
+        "credentials": {
+          "googleCalendarOAuth2Api": {
+            "id": "VFsyOELtxOoaAxpu",
+            "name": "Google Calendar account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "f666dfa7-8a6b-4f86-8f41-7ba9469b8be2",
+          "responseMode": "lastNode",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.1,
+        "position": [
+          -224,
+          32
+        ],
+        "id": "551de1b5-99a2-4cd6-b6ea-bceb41a13855",
+        "name": "Webhook",
+        "webhookId": "f666dfa7-8a6b-4f86-8f41-7ba9469b8be2",
+        "disabled": true
+      },
+      {
+        "parameters": {
+          "operation": "getAll",
+          "calendar": {
+            "__rl": true,
+            "value": "es-419.ar#holiday@group.v.calendar.google.com",
+            "mode": "list",
+            "cachedResultName": "Días feriados en Argentina"
+          },
+          "returnAll": true,
+          "timeMax": "={{ $now.plus({ month: 4 }) }}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleCalendar",
+        "typeVersion": 1.3,
+        "position": [
+          320,
+          208
+        ],
+        "id": "e40df7e9-d9bd-4b59-ac44-fd086bbf1273",
+        "name": "Get many events2",
+        "credentials": {
+          "googleCalendarOAuth2Api": {
+            "id": "VFsyOELtxOoaAxpu",
+            "name": "Google Calendar account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "outputFieldName": "hoy",
+          "options": {}
+        },
+        "id": "bd3c328f-6a2a-4a86-81b2-bd8177d92251",
+        "name": "hoy1",
+        "type": "n8n-nodes-base.dateTime",
+        "typeVersion": 2,
+        "position": [
+          0,
+          160
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "addToDate",
+          "magnitude": "={{ $json.hoy}}",
+          "duration": 1,
+          "outputFieldName": "mañana",
+          "options": {}
+        },
+        "id": "9d1048ae-7f52-48d0-bafd-b754ddb978e5",
+        "name": "mañana1",
+        "type": "n8n-nodes-base.dateTime",
+        "typeVersion": 2,
+        "position": [
+          144,
+          160
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = [];\nconst inputs = $input.all();\nlet turnosOcupados = [];\n\n// Procesar inputs para obtener turnos ocupados\nfor (let i = 0; i < inputs.length; i++) {\n  if (inputs[i].json) {\n    turnosOcupados.push(inputs[i].json);\n  }\n}\n\n// Obtener configuración del webhook\nconst webhookData = $('When Executed by Another Workflow').first().json;\nconst configuracion = webhookData.body || webhookData;\nconst diasAGenerar = configuracion.dias || 7;\n\n// Obtener feriados dinámicos del nodo \"Get many events2\"\nfunction obtenerFeriadosDinamicos() {\n  const feriados = [];\n  try {\n    const feriadosData = $('Get many events2').all();\n    \n    feriadosData.forEach(item => {\n      if (item.json && item.json.start && item.json.start.date) {\n        feriados.push(item.json.start.date);\n      }\n      // Si el feriado dura más de un día, agregar las fechas intermedias\n      if (item.json && item.json.end && item.json.end.date && item.json.start.date !== item.json.end.date) {\n        const fechaInicio = new Date(item.json.start.date);\n        const fechaFin = new Date(item.json.end.date);\n        \n        // Agregar todas las fechas entre inicio y fin\n        const fechaActual = new Date(fechaInicio);\n        while (fechaActual < fechaFin) {\n          feriados.push(fechaActual.toISOString().split('T')[0]);\n          fechaActual.setDate(fechaActual.getDate() + 1);\n        }\n      }\n    });\n  } catch (error) {\n    console.log('No se pudieron obtener feriados dinámicos, usando lista vacía');\n  }\n  \n  // Eliminar duplicados\n  return [...new Set(feriados)];\n}\n\nfunction convertirAMinutos(hora) {\n  const [horas, minutos] = hora.split(':').map(Number);\n  return horas * 60 + minutos;\n}\n\nfunction convertirDesdeMinutos(minutosTotales) {\n  const horas = Math.floor(minutosTotales / 60);\n  const minutos = minutosTotales % 60;\n  return `${horas.toString().padStart(2, '0')}:${minutos.toString().padStart(2, '0')}`;\n}\n\nfunction generarSlots(horaInicio, horaFin, duracionMinutos) {\n  const slots = [];\n  const inicio = convertirAMinutos(horaInicio);\n  const fin = convertirAMinutos(horaFin);\n  \n  for (let minutos = inicio; minutos + duracionMinutos <= fin; minutos += duracionMinutos) {\n    const slotInicio = convertirDesdeMinutos(minutos);\n    const slotFin = convertirDesdeMinutos(minutos + duracionMinutos);\n    \n    slots.push({\n      inicio: slotInicio,\n      fin: slotFin\n    });\n  }\n  \n  return slots;\n}\n\nfunction hayConflictoConOcupados(horaInicio, horaFin, turnosOcupados) {\n  const inicioSlot = convertirAMinutos(horaInicio);\n  const finSlot = convertirAMinutos(horaFin);\n  \n  return turnosOcupados.some(turno => {\n    const inicioOcupado = convertirAMinutos(turno.inicio);\n    const finOcupado = convertirAMinutos(turno.final);\n    // Verificar si hay solapamiento\n    return (inicioSlot < finOcupado && finSlot > inicioOcupado);\n  });\n}\n\nfunction esHorarioExcluido(horaInicio, horaFin) {\n  const inicioMinutos = convertirAMinutos(horaInicio);\n  const finMinutos = convertirAMinutos(horaFin);\n  \n  // Rangos excluidos en minutos\n  const rangosExcluidos = [\n    { inicio: convertirAMinutos(\"08:30\"), fin: convertirAMinutos(\"10:00\") },  // 8:30 - 10:00 AM\n    { inicio: convertirAMinutos(\"10:30\"), fin: convertirAMinutos(\"15:00\") },  // 10:30 AM - 3:00 PM\n    { inicio: convertirAMinutos(\"15:30\"), fin: convertirAMinutos(\"16:00\") },  // 3:30 - 4:00 PM\n    { inicio: convertirAMinutos(\"16:00\"), fin: convertirAMinutos(\"23:59\") }   // 4:00 PM en adelante\n  ];\n  \n  // Verificar si el slot se solapa con algún rango excluido\n  return rangosExcluidos.some(rango => {\n    return (inicioMinutos < rango.fin && finMinutos > rango.inicio);\n  });\n}\n\nfunction generarFechasProximosDias(cantidadDias) {\n  const fechas = [];\n  const hoy = new Date();\n  \n  // Obtener feriados dinámicos\n  const feriados = obtenerFeriadosDinamicos();\n  \n  let diasEncontrados = 0;\n  let i = 1;\n  \n  // Empezar desde mañana y buscar días laborables\n  while (diasEncontrados < cantidadDias) {\n    const fecha = new Date(hoy);\n    fecha.setDate(hoy.getDate() + i);\n    \n    const fechaFormateada = fecha.toISOString().split('T')[0];\n    const dayOfWeek = fecha.getDay(); // 0=domingo, 1=lunes, ..., 6=sábado\n    \n    // Verificar si es día laborable (lunes a viernes) y no es feriado\n    const esLaborable = dayOfWeek >= 1 && dayOfWeek <= 5;\n    const noEsFeriado = !feriados.includes(fechaFormateada);\n    \n    if (esLaborable && noEsFeriado) {\n      fechas.push(fechaFormateada);\n      diasEncontrados++;\n    }\n    \n    i++;\n  }\n  \n  return fechas;\n}\n\nfunction calcularTurnosDisponibles(turnosOcupados, configuracion, cantidadDias) {\n  const tiempo = configuracion.tiempo || 30; // duración por defecto 30 minutos\n  \n  // Extraer rangos horarios de forma dinámica\n  const rangosHorarios = [];\n  let index = 1;\n  \n  while (configuracion[`horarioInicio${index}`] && configuracion[`horarioFin${index}`]) {\n    rangosHorarios.push({\n      inicio: configuracion[`horarioInicio${index}`],\n      fin: configuracion[`horarioFin${index}`]\n    });\n    index++;\n  }\n  \n  // Si no se encontraron rangos, usar un rango predeterminado\n  if (rangosHorarios.length === 0) {\n    rangosHorarios.push({\n      inicio: \"08:00\",\n      fin: \"18:00\"\n    });\n  }\n  \n  // Generar fechas para los próximos días\n  const fechasProximas = generarFechasProximosDias(cantidadDias);\n  \n  const turnosDisponibles = {};\n  \n  // Procesar cada día\n  fechasProximas.forEach(dia => {\n    turnosDisponibles[dia] = [];\n    \n    // Obtener turnos ocupados para este día específico\n    const ocupadosDelDia = turnosOcupados.filter(turno => turno.dia === dia);\n    \n    // Procesar cada rango horario configurado\n    rangosHorarios.forEach(rango => {\n      // Generar todos los slots posibles en este rango\n      const slotsEnRango = generarSlots(rango.inicio, rango.fin, tiempo);\n      \n      // Filtrar slots que NO están ocupados y NO están en horarios excluidos\n      const slotsDisponibles = slotsEnRango.filter(slot => {\n        const noEstaOcupado = !hayConflictoConOcupados(slot.inicio, slot.fin, ocupadosDelDia);\n        const noEsHorarioExcluido = !esHorarioExcluido(slot.inicio, slot.fin);\n        return noEstaOcupado && noEsHorarioExcluido;\n      }).map(slot => ({\n        dia: dia,\n        inicio: slot.inicio,\n        fin: slot.fin,\n        fechaHora: `${dia} ${slot.inicio}-${slot.fin}`\n      }));\n      \n      // Añadir slots disponibles al día\n      turnosDisponibles[dia].push(...slotsDisponibles);\n    });\n    \n    // Ordenar turnos por hora de inicio\n    turnosDisponibles[dia].sort((a, b) => {\n      const minutosA = convertirAMinutos(a.inicio);\n      const minutosB = convertirAMinutos(b.inicio);\n      return minutosA - minutosB;\n    });\n  });\n  \n  return turnosDisponibles;\n}\n\n// Calcular turnos disponibles\nconst resultado = calcularTurnosDisponibles(turnosOcupados, configuracion, diasAGenerar);\n\n// Obtener información de feriados para estadísticas\nconst feriadosEncontrados = obtenerFeriadosDinamicos();\n\n// Agregar estadísticas útiles\nconst estadisticas = {\n  totalDias: Object.keys(resultado).length,\n  totalTurnosDisponibles: Object.values(resultado).reduce((total, turnos) => total + turnos.length, 0),\n  diasConTurnos: Object.entries(resultado).filter(([_, turnos]) => turnos.length > 0).length,\n  turnosOcupadosRecibidos: turnosOcupados.length,\n  feriadosEncontrados: feriadosEncontrados.length,\n  listaFeriados: feriadosEncontrados\n};\n\nitems.push({\n  json: {\n    calendar: \"Taller_1\",\n    turnosDisponibles: resultado,\n    estadisticas: estadisticas,\n    configuracionUsada: {\n      dias: diasAGenerar,\n      tiempoPorTurno: configuracion.tiempo || 30,\n      rangosHorarios: configuracion.horarioInicio1 ? \n        `${configuracion.horarioInicio1} - ${configuracion.horarioFin1}` : \"08:00 - 18:00\"\n    }\n  }\n});\n\nreturn items;"
+        },
+        "id": "443e7ec3-1073-4ac2-a2a3-d53ff19ae8e7",
+        "name": "turnosDisponibles1",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1584,
+          128
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "function calcularSieteDiasLaborables() {\n  const hoy = new Date();\n  \n  // Obtener los feriados del nodo anterior\n  const feriadosData = $input.all(); // Obtiene todos los items del nodo anterior\n  const feriados = [];\n  \n  // Extraer las fechas de los feriados del formato que recibes\n  feriadosData.forEach(item => {\n    if (item.json && item.json.start && item.json.start.date) {\n      feriados.push(item.json.start.date);\n    }\n    // Si el feriado dura más de un día, también agregar las fechas intermedias\n    if (item.json && item.json.end && item.json.end.date && item.json.start.date !== item.json.end.date) {\n      const fechaInicio = new Date(item.json.start.date);\n      const fechaFin = new Date(item.json.end.date);\n      \n      // Agregar todas las fechas entre inicio y fin\n      const fechaActual = new Date(fechaInicio);\n      while (fechaActual < fechaFin) {\n        feriados.push(fechaActual.toISOString().split('T')[0]);\n        fechaActual.setDate(fechaActual.getDate() + 1);\n      }\n    }\n  });\n  \n  // Eliminar duplicados de la lista de feriados\n  const feriadosUnicos = [...new Set(feriados)];\n  \n  let diasLaborablesEncontrados = 0;\n  let i = 1; // Empezar desde mañana\n  let fechaFinal = null;\n  \n  // Buscar hasta encontrar exactamente 7 días laborables\n  while (diasLaborablesEncontrados < 7) {\n    const fecha = new Date(hoy);\n    fecha.setDate(hoy.getDate() + i);\n    \n    const fechaFormateada = fecha.toISOString().split('T')[0];\n    const dayOfWeek = fecha.getDay(); // 0=domingo, 1=lunes, ..., 6=sábado\n    \n    // Verificar si es día laborable (lunes a viernes) y no es feriado\n    const esLaborable = dayOfWeek >= 1 && dayOfWeek <= 5; // lunes a viernes\n    const noEsFeriado = !feriadosUnicos.includes(fechaFormateada);\n    \n    if (esLaborable && noEsFeriado) {\n      diasLaborablesEncontrados++;\n      if (diasLaborablesEncontrados === 7) {\n        // Establecer hora específica y formato completo\n        fecha.setHours(12, 44, 14, 1); // 12:44:14.001\n        fechaFinal = fecha.toISOString().replace('Z', '-04:00'); // Cambiar Z por -04:00\n      }\n    }\n    \n    i++;\n  }\n  \n  return fechaFinal;\n}\n\nconst sieteDias = calcularSieteDiasLaborables();\n\nreturn [{\n  json: {\n    sieteDias: sieteDias,\n    feriadosEncontrados: $input.all().length // Para debug: cantidad de feriados encontrados\n  }\n}];"
+        },
+        "id": "950fd984-a38e-4b2c-bafd-b76df1a02695",
+        "name": "diasLibres",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          592,
+          32
+        ]
+      }
+    ],
+    "connections": {
+      "Code": {
+        "main": [
+          [
+            {
+              "node": "turnosDisponibles1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "When Executed by Another Workflow": {
+        "main": [
+          [
+            {
+              "node": "hoy1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get row(s) in sheet": {
+        "main": [
+          [
+            {
+              "node": "Loop Over Items",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Loop Over Items": {
+        "main": [
+          [
+            {
+              "node": "Code",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Get many events1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get many events1": {
+        "main": [
+          [
+            {
+              "node": "Loop Over Items",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "hoy1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get many events2": {
+        "main": [
+          [
+            {
+              "node": "diasLibres",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "hoy1": {
+        "main": [
+          [
+            {
+              "node": "mañana1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "mañana1": {
+        "main": [
+          [
+            {
+              "node": "Get many events2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "diasLibres": {
+        "main": [
+          [
+            {
+              "node": "Get row(s) in sheet",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "system migration",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-11-04T19:34:56.292Z",
+    "updatedAt": "2026-11-04T19:34:56.292Z"
+  },
+  "activeVersionId": "6a938d4e-756e-4a31-aadd-46b2d3f0d35f",
+  "connections": {
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "turnosDisponibles1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "hoy1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get many events1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many events1": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "hoy1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many events2": {
+      "main": [
+        [
+          {
+            "node": "diasLibres",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "hoy1": {
+      "main": [
+        [
+          {
+            "node": "mañana1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "mañana1": {
+      "main": [
+        [
+          {
+            "node": "Get many events2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "diasLibres": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2025-09-17T15:47:27.519Z",
+  "id": "tCU9k8k2ZjWl5wPd",
+  "isArchived": false,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "name": "GetTurnos",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst returnItems = [];\n\n// Verificar si hay items\nif (!items || items.length === 0) {\n  return [];\n}\n\n// Función para determinar la bahía según diferentes criterios\nfunction determinarBahia(data) {\n  // OPCIÓN 1: Por ID del calendario (reemplaza con los IDs reales)\n  if (data.organizer && data.organizer.email) {\n    if (data.organizer.email.includes('bahia1') || data.organizer.email === 'id_calendario_bahia1@gmail.com') {\n      return 'Bahías 1';\n    }\n    if (data.organizer.email.includes('bahia2') || data.organizer.email === 'id_calendario_bahia2@gmail.com') {\n      return 'Bahías 2';\n    }\n  }\n  \n  // OPCIÓN 2: Por título/resumen del evento\n  if (data.summary) {\n    if (data.summary.toLowerCase().includes('bahía 1') || data.summary.toLowerCase().includes('bahia 1')) {\n      return 'Bahías 1';\n    }\n    if (data.summary.toLowerCase().includes('bahía 2') || data.summary.toLowerCase().includes('bahia 2')) {\n      return 'Bahías 2';\n    }\n  }\n  \n  // OPCIÓN 3: Obtener desde el loop context (si viene del Excel)\n  try {\n    const loopItem = $(\"Loop Over Items\").item.json;\n    if (loopItem.Bahias || loopItem.bahias || loopItem.Bahía || loopItem.bahía) {\n      const bahiaValue = loopItem.Bahias || loopItem.bahias || loopItem.Bahía || loopItem.bahía;\n      return bahiaValue == 1 ? 'Bahías 1' : 'Bahías 2';\n    }\n    if (loopItem.Taller) {\n      // Si el campo se llama \"Taller\" en tu Excel\n      return loopItem.Bahias.includes('1') ? 'Bahías 1' : 'Bahías 2';\n    }\n  } catch (error) {\n    // No se pudo obtener del loop context\n  }\n  \n  // OPCIÓN 4: Por defecto, intentar deducir por otros campos\n  return 'Bahía no identificada';\n}\n\nfor (const item of items) {\n  // Verificar que el item tenga la estructura correcta\n  if (!item || !item.json) {\n    continue; // Saltar este item si no tiene la estructura correcta\n  }\n  \n  let data = item.json;\n  const bahia = determinarBahia(data);\n  \n  // Verificar si tiene dateTime (eventos con hora específica)\n  if (data.start && data.start.dateTime && data.end && data.end.dateTime) {\n    const dia = data.start.dateTime.split('T')[0];\n    const inicio = data.start.dateTime.split('T')[1].substring(0, 5);\n    const final = data.end.dateTime.split('T')[1].substring(0, 5);\n    \n    returnItems.push({\n      json: {\n        dia: dia,\n        inicio: inicio, \n        final: final,\n        tipo: 'evento_con_hora',\n        titulo: data.summary || 'Sin título',\n        bahia: bahia,\n        calendario_email: data.organizer?.email || 'No disponible'\n      }\n    });\n  }\n  // Verificar si tiene date (eventos de día completo, como feriados)\n  else if (data.start && data.start.date) {\n    const dia = data.start.date;\n    \n    returnItems.push({\n      json: {\n        dia: dia,\n        inicio: '00:00', \n        final: '23:59',\n        tipo: 'evento_dia_completo',\n        titulo: data.summary || 'Sin título',\n        bahia: bahia,\n        calendario_email: data.organizer?.email || 'No disponible'\n      }\n    });\n  }\n}\n\nreturn returnItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        112
+      ],
+      "id": "a4665555-b2e4-4694-ace6-d51c8253156e",
+      "name": "Code",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -320,
+        192
+      ],
+      "id": "21410642-d3ba-4540-b59c-a3075496e5f0",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1eyskisSR3eCYLDfIxicAF605LrlwKBu8D8iweqnSt00",
+          "mode": "list",
+          "cachedResultName": "CHEXA MANTENIMIENTO",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1eyskisSR3eCYLDfIxicAF605LrlwKBu8D8iweqnSt00/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 323427792,
+          "mode": "list",
+          "cachedResultName": "Tabla Horarios Taller",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ifqeAsO3KaSjUeJaeDvfis_MQH1dakEtbO1PZ_dIHGM/edit#gid=323427792"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Taller",
+              "lookupValue": "={{ $('When Executed by Another Workflow').first().json.query }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        768,
+        112
+      ],
+      "id": "8e841d55-5eb4-407a-b423-a3baa8c4689b",
+      "name": "Get row(s) in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "mydWwvSbUgk78Yn0",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        976,
+        112
+      ],
+      "id": "a0dbad1f-ce8f-4689-9ae8-e400b4f2535a",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "={{ $(\"Loop Over Items\").item.json.Id_Calendario }}",
+          "mode": "id"
+        },
+        "timeMax": "={{ $now.plus({ week: 2}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        1152,
+        208
+      ],
+      "id": "23fa03b3-07fa-4467-8af1-ff0c6d8c4aff",
+      "name": "Get many events1",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "VFsyOELtxOoaAxpu",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "f666dfa7-8a6b-4f86-8f41-7ba9469b8be2",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -224,
+        32
+      ],
+      "id": "551de1b5-99a2-4cd6-b6ea-bceb41a13855",
+      "name": "Webhook",
+      "webhookId": "f666dfa7-8a6b-4f86-8f41-7ba9469b8be2",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "es-419.ar#holiday@group.v.calendar.google.com",
+          "mode": "list",
+          "cachedResultName": "Días feriados en Argentina"
+        },
+        "returnAll": true,
+        "timeMax": "={{ $now.plus({ month: 4 }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        320,
+        208
+      ],
+      "id": "e40df7e9-d9bd-4b59-ac44-fd086bbf1273",
+      "name": "Get many events2",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "VFsyOELtxOoaAxpu",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "outputFieldName": "hoy",
+        "options": {}
+      },
+      "id": "bd3c328f-6a2a-4a86-81b2-bd8177d92251",
+      "name": "hoy1",
+      "type": "n8n-nodes-base.dateTime",
+      "typeVersion": 2,
+      "position": [
+        0,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "addToDate",
+        "magnitude": "={{ $json.hoy}}",
+        "duration": 1,
+        "outputFieldName": "mañana",
+        "options": {}
+      },
+      "id": "9d1048ae-7f52-48d0-bafd-b754ddb978e5",
+      "name": "mañana1",
+      "type": "n8n-nodes-base.dateTime",
+      "typeVersion": 2,
+      "position": [
+        144,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = [];\nconst inputs = $input.all();\nlet turnosOcupados = [];\n\n// Procesar inputs para obtener turnos ocupados\nfor (let i = 0; i < inputs.length; i++) {\n  if (inputs[i].json) {\n    turnosOcupados.push(inputs[i].json);\n  }\n}\n\n// Obtener configuración del webhook\nconst webhookData = $('When Executed by Another Workflow').first().json;\nconst configuracion = webhookData.body || webhookData;\nconst diasAGenerar = configuracion.dias || 7;\n\n// Obtener feriados dinámicos del nodo \"Get many events2\"\nfunction obtenerFeriadosDinamicos() {\n  const feriados = [];\n  try {\n    const feriadosData = $('Get many events2').all();\n    \n    feriadosData.forEach(item => {\n      if (item.json && item.json.start && item.json.start.date) {\n        feriados.push(item.json.start.date);\n      }\n      // Si el feriado dura más de un día, agregar las fechas intermedias\n      if (item.json && item.json.end && item.json.end.date && item.json.start.date !== item.json.end.date) {\n        const fechaInicio = new Date(item.json.start.date);\n        const fechaFin = new Date(item.json.end.date);\n        \n        // Agregar todas las fechas entre inicio y fin\n        const fechaActual = new Date(fechaInicio);\n        while (fechaActual < fechaFin) {\n          feriados.push(fechaActual.toISOString().split('T')[0]);\n          fechaActual.setDate(fechaActual.getDate() + 1);\n        }\n      }\n    });\n  } catch (error) {\n    console.log('No se pudieron obtener feriados dinámicos, usando lista vacía');\n  }\n  \n  // Eliminar duplicados\n  return [...new Set(feriados)];\n}\n\nfunction convertirAMinutos(hora) {\n  const [horas, minutos] = hora.split(':').map(Number);\n  return horas * 60 + minutos;\n}\n\nfunction convertirDesdeMinutos(minutosTotales) {\n  const horas = Math.floor(minutosTotales / 60);\n  const minutos = minutosTotales % 60;\n  return `${horas.toString().padStart(2, '0')}:${minutos.toString().padStart(2, '0')}`;\n}\n\nfunction generarSlots(horaInicio, horaFin, duracionMinutos) {\n  const slots = [];\n  const inicio = convertirAMinutos(horaInicio);\n  const fin = convertirAMinutos(horaFin);\n  \n  for (let minutos = inicio; minutos + duracionMinutos <= fin; minutos += duracionMinutos) {\n    const slotInicio = convertirDesdeMinutos(minutos);\n    const slotFin = convertirDesdeMinutos(minutos + duracionMinutos);\n    \n    slots.push({\n      inicio: slotInicio,\n      fin: slotFin\n    });\n  }\n  \n  return slots;\n}\n\nfunction hayConflictoConOcupados(horaInicio, horaFin, turnosOcupados) {\n  const inicioSlot = convertirAMinutos(horaInicio);\n  const finSlot = convertirAMinutos(horaFin);\n  \n  return turnosOcupados.some(turno => {\n    const inicioOcupado = convertirAMinutos(turno.inicio);\n    const finOcupado = convertirAMinutos(turno.final);\n    // Verificar si hay solapamiento\n    return (inicioSlot < finOcupado && finSlot > inicioOcupado);\n  });\n}\n\nfunction esHorarioExcluido(horaInicio, horaFin) {\n  const inicioMinutos = convertirAMinutos(horaInicio);\n  const finMinutos = convertirAMinutos(horaFin);\n  \n  // Rangos excluidos en minutos\n  const rangosExcluidos = [\n    { inicio: convertirAMinutos(\"08:30\"), fin: convertirAMinutos(\"10:00\") },  // 8:30 - 10:00 AM\n    { inicio: convertirAMinutos(\"10:30\"), fin: convertirAMinutos(\"15:00\") },  // 10:30 AM - 3:00 PM\n    { inicio: convertirAMinutos(\"15:30\"), fin: convertirAMinutos(\"16:00\") },  // 3:30 - 4:00 PM\n    { inicio: convertirAMinutos(\"16:00\"), fin: convertirAMinutos(\"23:59\") }   // 4:00 PM en adelante\n  ];\n  \n  // Verificar si el slot se solapa con algún rango excluido\n  return rangosExcluidos.some(rango => {\n    return (inicioMinutos < rango.fin && finMinutos > rango.inicio);\n  });\n}\n\nfunction generarFechasProximosDias(cantidadDias) {\n  const fechas = [];\n  const hoy = new Date();\n  \n  // Obtener feriados dinámicos\n  const feriados = obtenerFeriadosDinamicos();\n  \n  let diasEncontrados = 0;\n  let i = 1;\n  \n  // Empezar desde mañana y buscar días laborables\n  while (diasEncontrados < cantidadDias) {\n    const fecha = new Date(hoy);\n    fecha.setDate(hoy.getDate() + i);\n    \n    const fechaFormateada = fecha.toISOString().split('T')[0];\n    const dayOfWeek = fecha.getDay(); // 0=domingo, 1=lunes, ..., 6=sábado\n    \n    // Verificar si es día laborable (lunes a viernes) y no es feriado\n    const esLaborable = dayOfWeek >= 1 && dayOfWeek <= 5;\n    const noEsFeriado = !feriados.includes(fechaFormateada);\n    \n    if (esLaborable && noEsFeriado) {\n      fechas.push(fechaFormateada);\n      diasEncontrados++;\n    }\n    \n    i++;\n  }\n  \n  return fechas;\n}\n\nfunction calcularTurnosDisponibles(turnosOcupados, configuracion, cantidadDias) {\n  const tiempo = configuracion.tiempo || 30; // duración por defecto 30 minutos\n  \n  // Extraer rangos horarios de forma dinámica\n  const rangosHorarios = [];\n  let index = 1;\n  \n  while (configuracion[`horarioInicio${index}`] && configuracion[`horarioFin${index}`]) {\n    rangosHorarios.push({\n      inicio: configuracion[`horarioInicio${index}`],\n      fin: configuracion[`horarioFin${index}`]\n    });\n    index++;\n  }\n  \n  // Si no se encontraron rangos, usar un rango predeterminado\n  if (rangosHorarios.length === 0) {\n    rangosHorarios.push({\n      inicio: \"08:00\",\n      fin: \"18:00\"\n    });\n  }\n  \n  // Generar fechas para los próximos días\n  const fechasProximas = generarFechasProximosDias(cantidadDias);\n  \n  const turnosDisponibles = {};\n  \n  // Procesar cada día\n  fechasProximas.forEach(dia => {\n    turnosDisponibles[dia] = [];\n    \n    // Obtener turnos ocupados para este día específico\n    const ocupadosDelDia = turnosOcupados.filter(turno => turno.dia === dia);\n    \n    // Procesar cada rango horario configurado\n    rangosHorarios.forEach(rango => {\n      // Generar todos los slots posibles en este rango\n      const slotsEnRango = generarSlots(rango.inicio, rango.fin, tiempo);\n      \n      // Filtrar slots que NO están ocupados y NO están en horarios excluidos\n      const slotsDisponibles = slotsEnRango.filter(slot => {\n        const noEstaOcupado = !hayConflictoConOcupados(slot.inicio, slot.fin, ocupadosDelDia);\n        const noEsHorarioExcluido = !esHorarioExcluido(slot.inicio, slot.fin);\n        return noEstaOcupado && noEsHorarioExcluido;\n      }).map(slot => ({\n        dia: dia,\n        inicio: slot.inicio,\n        fin: slot.fin,\n        fechaHora: `${dia} ${slot.inicio}-${slot.fin}`\n      }));\n      \n      // Añadir slots disponibles al día\n      turnosDisponibles[dia].push(...slotsDisponibles);\n    });\n    \n    // Ordenar turnos por hora de inicio\n    turnosDisponibles[dia].sort((a, b) => {\n      const minutosA = convertirAMinutos(a.inicio);\n      const minutosB = convertirAMinutos(b.inicio);\n      return minutosA - minutosB;\n    });\n  });\n  \n  return turnosDisponibles;\n}\n\n// Calcular turnos disponibles\nconst resultado = calcularTurnosDisponibles(turnosOcupados, configuracion, diasAGenerar);\n\n// Obtener información de feriados para estadísticas\nconst feriadosEncontrados = obtenerFeriadosDinamicos();\n\n// Agregar estadísticas útiles\nconst estadisticas = {\n  totalDias: Object.keys(resultado).length,\n  totalTurnosDisponibles: Object.values(resultado).reduce((total, turnos) => total + turnos.length, 0),\n  diasConTurnos: Object.entries(resultado).filter(([_, turnos]) => turnos.length > 0).length,\n  turnosOcupadosRecibidos: turnosOcupados.length,\n  feriadosEncontrados: feriadosEncontrados.length,\n  listaFeriados: feriadosEncontrados\n};\n\nitems.push({\n  json: {\n    calendar: \"Taller_1\",\n    turnosDisponibles: resultado,\n    estadisticas: estadisticas,\n    configuracionUsada: {\n      dias: diasAGenerar,\n      tiempoPorTurno: configuracion.tiempo || 30,\n      rangosHorarios: configuracion.horarioInicio1 ? \n        `${configuracion.horarioInicio1} - ${configuracion.horarioFin1}` : \"08:00 - 18:00\"\n    }\n  }\n});\n\nreturn items;"
+      },
+      "id": "443e7ec3-1073-4ac2-a2a3-d53ff19ae8e7",
+      "name": "turnosDisponibles1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1584,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "function calcularSieteDiasLaborables() {\n  const hoy = new Date();\n  \n  // Obtener los feriados del nodo anterior\n  const feriadosData = $input.all(); // Obtiene todos los items del nodo anterior\n  const feriados = [];\n  \n  // Extraer las fechas de los feriados del formato que recibes\n  feriadosData.forEach(item => {\n    if (item.json && item.json.start && item.json.start.date) {\n      feriados.push(item.json.start.date);\n    }\n    // Si el feriado dura más de un día, también agregar las fechas intermedias\n    if (item.json && item.json.end && item.json.end.date && item.json.start.date !== item.json.end.date) {\n      const fechaInicio = new Date(item.json.start.date);\n      const fechaFin = new Date(item.json.end.date);\n      \n      // Agregar todas las fechas entre inicio y fin\n      const fechaActual = new Date(fechaInicio);\n      while (fechaActual < fechaFin) {\n        feriados.push(fechaActual.toISOString().split('T')[0]);\n        fechaActual.setDate(fechaActual.getDate() + 1);\n      }\n    }\n  });\n  \n  // Eliminar duplicados de la lista de feriados\n  const feriadosUnicos = [...new Set(feriados)];\n  \n  let diasLaborablesEncontrados = 0;\n  let i = 1; // Empezar desde mañana\n  let fechaFinal = null;\n  \n  // Buscar hasta encontrar exactamente 7 días laborables\n  while (diasLaborablesEncontrados < 7) {\n    const fecha = new Date(hoy);\n    fecha.setDate(hoy.getDate() + i);\n    \n    const fechaFormateada = fecha.toISOString().split('T')[0];\n    const dayOfWeek = fecha.getDay(); // 0=domingo, 1=lunes, ..., 6=sábado\n    \n    // Verificar si es día laborable (lunes a viernes) y no es feriado\n    const esLaborable = dayOfWeek >= 1 && dayOfWeek <= 5; // lunes a viernes\n    const noEsFeriado = !feriadosUnicos.includes(fechaFormateada);\n    \n    if (esLaborable && noEsFeriado) {\n      diasLaborablesEncontrados++;\n      if (diasLaborablesEncontrados === 7) {\n        // Establecer hora específica y formato completo\n        fecha.setHours(12, 44, 14, 1); // 12:44:14.001\n        fechaFinal = fecha.toISOString().replace('Z', '-04:00'); // Cambiar Z por -04:00\n      }\n    }\n    \n    i++;\n  }\n  \n  return fechaFinal;\n}\n\nconst sieteDias = calcularSieteDiasLaborables();\n\nreturn [{\n  json: {\n    sieteDias: sieteDias,\n    feriadosEncontrados: $input.all().length // Para debug: cantidad de feriados encontrados\n  }\n}];"
+      },
+      "id": "950fd984-a38e-4b2c-bafd-b76df1a02695",
+      "name": "diasLibres",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        592,
+        32
+      ]
+    }
+  ],
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "tCU9k8k2ZjWl5wPd",
+      "projectId": "ZjcvWAM7NzgUDQT2",
+      "createdAt": "2025-09-17T15:47:27.522Z",
+      "updatedAt": "2025-09-17T15:47:27.522Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [
+    {
+      "id": "gWPya5QbcohaweQK",
+      "name": "Chexa",
+      "createdAt": "2025-09-05T03:09:59.791Z",
+      "updatedAt": "2026-02-27T20:35:35.652Z"
+    }
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2026-11-04T20:06:09.429Z",
+  "versionId": "6a938d4e-756e-4a31-aadd-46b2d3f0d35f"
+}
