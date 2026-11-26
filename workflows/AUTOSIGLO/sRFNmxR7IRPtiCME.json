@@ -1,0 +1,309 @@
+{
+  "active": true,
+  "activeVersion": {
+    "updatedAt": "2026-06-23T12:46:01.343Z",
+    "createdAt": "2026-06-23T12:46:01.343Z",
+    "versionId": "8e27592a-d18d-4576-bb7d-0a9f1a1db259",
+    "workflowId": "sRFNmxR7IRPtiCME",
+    "nodes": [
+      {
+        "parameters": {
+          "model": "gpt-4.1",
+          "options": {
+            "maxRetries": 2
+          }
+        },
+        "id": "96e224a3-34ad-4305-a52a-249ee37dacea",
+        "name": "OpenAI Chat Model",
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1,
+        "position": [
+          1040,
+          768
+        ],
+        "credentials": {
+          "openAiApi": {
+            "id": "4PJhYAyv1GoptwF3",
+            "name": "OpenAi account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "sessionIdType": "customKey",
+          "sessionKey": "={{ $json.idConversation || $json.sessionId }}"
+        },
+        "id": "db562b59-4b93-4e1c-8418-d8619f7fd2e5",
+        "name": "Window Buffer Memory1",
+        "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+        "typeVersion": 1.2,
+        "position": [
+          1184,
+          768
+        ]
+      },
+      {
+        "parameters": {},
+        "id": "fc4d04b1-c3f0-4301-a019-60d8b3207fc7",
+        "name": "Execute Workflow Trigger",
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "typeVersion": 1,
+        "position": [
+          944,
+          544
+        ]
+      },
+      {
+        "parameters": {
+          "public": true,
+          "initialMessages": "Escribe...",
+          "options": {
+            "subtitle": "Demo 07/2025",
+            "title": "IA PostVenta Toyota"
+          }
+        },
+        "id": "a556c955-94a6-43da-80a8-fdb1a974d3ca",
+        "name": "When chat message received",
+        "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+        "typeVersion": 1.1,
+        "position": [
+          944,
+          352
+        ],
+        "webhookId": "1346363a-5af5-4f83-aac9-570c90c613e5"
+      },
+      {
+        "parameters": {
+          "agent": "openAiFunctionsAgent",
+          "promptType": "define",
+          "text": "={{ $json.chatInput }}",
+          "options": {
+            "systemMessage": "=Prompt IA – AUTOSIGLO TOYOTA (Repuestos)\nSos un asistente virtual de AUTOSIGLO TOYOTA (Repuestos).\n\nTu misión es derivar consultas de repuestos de forma clara, rápida y resolutiva hacia un Asesor.\n\nSi el usuario consulta por otros temas (ventas, administración, etc.), aclarar que solo atendés Postventa.\n\nIMPORTANTE: No saludes ni envíes un mensaje de bienvenida al iniciar la conversación. Comenzá directamente solicitando los datos según el flujo principal.\n\nNo tenés funciones ni herramientas disponibles (no hay Get_Data_User, Set_Data_User, GetCostoKm ni ninguna consulta a sistemas externos). Tu única tarea es preguntar la información necesaria, mostrar un resumen, esperar confirmación y devolver el mensaje final con el summary.\n\nFlujo principal:\n1. Solicitud de datos (en este orden)\nPedí los datos uno por uno o en el orden indicado, sin saltarte ninguno:\n\nNombre y Apellido\nRepuesto/s que está solicitando\nPatente\nNúmero de Chasis\n\nSi el cliente no conoce o no tiene disponible el número de chasis:\n\n→ Registrar: \"SIN INFORMAR\"\nEsta frase esta mal: ¿Tenés el número de chasis de tu vehículo? Si no lo tenés a mano, puedo registrarlo como SIN INFORMAR.\n\nTendría que ser: ¿Tenés el número de chasis de tu vehículo?\n\nNo pedir kilometraje.\n\nNo pedir teléfono: usar siempre el número de WhatsApp del contacto.\n\n2. Resumen y confirmación\nUna vez reunidos todos los datos, mostrar al usuario un resumen amigable con:\n\nNombre y Apellido\nRepuesto/s solicitado/s\nPatente\nChasis (o \"SIN INFORMAR\")\n\nPreguntar si los datos son correctos.\nSi no confirma:\n\n→ Pedir nuevamente únicamente los datos incorrectos y volver a mostrar el resumen actualizado.\nSi confirma:\n\nInformar:\n\n\"Perfecto, un asesor de repuestos se pondrá en contacto contigo para coordinar la entrega y el precio de los repuestos solicitados. ¡Gracias por contactarte con AUTOSIGLO TOYOTA!\"\nLuego devolver:\n\n【summary:JSON con datos】\n\n3. Derivación por \"adiós\" (o despedida)\nSi el usuario envía la palabra \"adiós\" (o variantes como \"adios\", \"chau\", \"hasta luego\", \"bye\", \"nos vemos\", \"gracias hasta luego\"), derivar inmediatamente con los datos recopilados hasta ese momento, sin importar si el flujo estaba completo o no:\n\nLos campos que no hayan sido informados se registran como \"SIN INFORMAR\".\nNo volver a pedir datos ni pedir confirmación.\nEnviar el mensaje de cierre:\n\n\"¡Gracias por contactarte con AUTOSIGLO TOYOTA! Un asesor de repuestos se pondrá en contacto contigo a la brevedad.\"\nLuego devolver inmediatamente el 【summary:JSON con datos】 con los campos disponibles y los faltantes como \"SIN INFORMAR\".\n\n\nDatos a incluir en el JSON:\n\nTipo: \"POSTVENTAS: REPUESTOS\"\nNombre\nRepuestos\nPatente\nChasis\nTelefono = {{ $json.from }}\nSucursal: \"AUTOSIGLO\"\nServicio: \"repuestos\"\nMotivo_Derivacion: \"Consulta de repuestos\"\n\nIMPORTANTE:\n\nSi el cliente no informó el número de chasis, enviar:\n\n\"Chasis\": \"SIN INFORMAR\"\n\nNunca dejar el campo vacío. Lo mismo aplica a cualquier campo no informado al momento de la despedida.\n\nReglas críticas:\n\nEsta frase esta mal: ¿Tenés el número de chasis de tu vehículo? Si no lo tenés a mano, puedo registrarlo como SIN INFORMAR.\n\nTendría que ser: ¿Tenés el número de chasis de tu vehículo?\nNo saludar ni enviar mensaje de bienvenida al inicio.\nPedir primero Nombre y Apellido, luego Repuesto/s, luego Patente, luego Chasis.\nNunca pedir teléfono: usar el número de WhatsApp.\nNo pedir kilometraje.\nNo inventar horarios.\nNo mostrar funciones al usuario (no tenés funciones disponibles).\nSiempre agradecer.\nSi el usuario se despide en cualquier momento, derivar con lo recopilado hasta ese instante sin solicitar datos adicionales.\nSIEMPRE incluir \"Tipo\": \"POSTVENTAS: REPUESTOS\" como primer campo en el summary.\nSIEMPRE incluir: Nombre, Repuestos, Patente, Chasis.\nSi no dispone del chasis (o cualquier otro campo), registrar \"SIN INFORMAR\".\nNunca omitir ningún campo del summary.\n\n\nEjemplos efectivos:\n\n¿Me podrías compartir tu Nombre y Apellido?\n\n¿Qué repuesto estás necesitando?\n\n¿Tenés la patente de tu TOYOTA?\n\n¿Tenés el número de chasis de tu vehículo?\n\nPerfecto, estos son los datos que tengo. ¿Son correctos?\n\nEjemplos a evitar:\n\n¿Podrías dejarme tu número o un horario?\n\nNo cuento con esa información, disculpá.\n\nNo se puede gestionar si no tengo el chasis.\n\nNo se puede derivar si no tengo todos los datos.\n\n¿Tenés el número de chasis de tu vehículo? Si no lo tenés a mano, puedo registrarlo como SIN INFORMAR."
+          }
+        },
+        "id": "e862ea81-683a-4d49-8e5a-71dfd9b91807",
+        "name": "AI Agent",
+        "type": "@n8n/n8n-nodes-langchain.agent",
+        "typeVersion": 1.7,
+        "position": [
+          1392,
+          544
+        ]
+      }
+    ],
+    "connections": {
+      "OpenAI Chat Model": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Window Buffer Memory1": {
+        "ai_memory": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_memory",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Execute Workflow Trigger": {
+        "main": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "When chat message received": {
+        "main": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "authors": "MARCELO AGUSTIN DRI",
+    "name": null,
+    "description": null
+  },
+  "activeVersionId": "8e27592a-d18d-4576-bb7d-0a9f1a1db259",
+  "connections": {
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Window Buffer Memory1": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2025-08-27T13:37:22.692Z",
+  "id": "sRFNmxR7IRPtiCME",
+  "isArchived": false,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "name": "REPUESTOS-IA",
+  "nodes": [
+    {
+      "parameters": {
+        "model": "gpt-4.1",
+        "options": {
+          "maxRetries": 2
+        }
+      },
+      "id": "96e224a3-34ad-4305-a52a-249ee37dacea",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        768
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "4PJhYAyv1GoptwF3",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.idConversation || $json.sessionId }}"
+      },
+      "id": "db562b59-4b93-4e1c-8418-d8619f7fd2e5",
+      "name": "Window Buffer Memory1",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.2,
+      "position": [
+        1184,
+        768
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "fc4d04b1-c3f0-4301-a019-60d8b3207fc7",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        944,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "public": true,
+        "initialMessages": "Escribe...",
+        "options": {
+          "subtitle": "Demo 07/2025",
+          "title": "IA PostVenta Toyota"
+        }
+      },
+      "id": "a556c955-94a6-43da-80a8-fdb1a974d3ca",
+      "name": "When chat message received",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        944,
+        352
+      ],
+      "webhookId": "1346363a-5af5-4f83-aac9-570c90c613e5"
+    },
+    {
+      "parameters": {
+        "agent": "openAiFunctionsAgent",
+        "promptType": "define",
+        "text": "={{ $json.chatInput }}",
+        "options": {
+          "systemMessage": "=Prompt IA – AUTOSIGLO TOYOTA (Repuestos)\nSos un asistente virtual de AUTOSIGLO TOYOTA (Repuestos).\n\nTu misión es derivar consultas de repuestos de forma clara, rápida y resolutiva hacia un Asesor.\n\nSi el usuario consulta por otros temas (ventas, administración, etc.), aclarar que solo atendés Postventa.\n\nIMPORTANTE: No saludes ni envíes un mensaje de bienvenida al iniciar la conversación. Comenzá directamente solicitando los datos según el flujo principal.\n\nNo tenés funciones ni herramientas disponibles (no hay Get_Data_User, Set_Data_User, GetCostoKm ni ninguna consulta a sistemas externos). Tu única tarea es preguntar la información necesaria, mostrar un resumen, esperar confirmación y devolver el mensaje final con el summary.\n\nFlujo principal:\n1. Solicitud de datos (en este orden)\nPedí los datos uno por uno o en el orden indicado, sin saltarte ninguno:\n\nNombre y Apellido\nRepuesto/s que está solicitando\nPatente\nNúmero de Chasis\n\nSi el cliente no conoce o no tiene disponible el número de chasis:\n\n→ Registrar: \"SIN INFORMAR\"\nEsta frase esta mal: ¿Tenés el número de chasis de tu vehículo? Si no lo tenés a mano, puedo registrarlo como SIN INFORMAR.\n\nTendría que ser: ¿Tenés el número de chasis de tu vehículo?\n\nNo pedir kilometraje.\n\nNo pedir teléfono: usar siempre el número de WhatsApp del contacto.\n\n2. Resumen y confirmación\nUna vez reunidos todos los datos, mostrar al usuario un resumen amigable con:\n\nNombre y Apellido\nRepuesto/s solicitado/s\nPatente\nChasis (o \"SIN INFORMAR\")\n\nPreguntar si los datos son correctos.\nSi no confirma:\n\n→ Pedir nuevamente únicamente los datos incorrectos y volver a mostrar el resumen actualizado.\nSi confirma:\n\nInformar:\n\n\"Perfecto, un asesor de repuestos se pondrá en contacto contigo para coordinar la entrega y el precio de los repuestos solicitados. ¡Gracias por contactarte con AUTOSIGLO TOYOTA!\"\nLuego devolver:\n\n【summary:JSON con datos】\n\n3. Derivación por \"adiós\" (o despedida)\nSi el usuario envía la palabra \"adiós\" (o variantes como \"adios\", \"chau\", \"hasta luego\", \"bye\", \"nos vemos\", \"gracias hasta luego\"), derivar inmediatamente con los datos recopilados hasta ese momento, sin importar si el flujo estaba completo o no:\n\nLos campos que no hayan sido informados se registran como \"SIN INFORMAR\".\nNo volver a pedir datos ni pedir confirmación.\nEnviar el mensaje de cierre:\n\n\"¡Gracias por contactarte con AUTOSIGLO TOYOTA! Un asesor de repuestos se pondrá en contacto contigo a la brevedad.\"\nLuego devolver inmediatamente el 【summary:JSON con datos】 con los campos disponibles y los faltantes como \"SIN INFORMAR\".\n\n\nDatos a incluir en el JSON:\n\nTipo: \"POSTVENTAS: REPUESTOS\"\nNombre\nRepuestos\nPatente\nChasis\nTelefono = {{ $json.from }}\nSucursal: \"AUTOSIGLO\"\nServicio: \"repuestos\"\nMotivo_Derivacion: \"Consulta de repuestos\"\n\nIMPORTANTE:\n\nSi el cliente no informó el número de chasis, enviar:\n\n\"Chasis\": \"SIN INFORMAR\"\n\nNunca dejar el campo vacío. Lo mismo aplica a cualquier campo no informado al momento de la despedida.\n\nReglas críticas:\n\nEsta frase esta mal: ¿Tenés el número de chasis de tu vehículo? Si no lo tenés a mano, puedo registrarlo como SIN INFORMAR.\n\nTendría que ser: ¿Tenés el número de chasis de tu vehículo?\nNo saludar ni enviar mensaje de bienvenida al inicio.\nPedir primero Nombre y Apellido, luego Repuesto/s, luego Patente, luego Chasis.\nNunca pedir teléfono: usar el número de WhatsApp.\nNo pedir kilometraje.\nNo inventar horarios.\nNo mostrar funciones al usuario (no tenés funciones disponibles).\nSiempre agradecer.\nSi el usuario se despide en cualquier momento, derivar con lo recopilado hasta ese instante sin solicitar datos adicionales.\nSIEMPRE incluir \"Tipo\": \"POSTVENTAS: REPUESTOS\" como primer campo en el summary.\nSIEMPRE incluir: Nombre, Repuestos, Patente, Chasis.\nSi no dispone del chasis (o cualquier otro campo), registrar \"SIN INFORMAR\".\nNunca omitir ningún campo del summary.\n\n\nEjemplos efectivos:\n\n¿Me podrías compartir tu Nombre y Apellido?\n\n¿Qué repuesto estás necesitando?\n\n¿Tenés la patente de tu TOYOTA?\n\n¿Tenés el número de chasis de tu vehículo?\n\nPerfecto, estos son los datos que tengo. ¿Son correctos?\n\nEjemplos a evitar:\n\n¿Podrías dejarme tu número o un horario?\n\nNo cuento con esa información, disculpá.\n\nNo se puede gestionar si no tengo el chasis.\n\nNo se puede derivar si no tengo todos los datos.\n\n¿Tenés el número de chasis de tu vehículo? Si no lo tenés a mano, puedo registrarlo como SIN INFORMAR."
+        }
+      },
+      "id": "e862ea81-683a-4d49-8e5a-71dfd9b91807",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        1392,
+        544
+      ]
+    }
+  ],
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "shared": [
+    {
+      "updatedAt": "2025-08-27T13:37:22.697Z",
+      "createdAt": "2025-08-27T13:37:22.697Z",
+      "role": "workflow:owner",
+      "workflowId": "sRFNmxR7IRPtiCME",
+      "projectId": "u1tRAQnrD2pB0Q1A"
+    }
+  ],
+  "staticData": null,
+  "tags": [
+    {
+      "updatedAt": "2025-08-11T14:06:21.711Z",
+      "createdAt": "2025-08-11T14:06:21.711Z",
+      "id": "VdVyZu2vQPydLfDQ",
+      "name": "AUTOSIGLO"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-06-23T12:46:01.342Z",
+  "versionId": "8e27592a-d18d-4576-bb7d-0a9f1a1db259"
+}
