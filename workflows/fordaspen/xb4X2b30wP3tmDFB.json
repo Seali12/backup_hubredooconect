@@ -1,0 +1,213 @@
+{
+  "active": false,
+  "activeVersion": null,
+  "activeVersionId": null,
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "getToken",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultas": {
+      "main": [
+        [
+          {
+            "node": "Reservas Ford",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "getToken": {
+      "main": [
+        [
+          {
+            "node": "Conversaciones del bot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Conversaciones del bot": {
+      "main": [
+        [
+          {
+            "node": "Consultas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reservas Ford": {
+      "main": [
+        [
+          {
+            "node": "Resumen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-11-10T19:11:12.032Z",
+  "id": "xb4X2b30wP3tmDFB",
+  "isArchived": true,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "name": "TEMP lectura reservas Ford (borrar)",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "id": "c3a39ba5-4c22-4803-a819-3ab72d9e6894",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "9440b3a2-45ae-4d03-a3e1-6f35984ba076",
+      "name": "getToken",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        224,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * \nFROM mydatabase.token_agenda_ford\nWHERE company = 2\nORDER BY id DESC\nLIMIT 1;",
+        "options": {}
+      },
+      "credentials": {
+        "mySql": {
+          "id": "MYmGGfM8lz7xrUC9",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "id": "e89ccdcc-9aa5-49de-934e-dd0151efb4eb",
+      "name": "Consultas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ],
+      "parameters": {
+        "jsCode": "return $('Conversaciones del bot').all().map(i => i.json).filter(f => f.selected_date && f.plate).map(f => { const d = String(f.selected_date).slice(0, 10); return { json: { dealer: String(f.sucursal || '60834'), page: 1, body: { dealer: String(f.sucursal || '60834'), country: 'ARG', startDate: d, endDate: d, types: ['NORMAL'], search: String(f.plate).toUpperCase() } } }; });"
+      },
+      "executeOnce": true
+    },
+    {
+      "id": "1445f827-e92f-4f3f-aa5e-bf1ee970392d",
+      "name": "Reservas Ford",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        672,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.service.ford.com/agenda/manage-reservation-bff/reservations?page={{ $json.page }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "countrycode",
+              "value": "ARG"
+            },
+            {
+              "name": "dealercode",
+              "value": "={{ $json.dealer }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "jXzonHTBszDvh6kA",
+          "name": "Bearer Auth account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "f98897d1-a77e-49f4-8c20-b52ad37a3041",
+      "name": "Conversaciones del bot",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        400,
+        200
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id_conversation, plate, chassi, model, sucursal, company, selected_date, selected_hour, service_id, created_at, updated_at\nFROM agenda_ford\nWHERE ((created_at >= '2026-10-01 03:00:00' AND created_at < '2026-10-11 03:00:00')\n    OR (created_at >= '2026-11-01 03:00:00' AND created_at < '2026-11-11 03:00:00'))\nORDER BY created_at;",
+        "options": {}
+      },
+      "credentials": {
+        "mySql": {
+          "id": "MYmGGfM8lz7xrUC9",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "id": "14ad971b-39db-43bf-a4cb-9180307a32e1",
+      "name": "Resumen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1000,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const filas = $('Conversaciones del bot').all().map(i => i.json);\nconst conFecha = filas.filter(f => f.selected_date && f.plate);\nconst res = $input.all().map(i => i.json);\nconst out = conFecha.map((f, i) => {\n  const r = res[i] || {};\n  const items = (r.result && r.result.items) || [];\n  const fecha = String(f.selected_date).slice(0, 10);\n  const match = items.find(it => String(it.vehicle && it.vehicle.plate || '').toUpperCase() === String(f.plate).toUpperCase() && String(it.date).slice(0, 10) === fecha);\n  return { json: { mes: String(f.created_at).slice(0, 7), id_conversation: f.id_conversation, plate: f.plate, model: f.model, sucursal: f.sucursal, created_at: f.created_at, selected_date: fecha, selected_hour: f.selected_hour, service_id: f.service_id, enFord: !!match, estadoFord: match ? match.status : null, origenFord: match ? match.source : null, horaFord: match ? match.date : null, errorFord: r.error && r.error.message ? String(r.error.message).slice(0, 120) : null } };\n});\nconst totales = {};\nfor (const f of filas) { const m = String(f.created_at).slice(0, 7); totales[m] = totales[m] || { conversaciones: 0, conPatente: 0, eligieronFecha: 0, turnosEnFord: 0 }; totales[m].conversaciones++; if (f.plate) totales[m].conPatente++; if (f.selected_date && f.plate) totales[m].eligieronFecha++; }\nfor (const o of out) if (o.json.enFord) totales[o.json.mes].turnosEnFord++;\nreturn [{ json: { totales, detalle: out.map(o => o.json) } }];"
+      },
+      "executeOnce": true
+    }
+  ],
+  "pinData": null,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "xb4X2b30wP3tmDFB",
+      "projectId": "uctBMgzvi5ZzGu3j",
+      "createdAt": "2026-11-10T19:11:12.071Z",
+      "updatedAt": "2026-11-10T19:11:12.071Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2026-11-10T19:13:31.000Z",
+  "versionId": "ede15e2b-d6db-442b-9ca0-5628503ccdcf"
+}
