@@ -1,0 +1,241 @@
+{
+  "active": false,
+  "activeVersion": null,
+  "activeVersionId": null,
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Pilot authentication",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pilot authentication": {
+      "main": [
+        [
+          {
+            "node": "Pilot authorization",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pilot authorization": {
+      "main": [
+        [
+          {
+            "node": "Frio del bot sin call center",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Frio del bot sin call center": {
+      "main": [
+        [
+          {
+            "node": "Uno por uno",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Asignar al call center": {
+      "main": [
+        [
+          {
+            "node": "Pausa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pausa": {
+      "main": [
+        [
+          {
+            "node": "Uno por uno",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Uno por uno": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Asignar al call center",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-10-29T14:07:48.970Z",
+  "id": "pLxHlIcPKKNO1hw1",
+  "isArchived": true,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "name": "TEMP Ford - asignar Frio del bot al call center",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "id": "2ce0a5df-ead6-4c6b-bde8-12d9ef418c43",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        80
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "bd7a8ba7-d549-4446-9be0-22a47778268b",
+      "name": "Pilot authentication",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        224,
+        80
+      ],
+      "parameters": {
+        "url": "https://api.pilotsolution.net/v1/users/authentication.php",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "options": {}
+      },
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "NHXyrkv9ca6Njn8R",
+          "name": "PILOT FORD COLOMBIA"
+        }
+      }
+    },
+    {
+      "id": "116137f1-98d9-4239-948e-1d82f937ad4a",
+      "name": "Pilot authorization",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        448,
+        80
+      ],
+      "parameters": {
+        "url": "https://api.pilotsolution.net/v1/users/authorization.php",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "identity_token",
+              "value": "={{ $json.result.entitydata.accounts[0].token }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "6ed707f7-257e-4e2f-a45a-babc7f426c18",
+      "name": "Frio del bot sin call center",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        672,
+        80
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, pilot_tracking_id FROM ford_colombia WHERE id IN (5392,5398,5405,5428,5429,5452,5459,5463,5464,5468,5470,5476,5485,5498,5504,5513,5524,5531,5533,5551,5553,5557,5571,5574,5575,5582,5609,5632,5635,5636,5638,5646,5655,5678,5679,5680,5702,5715,5719,5723,5725,5728,5733,5737,5750,5751,5752,5758,5762,5780,5785,5786,5796,5798,5805,5814,5828,5837,5839) AND `lead` = 'good_lead' AND grado_interes = 'Frío' ORDER BY id",
+        "options": {}
+      },
+      "credentials": {
+        "mySql": {
+          "id": "Vl0rIdPXBmN5yKfQ",
+          "name": "MSQL-FORD-COLOMBIA"
+        }
+      }
+    },
+    {
+      "id": "4e35af1b-860e-4841-bdac-6ee8e3dc5c2a",
+      "name": "Asignar al call center",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.pilotsolution.net/v1/welcomes/assign.php",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ data: { id: $json.pilot_tracking_id, to_type: \"huntGroup\", to_entity_id: \"9214\", comment: \"Asignado al call center: el bot lo califico Frio\" }, header: { FlowName: \"lead_assign_to_huntgroup\", SequenceId: 1, TimeStamp: 1248377, TrackingId: \"FD1C4A1A-CAFB-467E-825B-7FFB86CC21E3\", access_token: $(\"Pilot authorization\").first().json.result.entitydata.session.identityToken } }) }}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "eaafcc71-3db4-4e8a-b45f-ee843bacac48",
+      "name": "Pausa",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1344,
+        80
+      ],
+      "parameters": {
+        "amount": 1.5
+      },
+      "webhookId": "0e411bb6-73ed-4c60-93e0-f779602cb38d"
+    },
+    {
+      "id": "3a6dd96a-0ce9-45ad-a30e-ac50118af9a2",
+      "name": "Uno por uno",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        896,
+        80
+      ],
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      }
+    }
+  ],
+  "pinData": null,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "pLxHlIcPKKNO1hw1",
+      "projectId": "K8p6XEqA0L6D2uVt",
+      "createdAt": "2026-10-29T14:07:48.986Z",
+      "updatedAt": "2026-10-29T14:07:48.986Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2026-10-29T14:12:42.000Z",
+  "versionId": "cdbe34b2-9fb1-4692-9509-4310d565a53b"
+}
