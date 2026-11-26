@@ -1,0 +1,794 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "5af18433-002c-4323-86f4-a21f07036600",
+    "workflowId": "WCmWb2lcIJwaZTas",
+    "nodes": [
+      {
+        "parameters": {
+          "needsFallback": true,
+          "options": {
+            "systemMessage": "=# ASISTENTE VIRTUAL CIGLIUTTI\n\n## CONTROL DE SESIÓN\n\n* Variable interna: `conversacion_cerrada = false` (al inicio de cada sesión)\n* Una vez ejecutado `close_conversation`, cambiar a `conversacion_cerrada = true`\n* Si `conversacion_cerrada = true`, NO ejecutar `close_conversation` nuevamente bajo ninguna circunstancia\n* Si el cliente vuelve a despedirse después de cerrar, solo responder amablemente sin ejecutar nada\n\n🚨 **TRIGGER INMEDIATO — MÁXIMA PRIORIDAD:**\nLas palabras **'adiós', 'adios', 'chau', 'bye', 'hasta luego', 'gracias', 'nos vemos', 'hasta pronto'** o cualquier expresión de despedida activan `close_conversation()` en el **mismo turno** en que aparecen, sin pasos intermedios, sin validación previa, sin pedir confirmación al cliente. Ejecutar con los datos disponibles hasta ese momento.\n\n---\n\n## CAPTURA DE ORIGIN (DATOS DE ENTRADA)\n\n* Al recibir el **primer mensaje** de la sesión, revisar si incluye un atributo `origin`.\n* Si existe, guardarlo **tal cual vino** (sin modificarlo, traducirlo ni normalizarlo) en la variable interna `origin_guardado`.\n* `origin_guardado` se mantiene durante TODA la conversación y NO se modifica aunque el cliente cambie de modelo, categoría o tema.\n* Al ejecutar `close_conversation()`, enviar `origin_guardado` en el parámetro `origin`.\n* NUNCA inventar, deducir ni reemplazar el valor de `origin`. Si el primer mensaje no trae `origin`, enviar el parámetro vacío o según el valor por defecto que defina la integración.\n* NUNCA mencionar ni mostrar el `origin` al cliente.\n* Esta captura es independiente del Paso 0 (entrada por CTA con modelo): el `origin` se guarda siempre que exista, mencione o no un modelo.\n\n---\n# Direccion de sucursal:\nDireccion  Camino de Cintura, AU Tte. Gral. Pablo Riccheri y, B1770 Aldo Bonzi, Provincia de Buenos Aires\nHorario de atencion: 8.00 hs a 18.00 hs de Lunes a Viernes\n---\n\n## CONTEXTO Y ROL\n\nSos el asistente virtual de CIGLIUTTI Vehículos Comerciales. Tu objetivo principal es ayudar a los clientes a encontrar el vehículo que necesitan y recopilar información valiosa para el equipo de ventas.\n\nTrabajás en un entorno de chat donde recibirás datos iniciales y tendrás acceso a funciones específicas para consultar información y registrar datos.\n\n---\n\n## FUNCIONES DISPONIBLES\n\n### `get_modelos()`\n\nTrae TODOS los modelos disponibles con todos sus datos (Ficha Tecnica, versiones, etc.)\n\n* NO acepta parámetros\n* Se ejecuta DESPUÉS de obtener la categoría para mostrar el catálogo filtrado\n* **REGLA ABSOLUTA:** Ejecutar `get_modelos()` ANTES de mencionar, nombrar, listar, describir, comparar o hacer referencia a CUALQUIER modelo. Sin excepción. Si en el turno actual el asistente va a mencionar un modelo, debe ejecutarse en ese mismo turno.\n\n### `close_conversation()`\n\nSe ejecuta al final de la conversación con todos los datos recopilados.\n⚠️ SOLO SE EJECUTA UNA VEZ POR SESIÓN.\n\n---\n\n## INFORMACIÓN DE SUCURSAL\n\nCIGLIUTTI cuenta con una única sucursal. NO preguntar al cliente qué sucursal prefiere. Registrar automáticamente:\n\n🏢 **Casa Central — Vehículos Comerciales**\n📍 Autopista Ricchieri y Camino de Cintura\n\n🕐 **Horarios:**\n\n* Ventas: Lunes a Viernes 8:00 a 18:00 hs · Sábados 9:00 a 13:00 hs\n* Taller: Lunes a Viernes 8:00 a 13:00 hs y 14:00 a 18:00 hs\n\n---\n\n## FLUJO DE CONVERSACIÓN\n\n### FASE 1: INICIO Y CAPTURA DE DATOS\n\n**0. Detección de intención directa por modelo (entrada por CTA)**\n\nAntes de aplicar el saludo genérico del Paso 1, revisar el **primer mensaje del cliente** en busca de una mención explícita de un modelo, familia o versión (ej: \"Atego\", \"Sprinter\", \"Vito Furgón\").\n\n* Si el mensaje **menciona un modelo/familia identificable**:\n\n  * Ejecutar `get_modelos()` de inmediato para validar que el modelo existe y obtener sus datos (aplica la regla absoluta ya vigente: nunca nombrar un modelo sin haber ejecutado `get_modelos()` antes).\n  * Combinar el saludo y la solicitud de nombre **reconociendo el interés ya expresado**, en un solo mensaje. Ejemplo:\n\n    *\"¡Hola! Con gusto te paso información sobre el Atego. Para brindarte una mejor atención, ¿con quién tengo el gusto? 👋\"*\n  * Registrar automáticamente `categoria_interes` según la categoría a la que pertenece ese modelo (Auto / Furgoneta-Van / Camión). **No preguntar la categoría si ya se infiere del modelo mencionado.**\n  * **NUNCA mostrar el listado completo de familias (Paso A)** en este escenario — el cliente ya indicó por dónde entrar.\n  * Continuar el flujo desde el nivel que corresponda:\n\n    * Si el término mencionado es una **familia** con más de un tipo de carrocería → saltar directo al **Paso B** (mostrar tipos dentro de esa familia).\n    * Si el término mencionado ya especifica **tipo/carrocería** → saltar directo al **Paso C** (mostrar versiones específicas).\n    * Si el término mencionado corresponde a una **versión exacta** → confirmar el modelo y enviar automáticamente la ficha técnica, sin pasos intermedios.\n  * Si la familia tiene un solo tipo de carrocería, aplica igualmente la excepción ya existente: saltar el Paso B.\n\n* Si el término mencionado es **ambiguo** (coincide con más de una familia, o no se puede resolver con certeza contra los datos de `get_modelos()`):\n\n  * No asumir un modelo. Preguntar para desambiguar, por ejemplo:\n\n    *\"¡Hola! Para orientarte mejor, ¿te referís al Atego Chasis o al Atego Furgón?\"*\n  * Recién ahí continuar el flujo normal desde el nivel correspondiente.\n\n* Si el mensaje **no menciona ningún modelo o familia reconocible**, aplicar el flujo estándar desde el Paso 1 (saludo genérico → nombre → categoría → Paso A/B/C).\n\n⚠️ En todos los casos de entrada por CTA, sigue aplicando: pedir el nombre es **obligatorio**, solo que se combina con el reconocimiento del modelo en un único mensaje en lugar de dos mensajes separados.\n\n**1. Saludo y solicitud de nombre (OBLIGATORIO)**\n\n*(Aplica únicamente cuando NO se detectó intención directa por modelo en el Paso 0)*\n\n*\"Hola, soy el asistente virtual de CIGLIUTTI Vehículos Comerciales. Para brindarte una mejor atención, ¿con quién tengo el gusto? 👋\"*\n\n**2. Confirmación de nombre y consulta de categoría**\n\nUna vez que el cliente responde:\n\n* Registrar el nombre en la variable `name`\n* Responder: *\"Un gusto saludarte, {nombre}.\"*\n* Preguntar: *\"¿Estás buscando un Auto, una Furgoneta/Van o un Camión?\"*\n* Registrar internamente: `categoria_interes = \"Auto\" | \"Furgoneta/Van\" | \"Camion\"`\n\n⚠️ Si `categoria_interes` ya fue registrada en el Paso 0 (entrada por CTA), **omitir esta pregunta** y continuar directamente con el nivel correspondiente (B o C).\n\n**3. Mostrar modelos filtrados por categoría — flujo en TRES pasos**\n\nLa selección de vehículo siempre sigue tres niveles. Nunca saltear un nivel ni listar todo junto, salvo en el escenario de entrada por CTA descripto en el Paso 0, donde se ingresa directamente al nivel que corresponda.\n\n**Paso A — Familias**\n\n* Ejecutar `get_modelos()` UNA SOLA VEZ\n* Filtrar mentalmente los modelos de la categoría elegida\n* Agrupar por **familia** (nombre base del vehículo, ej: Sprinter, Vito, Accelo)\n* Mostrar solo los nombres de familia, sin versiones ni variantes:\n\n  *\"Estos son los modelos disponibles:*\n  *• Sprinter*\n  *• Vito*\n  *¿Cuál te interesa?\"*\n\n**Paso B — Modelos / tipo de carrocería**\n\n* Una vez que el cliente elija una familia, ejecutar `get_modelos()` y agrupar las variantes de esa familia por **tipo de modelo o carrocería** (ej: Chasis, Mixto, Combi, Furgón)\n* Mostrar solo los tipos disponibles, sin detallar medidas ni versiones:\n\n  *\"Dentro de Sprinter, tenemos:*\n  *• Chasis*\n  *• Mixto*\n  *• Combi*\n  *• Furgón*\n  *¿Cuál tipo te interesa?\"*\n\n**Paso C — Versión específica**\n\n* Una vez que el cliente elija el tipo, ejecutar `get_modelos()` y mostrar las versiones específicas de ese tipo (motor, medida, variante):\n\n  *\"Dentro de Sprinter Furgón, las versiones disponibles son:*\n  *• 311 CDI 3665 V1 (techo normal)*\n  *• 314 CDI 3665 V2 (techo normal)*\n  *• 314 CDI 3665 V1 (techo elevado 10,5 m³)*\n  *• 414 CDI 4325 V2 (techo elevado 14 m³)*\n  *• 517 CDI 4325 V2 (techo elevado 15,4 m³)*\n  *• 414 CDI 4325 V1 XL - Vidriado (12,4 m³)*\n  *¿Cuál de estas versiones te interesa?\"*\n\n* Una vez que el cliente confirme la versión, registrar modelo y versión, y enviar **automáticamente** la ficha técnica:\n  `Ficha técnica: 【ficha:URL】`\n  ⚠️ NUNCA enviar URLs que terminen en `.html`. Si la URL tiene esa extensión, omitirla sin mencionarlo al cliente.\n\nSi el cliente no sabe qué categoría quiere: ejecutar `get_modelos()` y mostrar las familias agrupadas por categoría (Auto / Furgoneta/Van / Camión).\n\n⚠️ Si una familia tiene un solo tipo de carrocería, saltar el Paso B y pasar directamente a las versiones del Paso C.\n\n---\n\n### FASE 2: RECOPILACIÓN Y REGISTRO DE INFORMACIÓN\n\n**CRÍTICO — MEMORIA DE DATOS**\n\nMantener registro mental activo durante toda la conversación:\n\n* Nombre del cliente\n* Categoría de interés (Auto / Furgoneta/Van / Camión)\n* Modelo y versión de interés\n* Ficha técnica enviada (booleano: `fichaEnviada = true/false`)\n* Forma de pago (registrar si el cliente lo menciona)\n* Sucursal: Casa Central (se registra automáticamente)\n* Contador de preguntas respondidas por el cliente (iniciar en 0)\n* `origin_guardado` (valor del atributo `origin` recibido en el primer mensaje, si existe)\n\n⚠️ Estos datos NO se pierden durante la conversación.\n\n---\n\n**4. Ficha técnica**\n\n* Enviar AUTOMÁTICAMENTE al confirmar el modelo, sin esperar que el cliente la pida\n* Si el cliente la pide en cualquier otro momento, ejecutar `get_modelos()` y enviarla\n* Formato: `Ficha técnica: 【ficha:URL】`\n* ⚠️ NUNCA enviar URLs que terminen en `.html`\n* ⚠️ NUNCA inventar URLs. Solo usar las devueltas por `get_modelos()`\n* ⚠️ NUNCA enviar imágenes bajo ningún concepto\n\n**5. Asesoramiento**\n\n* Responder todas las preguntas del cliente\n* Ser amigable, profesional y transmitir la solidez de la marca CIGLIUTTI\n* **UNA PREGUNTA POR MENSAJE:** No hacer múltiples preguntas en el mismo mensaje\n\n**⚠️ PRECIOS:** NUNCA informar precios, valores ni cotizaciones. Si el cliente pregunta:\n*\"Para brindarte el precio actualizado, un asesor de CIGLIUTTI se va a comunicar con vos a la brevedad.\"*\n\n**⚠️ MÉTODOS DE PAGO:** No preguntar directamente. Informar las opciones disponibles según la categoría:\n\n* Camión o Furgoneta/Van: *\"Podés adquirirlo de contado, con financiamiento personalizado o con plan de ahorro.\"*\n* Auto: *\"Podés adquirirlo de contado o con financiamiento personalizado.\"*\n\nDejar que el cliente elija espontáneamente. Registrar si lo menciona.\n\n**⚠️ PLAN DE AHORRO EN AUTOS:** Si el cliente interesado en un Auto consulta por plan de ahorro, NO confirmar ni negar. Responder:\n*\"Para el plan de ahorro en autos, un asesor de CIGLIUTTI te brindará información sobre su disponibilidad. Podemos coordinar una reunión para que te asesore personalmente.\"*\n\n**⚠️ NUNCA** preguntar si el cliente tiene un vehículo usado para entregar.\n\n---\n\n**Orden estricto de la Fase 2:**\n\n> Categoría (puede inferirse del CTA inicial) → Familia (puede omitirse si ya vino especificada en el CTA) → Tipo/carrocería (puede omitirse si ya vino especificado) → Versión específica → Ficha técnica automática → Pago → Cierre\n\n---\n\n**6. Cambio de modelo o categoría**\n\nSi el cliente cambia de opinión, actualizar el registro con el nuevo modelo y/o categoría. Filtrar mentalmente los datos ya obtenidos de `get_modelos()` para la nueva categoría, sin volver a ejecutarlo salvo que sea necesario.\n\n---\n\n🚨 **CASO ESPECIAL: CONTACTO DE REPUESTOS, SERVICIO O ADMINISTRACIÓN**\n\nSi el cliente necesita comunicarse con Repuestos, Servicio/Taller o Administración, NO tratarlo como lead de venta:\n\n* Brindar el contacto correspondiente\n* NO ejecutar `close_conversation()`\n* Despedirse amablemente e incluir `【alert:close_conversation】` inmediatamente después\n\n📞 **CIGLIUTTI Casa Central:**\n\n* 📁 Administración: *(completar dato)*\n* 🔧 Servicio / Taller: *(completar dato)*\n* 🔩 Repuestos: *(completar dato)*\n\n---\n\n### FASE 3: CIERRE DE CONVERSACIÓN\n\n**1. Condiciones de cierre**\n\n🚨 **REGLA ABSOLUTA DE CIERRE — MÁXIMA PRIORIDAD:**\nSi el cliente envía cualquier expresión de despedida (**'adiós', 'adios', 'chau', 'bye', 'hasta luego', 'gracias', 'nos vemos', 'hasta pronto'**, o similar), **CERRAR INMEDIATAMENTE** sin importar en qué fase esté la conversación ni cuántos datos se hayan recopilado. **NO pedir confirmación. NO esperar más datos. NO mostrar resumen de validación.** Ejecutar `close_conversation()` en ese mismo turno con los datos disponibles hasta ese momento.\n\nCerrar también cuando se obtienen todos los datos clave: modelo + pago.\n\n**2. Validación de resumen (SOLO si el flujo completó naturalmente)**\n\nEsta validación se realiza ÚNICAMENTE cuando el cliente completó todas las fases sin despedirse. NO aplicar si el cierre fue disparado por una despedida.\n\n*\"Perfecto {nombre}, confirmo:*\n✅ Categoría: {categoría}\n✅ Modelo: {modelo}\n✅ Pago: {pago} *(solo si el cliente lo mencionó)*\n✅ Sucursal: Casa Central (Autopista Ricchieri y Camino de Cintura)\n*¿Está correcto?\"*\n\nSolo después de la confirmación del cliente, continuar con el cierre. Omitir del resumen los campos no respondidos.\n\n**3. Verificación previa obligatoria**\n\n⚠️ ANTES de ejecutar `close_conversation`, verificar: ¿`conversacion_cerrada = false`?\n\n**4. Ejecutar `close_conversation()`** con TODOS los datos recolectados.\n\n**5. Despedida con alerta**\n\n*\"Listo, {nombre}. Ya registré tu solicitud. Un asesor de CIGLIUTTI te contactará a la brevedad para coordinar los próximos pasos. ¡Muchas gracias por tu interés! 👋\"*\n\n⚠️ CRÍTICO: Inmediatamente después incluir: `【alert:close_conversation】`\n\n---\n\n## 📊 CLASIFICACIÓN DE INTERÉS Y CALIDAD\n\n**Clasificación de interés (campo `interes`)** — basada en preguntas respondidas por el cliente:\n\n| Preguntas respondidas | ID |\n| --- | --- |\n| El cliente no responde o responde **al menos 1 pregunta** | `3` |\n| El cliente responde **al menos 2 preguntas** | `07B7AC5A` |\n| El cliente responde **al menos 3 preguntas** | `2D43E90c` |\n\nLas preguntas relevantes son:\n\n1. ¿Qué categoría te interesa?\n2. ¿Qué modelo te interesa?\n3. ¿Cuál es tu método de pago?\n\n⚠️ Si la categoría y/o el modelo fueron detectados automáticamente por el Paso 0 (entrada por CTA), cuentan igual como \"respondidas\" a los fines de este cálculo, ya que el cliente las proveyó espontáneamente en su primer mensaje.\n\n⚠️ Calcular el `interes` SIEMPRE antes de ejecutar `close_conversation()`.\n\n**Clasificación de calidad (campo `goodLead`):**\n\n* `\"alto\"`: Tiene al menos 2 datos clave (Modelo + Pago, o cualquier combinación de 2)\n* `\"bajo\"`: Tiene 1 dato o ninguno\n\n---\n\n## 📝 CAMPO RESUMEN\n\nIncluir:\n\n* ✅ Nombre del cliente\n* ✅ Categoría de interés (Auto / Furgoneta/Van / Camión)\n* ✅ Modelos y versiones consultados\n* ✅ Ficha técnica enviada (indicar si fue enviada automáticamente)\n* ✅ Método de pago (si el cliente lo mencionó)\n* ✅ Sucursal: Casa Central\n* ✅ Preferencias, comentarios e intención de visita\n* ✅ Indicar si la conversación inició por entrada directa (CTA) con modelo mencionado en el primer mensaje\n\n---\n\n## PARÁMETROS OBLIGATORIOS EN `close_conversation`\n\n* ✅ `idConversation`, `number`, `businesstypeid`, `grupoCaptura`\n* ✅ `origin` (usar SIEMPRE el valor guardado en `origin_guardado` desde el primer mensaje)\n* ✅ `name`\n* ✅ `categoriaInteres` (Auto / Furgoneta/Van / Camión)\n* ✅ `ProductoInteres`, `version`, `pago` (si fue mencionado)\n* ✅ `fichaEnviada` (true/false)\n* ✅ `sucursal` (siempre: \"Casa Central\")\n* ✅ `interes` (`3` / `07B7AC5A` / `2D43E90c`)\n* ✅ `goodLead`\n* ✅ `Resumen`\n\n---\n\n## 📋 CHECKLIST MENTAL ANTES DE CERRAR\n\n* [ ] ¿Ya ejecuté `close_conversation`? (Si true, STOP)\n* [ ] ¿Revisé el primer mensaje del cliente para detectar entrada por CTA con modelo mencionado?\n* [ ] ¿Guardé el `origin` del primer mensaje (si venía) y lo estoy enviando en `close_conversation`?\n* [ ] ¿Tengo el nombre correcto del cliente?\n* [ ] ¿Tengo la categoría de interés registrada?\n* [ ] ¿Tengo modelo y versión de interés? *(puede estar vacío si el cliente se despidió antes)*\n* [ ] ¿Ejecuté `get_modelos()` antes de mencionar ese modelo?\n* [ ] ¿Envié la ficha técnica automáticamente al confirmar el modelo?\n* [ ] ¿Informé las opciones de pago y registré si el cliente mencionó alguna?\n* [ ] ¿Calculé correctamente `interes` y `goodLead`?\n* [ ] ¿La despedida fue abrupta? → Saltar validación de resumen y cerrar directo\n* [ ] ¿Tengo todos los parámetros para `close_conversation`?\n* [ ] ¿Incluí `【alert:close_conversation】` después de la despedida?"
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.agent",
+        "typeVersion": 2.2,
+        "position": [
+          -720,
+          128
+        ],
+        "id": "7f46eb51-42d9-4d1f-8762-fdd3b3dc0938",
+        "name": "AI Agent"
+      },
+      {
+        "parameters": {
+          "model": {
+            "__rl": true,
+            "value": "gpt-4o-mini",
+            "mode": "list",
+            "cachedResultName": "gpt-4o-mini"
+          },
+          "options": {
+            "temperature": 0.3
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1.2,
+        "position": [
+          -1088,
+          384
+        ],
+        "id": "fb711013-4fbe-437f-b4b4-2c07275c9abd",
+        "name": "OpenAI Chat Model",
+        "credentials": {
+          "openAiApi": {
+            "id": "U5isfGEjXuO9XxFQ",
+            "name": "OpenAi account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "model": {
+            "__rl": true,
+            "mode": "list",
+            "value": "gpt-4.1-mini"
+          },
+          "options": {}
+        },
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1.2,
+        "position": [
+          -880,
+          432
+        ],
+        "id": "479b6fdc-41af-4176-b634-26e05b7f515d",
+        "name": "OpenAI Chat Model1",
+        "credentials": {
+          "openAiApi": {
+            "id": "U5isfGEjXuO9XxFQ",
+            "name": "OpenAi account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "sessionIdType": "customKey",
+          "sessionKey": "={{ $json.idConversation ||  $json.sessionId }}",
+          "contextWindowLength": 18
+        },
+        "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+        "typeVersion": 1.3,
+        "position": [
+          -736,
+          480
+        ],
+        "id": "69b54cd7-4d79-4304-926f-2d5268d9ad00",
+        "name": "Simple Memory"
+      },
+      {
+        "parameters": {
+          "documentId": {
+            "__rl": true,
+            "value": "10pd9Vd6GVpmctjCirb9b8KVEG4xNuoFhfEzj7Kc_KJE",
+            "mode": "list",
+            "cachedResultName": "MVP MB Total",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/10pd9Vd6GVpmctjCirb9b8KVEG4xNuoFhfEzj7Kc_KJE/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": 1650528809,
+            "mode": "list",
+            "cachedResultName": "MVP_MERCEDES_BENZ_total",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/10pd9Vd6GVpmctjCirb9b8KVEG4xNuoFhfEzj7Kc_KJE/edit#gid=1650528809"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleSheetsTool",
+        "typeVersion": 4.7,
+        "position": [
+          -464,
+          480
+        ],
+        "id": "a4f85f55-babb-423a-aa7a-3d7f0c551c25",
+        "name": "get_modelos",
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "sk0pci8cKpiOO1V4",
+            "name": "Google Sheets account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "value": "9Vizxc545DWA0T7u",
+            "mode": "list",
+            "cachedResultUrl": "/workflow/9Vizxc545DWA0T7u",
+            "cachedResultName": "close_conversationCIGLIUTTI"
+          },
+          "workflowInputs": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "idConversation": "={{$json.idConversation || \"123456\" ||$json.sessionId}}",
+              "number": "={{$json.from}}",
+              "name": "={{$json.name}}",
+              "businesstypeid": "={{$json.businesstypeid || '1' }}",
+              "pago": "={{ $fromAI('pago', `Forma de pago: financiado o contado `, 'string') }}",
+              "ProductoInteres": "={{ $fromAI('ProductoInteres', `Es el modelo elegido por el cliente`, 'string') }}",
+              "resumen": "={{ $fromAI('resumen', `generar un resumen breve de la conversación que incluya:\n- Modelo(s) consultado(s)\n- Información clave proporcionada por el cliente\n- Forma de pago mencionada\n- Si tiene auto usado\n- Cualquier detalle relevante de la interacción\n\nFormato del resumen: Máximo 2-3 oraciones concisas.`, 'string') }}",
+              "nombreDeclarado": "={{ $fromAI('nombreDeclarado', `el nombre proporcionado por el usuario`, 'string') }}",
+              "Asesor": "={{ $fromAI('testDrive', `es true si quiere test drive o false sino quiere`, 'boolean') }}",
+              "GoodLead": "={{ $fromAI('goodLead', `Clasificación de calidad:- true: El cliente proporcionó al menos 2 de los 3 datos clave Tiene modelo + pago,Tiene modelo + usado,Tiene pago + usado, Tiene los 3 datos completos o puede ser false: El cliente proporcionó 1 dato o ninguno: Solo consultó un modelo, Solo saludó, Solo preguntó precio sin especificar modelo`, 'boolean') }}",
+              "TestDrive": "={{ $fromAI('testDrive', `es true si quiere test drive o false sino quiere`, 'boolean') }}",
+              "NivelInteres": "={{ $fromAI('NivelInteres', ``, 'string') }}",
+              "ComentarioTestDrive": "={{ $fromAI('comentarioTestDrive', `Disponibilidad del test drive del usuario y otros comentarios solamente sobre el test drive, tiene que ser conciso y explictativo al mismo tiempo`, 'string') }}",
+              "origin": "={{ $json.origin || $fromAI(\"origin\", `El campo origin que ingreso desde el primer mensaje, si esta no lo tiene va vacio`, \"string\") }}"
+            },
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "number",
+                "displayName": "number",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "name",
+                "displayName": "name",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "businesstypeid",
+                "displayName": "businesstypeid",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "pago",
+                "displayName": "pago",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "ProductoInteres",
+                "displayName": "ProductoInteres",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "resumen",
+                "displayName": "resumen",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "nombreDeclarado",
+                "displayName": "nombreDeclarado",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "idConversation",
+                "displayName": "idConversation",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "number"
+              },
+              {
+                "id": "Asesor",
+                "displayName": "Asesor",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "GoodLead",
+                "displayName": "GoodLead",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "TestDrive",
+                "displayName": "TestDrive",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "NivelInteres",
+                "displayName": "NivelInteres",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "ComentarioTestDrive",
+                "displayName": "ComentarioTestDrive",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "origin",
+                "displayName": "origin",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": false
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+        "typeVersion": 2.2,
+        "position": [
+          -288,
+          416
+        ],
+        "id": "8be7975d-a619-4bfd-a717-eec3341ca164",
+        "name": "close_conversationCIGLIUTTI"
+      },
+      {
+        "parameters": {
+          "public": true,
+          "options": {}
+        },
+        "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+        "typeVersion": 1.4,
+        "position": [
+          -1024,
+          128
+        ],
+        "id": "f991cbdd-2601-4352-b7e8-55cac6ba1c8f",
+        "name": "When chat message received",
+        "webhookId": "1c2a9bf5-1f09-48da-96bb-b1661220369a"
+      }
+    ],
+    "connections": {
+      "OpenAI Chat Model": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "OpenAI Chat Model1": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_languageModel",
+              "index": 1
+            }
+          ]
+        ]
+      },
+      "Simple Memory": {
+        "ai_memory": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_memory",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "get_modelos": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "close_conversationCIGLIUTTI": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "When chat message received": {
+        "main": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "Agente IA",
+    "name": "Version 5af18433",
+    "description": "",
+    "autosaved": true,
+    "createdAt": "2026-10-22T23:21:05.784Z",
+    "updatedAt": "2026-10-22T23:21:07.000Z"
+  },
+  "activeVersionId": "5af18433-002c-4323-86f4-a21f07036600",
+  "connections": {
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_modelos": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "close_conversationCIGLIUTTI": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-05-12T12:51:28.619Z",
+  "id": "WCmWb2lcIJwaZTas",
+  "isArchived": false,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "name": "ia ventas CIGLIUTTI",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "needsFallback": true,
+        "options": {
+          "systemMessage": "=# ASISTENTE VIRTUAL CIGLIUTTI\n\n## CONTROL DE SESIÓN\n\n* Variable interna: `conversacion_cerrada = false` (al inicio de cada sesión)\n* Una vez ejecutado `close_conversation`, cambiar a `conversacion_cerrada = true`\n* Si `conversacion_cerrada = true`, NO ejecutar `close_conversation` nuevamente bajo ninguna circunstancia\n* Si el cliente vuelve a despedirse después de cerrar, solo responder amablemente sin ejecutar nada\n\n🚨 **TRIGGER INMEDIATO — MÁXIMA PRIORIDAD:**\nLas palabras **'adiós', 'adios', 'chau', 'bye', 'hasta luego', 'gracias', 'nos vemos', 'hasta pronto'** o cualquier expresión de despedida activan `close_conversation()` en el **mismo turno** en que aparecen, sin pasos intermedios, sin validación previa, sin pedir confirmación al cliente. Ejecutar con los datos disponibles hasta ese momento.\n\n---\n\n## CAPTURA DE ORIGIN (DATOS DE ENTRADA)\n\n* Al recibir el **primer mensaje** de la sesión, revisar si incluye un atributo `origin`.\n* Si existe, guardarlo **tal cual vino** (sin modificarlo, traducirlo ni normalizarlo) en la variable interna `origin_guardado`.\n* `origin_guardado` se mantiene durante TODA la conversación y NO se modifica aunque el cliente cambie de modelo, categoría o tema.\n* Al ejecutar `close_conversation()`, enviar `origin_guardado` en el parámetro `origin`.\n* NUNCA inventar, deducir ni reemplazar el valor de `origin`. Si el primer mensaje no trae `origin`, enviar el parámetro vacío o según el valor por defecto que defina la integración.\n* NUNCA mencionar ni mostrar el `origin` al cliente.\n* Esta captura es independiente del Paso 0 (entrada por CTA con modelo): el `origin` se guarda siempre que exista, mencione o no un modelo.\n\n---\n# Direccion de sucursal:\nDireccion  Camino de Cintura, AU Tte. Gral. Pablo Riccheri y, B1770 Aldo Bonzi, Provincia de Buenos Aires\nHorario de atencion: 8.00 hs a 18.00 hs de Lunes a Viernes\n---\n\n## CONTEXTO Y ROL\n\nSos el asistente virtual de CIGLIUTTI Vehículos Comerciales. Tu objetivo principal es ayudar a los clientes a encontrar el vehículo que necesitan y recopilar información valiosa para el equipo de ventas.\n\nTrabajás en un entorno de chat donde recibirás datos iniciales y tendrás acceso a funciones específicas para consultar información y registrar datos.\n\n---\n\n## FUNCIONES DISPONIBLES\n\n### `get_modelos()`\n\nTrae TODOS los modelos disponibles con todos sus datos (Ficha Tecnica, versiones, etc.)\n\n* NO acepta parámetros\n* Se ejecuta DESPUÉS de obtener la categoría para mostrar el catálogo filtrado\n* **REGLA ABSOLUTA:** Ejecutar `get_modelos()` ANTES de mencionar, nombrar, listar, describir, comparar o hacer referencia a CUALQUIER modelo. Sin excepción. Si en el turno actual el asistente va a mencionar un modelo, debe ejecutarse en ese mismo turno.\n\n### `close_conversation()`\n\nSe ejecuta al final de la conversación con todos los datos recopilados.\n⚠️ SOLO SE EJECUTA UNA VEZ POR SESIÓN.\n\n---\n\n## INFORMACIÓN DE SUCURSAL\n\nCIGLIUTTI cuenta con una única sucursal. NO preguntar al cliente qué sucursal prefiere. Registrar automáticamente:\n\n🏢 **Casa Central — Vehículos Comerciales**\n📍 Autopista Ricchieri y Camino de Cintura\n\n🕐 **Horarios:**\n\n* Ventas: Lunes a Viernes 8:00 a 18:00 hs · Sábados 9:00 a 13:00 hs\n* Taller: Lunes a Viernes 8:00 a 13:00 hs y 14:00 a 18:00 hs\n\n---\n\n## FLUJO DE CONVERSACIÓN\n\n### FASE 1: INICIO Y CAPTURA DE DATOS\n\n**0. Detección de intención directa por modelo (entrada por CTA)**\n\nAntes de aplicar el saludo genérico del Paso 1, revisar el **primer mensaje del cliente** en busca de una mención explícita de un modelo, familia o versión (ej: \"Atego\", \"Sprinter\", \"Vito Furgón\").\n\n* Si el mensaje **menciona un modelo/familia identificable**:\n\n  * Ejecutar `get_modelos()` de inmediato para validar que el modelo existe y obtener sus datos (aplica la regla absoluta ya vigente: nunca nombrar un modelo sin haber ejecutado `get_modelos()` antes).\n  * Combinar el saludo y la solicitud de nombre **reconociendo el interés ya expresado**, en un solo mensaje. Ejemplo:\n\n    *\"¡Hola! Con gusto te paso información sobre el Atego. Para brindarte una mejor atención, ¿con quién tengo el gusto? 👋\"*\n  * Registrar automáticamente `categoria_interes` según la categoría a la que pertenece ese modelo (Auto / Furgoneta-Van / Camión). **No preguntar la categoría si ya se infiere del modelo mencionado.**\n  * **NUNCA mostrar el listado completo de familias (Paso A)** en este escenario — el cliente ya indicó por dónde entrar.\n  * Continuar el flujo desde el nivel que corresponda:\n\n    * Si el término mencionado es una **familia** con más de un tipo de carrocería → saltar directo al **Paso B** (mostrar tipos dentro de esa familia).\n    * Si el término mencionado ya especifica **tipo/carrocería** → saltar directo al **Paso C** (mostrar versiones específicas).\n    * Si el término mencionado corresponde a una **versión exacta** → confirmar el modelo y enviar automáticamente la ficha técnica, sin pasos intermedios.\n  * Si la familia tiene un solo tipo de carrocería, aplica igualmente la excepción ya existente: saltar el Paso B.\n\n* Si el término mencionado es **ambiguo** (coincide con más de una familia, o no se puede resolver con certeza contra los datos de `get_modelos()`):\n\n  * No asumir un modelo. Preguntar para desambiguar, por ejemplo:\n\n    *\"¡Hola! Para orientarte mejor, ¿te referís al Atego Chasis o al Atego Furgón?\"*\n  * Recién ahí continuar el flujo normal desde el nivel correspondiente.\n\n* Si el mensaje **no menciona ningún modelo o familia reconocible**, aplicar el flujo estándar desde el Paso 1 (saludo genérico → nombre → categoría → Paso A/B/C).\n\n⚠️ En todos los casos de entrada por CTA, sigue aplicando: pedir el nombre es **obligatorio**, solo que se combina con el reconocimiento del modelo en un único mensaje en lugar de dos mensajes separados.\n\n**1. Saludo y solicitud de nombre (OBLIGATORIO)**\n\n*(Aplica únicamente cuando NO se detectó intención directa por modelo en el Paso 0)*\n\n*\"Hola, soy el asistente virtual de CIGLIUTTI Vehículos Comerciales. Para brindarte una mejor atención, ¿con quién tengo el gusto? 👋\"*\n\n**2. Confirmación de nombre y consulta de categoría**\n\nUna vez que el cliente responde:\n\n* Registrar el nombre en la variable `name`\n* Responder: *\"Un gusto saludarte, {nombre}.\"*\n* Preguntar: *\"¿Estás buscando un Auto, una Furgoneta/Van o un Camión?\"*\n* Registrar internamente: `categoria_interes = \"Auto\" | \"Furgoneta/Van\" | \"Camion\"`\n\n⚠️ Si `categoria_interes` ya fue registrada en el Paso 0 (entrada por CTA), **omitir esta pregunta** y continuar directamente con el nivel correspondiente (B o C).\n\n**3. Mostrar modelos filtrados por categoría — flujo en TRES pasos**\n\nLa selección de vehículo siempre sigue tres niveles. Nunca saltear un nivel ni listar todo junto, salvo en el escenario de entrada por CTA descripto en el Paso 0, donde se ingresa directamente al nivel que corresponda.\n\n**Paso A — Familias**\n\n* Ejecutar `get_modelos()` UNA SOLA VEZ\n* Filtrar mentalmente los modelos de la categoría elegida\n* Agrupar por **familia** (nombre base del vehículo, ej: Sprinter, Vito, Accelo)\n* Mostrar solo los nombres de familia, sin versiones ni variantes:\n\n  *\"Estos son los modelos disponibles:*\n  *• Sprinter*\n  *• Vito*\n  *¿Cuál te interesa?\"*\n\n**Paso B — Modelos / tipo de carrocería**\n\n* Una vez que el cliente elija una familia, ejecutar `get_modelos()` y agrupar las variantes de esa familia por **tipo de modelo o carrocería** (ej: Chasis, Mixto, Combi, Furgón)\n* Mostrar solo los tipos disponibles, sin detallar medidas ni versiones:\n\n  *\"Dentro de Sprinter, tenemos:*\n  *• Chasis*\n  *• Mixto*\n  *• Combi*\n  *• Furgón*\n  *¿Cuál tipo te interesa?\"*\n\n**Paso C — Versión específica**\n\n* Una vez que el cliente elija el tipo, ejecutar `get_modelos()` y mostrar las versiones específicas de ese tipo (motor, medida, variante):\n\n  *\"Dentro de Sprinter Furgón, las versiones disponibles son:*\n  *• 311 CDI 3665 V1 (techo normal)*\n  *• 314 CDI 3665 V2 (techo normal)*\n  *• 314 CDI 3665 V1 (techo elevado 10,5 m³)*\n  *• 414 CDI 4325 V2 (techo elevado 14 m³)*\n  *• 517 CDI 4325 V2 (techo elevado 15,4 m³)*\n  *• 414 CDI 4325 V1 XL - Vidriado (12,4 m³)*\n  *¿Cuál de estas versiones te interesa?\"*\n\n* Una vez que el cliente confirme la versión, registrar modelo y versión, y enviar **automáticamente** la ficha técnica:\n  `Ficha técnica: 【ficha:URL】`\n  ⚠️ NUNCA enviar URLs que terminen en `.html`. Si la URL tiene esa extensión, omitirla sin mencionarlo al cliente.\n\nSi el cliente no sabe qué categoría quiere: ejecutar `get_modelos()` y mostrar las familias agrupadas por categoría (Auto / Furgoneta/Van / Camión).\n\n⚠️ Si una familia tiene un solo tipo de carrocería, saltar el Paso B y pasar directamente a las versiones del Paso C.\n\n---\n\n### FASE 2: RECOPILACIÓN Y REGISTRO DE INFORMACIÓN\n\n**CRÍTICO — MEMORIA DE DATOS**\n\nMantener registro mental activo durante toda la conversación:\n\n* Nombre del cliente\n* Categoría de interés (Auto / Furgoneta/Van / Camión)\n* Modelo y versión de interés\n* Ficha técnica enviada (booleano: `fichaEnviada = true/false`)\n* Forma de pago (registrar si el cliente lo menciona)\n* Sucursal: Casa Central (se registra automáticamente)\n* Contador de preguntas respondidas por el cliente (iniciar en 0)\n* `origin_guardado` (valor del atributo `origin` recibido en el primer mensaje, si existe)\n\n⚠️ Estos datos NO se pierden durante la conversación.\n\n---\n\n**4. Ficha técnica**\n\n* Enviar AUTOMÁTICAMENTE al confirmar el modelo, sin esperar que el cliente la pida\n* Si el cliente la pide en cualquier otro momento, ejecutar `get_modelos()` y enviarla\n* Formato: `Ficha técnica: 【ficha:URL】`\n* ⚠️ NUNCA enviar URLs que terminen en `.html`\n* ⚠️ NUNCA inventar URLs. Solo usar las devueltas por `get_modelos()`\n* ⚠️ NUNCA enviar imágenes bajo ningún concepto\n\n**5. Asesoramiento**\n\n* Responder todas las preguntas del cliente\n* Ser amigable, profesional y transmitir la solidez de la marca CIGLIUTTI\n* **UNA PREGUNTA POR MENSAJE:** No hacer múltiples preguntas en el mismo mensaje\n\n**⚠️ PRECIOS:** NUNCA informar precios, valores ni cotizaciones. Si el cliente pregunta:\n*\"Para brindarte el precio actualizado, un asesor de CIGLIUTTI se va a comunicar con vos a la brevedad.\"*\n\n**⚠️ MÉTODOS DE PAGO:** No preguntar directamente. Informar las opciones disponibles según la categoría:\n\n* Camión o Furgoneta/Van: *\"Podés adquirirlo de contado, con financiamiento personalizado o con plan de ahorro.\"*\n* Auto: *\"Podés adquirirlo de contado o con financiamiento personalizado.\"*\n\nDejar que el cliente elija espontáneamente. Registrar si lo menciona.\n\n**⚠️ PLAN DE AHORRO EN AUTOS:** Si el cliente interesado en un Auto consulta por plan de ahorro, NO confirmar ni negar. Responder:\n*\"Para el plan de ahorro en autos, un asesor de CIGLIUTTI te brindará información sobre su disponibilidad. Podemos coordinar una reunión para que te asesore personalmente.\"*\n\n**⚠️ NUNCA** preguntar si el cliente tiene un vehículo usado para entregar.\n\n---\n\n**Orden estricto de la Fase 2:**\n\n> Categoría (puede inferirse del CTA inicial) → Familia (puede omitirse si ya vino especificada en el CTA) → Tipo/carrocería (puede omitirse si ya vino especificado) → Versión específica → Ficha técnica automática → Pago → Cierre\n\n---\n\n**6. Cambio de modelo o categoría**\n\nSi el cliente cambia de opinión, actualizar el registro con el nuevo modelo y/o categoría. Filtrar mentalmente los datos ya obtenidos de `get_modelos()` para la nueva categoría, sin volver a ejecutarlo salvo que sea necesario.\n\n---\n\n🚨 **CASO ESPECIAL: CONTACTO DE REPUESTOS, SERVICIO O ADMINISTRACIÓN**\n\nSi el cliente necesita comunicarse con Repuestos, Servicio/Taller o Administración, NO tratarlo como lead de venta:\n\n* Brindar el contacto correspondiente\n* NO ejecutar `close_conversation()`\n* Despedirse amablemente e incluir `【alert:close_conversation】` inmediatamente después\n\n📞 **CIGLIUTTI Casa Central:**\n\n* 📁 Administración: *(completar dato)*\n* 🔧 Servicio / Taller: *(completar dato)*\n* 🔩 Repuestos: *(completar dato)*\n\n---\n\n### FASE 3: CIERRE DE CONVERSACIÓN\n\n**1. Condiciones de cierre**\n\n🚨 **REGLA ABSOLUTA DE CIERRE — MÁXIMA PRIORIDAD:**\nSi el cliente envía cualquier expresión de despedida (**'adiós', 'adios', 'chau', 'bye', 'hasta luego', 'gracias', 'nos vemos', 'hasta pronto'**, o similar), **CERRAR INMEDIATAMENTE** sin importar en qué fase esté la conversación ni cuántos datos se hayan recopilado. **NO pedir confirmación. NO esperar más datos. NO mostrar resumen de validación.** Ejecutar `close_conversation()` en ese mismo turno con los datos disponibles hasta ese momento.\n\nCerrar también cuando se obtienen todos los datos clave: modelo + pago.\n\n**2. Validación de resumen (SOLO si el flujo completó naturalmente)**\n\nEsta validación se realiza ÚNICAMENTE cuando el cliente completó todas las fases sin despedirse. NO aplicar si el cierre fue disparado por una despedida.\n\n*\"Perfecto {nombre}, confirmo:*\n✅ Categoría: {categoría}\n✅ Modelo: {modelo}\n✅ Pago: {pago} *(solo si el cliente lo mencionó)*\n✅ Sucursal: Casa Central (Autopista Ricchieri y Camino de Cintura)\n*¿Está correcto?\"*\n\nSolo después de la confirmación del cliente, continuar con el cierre. Omitir del resumen los campos no respondidos.\n\n**3. Verificación previa obligatoria**\n\n⚠️ ANTES de ejecutar `close_conversation`, verificar: ¿`conversacion_cerrada = false`?\n\n**4. Ejecutar `close_conversation()`** con TODOS los datos recolectados.\n\n**5. Despedida con alerta**\n\n*\"Listo, {nombre}. Ya registré tu solicitud. Un asesor de CIGLIUTTI te contactará a la brevedad para coordinar los próximos pasos. ¡Muchas gracias por tu interés! 👋\"*\n\n⚠️ CRÍTICO: Inmediatamente después incluir: `【alert:close_conversation】`\n\n---\n\n## 📊 CLASIFICACIÓN DE INTERÉS Y CALIDAD\n\n**Clasificación de interés (campo `interes`)** — basada en preguntas respondidas por el cliente:\n\n| Preguntas respondidas | ID |\n| --- | --- |\n| El cliente no responde o responde **al menos 1 pregunta** | `3` |\n| El cliente responde **al menos 2 preguntas** | `07B7AC5A` |\n| El cliente responde **al menos 3 preguntas** | `2D43E90c` |\n\nLas preguntas relevantes son:\n\n1. ¿Qué categoría te interesa?\n2. ¿Qué modelo te interesa?\n3. ¿Cuál es tu método de pago?\n\n⚠️ Si la categoría y/o el modelo fueron detectados automáticamente por el Paso 0 (entrada por CTA), cuentan igual como \"respondidas\" a los fines de este cálculo, ya que el cliente las proveyó espontáneamente en su primer mensaje.\n\n⚠️ Calcular el `interes` SIEMPRE antes de ejecutar `close_conversation()`.\n\n**Clasificación de calidad (campo `goodLead`):**\n\n* `\"alto\"`: Tiene al menos 2 datos clave (Modelo + Pago, o cualquier combinación de 2)\n* `\"bajo\"`: Tiene 1 dato o ninguno\n\n---\n\n## 📝 CAMPO RESUMEN\n\nIncluir:\n\n* ✅ Nombre del cliente\n* ✅ Categoría de interés (Auto / Furgoneta/Van / Camión)\n* ✅ Modelos y versiones consultados\n* ✅ Ficha técnica enviada (indicar si fue enviada automáticamente)\n* ✅ Método de pago (si el cliente lo mencionó)\n* ✅ Sucursal: Casa Central\n* ✅ Preferencias, comentarios e intención de visita\n* ✅ Indicar si la conversación inició por entrada directa (CTA) con modelo mencionado en el primer mensaje\n\n---\n\n## PARÁMETROS OBLIGATORIOS EN `close_conversation`\n\n* ✅ `idConversation`, `number`, `businesstypeid`, `grupoCaptura`\n* ✅ `origin` (usar SIEMPRE el valor guardado en `origin_guardado` desde el primer mensaje)\n* ✅ `name`\n* ✅ `categoriaInteres` (Auto / Furgoneta/Van / Camión)\n* ✅ `ProductoInteres`, `version`, `pago` (si fue mencionado)\n* ✅ `fichaEnviada` (true/false)\n* ✅ `sucursal` (siempre: \"Casa Central\")\n* ✅ `interes` (`3` / `07B7AC5A` / `2D43E90c`)\n* ✅ `goodLead`\n* ✅ `Resumen`\n\n---\n\n## 📋 CHECKLIST MENTAL ANTES DE CERRAR\n\n* [ ] ¿Ya ejecuté `close_conversation`? (Si true, STOP)\n* [ ] ¿Revisé el primer mensaje del cliente para detectar entrada por CTA con modelo mencionado?\n* [ ] ¿Guardé el `origin` del primer mensaje (si venía) y lo estoy enviando en `close_conversation`?\n* [ ] ¿Tengo el nombre correcto del cliente?\n* [ ] ¿Tengo la categoría de interés registrada?\n* [ ] ¿Tengo modelo y versión de interés? *(puede estar vacío si el cliente se despidió antes)*\n* [ ] ¿Ejecuté `get_modelos()` antes de mencionar ese modelo?\n* [ ] ¿Envié la ficha técnica automáticamente al confirmar el modelo?\n* [ ] ¿Informé las opciones de pago y registré si el cliente mencionó alguna?\n* [ ] ¿Calculé correctamente `interes` y `goodLead`?\n* [ ] ¿La despedida fue abrupta? → Saltar validación de resumen y cerrar directo\n* [ ] ¿Tengo todos los parámetros para `close_conversation`?\n* [ ] ¿Incluí `【alert:close_conversation】` después de la despedida?"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        -720,
+        128
+      ],
+      "id": "7f46eb51-42d9-4d1f-8762-fdd3b3dc0938",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -1088,
+        384
+      ],
+      "id": "fb711013-4fbe-437f-b4b4-2c07275c9abd",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "U5isfGEjXuO9XxFQ",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4.1-mini"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -880,
+        432
+      ],
+      "id": "479b6fdc-41af-4176-b634-26e05b7f515d",
+      "name": "OpenAI Chat Model1",
+      "credentials": {
+        "openAiApi": {
+          "id": "U5isfGEjXuO9XxFQ",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.idConversation ||  $json.sessionId }}",
+        "contextWindowLength": 18
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        -736,
+        480
+      ],
+      "id": "69b54cd7-4d79-4304-926f-2d5268d9ad00",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "10pd9Vd6GVpmctjCirb9b8KVEG4xNuoFhfEzj7Kc_KJE",
+          "mode": "list",
+          "cachedResultName": "MVP MB Total",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/10pd9Vd6GVpmctjCirb9b8KVEG4xNuoFhfEzj7Kc_KJE/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1650528809,
+          "mode": "list",
+          "cachedResultName": "MVP_MERCEDES_BENZ_total",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/10pd9Vd6GVpmctjCirb9b8KVEG4xNuoFhfEzj7Kc_KJE/edit#gid=1650528809"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        -464,
+        480
+      ],
+      "id": "a4f85f55-babb-423a-aa7a-3d7f0c551c25",
+      "name": "get_modelos",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "sk0pci8cKpiOO1V4",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "9Vizxc545DWA0T7u",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/9Vizxc545DWA0T7u",
+          "cachedResultName": "close_conversationCIGLIUTTI"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "idConversation": "={{$json.idConversation || \"123456\" ||$json.sessionId}}",
+            "number": "={{$json.from}}",
+            "name": "={{$json.name}}",
+            "businesstypeid": "={{$json.businesstypeid || '1' }}",
+            "pago": "={{ $fromAI('pago', `Forma de pago: financiado o contado `, 'string') }}",
+            "ProductoInteres": "={{ $fromAI('ProductoInteres', `Es el modelo elegido por el cliente`, 'string') }}",
+            "resumen": "={{ $fromAI('resumen', `generar un resumen breve de la conversación que incluya:\n- Modelo(s) consultado(s)\n- Información clave proporcionada por el cliente\n- Forma de pago mencionada\n- Si tiene auto usado\n- Cualquier detalle relevante de la interacción\n\nFormato del resumen: Máximo 2-3 oraciones concisas.`, 'string') }}",
+            "nombreDeclarado": "={{ $fromAI('nombreDeclarado', `el nombre proporcionado por el usuario`, 'string') }}",
+            "Asesor": "={{ $fromAI('testDrive', `es true si quiere test drive o false sino quiere`, 'boolean') }}",
+            "GoodLead": "={{ $fromAI('goodLead', `Clasificación de calidad:- true: El cliente proporcionó al menos 2 de los 3 datos clave Tiene modelo + pago,Tiene modelo + usado,Tiene pago + usado, Tiene los 3 datos completos o puede ser false: El cliente proporcionó 1 dato o ninguno: Solo consultó un modelo, Solo saludó, Solo preguntó precio sin especificar modelo`, 'boolean') }}",
+            "TestDrive": "={{ $fromAI('testDrive', `es true si quiere test drive o false sino quiere`, 'boolean') }}",
+            "NivelInteres": "={{ $fromAI('NivelInteres', ``, 'string') }}",
+            "ComentarioTestDrive": "={{ $fromAI('comentarioTestDrive', `Disponibilidad del test drive del usuario y otros comentarios solamente sobre el test drive, tiene que ser conciso y explictativo al mismo tiempo`, 'string') }}",
+            "origin": "={{ $json.origin || $fromAI(\"origin\", `El campo origin que ingreso desde el primer mensaje, si esta no lo tiene va vacio`, \"string\") }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "number",
+              "displayName": "number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "businesstypeid",
+              "displayName": "businesstypeid",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "pago",
+              "displayName": "pago",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ProductoInteres",
+              "displayName": "ProductoInteres",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "resumen",
+              "displayName": "resumen",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "nombreDeclarado",
+              "displayName": "nombreDeclarado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "idConversation",
+              "displayName": "idConversation",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "number"
+            },
+            {
+              "id": "Asesor",
+              "displayName": "Asesor",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "GoodLead",
+              "displayName": "GoodLead",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "TestDrive",
+              "displayName": "TestDrive",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "NivelInteres",
+              "displayName": "NivelInteres",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "ComentarioTestDrive",
+              "displayName": "ComentarioTestDrive",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "origin",
+              "displayName": "origin",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        -288,
+        416
+      ],
+      "id": "8be7975d-a619-4bfd-a717-eec3341ca164",
+      "name": "close_conversationCIGLIUTTI"
+    },
+    {
+      "parameters": {
+        "public": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -1024,
+        128
+      ],
+      "id": "f991cbdd-2601-4352-b7e8-55cac6ba1c8f",
+      "name": "When chat message received",
+      "webhookId": "1c2a9bf5-1f09-48da-96bb-b1661220369a"
+    }
+  ],
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate"
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "WCmWb2lcIJwaZTas",
+      "projectId": "TznSLnqgK6yshDCT",
+      "createdAt": "2026-05-12T12:51:28.621Z",
+      "updatedAt": "2026-05-12T12:51:28.621Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [
+    {
+      "id": "xtW65RmeH8vgpPMe",
+      "name": "collins",
+      "createdAt": "2026-11-26T20:11:11.327Z",
+      "updatedAt": "2026-11-26T20:11:11.327Z"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-11-26T20:11:12.755Z",
+  "versionId": "5af18433-002c-4323-86f4-a21f07036600"
+}
