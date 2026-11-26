@@ -1,0 +1,917 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "fc7977df-04a1-4914-8227-3697983c7f95",
+    "workflowId": "WBCl3pZkoWZAq9Qz",
+    "nodes": [
+      {
+        "parameters": {
+          "promptType": "define",
+          "text": "={{ $json.chatInput }}",
+          "needsFallback": true,
+          "options": {
+            "systemMessage": "=```\n🎯 ROL Y OBJETIVO\nSos un vendedor del concesionario oficial CAR ONE. Tu misión: cerrar ventas recopilando información clave en cada conversación.\n\n🗣️ SALUDO OBLIGATORIO\nSiempre iniciá EXACTAMENTE con:\nHola! Somos CAR ONE ¿En qué te podemos ayudar hoy? 🚗\n\n📥 DATOS DE ENTRADA\nRecibirás estos datos al inicio:\n- origin: {{ $json.origin }}\n- businesstypeid: {{ $json.businesstypeid }}\n- grupoCaptura: {{ $json.grupoCaptura }}\n- from: {{ $json.from }}\n- name: {{ $json.name }}\n- idConversation: {{ $json.idConversation }}\n\n⚡ FUNCIONES DISPONIBLES\n\n1. get_modelos() - SIN PARÁMETROS\nEjecutar antes de mencionar modelos disponibles.\n\n2. get_ficha_tecnica() - NO DISPONIBLE\nNO mencionar fichas técnicas.\n\n3. insert_lead - EJECUTAR SIEMPRE AL CERRAR\nEjecutar cuando:\n- El cliente se despide (dice \"chau\", \"adiós\", \"gracias\", etc.)\n- Ya recopilaste toda la información necesaria\n\ninsert_lead({\n  \"name\": \"{{ $json.name }}\",\n  \"from\": \"{{ $json.from }}\",\n  \"idConversation\": \"{{ $json.idConversation }}\",\n  \"producto\": \"Modelo recopilado o vacío si no lo tenés\",\n  \"usado\": \"Usado recopilado o 'no tiene usado' o vacío\",\n  \"pago\": \"contado/financiado o vacío\"\n})\n\n4. close_conversation - EJECUTAR SIEMPRE DESPUÉS DE insert_lead\nEjecutar inmediatamente después de insert_lead.\n\nclose_conversation({\n  \"origin\": \"{{ $json.origin }}\",\n  \"businesstypeid\": \"{{ $json.businesstypeid }}\",\n  \"grupoCaptura\": \"{{ $json.grupoCaptura }}\",\n  \"modelo\": \"Modelo recopilado o vacío\",\n  \"pago\": \"contado/financiado o vacío\",\n  \"usado\": \"Usado recopilado o 'no tiene usado' o vacío\",\n  \"interes\": \"alto o bajo\"\n})\n\nCriterio para \"interes\":\n- \"alto\": Tiene modelo + pago + usado completos\n- \"bajo\": Falta algún dato\n\n---\n\n## 📊 FLUJO SIMPLE\n\n**DURANTE LA CONVERSACIÓN:**\n1. Saludo obligatorio\n2. get_modelos() → mostrar opciones\n3. Recopilar: modelo, pago, usado\n4. Responder preguntas y asesorar\n5. Si el usario cambia de modelos ejecuta desde el paso 2 devuelta (y limpia los datos del modelo compilado)\n\n**AL DETECTAR CIERRE (cliente se despide O ya tenés toda la info):**\n5. Ejecutar insert_lead (con los datos que tengas)\n6. Ejecutar close_conversation (TENE EN CUENTA QUE EL MODELO ELEGIDO PUEDE VARIAR, siempre manda el elegido)\n7. Despedida amigable\n\n---\n\n## 🎯 CUÁNDO CERRAR LA CONVERSACIÓN\n\nEjecutar insert_lead + close_conversation cuando:\n\n✅ El cliente se despide:\n- \"Chau\"\n- \"Gracias, lo voy a pensar\"\n- \"Bueno, después te escribo\"\n- \"Adiós\"\n- Cualquier frase de despedida\n\n✅ Ya tenés toda la información:\n- Modelo ✅\n- Pago ✅\n- Usado ✅\n\n---\n\n## 💡 EJEMPLOS\n\n### Ejemplo 1: Cliente se despide CON INFO COMPLETA\n\n**Conversación:**\n```\nCliente: Me interesa el Kicks\nBot: ¡Excelente elección! ¿Cómo te gustaría pagarlo?\nCliente: Financiado\nBot: Perfecto. ¿Tenés algún usado para dar en parte de pago?\nCliente: Sí, un Gol 2018\nBot: Genial. Te contactamos para coordinar los detalles.\nCliente: Dale, gracias! Chau!\n```\n\n**Bot ejecuta:**\n```javascript\n// 1. Detecta despedida → ejecutar insert_lead\ninsert_lead({\n  \"name\": \"Nacho Cabaleiro\",\n  \"from\": \"+5491150997009\",\n  \"idConversation\": \"394476\",\n  \"producto\": \"Kicks\",\n  \"usado\": \"Gol 2018\",\n  \"pago\": \"financiado\"\n})\n\n// 2. Ejecutar close_conversation\nclose_conversation({\n  \"origin\": \"FY48I85KIDZXWPP9G\",\n  \"businesstypeid\": \"4\",\n  \"grupoCaptura\": \"RENAULT CAR ONE\",\n  \"modelo\": \"Kicks\",\n  \"pago\": \"financiado\",\n  \"usado\": \"Gol 2018\",\n  \"interes\": \"alto\"\n})\n```\n\n**Bot responde:**\n\"¡Perfecto! Nos comunicamos pronto. ¡Que tengas un buen día! 🚗\"\n\n---\n\n### Ejemplo 2: Cliente se despide SIN INFO COMPLETA\n\n**Conversación:**\n```\nCliente: Hola, me pasas info del Kicks?\nBot: ¡Hola! Claro, el Kicks...\nCliente: Ok, lo voy a pensar. Chau!\n```\n\n**Bot ejecuta:**\n```javascript\n// 1. Detecta despedida → ejecutar insert_lead\ninsert_lead({\n  \"name\": \"Nacho Cabaleiro\",\n  \"from\": \"+5491150997009\",\n  \"idConversation\": \"394476\",\n  \"producto\": \"Kicks\",\n  \"usado\": \"\",\n  \"pago\": \"\"\n})\n\n// 2. Ejecutar close_conversation\nclose_conversation({\n  \"origin\": \"FY48I85KIDZXWPP9G\",\n  \"businesstypeid\": \"4\",\n  \"grupoCaptura\": \"RENAULT CAR ONE\",\n  \"modelo\": \"Kicks\",\n  \"pago\": \"\",\n  \"usado\": \"\",\n  \"interes\": \"bajo\"\n})\n```\n\n**Bot responde:**\n\"¡Dale! Cualquier duda, acá estamos. ¡Saludos! 🚗\"\n\n---\n\n### Ejemplo 3: Ya tenés toda la info (cierre proactivo)\n\n**Conversación:**\n```\nCliente: Me interesa el Kicks financiado\nBot: ¿Tenés algún usado?\nCliente: Sí, un Corsa 2015\n```\n\n**Bot ejecuta:**\n```javascript\n// 1. Tiene todo → ejecutar insert_lead\ninsert_lead({\n  \"name\": \"Nacho Cabaleiro\",\n  \"from\": \"+5491150997009\",\n  \"idConversation\": \"394476\",\n  \"producto\": \"Kicks\",\n  \"usado\": \"Corsa 2015\",\n  \"pago\": \"financiado\"\n})\n\n// 2. Ejecutar close_conversation\nclose_conversation({\n  \"origin\": \"FY48I85KIDZXWPP9G\",\n  \"businesstypeid\": \"4\",\n  \"grupoCaptura\": \"RENAULT CAR ONE\",\n  \"modelo\": \"Kicks\",\n  \"pago\": \"financiado\",\n  \"usado\": \"Corsa 2015\",\n  \"interes\": \"alto\"\n})\n```\n\n**Bot responde:**\n\"¡Perfecto! Ya registré tu consulta. Un asesor se va a comunicar pronto para coordinar todo. ¿Hay algo más en lo que pueda ayudarte?\"\n\n---\n\n## ⚠️ REGLAS IMPORTANTES\n\n🚨 **SIEMPRE ejecutar ambas funciones al cerrar:**\n```\ninsert_lead → close_conversation\n```\n🚨 **SI el usuario elije hace una segunda consulta sobre otro modelo, volver a cargar los datos en close conversation nuevos con las nuevas respuestas del usuario**\n\n🚨 **SI NO SE OBTIENE EL nombre del cliente no preguntarlo.\n\n🚨 **NUNCA ejecutar las funciones dos veces en la misma conversación**\n\n🚨 **Ejecutar al detectar:**\n- Despedida del cliente (palabras como: chau, adiós, gracias, después te escribo, etc.)\n- Ya tenés modelo + pago + usado completos\n\n🚨 **Campos en insert_lead:**\n- Si no tenés un dato, enviar string vacío \"\"\n- NUNCA enviar \"undefined\" o null\n\n🚨 **Campo \"interes\" en close_conversation:**\n- \"alto\": Tiene modelo + pago + usado\n- \"bajo\": Falta al menos un dato\n\n---\n\n## 📋 CHECKLIST RÁPIDO\n\nAntes de cerrar:\n- [ ] ¿El cliente se despidió O ya tengo toda la info?\n- [ ] Ejecutar insert_lead (con los datos que tenga)\n- [ ] Ejecutar close_conversation (con origin, businesstypeid, grupoCaptura)\n- [ ] Despedida amigable\n\n---\n\n## 🔥 MODO CLOSER\n\nDurante la conversación:\n- Ser amigable y persistente\n- Preguntar por: modelo, forma de pago, usado\n- No presionar si el cliente no quiere dar info\n\nAl detectar cierre:\n- Ejecutar SIEMPRE: insert_lead + close_conversation\n- Agradecer y despedirse\n\n---\n\n## 📸 FORMATO DE IMÁGENES\n📌 【imagen:URL】  (para .jpg, .png, .webp)\n📌 【ficha:URL】   (para .pdf)\n```",
+            "maxIterations": 50
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.agent",
+        "typeVersion": 2.2,
+        "position": [
+          -80,
+          464
+        ],
+        "id": "43ae0d26-c704-4c42-bc47-8f72c88d5f57",
+        "name": "AI Agent",
+        "executeOnce": true
+      },
+      {
+        "parameters": {
+          "model": {
+            "__rl": true,
+            "value": "gpt-4.1",
+            "mode": "list",
+            "cachedResultName": "gpt-4.1"
+          },
+          "options": {
+            "maxRetries": 2
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1.2,
+        "position": [
+          -448,
+          640
+        ],
+        "id": "53d4f045-073a-40c1-9353-0e1b2ca30dcd",
+        "name": "OpenAI Chat Model",
+        "credentials": {
+          "openAiApi": {
+            "id": "Syhre8dGw3hu8uuO",
+            "name": "OpenAi account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "sessionIdType": "customKey",
+          "sessionKey": "={{ $json.idConversation ||  $json.sessionId }}",
+          "contextWindowLength": 18
+        },
+        "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+        "typeVersion": 1.3,
+        "position": [
+          -160,
+          640
+        ],
+        "id": "2c8274e2-f9f8-471e-a94b-a9928b2dbbf1",
+        "name": "Simple Memory1"
+      },
+      {
+        "parameters": {
+          "model": {
+            "__rl": true,
+            "mode": "list",
+            "value": "gpt-4.1-mini"
+          },
+          "options": {}
+        },
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1.2,
+        "position": [
+          -288,
+          640
+        ],
+        "id": "1156d69c-cf94-485d-8763-fcbdec82d412",
+        "name": "OpenAI Chat Model1",
+        "credentials": {
+          "openAiApi": {
+            "id": "Syhre8dGw3hu8uuO",
+            "name": "OpenAi account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "documentId": {
+            "__rl": true,
+            "value": "1kG4R-73efJMlFCOgbs_IRQqRp8Pa3AmLZUskPigPnC4",
+            "mode": "list",
+            "cachedResultName": "CAR ONE IA",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1kG4R-73efJMlFCOgbs_IRQqRp8Pa3AmLZUskPigPnC4/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "gid=0",
+            "mode": "list",
+            "cachedResultName": "Hoja 1",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1kG4R-73efJMlFCOgbs_IRQqRp8Pa3AmLZUskPigPnC4/edit#gid=0"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleSheetsTool",
+        "typeVersion": 4.7,
+        "position": [
+          -32,
+          640
+        ],
+        "id": "8762020d-3fb8-4b5e-9c93-3003aa5250b9",
+        "name": "get_modelos",
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "PG87IrAIo4rDIm2L",
+            "name": "Google Sheets account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "appendOrUpdate",
+          "documentId": {
+            "__rl": true,
+            "value": "1kG4R-73efJMlFCOgbs_IRQqRp8Pa3AmLZUskPigPnC4",
+            "mode": "list",
+            "cachedResultName": "CAR ONE IA",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1kG4R-73efJMlFCOgbs_IRQqRp8Pa3AmLZUskPigPnC4/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": 985659095,
+            "mode": "list",
+            "cachedResultName": "clientes",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1kG4R-73efJMlFCOgbs_IRQqRp8Pa3AmLZUskPigPnC4/edit#gid=985659095"
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "Fecha": "={{$now.format('yyyy-MM-dd')}}",
+              "Nombre": "={{ $('When chat message received').first().json.name }}",
+              "Telefono": "={{ $('When chat message received').first().json.from }}",
+              "Producto": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Producto', ``, 'string') }}",
+              "Pago": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Pago', ``, 'string') }}",
+              "Usado": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Usado', ``, 'string') }}",
+              "idConversation": "={{ $('When chat message received').first().json.idConversation }}",
+              "interes": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('interes', `\"alto\": Cuando se tiene toda la información (modelo + pago + usado si aplica)\n\"bajo\": Cuando falta información O cuando hay despedida prematura (\"chau\", \"adiós\", etc.)`, 'string') }}",
+              "Hora": "={{$now.format('H:mm')}}"
+            },
+            "matchingColumns": [
+              "idConversation"
+            ],
+            "schema": [
+              {
+                "id": "Fecha",
+                "displayName": "Fecha",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "Hora",
+                "displayName": "Hora",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "Nombre",
+                "displayName": "Nombre",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "Telefono",
+                "displayName": "Telefono",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "Producto",
+                "displayName": "Producto",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "Pago",
+                "displayName": "Pago",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "Usado",
+                "displayName": "Usado",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "Dealer",
+                "displayName": "Dealer",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": true
+              },
+              {
+                "id": "idConversation",
+                "displayName": "idConversation",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "interes",
+                "displayName": "interes",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true
+              }
+            ],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleSheetsTool",
+        "typeVersion": 4.7,
+        "position": [
+          224,
+          624
+        ],
+        "id": "10ddebad-2fe8-49f5-9bcf-64f386930d34",
+        "name": "insert_lead",
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "PG87IrAIo4rDIm2L",
+            "name": "Google Sheets account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "public": true,
+          "initialMessages": "Hola, soy el bot de CAR ONE.\nEn que te puedo ayudar hoy?",
+          "options": {}
+        },
+        "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+        "typeVersion": 1.3,
+        "position": [
+          -224,
+          464
+        ],
+        "id": "bfb4b16e-6025-4158-981c-8addc2e47930",
+        "name": "When chat message received",
+        "webhookId": "9120555f-c2f7-49b0-a491-7c7c37fb7767"
+      },
+      {
+        "parameters": {
+          "name": "close_conversation",
+          "workflowId": {
+            "__rl": true,
+            "value": "lREtnlIvl60Qheip",
+            "mode": "list",
+            "cachedResultName": "CLOSE-CONVERSATION-CARONE"
+          },
+          "fields": {
+            "values": [
+              {
+                "name": "name",
+                "stringValue": "={{ $('When chat message received').first().json.name }}"
+              },
+              {
+                "name": "from",
+                "stringValue": "={{ $('When chat message received').first().json.from }}"
+              },
+              {
+                "name": "idConversation",
+                "stringValue": "={{ $json.idConversation }}"
+              },
+              {
+                "name": "origin",
+                "stringValue": "={{ $('When chat message received').first().json.origin }}"
+              },
+              {
+                "name": "businesstypeid ",
+                "stringValue": "={{ $('When chat message received').first().json.businesstypeid  }}"
+              },
+              {
+                "name": "grupoCaptura ",
+                "stringValue": "={{ $('When chat message received').first().json.grupoCaptura   }}"
+              },
+              {
+                "name": "producto",
+                "stringValue": "={{ $fromAI('producto') }}"
+              },
+              {
+                "name": "usado",
+                "stringValue": "={{ $fromAI('usado') }}"
+              },
+              {
+                "name": "pago",
+                "stringValue": "={{ $fromAI('pago') }}"
+              },
+              {
+                "name": "ProductoInteres",
+                "stringValue": "={{ $fromAI('producto') }}"
+              },
+              {
+                "name": "ModeloAuto",
+                "stringValue": "={{ $fromAI('modeloAuto') }}"
+              }
+            ]
+          },
+          "specifyInputSchema": true,
+          "jsonSchemaExample": "{\n  \"name\":\"Lisandro Bachur\",\n  \"from\":\"11314328922\",\n  \"idConversation\":\"381198\",\n  \"producto\": \"MINI Aceman BEV JCW\",\n  \"usado\": \"no tengo\",\n  \"pago\": \"contado\"\n}\n"
+        },
+        "id": "0bdcbb92-36fb-4882-9946-5bd92c2241b3",
+        "name": "close_conversation",
+        "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+        "typeVersion": 1.2,
+        "position": [
+          80,
+          640
+        ]
+      }
+    ],
+    "connections": {
+      "OpenAI Chat Model": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Simple Memory1": {
+        "ai_memory": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_memory",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "OpenAI Chat Model1": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_languageModel",
+              "index": 1
+            }
+          ]
+        ]
+      },
+      "get_modelos": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "insert_lead": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "When chat message received": {
+        "main": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "close_conversation": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "system migration",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-11-10T13:52:35.720Z",
+    "updatedAt": "2026-11-10T13:52:35.720Z"
+  },
+  "activeVersionId": "fc7977df-04a1-4914-8227-3697983c7f95",
+  "connections": {
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory1": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "get_modelos": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "insert_lead": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "close_conversation": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2025-11-11T14:43:42.393Z",
+  "id": "WBCl3pZkoWZAq9Qz",
+  "isArchived": false,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "name": "VENTAS-IA CAR ONE UY",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.chatInput }}",
+        "needsFallback": true,
+        "options": {
+          "systemMessage": "=```\n🎯 ROL Y OBJETIVO\nSos un vendedor del concesionario oficial CAR ONE. Tu misión: cerrar ventas recopilando información clave en cada conversación.\n\n🗣️ SALUDO OBLIGATORIO\nSiempre iniciá EXACTAMENTE con:\nHola! Somos CAR ONE ¿En qué te podemos ayudar hoy? 🚗\n\n📥 DATOS DE ENTRADA\nRecibirás estos datos al inicio:\n- origin: {{ $json.origin }}\n- businesstypeid: {{ $json.businesstypeid }}\n- grupoCaptura: {{ $json.grupoCaptura }}\n- from: {{ $json.from }}\n- name: {{ $json.name }}\n- idConversation: {{ $json.idConversation }}\n\n⚡ FUNCIONES DISPONIBLES\n\n1. get_modelos() - SIN PARÁMETROS\nEjecutar antes de mencionar modelos disponibles.\n\n2. get_ficha_tecnica() - NO DISPONIBLE\nNO mencionar fichas técnicas.\n\n3. insert_lead - EJECUTAR SIEMPRE AL CERRAR\nEjecutar cuando:\n- El cliente se despide (dice \"chau\", \"adiós\", \"gracias\", etc.)\n- Ya recopilaste toda la información necesaria\n\ninsert_lead({\n  \"name\": \"{{ $json.name }}\",\n  \"from\": \"{{ $json.from }}\",\n  \"idConversation\": \"{{ $json.idConversation }}\",\n  \"producto\": \"Modelo recopilado o vacío si no lo tenés\",\n  \"usado\": \"Usado recopilado o 'no tiene usado' o vacío\",\n  \"pago\": \"contado/financiado o vacío\"\n})\n\n4. close_conversation - EJECUTAR SIEMPRE DESPUÉS DE insert_lead\nEjecutar inmediatamente después de insert_lead.\n\nclose_conversation({\n  \"origin\": \"{{ $json.origin }}\",\n  \"businesstypeid\": \"{{ $json.businesstypeid }}\",\n  \"grupoCaptura\": \"{{ $json.grupoCaptura }}\",\n  \"modelo\": \"Modelo recopilado o vacío\",\n  \"pago\": \"contado/financiado o vacío\",\n  \"usado\": \"Usado recopilado o 'no tiene usado' o vacío\",\n  \"interes\": \"alto o bajo\"\n})\n\nCriterio para \"interes\":\n- \"alto\": Tiene modelo + pago + usado completos\n- \"bajo\": Falta algún dato\n\n---\n\n## 📊 FLUJO SIMPLE\n\n**DURANTE LA CONVERSACIÓN:**\n1. Saludo obligatorio\n2. get_modelos() → mostrar opciones\n3. Recopilar: modelo, pago, usado\n4. Responder preguntas y asesorar\n5. Si el usario cambia de modelos ejecuta desde el paso 2 devuelta (y limpia los datos del modelo compilado)\n\n**AL DETECTAR CIERRE (cliente se despide O ya tenés toda la info):**\n5. Ejecutar insert_lead (con los datos que tengas)\n6. Ejecutar close_conversation (TENE EN CUENTA QUE EL MODELO ELEGIDO PUEDE VARIAR, siempre manda el elegido)\n7. Despedida amigable\n\n---\n\n## 🎯 CUÁNDO CERRAR LA CONVERSACIÓN\n\nEjecutar insert_lead + close_conversation cuando:\n\n✅ El cliente se despide:\n- \"Chau\"\n- \"Gracias, lo voy a pensar\"\n- \"Bueno, después te escribo\"\n- \"Adiós\"\n- Cualquier frase de despedida\n\n✅ Ya tenés toda la información:\n- Modelo ✅\n- Pago ✅\n- Usado ✅\n\n---\n\n## 💡 EJEMPLOS\n\n### Ejemplo 1: Cliente se despide CON INFO COMPLETA\n\n**Conversación:**\n```\nCliente: Me interesa el Kicks\nBot: ¡Excelente elección! ¿Cómo te gustaría pagarlo?\nCliente: Financiado\nBot: Perfecto. ¿Tenés algún usado para dar en parte de pago?\nCliente: Sí, un Gol 2018\nBot: Genial. Te contactamos para coordinar los detalles.\nCliente: Dale, gracias! Chau!\n```\n\n**Bot ejecuta:**\n```javascript\n// 1. Detecta despedida → ejecutar insert_lead\ninsert_lead({\n  \"name\": \"Nacho Cabaleiro\",\n  \"from\": \"+5491150997009\",\n  \"idConversation\": \"394476\",\n  \"producto\": \"Kicks\",\n  \"usado\": \"Gol 2018\",\n  \"pago\": \"financiado\"\n})\n\n// 2. Ejecutar close_conversation\nclose_conversation({\n  \"origin\": \"FY48I85KIDZXWPP9G\",\n  \"businesstypeid\": \"4\",\n  \"grupoCaptura\": \"RENAULT CAR ONE\",\n  \"modelo\": \"Kicks\",\n  \"pago\": \"financiado\",\n  \"usado\": \"Gol 2018\",\n  \"interes\": \"alto\"\n})\n```\n\n**Bot responde:**\n\"¡Perfecto! Nos comunicamos pronto. ¡Que tengas un buen día! 🚗\"\n\n---\n\n### Ejemplo 2: Cliente se despide SIN INFO COMPLETA\n\n**Conversación:**\n```\nCliente: Hola, me pasas info del Kicks?\nBot: ¡Hola! Claro, el Kicks...\nCliente: Ok, lo voy a pensar. Chau!\n```\n\n**Bot ejecuta:**\n```javascript\n// 1. Detecta despedida → ejecutar insert_lead\ninsert_lead({\n  \"name\": \"Nacho Cabaleiro\",\n  \"from\": \"+5491150997009\",\n  \"idConversation\": \"394476\",\n  \"producto\": \"Kicks\",\n  \"usado\": \"\",\n  \"pago\": \"\"\n})\n\n// 2. Ejecutar close_conversation\nclose_conversation({\n  \"origin\": \"FY48I85KIDZXWPP9G\",\n  \"businesstypeid\": \"4\",\n  \"grupoCaptura\": \"RENAULT CAR ONE\",\n  \"modelo\": \"Kicks\",\n  \"pago\": \"\",\n  \"usado\": \"\",\n  \"interes\": \"bajo\"\n})\n```\n\n**Bot responde:**\n\"¡Dale! Cualquier duda, acá estamos. ¡Saludos! 🚗\"\n\n---\n\n### Ejemplo 3: Ya tenés toda la info (cierre proactivo)\n\n**Conversación:**\n```\nCliente: Me interesa el Kicks financiado\nBot: ¿Tenés algún usado?\nCliente: Sí, un Corsa 2015\n```\n\n**Bot ejecuta:**\n```javascript\n// 1. Tiene todo → ejecutar insert_lead\ninsert_lead({\n  \"name\": \"Nacho Cabaleiro\",\n  \"from\": \"+5491150997009\",\n  \"idConversation\": \"394476\",\n  \"producto\": \"Kicks\",\n  \"usado\": \"Corsa 2015\",\n  \"pago\": \"financiado\"\n})\n\n// 2. Ejecutar close_conversation\nclose_conversation({\n  \"origin\": \"FY48I85KIDZXWPP9G\",\n  \"businesstypeid\": \"4\",\n  \"grupoCaptura\": \"RENAULT CAR ONE\",\n  \"modelo\": \"Kicks\",\n  \"pago\": \"financiado\",\n  \"usado\": \"Corsa 2015\",\n  \"interes\": \"alto\"\n})\n```\n\n**Bot responde:**\n\"¡Perfecto! Ya registré tu consulta. Un asesor se va a comunicar pronto para coordinar todo. ¿Hay algo más en lo que pueda ayudarte?\"\n\n---\n\n## ⚠️ REGLAS IMPORTANTES\n\n🚨 **SIEMPRE ejecutar ambas funciones al cerrar:**\n```\ninsert_lead → close_conversation\n```\n🚨 **SI el usuario elije hace una segunda consulta sobre otro modelo, volver a cargar los datos en close conversation nuevos con las nuevas respuestas del usuario**\n\n🚨 **SI NO SE OBTIENE EL nombre del cliente no preguntarlo.\n\n🚨 **NUNCA ejecutar las funciones dos veces en la misma conversación**\n\n🚨 **Ejecutar al detectar:**\n- Despedida del cliente (palabras como: chau, adiós, gracias, después te escribo, etc.)\n- Ya tenés modelo + pago + usado completos\n\n🚨 **Campos en insert_lead:**\n- Si no tenés un dato, enviar string vacío \"\"\n- NUNCA enviar \"undefined\" o null\n\n🚨 **Campo \"interes\" en close_conversation:**\n- \"alto\": Tiene modelo + pago + usado\n- \"bajo\": Falta al menos un dato\n\n---\n\n## 📋 CHECKLIST RÁPIDO\n\nAntes de cerrar:\n- [ ] ¿El cliente se despidió O ya tengo toda la info?\n- [ ] Ejecutar insert_lead (con los datos que tenga)\n- [ ] Ejecutar close_conversation (con origin, businesstypeid, grupoCaptura)\n- [ ] Despedida amigable\n\n---\n\n## 🔥 MODO CLOSER\n\nDurante la conversación:\n- Ser amigable y persistente\n- Preguntar por: modelo, forma de pago, usado\n- No presionar si el cliente no quiere dar info\n\nAl detectar cierre:\n- Ejecutar SIEMPRE: insert_lead + close_conversation\n- Agradecer y despedirse\n\n---\n\n## 📸 FORMATO DE IMÁGENES\n📌 【imagen:URL】  (para .jpg, .png, .webp)\n📌 【ficha:URL】   (para .pdf)\n```",
+          "maxIterations": 50
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        -80,
+        464
+      ],
+      "id": "43ae0d26-c704-4c42-bc47-8f72c88d5f57",
+      "name": "AI Agent",
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4.1",
+          "mode": "list",
+          "cachedResultName": "gpt-4.1"
+        },
+        "options": {
+          "maxRetries": 2
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -448,
+        640
+      ],
+      "id": "53d4f045-073a-40c1-9353-0e1b2ca30dcd",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "Syhre8dGw3hu8uuO",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.idConversation ||  $json.sessionId }}",
+        "contextWindowLength": 18
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        -160,
+        640
+      ],
+      "id": "2c8274e2-f9f8-471e-a94b-a9928b2dbbf1",
+      "name": "Simple Memory1"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4.1-mini"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -288,
+        640
+      ],
+      "id": "1156d69c-cf94-485d-8763-fcbdec82d412",
+      "name": "OpenAI Chat Model1",
+      "credentials": {
+        "openAiApi": {
+          "id": "Syhre8dGw3hu8uuO",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1kG4R-73efJMlFCOgbs_IRQqRp8Pa3AmLZUskPigPnC4",
+          "mode": "list",
+          "cachedResultName": "CAR ONE IA",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1kG4R-73efJMlFCOgbs_IRQqRp8Pa3AmLZUskPigPnC4/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Hoja 1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1kG4R-73efJMlFCOgbs_IRQqRp8Pa3AmLZUskPigPnC4/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        -32,
+        640
+      ],
+      "id": "8762020d-3fb8-4b5e-9c93-3003aa5250b9",
+      "name": "get_modelos",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "PG87IrAIo4rDIm2L",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1kG4R-73efJMlFCOgbs_IRQqRp8Pa3AmLZUskPigPnC4",
+          "mode": "list",
+          "cachedResultName": "CAR ONE IA",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1kG4R-73efJMlFCOgbs_IRQqRp8Pa3AmLZUskPigPnC4/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 985659095,
+          "mode": "list",
+          "cachedResultName": "clientes",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1kG4R-73efJMlFCOgbs_IRQqRp8Pa3AmLZUskPigPnC4/edit#gid=985659095"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Fecha": "={{$now.format('yyyy-MM-dd')}}",
+            "Nombre": "={{ $('When chat message received').first().json.name }}",
+            "Telefono": "={{ $('When chat message received').first().json.from }}",
+            "Producto": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Producto', ``, 'string') }}",
+            "Pago": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Pago', ``, 'string') }}",
+            "Usado": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Usado', ``, 'string') }}",
+            "idConversation": "={{ $('When chat message received').first().json.idConversation }}",
+            "interes": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('interes', `\"alto\": Cuando se tiene toda la información (modelo + pago + usado si aplica)\n\"bajo\": Cuando falta información O cuando hay despedida prematura (\"chau\", \"adiós\", etc.)`, 'string') }}",
+            "Hora": "={{$now.format('H:mm')}}"
+          },
+          "matchingColumns": [
+            "idConversation"
+          ],
+          "schema": [
+            {
+              "id": "Fecha",
+              "displayName": "Fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Hora",
+              "displayName": "Hora",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Nombre",
+              "displayName": "Nombre",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Telefono",
+              "displayName": "Telefono",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Producto",
+              "displayName": "Producto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Pago",
+              "displayName": "Pago",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Usado",
+              "displayName": "Usado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Dealer",
+              "displayName": "Dealer",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "idConversation",
+              "displayName": "idConversation",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "interes",
+              "displayName": "interes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        224,
+        624
+      ],
+      "id": "10ddebad-2fe8-49f5-9bcf-64f386930d34",
+      "name": "insert_lead",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "PG87IrAIo4rDIm2L",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "public": true,
+        "initialMessages": "Hola, soy el bot de CAR ONE.\nEn que te puedo ayudar hoy?",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -224,
+        464
+      ],
+      "id": "bfb4b16e-6025-4158-981c-8addc2e47930",
+      "name": "When chat message received",
+      "webhookId": "9120555f-c2f7-49b0-a491-7c7c37fb7767"
+    },
+    {
+      "parameters": {
+        "name": "close_conversation",
+        "workflowId": {
+          "__rl": true,
+          "value": "lREtnlIvl60Qheip",
+          "mode": "list",
+          "cachedResultName": "CLOSE-CONVERSATION-CARONE"
+        },
+        "fields": {
+          "values": [
+            {
+              "name": "name",
+              "stringValue": "={{ $('When chat message received').first().json.name }}"
+            },
+            {
+              "name": "from",
+              "stringValue": "={{ $('When chat message received').first().json.from }}"
+            },
+            {
+              "name": "idConversation",
+              "stringValue": "={{ $json.idConversation }}"
+            },
+            {
+              "name": "origin",
+              "stringValue": "={{ $('When chat message received').first().json.origin }}"
+            },
+            {
+              "name": "businesstypeid ",
+              "stringValue": "={{ $('When chat message received').first().json.businesstypeid  }}"
+            },
+            {
+              "name": "grupoCaptura ",
+              "stringValue": "={{ $('When chat message received').first().json.grupoCaptura   }}"
+            },
+            {
+              "name": "producto",
+              "stringValue": "={{ $fromAI('producto') }}"
+            },
+            {
+              "name": "usado",
+              "stringValue": "={{ $fromAI('usado') }}"
+            },
+            {
+              "name": "pago",
+              "stringValue": "={{ $fromAI('pago') }}"
+            },
+            {
+              "name": "ProductoInteres",
+              "stringValue": "={{ $fromAI('producto') }}"
+            },
+            {
+              "name": "ModeloAuto",
+              "stringValue": "={{ $fromAI('modeloAuto') }}"
+            }
+          ]
+        },
+        "specifyInputSchema": true,
+        "jsonSchemaExample": "{\n  \"name\":\"Lisandro Bachur\",\n  \"from\":\"11314328922\",\n  \"idConversation\":\"381198\",\n  \"producto\": \"MINI Aceman BEV JCW\",\n  \"usado\": \"no tengo\",\n  \"pago\": \"contado\"\n}\n"
+      },
+      "id": "0bdcbb92-36fb-4882-9946-5bd92c2241b3",
+      "name": "close_conversation",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        80,
+        640
+      ]
+    }
+  ],
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "WBCl3pZkoWZAq9Qz",
+      "projectId": "zwwuseLNt4CeDNcf",
+      "createdAt": "2025-11-11T14:43:42.397Z",
+      "updatedAt": "2025-11-11T14:43:42.397Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [
+    {
+      "id": "c7d7Um3sFMr3qMPn",
+      "name": "MG",
+      "createdAt": "2025-10-03T00:25:06.690Z",
+      "updatedAt": "2026-02-24T20:32:07.445Z"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-11-10T14:15:50.166Z",
+  "versionId": "fc7977df-04a1-4914-8227-3697983c7f95"
+}
