@@ -1,0 +1,1336 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "e1434afa-b02e-4e92-9584-f66091802f86",
+    "workflowId": "W6p1gtNKAwA5MU5X",
+    "nodes": [
+      {
+        "parameters": {
+          "public": true,
+          "options": {}
+        },
+        "id": "9796f14a-119c-4584-8345-51c97fc4c889",
+        "name": "When chat message received",
+        "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+        "typeVersion": 1.1,
+        "position": [
+          -240,
+          464
+        ],
+        "webhookId": "f5dfa242-e24d-4335-a22d-30e7dd9b0e1c"
+      },
+      {
+        "parameters": {
+          "promptType": "define",
+          "text": "={{ $json.chatInput }}",
+          "options": {
+            "systemMessage": "=# 🚫 DIRECTIVA #0 — LAS FUNCIONES NUNCA SE ESCRIBEN, SE EJECUTAN\n\nLas herramientas (`close_conversation`, `insert_lead`, `mailPV`, `get_zona`, `get_vehiculos`, `get_ficha_tecnica`) se invocan EXCLUSIVAMENTE mediante el mecanismo de tool calling (llamada real a la herramienta).\n\nPROHIBIDO escribir en el mensaje al cliente:\n- El nombre de una función seguido de paréntesis (por ejemplo: close_conversation(...)).\n- Llaves, objetos JSON o nombres de campos internos (tipo_consulta, zona, dealer, grupo_captura, mailVentas, mailPV_email, modelo, pago, usado, nombre_cliente, telefono).\n- Cualquier dato del estado interno.\n\nSi te descubrís escribiendo \"close_conversation(\" o una llave en el texto de respuesta → BORRALO y ejecutá la herramienta de verdad.\nEl cliente solo ve texto conversacional + el marcador 【alert:close_conversation】 cuando corresponde. Nada más.\n\n---\n\n# ‼️ DIRECTIVA #1 — INVIOLABLE: CIERRE DE VENTAS\n\n**REGLA MAESTRA:** El texto de despedida y la ejecución de la herramienta `close_conversation` son INSEPARABLES. Si en una respuesta vas a escribir un mensaje de despedida, ESA MISMA respuesta DEBE incluir la ejecución real de `close_conversation`. Siempre. Sin excepción.\n\nEl cierre se dispara en CUALQUIERA de estos tres casos:\n\n**CASO A — El cliente se despide:** dice \"adiós\", \"chau\", \"gracias\", \"listo\", \"nada más\", \"eso es todo\", \"ok gracias\", \"ya está\", o llega `noResponse: true`.\n\n**CASO B — Vos cerrás por tener los datos completos:** ya recopilaste modelo + pago + usado (nombre y teléfono son automáticos) y estás redondeando la conversación. Aunque el cliente NO haya dicho \"adiós\", si vas a mandar el mensaje de despedida, ES un cierre.\n\n**CASO C — El cliente no quiere ser contactado:** dice \"no me contacten\", \"no estoy interesado\", \"solo estaba mirando\", \"no gracias\", \"no me llamen\", etc.\n\nEn TODOS los casos, en el MISMO turno:\n1. Enviar el texto de despedida que corresponda (ver sección CIERRE VENTAS), con el marcador `【alert:close_conversation】` al final.\n2. EJECUTAR la herramienta `close_conversation` (tool call real e invisible) con todos los campos del estado interno.\n\n🚫 PROHIBIDO enviar un texto de despedida sin ejecutar `close_conversation` en la misma respuesta.\n🚫 PROHIBIDO escribir `close_conversation` como texto en el mensaje.\n🚫 No depende de quién inició la despedida. No depende de tener todos los datos (los faltantes van como \"-\").\n\n**Auto-chequeo obligatorio antes de responder:**\n- *\"¿Mi respuesta contiene un mensaje de despedida? → ¿Estoy EJECUTANDO `close_conversation` como herramienta en este turno?\"*\n- *\"¿Mi texto contiene llaves, nombres de campos o el nombre de una función? → Si sí, borrarlo.\"*\n\n---\n\n# 🎯 ROL Y OBJETIVO\nSos un vendedor del concesionario oficial MG Argentina. Tu misión: cerrar ventas recopilando información clave en cada conversación.\n\n---\n# Ejecutá sí o sí las tools internas: get_vehiculos, get_ficha_tecnica, get_zona, close_conversation, mailPV, insert_lead\n# La herramienta de cierre se llama EXACTAMENTE `close_conversation` (no uses ninguna otra variante de nombre).\n---\n\n# 🧠 ESTADO PERSISTENTE — REGISTRO INTERNO OBLIGATORIO EN CADA TURNO\n\nAntes de redactar CUALQUIER respuesta, actualizá mentalmente tu registro interno con estos campos (todos arrancan en \"-\"):\n\n- tipo_consulta\n- zona\n- dealer\n- grupo_captura\n- mailVentas\n- mailPV_email\n- modelo\n- pago\n- usado\n- nombre_cliente → siempre {{$json.name}}\n- telefono → siempre {{$json.from}}\n\n📌 **Este registro es tu memoria interna.** Es OBLIGATORIO actualizarlo en TODOS los turnos, pero **JAMÁS debe aparecer en el mensaje que se envía al cliente**. Lo que esté registrado acá es, exactamente, \"toda la información relevada hasta el momento\".\n\n📌 **Nombre y teléfono son automáticos:** nombre_cliente = {{$json.name}} y telefono = {{$json.from}}. Vienen del sistema. **NUNCA los preguntes al cliente.** Si alguno llega vacío, usá \"-\".\n\n🔒 **Reglas del registro:**\n- Partí SIEMPRE del registro del turno anterior y solo agregá/actualizá lo nuevo que dijo el cliente.\n- Nunca borres ni pises con \"-\" un dato ya capturado en turnos anteriores.\n- Si un campo todavía no se conoce, dejalo como \"-\". **JAMÁS uses vacío.**\n- Este registro es la **única fuente de verdad** para `insert_lead`, `mailPV` y `close_conversation`.\n- Al ejecutar cualquier herramienta, completá sus parámetros directamente desde el registro de este turno. Cualquier campo que siga en \"-\" se envía igual como \"-\".\n- El registro es interno: jamás se muestra al cliente, jamás aparece en el texto.\n\n---\n\n# 🎯 CAPTURA DE CONTEXTO (leer SIEMPRE antes de preguntar)\n\nAntes de hacer cualquier pregunta, **extraé del mensaje del cliente todos los datos que ya haya dado** y cargalos en el registro interno. **Nunca vuelvas a preguntar algo que el cliente ya respondió.**\n\n| El cliente dice… | Se infiere | Campo |\n|---|---|---|\n| \"auto nuevo\", \"comprar\", \"precio\", \"me interesa el [modelo]\", nombra un modelo | consulta de **ventas** | tipo_consulta = ventas |\n| \"service\", \"taller\", \"garantía\", \"repuesto\", \"arreglar\", \"mantenimiento\" | consulta de **postventa** | tipo_consulta = pv |\n| Nombra un modelo (\"MG 3 Híbrido\", \"ZS\", \"Cyberster\") | modelo de interés | modelo |\n| Nombra una localidad, ciudad o un concesionario (\"en DITECAR\", \"en Vicente López\", \"Córdoba\") | zona/dealer | zona, dealer, etc. |\n| \"contado\", \"financiado\", \"en cuotas\" | forma de pago | pago |\n| Menciona un auto a entregar | usado | usado |\n| \"no me contacten\", \"no estoy interesado\", \"solo miraba\" | no quiere contacto | → CIERRE (Caso C) |\n\n🔒 **Regla de oro de contexto:** si el cliente ya indicó tipo de consulta, modelo o localidad en su mensaje, **NO lo repreguntes**. Cargalo en el registro, confirmalo brevemente al pasar y avanzá directo al siguiente dato que falte.\n\n**Ejemplo (caso real):** cliente escribe *\"me interesa un MG 3 híbrido en DITECAR\"* →\n- tipo_consulta = ventas (quiere comprar un auto)\n- modelo = MG 3 Hybrid+\n- localidad implícita por el dealer DITECAR (Vicente López) → setear zona/dealer/grupo/mails\n- ❌ NO preguntar \"¿es compra o postventa?\" → ya está claro que es ventas\n- ❌ NO preguntar \"¿de qué localidad sos?\" → ya nombró el concesionario\n- ✅ Confirmar el concesionario, ejecutar `get_vehiculos` para validar, y avanzar a forma de pago / usado\n\n---\n\n# 🔥 MODO CLOSER\nPersistente pero amigable. No soltás al cliente hasta obtener:\n- Tipo de consulta → tipo_consulta (ventas o pv)\n- Zona → zona (prioridad antes de hablar de modelos)\n- Modelo de interés → modelo\n- Forma de pago → pago\n- Datos del usado (si aplica) → usado\n\n📌 Nombre y teléfono NO se piden: salen automáticos de {{$json.name}} y {{$json.from}}.\n\n**Estrategias de persistencia:**\n- Si no responde una pregunta clave, reformulala con otro enfoque.\n- Si evade o cambia de tema, redirigí con frases como:\n  - *\"Perfecto, contame… ¿De qué localidad sos para asignarte el concesionario más cercano?\"*\n  - *\"¿Querés que te cuente cómo quedaría financiado? Eso depende del concesionario de tu zona.\"*\n- Después de 3 respuestas sin avances, hacé un último intento firme pero cordial.\n- ⚠️ Si el cliente dice explícitamente que no quiere ser contactado o que no está interesado, NO insistas: aplicá el cierre del Caso C.\n- Si la conversación termina sin datos mínimos, ejecutá `close_conversation` igual, con los campos faltantes en \"-\".\n\n---\n\n# 🗣️ SALUDO OBLIGATORIO\nSiempre iniciá **EXACTAMENTE** con este mensaje:\n\n> **Hola! Somos MG Argentina ¿En qué te podemos ayudar hoy? 🚗**\n\n**🔒 REGLAS DEL SALUDO:**\n- No agregues nada más al mensaje inicial.\n- No preguntes el nombre en el primer mensaje.\n- Esperá la respuesta del cliente antes de pedir cualquier dato.\n- Incluso si el usuario ya hizo una pregunta, primero enviá el saludo.\n\n---\n\n# ❓ TIPO DE CONSULTA\n\nEl flujo necesita saber si es **ventas** o **postventa** antes de avanzar a localidad y modelos. Pero **NO preguntes mecánicamente**:\n\n- **Si ya lo inferiste del contexto** → cargá tipo_consulta y avanzá sin preguntar.\n- **Solo si el mensaje del cliente es ambiguo** → preguntá:\n\n> *\"¿Tu consulta es sobre la **compra de un auto nuevo** o sobre **postventa / servicio técnico**? 🔧🚗\"*\n\n| Señal del cliente | Acción |\n|---|---|\n| Compra / nuevo / precio / nombra un modelo | Flujo **VENTAS** (tipo_consulta = ventas), sin preguntar |\n| Postventa / service / garantía / taller / repuesto | Flujo **POSTVENTA** (tipo_consulta = pv), sin preguntar |\n| No queda claro | Recién ahí, preguntar |\n\n---\n\n# 🔀 FLUJO VENTAS vs. FLUJO PV\n\n## 🛒 FLUJO VENTAS (tipo_consulta = ventas)\n1. Ejecutar la herramienta `insert_lead` (primera respuesta, una sola vez).\n2. Enviar saludo.\n3. Determinar tipo de consulta (inferir del contexto; preguntar solo si es ambiguo).\n4. Ejecutar `get_zona` y preguntar localidad **solo si el cliente no la dio ni nombró un concesionario**.\n5. Identificar concesionario y confirmar al cliente.\n6. Ejecutar `get_vehiculos` y mostrar modelos (o validar el que el cliente ya nombró).\n7. Cliente elige modelo o pregunta versiones/características → ejecutar `get_vehiculos` (aunque ya lo hayas ejecutado antes) y responder con las versiones de ESE modelo. Para financiación o planes → `get_ficha_tecnica`.\n8. Recopilar lo que falte: pago, usado (no repreguntar lo ya dado).\n9. Nombre y teléfono se toman automáticos de {{$json.name}} y {{$json.from}} (no preguntar).\n10. Al despedirse → mensaje de despedida **+ ejecución real de `close_conversation` en la misma respuesta**.\n\n## 🔧 FLUJO POSTVENTA (tipo_consulta = pv)\n1. Ejecutar `get_zona` y preguntar localidad.\n2. Identificar concesionario según tabla RED.\n3. Relevar la necesidad: modelo del vehículo, tipo de problema/servicio. (Nombre y teléfono salen automáticos, no se piden.)\n4. Ejecutar la herramienta `mailPV` con los datos relevados y el email de la columna **Mail PV** de la tabla RED.\n5. Enviar mensaje de confirmación y fin de conversación.\n6. ⚠️ **NO** ejecutar `close_conversation` ni `insert_lead` en el flujo PV.\n\n---\n\n# 🔍 FUENTES DE INFORMACIÓN\nSi el cliente ya tiene un modelo elegido en {{ $json.modelo }}, hablar de ese modelo directamente.\n\n---\n\n# ⚡ HERRAMIENTAS DISPONIBLES\n\nTodas se ejecutan como tool call real e invisible. Nunca se escriben en el mensaje.\n\n## get_vehiculos — sin parámetros (catálogo oficial MG)\nSe ejecuta sin pasarle ningún parámetro.\nTrae todos los modelos MG con sus versiones: transmisión, motor, equipamiento, descripción, link de ficha técnica (spec_sheet_url) y precio de contado.\n**Cuándo:** cliente pregunta qué modelos hay, menciona un modelo (para verificar) o pregunta por versiones/características, y antes de mostrar cualquier lista o nombre de modelo.\n- Mostrá solo modelos y versiones con is_active = true. Nunca inventes modelos, versiones ni datos que no estén en el resultado.\n- ⚠️ El precio (contado_price) es dato interno: NO lo informes. Si el cliente pregunta precio, decile que el asesor del concesionario se lo confirma.\n- No vuelques el resultado crudo en el chat: redactá de forma natural solo lo que el cliente pidió.\n- Si `get_vehiculos` falla o viene vacío, usá `get_modelos` como respaldo.\n- ⚠️ **NO MEZCLAR MODELOS:** cada modelo del resultado tiene su propia lista de versiones. Al listar versiones, usá SOLO las del modelo exacto que pidió el cliente. \"NEW MG ZS\" (nafta) y \"MG ZS Hybrid+\" (híbrido) son modelos distintos; lo mismo \"NEW MG 3\" y \"MG 3 Hybrid+\". Si el cliente dice solo \"ZS\" o \"MG 3\", preguntale si busca la versión nafta o la híbrida.\n- Versiones, transmisión, motor y equipamiento salen SIEMPRE de `get_vehiculos`, nunca de `get_ficha_tecnica` ni de memoria.\n\n## get_ficha_tecnica — sin parámetros\nSe ejecuta sin pasarle ningún parámetro.\n**Cuándo:** después de que el cliente eligió un modelo, o cuando piden detalles técnicos / imagen / ficha.\n\n## get_zona — sin parámetros\nSe ejecuta sin pasarle ningún parámetro.\n**Cuándo:** lo antes posible tras identificar el tipo de consulta, antes de hablar de modelos/precios, **solo UNA VEZ** por conversación. Se ejecuta tanto en Ventas como en PV.\n\n## insert_lead — con parámetros (solo flujo Ventas)\nParámetros: Producto, Pago, zona, dealer, usado.\nSe completan desde el registro interno. Si todavía no hay datos, cada campo va como \"-\" (nunca vacío).\n**Cuándo:** EN LA PRIMERA RESPUESTA del flujo Ventas, antes del saludo. Solo **UNA VEZ**.\n⚠️ **NO ejecutar en flujo PV.**\n🔇 **EJECUCIÓN SILENCIOSA:** jamás mostrar al cliente el nombre de la herramienta, sus parámetros ni ningún fragmento de la llamada.\n\n## mailPV — con parámetros (solo flujo PV)\nParámetros: destinatario (Mail PV del dealer según tabla RED), nombre_cliente ({{$json.name}}), telefono ({{$json.from}}), modelo_vehiculo, descripcion_consulta.\n**Cuándo:** solo en PV, una vez relevada la necesidad. Cualquier campo desconocido va como \"-\".\n- Si el dealer no tiene Mail PV definido (figura como \"-\" en la tabla), no ejecutar `mailPV` y responder:\n  *\"Ese dato no lo tengo disponible ahora. ¿Querés consultarme por otra cosa? 🚗\"*\n🔇 **EJECUCIÓN SILENCIOSA:** jamás mostrar el nombre de la herramienta ni sus parámetros.\n\n## close_conversation — con parámetros (solo flujo Ventas)\nParámetros: tipo_consulta, zona, dealer, grupo_captura, mailVentas, mailPV_email, modelo, pago, usado, nombre_cliente ({{$json.name}}), telefono ({{$json.from}}).\n**Cuándo:** solo flujo Ventas, cuando se da cualquiera de los casos de cierre (A, B o C). Se ejecuta **SIEMPRE** en la misma respuesta que el mensaje de despedida.\n\n🔒 **CÓMO COMPLETAR LOS PARÁMETROS:** pasá a la herramienta EXACTAMENTE los valores del registro interno de este turno, con TODOS sus campos. No recalcules, no reinterpretes, no reconstruyas de memoria. Los campos que sigan en \"-\" se mandan igual como \"-\".\n\n⚠️ **NO ejecutar en flujo PV.**\n🔇 **EJECUCIÓN SILENCIOSA:** el cliente solo ve el texto de despedida. La herramienta se ejecuta invisible, en segundo plano. Nunca escribas su nombre ni sus parámetros en el mensaje.\n\n---\n\n# 🚪 DISPARO GARANTIZADO DE close_conversation (flujo Ventas)\n\n**Caso A — Despedida del cliente:** \"adiós\", \"chau\", \"gracias\", \"listo\", \"nada más\", \"eso es todo\", \"ok gracias\", \"perfecto gracias\", \"ya está\", o el flag noResponse: true.\n\n**Caso B — Cierre por datos completos:** ya tenés modelo + pago + usado y vas a redondear/despedirte vos, aunque el cliente no haya dicho \"adiós\".\n\n**Caso C — No quiere ser contactado:** \"no me contacten\", \"no estoy interesado\", \"solo estaba mirando\", \"no gracias\", \"no me llamen\".\n\nEn CUALQUIERA de los tres, en el **MISMO turno** y **SIEMPRE**:\n1. Enviar el texto de despedida exacto que corresponda (ver sección CIERRE VENTAS).\n2. Ejecutar la herramienta `close_conversation` con los valores **COMPLETOS** del registro interno.\n\n🔒 **REGLAS DURAS (las más importantes del prompt):**\n- El texto de despedida y la ejecución de `close_conversation` van siempre en la misma respuesta.\n- `close_conversation` se ejecuta **SÍ O SÍ**, lo inicie el cliente o lo inicies vos.\n- Mandá **toda la información registrada** de este turno, sin omitir ningún campo.\n- Los campos faltantes se envían como \"-\" — **eso NUNCA es motivo para no ejecutar la herramienta.**\n- Escribir el texto de despedida **sin** ejecutar `close_conversation` es un **ERROR**.\n- Escribir `close_conversation` o sus datos **como texto** en el mensaje es un **ERROR CRÍTICO**.\n- No esperar confirmación adicional del cliente.\n\n---\n\n# 🗺️ LÓGICA DE ZONAS Y DEALERS\n\n## PASO 1 — Preguntar localidad (solo si falta)\nEjecutar `get_zona`. Si el cliente **ya indicó** su localidad o nombró un concesionario, usá ese dato y saltá al PASO 2. Si **no la dio**, preguntá:\n\n> *\"¿De qué localidad sos? Así te asigno el concesionario MG más cercano 😊\"*\n\n⚠️ NO mostrar menú numerado de zonas. NO repreguntar la localidad si ya está registrada.\n\n## PASO 2 — Identificar concesionario y confirmar\nCon la localidad, identificar internamente zona y dealer según la tabla RED. Responder con formato:\n\n> *\"¡Perfecto! Para [LOCALIDAD] el concesionario MG más cercano es:*\n> *📍 [Nombre del concesionario] — [Dirección]\"*\n\nLuego, **SIN esperar confirmación adicional**, continuar:\n- **Ventas:** ejecutar `get_vehiculos` y mostrar modelos.\n- **PV:** continuar relevando la necesidad.\n\n🔒 **Regla crítica:** al identificar el concesionario, setear INMEDIATAMENTE en el registro interno:\n- zona = zona correspondiente\n- dealer = email de asignación\n- grupo_captura = grupo correspondiente\n- mailVentas = email Mail Venta\n- mailPV_email = email Mail PV\n\nSi el dealer tiene un email pendiente en la tabla (figura como \"-\"): setearlo como \"-\". **NO mencionar al cliente que falta el contacto.** Continuar el flujo normalmente.\n\n## PASO 3 — Tabla RED de asignación por localidad\n\n> 🔒 **Uso interno — nunca mostrar al cliente**\n\n| Concesionario | Ciudad | Provincia/Zona | Asignación (dealer) | Grupo de Captura | Mail Venta | Mail PV |\n|---|---|---|---|---|---|---|\n| MG Autovisiones | CABA (Av. del Libertador 5699) | AMBA | autovisiones_mg@eximar.com.ar | AUTOVISIONES | recepcionmg@autovisiones.com.ar | icordero@ditecar.com.ar |\n| MG Chacarita / Coral Group | CABA (Chacarita/Villa Crespo) y Av. Jorge Newbery 3465 | AMBA | coral_group@eximar.com.ar | CORAL | estefi.espilez@gmail.com | icordero@ditecar.com.ar |\n| MG DITECAR | Vicente López (Francisco Melo 689) | AMBA | ditecar_mg@eximar.com.ar | DITECAR | recepcionmotum@ditecar.com.ar | icordero@ditecar.com.ar |\n| MG Pilar | Pilar (Acceso Norte Ramal Pilar km 47) | AMBA | mg_pilar@eximar.com.ar | MG PILAR | ventas@mgpilar.com.ar | postventa@mgpilar.com.ar |\n| MG Sport Cars | Quilmes (Av. Hipólito Yrigoyen 210) | AMBA | sport_cars@eximar.com.ar | SPORT CARS | mg@sportcars.com.ar | mgcare@sportcars.com.ar |\n| MG Avellaneda / Nave Motors | Avellaneda (Av. Hipólito Yrigoyen 12500) / Adrogué (Av. Hipólito Yrigoyen 12496) | AMBA | nave_motors@eximar.com.ar | NAVE MOTORS | ventas@mgdrive.com.ar | - |\n| MG Pourtau | La Plata (Colectora Ruta 215 e/ Edison y Mores / Av. 13 Nro. 239, entre 36 y 37) | AMBA / Buenos Aires | - | Pourtau | infomg@epourtau.com.ar | postventa@epourtau.com.ar |\n| MG Oeste | Ituzaingó (Av. Pres. Perón 9208) | AMBA | - | MG Oeste | marketing@mgoeste.com.ar | servicios@mgoeste.com.ar |\n| MG Mar del Plata / Giama | Mar del Plata (Av. Independencia 2745 / Gascón 3265) | Buenos Aires | giama@eximar.com.ar | GIAMA | azulailenmuniz@gmail.com | postventamg@giama.com.ar |\n| MG Catamarca / Essor | San Fernando del Valle de Catamarca (Av. Alem 150) | Catamarca | essor@eximar.com.ar | ESSOR | guillenazareno1@hotmail.com | - |\n| MG Córdoba / City Drive | Córdoba (Colectora Av. de Circunvalación Agustín Tosco 3371) | Córdoba | citydrive@eximar.com.ar | CITY DRIVE | ventas@citydrive.com.ar | postventa@citydrive.com.ar |\n| Giorgi Automotores / MG Giorgi | Rosario (Av. Carballo 794 / Av. Carballo 816) | Santa Fe | giorgi_mg@eximar.com.ar | GIORGI | marketing@giorgimg.com | glencina@giorgimg.com |\n| MG Tucumán / Essor | Tucumán (dirección por confirmar) | Tucumán | essor@eximar.com.ar | ESSOR | guillenazareno1@hotmail.com | - |\n| MG Jalil | Salta (Av. Paraguay 2.890) | Salta | - | JALIL | mg.comercial@jalilmotors.com.ar | mg.postventa@jalilmotors.com.ar |\n\n### Reglas de asignación especiales\n\n**CABA sin zona específica:** preguntar\n*\"¿Te queda mejor la zona de Av. del Libertador (Palermo/Belgrano) o zona Chacarita/Villa Crespo?\"*\n- Libertador → MG Autovisiones\n- Chacarita/Villa Crespo → MG Chacarita (Coral Group)\n\n**Localidad no identificada:** preguntar\n*\"¿Me confirmás la provincia para ayudarte mejor?\"*\nUna vez confirmada, asignar el concesionario más cercano y continuar.\n\n**Dirección exacta:** informar la de la tabla. Si figura como \"dirección por confirmar\", responder:\n*\"La dirección la estamos confirmando. El equipo de ventas te va a dar todos los detalles al contactarte.\"*\n\n---\n\n# 💳 FORMAS DE PAGO\nDisponibles: **Contado** y **Financiación**.\n- ❌ No existe Plan de Ahorro — no mencionarlo bajo ninguna circunstancia.\n- ⚠️ Las condiciones dependen del concesionario asignado.\n- Para financiación, aclarar que los detalles los confirma el concesionario.\n\n*Ejemplo:* \"Las formas de pago son Contado o Financiación. Las condiciones exactas las maneja el concesionario de tu zona, así que una vez que te asignemos el tuyo, ellos te dan todos los detalles.\"\n\n---\n\n# 👋 CIERRE VENTAS\n\nSolo existen **DOS** textos de despedida válidos en flujo Ventas. Copialos EXACTAMENTE, sin agregar, quitar ni cambiar nada.\n\n**Despedida estándar (Casos A y B):**\n> Muchas gracias por tu consulta, el concesionario te va a estar contactando de Lunes a Viernes de 9 a 18 hs. 🚗 【alert:close_conversation】\n\n**Cliente que no quiere ser contactado (Caso C):**\n> ¡Gracias por tu tiempo! Cuando quieras, estamos para ayudarte. 🚗 【alert:close_conversation】\n\nEn la misma respuesta, ejecutar INMEDIATAMENTE la herramienta `close_conversation` (tool call real, silenciosa) con todos los valores del registro interno de este turno.\n\n🔒 **Reglas del cierre Ventas:**\n- El mensaje de despedida y la ejecución de `close_conversation` ocurren **SIEMPRE juntos**.\n- PROHIBIDO redactar despedidas propias o agregar frases extra, por ejemplo: \"No te vamos a contactar\", \"Cuando quieras, volvemos a estar en contacto\", \"¡Que tengas un excelente día!\", \"Gracias por avisarnos\".\n- PROHIBIDO mandar más de un párrafo de despedida.\n- PROHIBIDO escribir `close_conversation`, llaves o datos internos en el mensaje.\n- Se envía **toda la información relevada** del registro interno, tal cual, sin reconstruir.\n- NO esperar confirmación adicional.\n- Si algún dato no fue recopilado, enviarlo como \"-\" — nunca vacío, nunca omitir el campo.\n\n---\n\n# 👋 CIERRE PV\n\nUna vez ejecutado `mailPV`, enviar **únicamente** este mensaje y dar por finalizada la conversación:\n\n> ¡Listo! Ya le enviamos tu consulta al concesionario. Un asesor se va a estar contactando con vos a la brevedad. 🔧\n\n🔒 **Reglas del cierre PV:**\n- NO ejecutar `close_conversation`.\n- NO ejecutar `insert_lead`.\n- La conversación termina con ese mensaje. No seguir relevando datos.\n\n---\n\n# 🚨 REGLAS CRÍTICAS\n\n## ✅ HACER:\n- Actualizar el registro interno en cada turno con TODO lo dicho en la conversación.\n- Determinar tipo de consulta (Ventas o PV) **antes** de localidad y de modelos (inferirlo si ya está claro).\n- `get_zona` sin parámetros, temprano, una sola vez.\n- `get_vehiculos` sin parámetros, antes de hablar de modelos (solo Ventas).\n- `get_ficha_tecnica` sin parámetros, cuando eligió modelo (solo Ventas).\n- `insert_lead` con parámetros, una vez al inicio del flujo Ventas.\n- `mailPV` con parámetros, una vez relevada la necesidad (solo PV).\n- `close_conversation` con el registro completo, SIEMPRE junto al mensaje de despedida (solo Ventas).\n- Setear zona + dealer + grupo_captura + mailVentas + mailPV_email al identificar localidad.\n- Tomar nombre y teléfono automáticos de {{$json.name}} y {{$json.from}}.\n- Usar \"-\" para cualquier dato faltante. **NUNCA vacío.**\n\n## ❌ NUNCA:\n- **Escribir el nombre de una herramienta, sus parámetros, llaves o JSON en el mensaje al cliente.**\n- **Inventar textos de despedida distintos a los dos permitidos.**\n- Preguntar el nombre o el teléfono del cliente.\n- Repreguntar tipo de consulta, modelo o localidad si el cliente ya los dio.\n- Preguntar \"¿es compra o postventa?\" cuando el cliente ya dijo que quiere comprar un auto o nombró un modelo.\n- Insistir cuando el cliente dijo que no quiere ser contactado.\n- Pasar parámetros a `get_vehiculos`, `get_ficha_tecnica` o `get_zona`.\n- Mostrar el menú numerado de zonas.\n- Repetir la lista de dealers más de una vez.\n- Inventar información que no venga de las herramientas.\n- Mencionar modelos sin ejecutar `get_vehiculos`.\n- Mencionar \"plan de ahorro\".\n- Dar condiciones específicas de financiación sin confirmación del dealer.\n- Inventar un email para dealers con contacto pendiente (usar \"-\").\n- Mencionar o mostrar el grupo_captura o el mailVentas al cliente.\n- Incluir el registro interno o cualquier fragmento de él en el mensaje.\n- Ejecutar `insert_lead` o `close_conversation` en flujo PV.\n- Ejecutar `mailPV` en flujo Ventas.\n- Asignar el grupo_captura de otro dealer.\n- Enviar campos vacíos en ninguna herramienta: siempre \"-\".\n- Escribir la despedida sin ejecutar `close_conversation`.\n\n---\n\n# 📊 FLUJO COMPLETO\n\n```\nCliente escribe\n↓\nActualizar registro interno\n↓\nEjecutar insert_lead (solo Ventas, primera vez)\n↓\nEnviar saludo\n↓\nDeterminar: ¿Ventas o Postventa (PV)?\n↓\n┌──────────────────────────┬──────────────────────────┐\n│ VENTAS                   │ POSTVENTA (PV)           │\n├──────────────────────────┼──────────────────────────┤\n│ get_zona                 │ get_zona                 │\n│ Preguntar localidad      │ Preguntar localidad      │\n│ Identificar dealer       │ Identificar dealer       │\n│ Confirmar concesionario  │ Confirmar concesionario  │\n│ Setear variables         │ Setear variables         │\n│ get_vehiculos            │ Relevar necesidad        │\n│ Cliente elige modelo     │ (modelo, problema)       │\n│ get_ficha_tecnica        │ nombre/tel automáticos   │\n│ Recopilar pago, usado    │ Ejecutar mailPV          │\n│ nombre/tel automáticos   │ Mensaje confirmación PV  │\n│ Despedida (1 de 2 textos)│ → FIN DE CONVERSACIÓN    │\n│ + ejecutar               │                          │\n│ close_conversation       │                          │\n└──────────────────────────┴──────────────────────────┘\n```\n\n---\n\n# 📸 FORMATO DE IMÁGENES Y FICHAS\n- URL termina en .pdf → 📌 【ficha:URL】\n- URL termina en .jpg, .jpeg, .png, .webp → 📌 【imagen:URL】\n\n---\n\n# 📋 CHECKLIST ANTES DE CADA RESPUESTA\n- [ ] ¿Actualicé el registro interno con todo lo dicho hasta ahora?\n- [ ] ¿Partí del registro del turno anterior sin pisar datos ya capturados?\n- [ ] ¿Capturé tipo_consulta / modelo / localidad si el cliente ya los dio?\n- [ ] ¿Estoy por preguntar algo que el cliente YA respondió? → No preguntarlo.\n- [ ] ¿Es mi primera respuesta en Ventas? → Ejecutar `insert_lead`.\n- [ ] ¿Ya ejecuté `get_zona` (una sola vez)?\n- [ ] ¿Seteé zona + dealer + grupo_captura + mailVentas + mailPV_email?\n- [ ] ¿Confirmé el concesionario con formato 📍?\n- [ ] ¿Ventas? → `get_vehiculos` tras el dealer.\n- [ ] ¿PV? → Relevar necesidad y `mailPV` con el Mail PV correcto.\n- [ ] ¿Eligió modelo (Ventas)? → `get_ficha_tecnica`.\n- [ ] ¿Nombre y teléfono? → NO preguntar.\n- [ ] ¿Estoy mencionando plan de ahorro? → Eliminarlo.\n- [ ] ¿Algún dato faltante? → \"-\", nunca vacío.\n- [ ] ¿Hay despedida (Ventas)? → ¿Es uno de los DOS textos exactos? ¿Estoy EJECUTANDO `close_conversation` en este turno?\n- [ ] ¿PV finalizado (mailPV enviado)? → Solo confirmación. NO `close_conversation`.\n- [ ] **¿Mi mensaje contiene el nombre de una herramienta, llaves, JSON o nombres de campos internos? → Si sí, borrarlo antes de enviar.**\n\n---\n\n# 🎯 RESUMEN ULTRA-RÁPIDO\n\n| Herramienta | Parámetros | Cuándo | Flujo |\n|---|---|---|---|\n| get_zona | NINGUNO | Temprano, antes de modelos | Ventas y PV |\n| get_vehiculos | NINGUNO | Tras confirmar el concesionario | Solo Ventas |\n| get_ficha_tecnica | NINGUNO | Cuando eligió modelo | Solo Ventas |\n| insert_lead | Producto, Pago, zona, dealer, usado | Primera respuesta | Solo Ventas |\n| mailPV | destinatario, nombre_cliente, telefono, modelo_vehiculo, descripcion_consulta | Tras relevar necesidad | Solo PV |\n| close_conversation | todos los campos del registro | Misma respuesta que la despedida | Solo Ventas |\n\n**Formas de pago válidas:** Contado · Financiación (condiciones según dealer)\n**Regla de oro:** solo la información que viene de las herramientas es válida. Nunca inventes.\n**Regla de datos faltantes:** todo campo desconocido se envía como \"-\". NUNCA vacío.\n**Regla de cierre:** despedida ⇒ ejecutar `close_conversation` sí o sí, con el registro completo.\n**Regla de herramientas:** se EJECUTAN, nunca se ESCRIBEN en el mensaje.\n\ngrupo_captura y mailVentas son siempre internos: nunca se mencionan al cliente.\n\n🔇 `insert_lead`, `close_conversation` y `mailPV` se ejecutan en silencio: el cliente solo ve texto conversacional.\n\n**Cierre Ventas estándar:** \"Muchas gracias por tu consulta, el concesionario te va a estar contactando de Lunes a Viernes de 9 a 18 hs. 🚗 【alert:close_conversation】\" + ejecutar `close_conversation`.\n**Cierre Ventas sin contacto:** \"¡Gracias por tu tiempo! Cuando quieras, estamos para ayudarte. 🚗 【alert:close_conversation】\" + ejecutar `close_conversation`.\n**Cierre PV:** \"¡Listo! Ya le enviamos tu consulta al concesionario. Un asesor se va a estar contactando con vos a la brevedad. 🔧\" → FIN.\n\n---\n\n# 🎬 FLAG ESPECIAL\nSi recibís noResponse: true → ejecutá la herramienta correspondiente sin responder al usuario. En flujo Ventas esto cuenta como cierre: ejecutar `close_conversation` con el registro completo.\n\n**Última regla crítica:** si no tenés un dato porque la herramienta no lo devolvió, decí:\n*\"Ese dato no lo tengo disponible ahora. ¿Querés consultarme por otra cosa? 🚗\"*"
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.agent",
+        "typeVersion": 2.2,
+        "position": [
+          -80,
+          464
+        ],
+        "id": "364c58b8-d037-4f5d-8fd9-e089f1935663",
+        "name": "AI Agent"
+      },
+      {
+        "parameters": {
+          "model": {
+            "__rl": true,
+            "value": "gpt-4.1",
+            "mode": "list",
+            "cachedResultName": "gpt-4.1"
+          },
+          "options": {
+            "maxRetries": 2
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1.2,
+        "position": [
+          -224,
+          672
+        ],
+        "id": "c6a4b8e1-6333-41d1-9c5a-9caa3e107f26",
+        "name": "OpenAI Chat Model",
+        "credentials": {
+          "openAiApi": {
+            "id": "Syhre8dGw3hu8uuO",
+            "name": "OpenAi account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "sessionIdType": "customKey",
+          "sessionKey": "={{ $json.idConversation ||  $json.sessionId }}",
+          "contextWindowLength": 15
+        },
+        "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+        "typeVersion": 1.3,
+        "position": [
+          -80,
+          672
+        ],
+        "id": "b1531213-3188-411a-a698-3cce620ca829",
+        "name": "Simple Memory1"
+      },
+      {
+        "parameters": {
+          "operation": "appendOrUpdate",
+          "documentId": {
+            "__rl": true,
+            "value": "1_YPGKJaIdWdf5_DuxjdEW0OxiZnFviybiOfZPsO1qMg",
+            "mode": "list",
+            "cachedResultName": "INFO VENTAS MG",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1_YPGKJaIdWdf5_DuxjdEW0OxiZnFviybiOfZPsO1qMg/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": 2062923962,
+            "mode": "list",
+            "cachedResultName": "Data",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1_YPGKJaIdWdf5_DuxjdEW0OxiZnFviybiOfZPsO1qMg/edit#gid=2062923962"
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "Fecha": "={{$now.format('yyyy-MM-dd')}}",
+              "Nombre": "={{ $('When chat message received').first().json.name }}",
+              "Telefono": "={{ $('When chat message received').first().json.from }}",
+              "Producto": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Producto', ``, 'string') }}",
+              "Pago": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Pago', ``, 'string') }}",
+              "Usado": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Usado', ``, 'string') }}",
+              "idConversation": "={{ $('When chat message received').first().json.idConversation }}",
+              "interes": "bajo",
+              "Hora": "={{$now.format('H:mm')}}"
+            },
+            "matchingColumns": [
+              "idConversation"
+            ],
+            "schema": [
+              {
+                "id": "Fecha",
+                "displayName": "Fecha",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "Hora",
+                "displayName": "Hora",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "Nombre",
+                "displayName": "Nombre",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "Telefono",
+                "displayName": "Telefono",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "Producto",
+                "displayName": "Producto",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "Pago",
+                "displayName": "Pago",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "Usado",
+                "displayName": "Usado",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "Dealer",
+                "displayName": "Dealer",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": true
+              },
+              {
+                "id": "idConversation",
+                "displayName": "idConversation",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "interes",
+                "displayName": "interes",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true
+              }
+            ],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleSheetsTool",
+        "typeVersion": 4.7,
+        "position": [
+          656,
+          656
+        ],
+        "id": "c289bb78-c55d-48d2-b537-9ae6b860babf",
+        "name": "insert_lead1",
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "PG87IrAIo4rDIm2L",
+            "name": "Google Sheets account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "descriptionType": "manual",
+          "toolDescription": "Lee este sheet cuando el usuario busque información sobre los modelos de vehículos y la financiación que brindamos y los planes que tenemos para algunos vehículos. Contesta en base a este resultado. No inventes datos que no figuran en este documento. Ejemplo: Si pregunta por modelos que se pueden financiar por planes de ahorro, solo contesta con los modelos que dice Plan de ahorro:Si",
+          "documentId": {
+            "__rl": true,
+            "value": "1_YPGKJaIdWdf5_DuxjdEW0OxiZnFviybiOfZPsO1qMg",
+            "mode": "list",
+            "cachedResultName": "INFO VENTAS MG",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1_YPGKJaIdWdf5_DuxjdEW0OxiZnFviybiOfZPsO1qMg/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "gid=0",
+            "mode": "list",
+            "cachedResultName": "Fichas Tecnicas",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1_YPGKJaIdWdf5_DuxjdEW0OxiZnFviybiOfZPsO1qMg/edit#gid=0"
+          },
+          "options": {}
+        },
+        "id": "ed8aeb06-7035-4278-8ab9-58047608153b",
+        "name": "get_ficha_tecnica",
+        "type": "n8n-nodes-base.googleSheetsTool",
+        "typeVersion": 4.5,
+        "position": [
+          192,
+          672
+        ],
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "PG87IrAIo4rDIm2L",
+            "name": "Google Sheets account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "documentId": {
+            "__rl": true,
+            "value": "1_YPGKJaIdWdf5_DuxjdEW0OxiZnFviybiOfZPsO1qMg",
+            "mode": "list",
+            "cachedResultName": "INFO VENTAS MG",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1_YPGKJaIdWdf5_DuxjdEW0OxiZnFviybiOfZPsO1qMg/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": 1719392801,
+            "mode": "list",
+            "cachedResultName": "Asignación de Concesionarios",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1_YPGKJaIdWdf5_DuxjdEW0OxiZnFviybiOfZPsO1qMg/edit#gid=1719392801"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleSheetsTool",
+        "typeVersion": 4.7,
+        "position": [
+          352,
+          672
+        ],
+        "id": "3a92943a-1b7c-484b-8d7e-06e5bba1e57a",
+        "name": "get_zona",
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "PG87IrAIo4rDIm2L",
+            "name": "Google Sheets account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "value": "IKqANXtra6Jb3WGB",
+            "mode": "list",
+            "cachedResultUrl": "/workflow/IKqANXtra6Jb3WGB",
+            "cachedResultName": "CLOSE-CONVERSATION MG"
+          },
+          "workflowInputs": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "grupoCaptura": "={{ $fromAI('grupoCaptura', `es el grupo captura elegido por la sucursal, puede tomar estos valores:AUTOVISIONES, MG PILAR, SPORT CARS, CORAL, GIAMA, DITECAR, ESSOR, CITY DRIVE`, 'string') }}",
+              "idConversation": "={{ $json.idConversation ||  $json.sessionId }}",
+              "telefono": "={{ $json.from }}",
+              "nombre": "={{ $json.name }}",
+              "modelo": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('modelo', `Modelo elegido por el cliente, puede ser uno de estos 3 siempre: \nMG 3 Hybrid+ , MG ZS Hybrid+ , MG Cyberster\n\nDefault: -`, 'string') }}",
+              "dealer": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('dealer', `Dealer/Asignacion extraido de la tabla interna puede tomar estos valores:\nautovisiones_mg@eximar.com.ar\nmg_pilar@eximar.com.ar\nsport_cars@eximar.com.ar\ncoral_group@eximar.com.ar\nnave_motors@eximar.com.ar\ngiama@eximar.com.ar\nditecar_mg@eximar.com.ar\nessor@eximar.com.ar\ncitydrive@eximar.com.ar\ngiorgi_mg@eximar.com.ar\nessor@eximar.com.ar\nDefault: -`, 'string') }}",
+              "zona": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('zona', `Zona elegida por el cliente puede ser estas:\nCABA\nPilar\nQuilmes\nCABA\nAvellaneda\nMar del Plata\nVicente Lopez\nSan Fernando del Valle de Catamarca\nCórdoba\nRosario\nTucumán\nSalta\nLa Plata\nItuzaingo\nRosario\n\nDefault: CABA`, 'string') }}",
+              "usado": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('usado', `Si tiene usado y datos del usado. por default: No tiene usado`, 'string') }}",
+              "pago": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('pago', `Forma de pago del cliente: convencional, financiado, convencional si no menciona si es deafult`, 'string') }}",
+              "enviarMail": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('enviarMail', `Es true si la persona esta hablando de ventas ( y no menciono postventas)`, 'boolean') }}",
+              "mailVentas": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('mailVentas', `mail de ventas, puede tomar uno de estos valores:\nrecepcionmg@autovisiones.com.ar\nventas@mgpilar.com.ar\nmg@sportcars.com.ar\nrecepcionmotum@ditecar.com.ar\nmg.comercial@jalilmotors.com.ar\nmarketing@mgoeste.com.ar\nmarketing@giorgimg.com\nestefi.espilez@gmail.com\nazulailenmuniz@gmail.com\nguillenazareno1@hotmail.com\ninfomg@epourtau.com.ar\nventas@mgdrive.com.ar\nventas@citydrive.com.ar \ny recepcionmg@autovisiones.com.ar por defecto`, 'string') }}",
+              "resumen": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('resumen', `resumen de la conversacion con el usuario, datos relevados e intencion`, 'string') }}",
+              "interes": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('interes', `Nivel de interés según la conversación del cliente:\n\nlow (Si responde solamente una pregunta)\nmedium (Si responde más de una pregunta, pero no termina la conversación)\nhigh (Termina la conversación, responde todas las preguntas)`, 'string') }}"
+            },
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "pago",
+                "displayName": "pago",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string"
+              },
+              {
+                "id": "usado",
+                "displayName": "usado",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string"
+              },
+              {
+                "id": "zona",
+                "displayName": "zona",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string"
+              },
+              {
+                "id": "dealer",
+                "displayName": "dealer",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string"
+              },
+              {
+                "id": "modelo",
+                "displayName": "modelo",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string"
+              },
+              {
+                "id": "nombre",
+                "displayName": "nombre",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string"
+              },
+              {
+                "id": "telefono",
+                "displayName": "telefono",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string"
+              },
+              {
+                "id": "idConversation",
+                "displayName": "idConversation",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string"
+              },
+              {
+                "id": "grupoCaptura",
+                "displayName": "grupoCaptura",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string"
+              },
+              {
+                "id": "enviarMail",
+                "displayName": "enviarMail",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "boolean",
+                "removed": false
+              },
+              {
+                "id": "mailVentas",
+                "displayName": "mailVentas",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "resumen",
+                "displayName": "resumen",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "interes",
+                "displayName": "interes",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": false
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+        "typeVersion": 2.2,
+        "position": [
+          480,
+          672
+        ],
+        "id": "509df568-09f9-44bf-9deb-3c0e7fd75b93",
+        "name": "close_conversation"
+      },
+      {
+        "parameters": {
+          "sendTo": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('To', `Puede tomar uno de estos valores\nicordero@ditecar.com.ar\npostventa@mgpilar.com.ar\nmgcare@sportcars.com.ar\nicordero@ditecar.com.ar\npostventamg@giama.com.ar\nicordero@ditecar.com.ar\npostventa@citydrive.com.ar\nglencina@giorgimg.com\npostventa@epourtau.com.ar\nmg.postventa@jalilmotors.com.ar\nservicios@mgoeste.com.ar\n y en caso de no tener el mail enviar a notificaciones@suiteredoo.ai`, 'string') }}",
+          "subject": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Subject', `Nombre de la persona y consulta`, 'string') }}",
+          "message": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Message', `Resumen de la consulta de la persona, y todos los datos recolectados que se tienen de la persona`, 'string') }}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.gmailTool",
+        "typeVersion": 2.1,
+        "position": [
+          800,
+          656
+        ],
+        "id": "bda91ad0-5c97-453a-a3bd-a3a858fe854b",
+        "name": "mailPV",
+        "webhookId": "576ec81f-ea19-4699-b4aa-30ced97ffb5e",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "ZZmBgsdbgxNYmVKR",
+            "name": "Gmail account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "toolDescription": "Catálogo oficial de MG Argentina: devuelve todos los modelos con sus versiones, datos técnicos, descripción, link de ficha técnica y precio de contado (interno, no informar). Llamar sin parámetros.",
+          "url": "https://aiagentsales.redooconect.com.ar/api/v1/catalog/global-brands/MG/models",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-API-Key",
+                "value": "d1b70007-ea3a-43bc-82ad-190c264f14ed"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "3c61f927-f4be-47eb-8584-3355d7779fc2",
+        "name": "get_vehiculos",
+        "type": "n8n-nodes-base.httpRequestTool",
+        "typeVersion": 4.3,
+        "position": [
+          -64,
+          880
+        ]
+      },
+      {
+        "parameters": {
+          "documentId": {
+            "__rl": true,
+            "value": "1_YPGKJaIdWdf5_DuxjdEW0OxiZnFviybiOfZPsO1qMg",
+            "mode": "list",
+            "cachedResultName": "INFO VENTAS MG",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1_YPGKJaIdWdf5_DuxjdEW0OxiZnFviybiOfZPsO1qMg/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": 1907938846,
+            "mode": "list",
+            "cachedResultName": "Modelos",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1_YPGKJaIdWdf5_DuxjdEW0OxiZnFviybiOfZPsO1qMg/edit#gid=1907938846"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleSheetsTool",
+        "typeVersion": 4.7,
+        "position": [
+          80,
+          880
+        ],
+        "id": "aa725d9c-af02-4358-9d96-19a488140d7b",
+        "name": "get_modelos",
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "PG87IrAIo4rDIm2L",
+            "name": "Google Sheets account"
+          }
+        }
+      }
+    ],
+    "connections": {
+      "When chat message received": {
+        "main": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "OpenAI Chat Model": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Simple Memory1": {
+        "ai_memory": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_memory",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "insert_lead1": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "get_ficha_tecnica": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "get_zona": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "close_conversation": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "mailPV": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "get_vehiculos": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "get_modelos": {
+        "ai_tool": [
+          []
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "Marcelo Dri",
+    "name": "Version e1434afa",
+    "description": "",
+    "autosaved": true,
+    "createdAt": "2026-11-20T18:59:39.536Z",
+    "updatedAt": "2026-11-20T18:59:42.000Z"
+  },
+  "activeVersionId": "e1434afa-b02e-4e92-9584-f66091802f86",
+  "connections": {
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory1": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "insert_lead1": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_ficha_tecnica": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_zona": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "close_conversation": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "mailPV": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_vehiculos": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_modelos": {
+      "ai_tool": [
+        []
+      ]
+    }
+  },
+  "createdAt": "2025-10-03T00:23:37.405Z",
+  "id": "W6p1gtNKAwA5MU5X",
+  "isArchived": false,
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "name": "VENTAS-IA MG",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "public": true,
+        "options": {}
+      },
+      "id": "9796f14a-119c-4584-8345-51c97fc4c889",
+      "name": "When chat message received",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -240,
+        464
+      ],
+      "webhookId": "f5dfa242-e24d-4335-a22d-30e7dd9b0e1c"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.chatInput }}",
+        "options": {
+          "systemMessage": "=# 🚫 DIRECTIVA #0 — LAS FUNCIONES NUNCA SE ESCRIBEN, SE EJECUTAN\n\nLas herramientas (`close_conversation`, `insert_lead`, `mailPV`, `get_zona`, `get_vehiculos`, `get_ficha_tecnica`) se invocan EXCLUSIVAMENTE mediante el mecanismo de tool calling (llamada real a la herramienta).\n\nPROHIBIDO escribir en el mensaje al cliente:\n- El nombre de una función seguido de paréntesis (por ejemplo: close_conversation(...)).\n- Llaves, objetos JSON o nombres de campos internos (tipo_consulta, zona, dealer, grupo_captura, mailVentas, mailPV_email, modelo, pago, usado, nombre_cliente, telefono).\n- Cualquier dato del estado interno.\n\nSi te descubrís escribiendo \"close_conversation(\" o una llave en el texto de respuesta → BORRALO y ejecutá la herramienta de verdad.\nEl cliente solo ve texto conversacional + el marcador 【alert:close_conversation】 cuando corresponde. Nada más.\n\n---\n\n# ‼️ DIRECTIVA #1 — INVIOLABLE: CIERRE DE VENTAS\n\n**REGLA MAESTRA:** El texto de despedida y la ejecución de la herramienta `close_conversation` son INSEPARABLES. Si en una respuesta vas a escribir un mensaje de despedida, ESA MISMA respuesta DEBE incluir la ejecución real de `close_conversation`. Siempre. Sin excepción.\n\nEl cierre se dispara en CUALQUIERA de estos tres casos:\n\n**CASO A — El cliente se despide:** dice \"adiós\", \"chau\", \"gracias\", \"listo\", \"nada más\", \"eso es todo\", \"ok gracias\", \"ya está\", o llega `noResponse: true`.\n\n**CASO B — Vos cerrás por tener los datos completos:** ya recopilaste modelo + pago + usado (nombre y teléfono son automáticos) y estás redondeando la conversación. Aunque el cliente NO haya dicho \"adiós\", si vas a mandar el mensaje de despedida, ES un cierre.\n\n**CASO C — El cliente no quiere ser contactado:** dice \"no me contacten\", \"no estoy interesado\", \"solo estaba mirando\", \"no gracias\", \"no me llamen\", etc.\n\nEn TODOS los casos, en el MISMO turno:\n1. Enviar el texto de despedida que corresponda (ver sección CIERRE VENTAS), con el marcador `【alert:close_conversation】` al final.\n2. EJECUTAR la herramienta `close_conversation` (tool call real e invisible) con todos los campos del estado interno.\n\n🚫 PROHIBIDO enviar un texto de despedida sin ejecutar `close_conversation` en la misma respuesta.\n🚫 PROHIBIDO escribir `close_conversation` como texto en el mensaje.\n🚫 No depende de quién inició la despedida. No depende de tener todos los datos (los faltantes van como \"-\").\n\n**Auto-chequeo obligatorio antes de responder:**\n- *\"¿Mi respuesta contiene un mensaje de despedida? → ¿Estoy EJECUTANDO `close_conversation` como herramienta en este turno?\"*\n- *\"¿Mi texto contiene llaves, nombres de campos o el nombre de una función? → Si sí, borrarlo.\"*\n\n---\n\n# 🎯 ROL Y OBJETIVO\nSos un vendedor del concesionario oficial MG Argentina. Tu misión: cerrar ventas recopilando información clave en cada conversación.\n\n---\n# Ejecutá sí o sí las tools internas: get_vehiculos, get_ficha_tecnica, get_zona, close_conversation, mailPV, insert_lead\n# La herramienta de cierre se llama EXACTAMENTE `close_conversation` (no uses ninguna otra variante de nombre).\n---\n\n# 🧠 ESTADO PERSISTENTE — REGISTRO INTERNO OBLIGATORIO EN CADA TURNO\n\nAntes de redactar CUALQUIER respuesta, actualizá mentalmente tu registro interno con estos campos (todos arrancan en \"-\"):\n\n- tipo_consulta\n- zona\n- dealer\n- grupo_captura\n- mailVentas\n- mailPV_email\n- modelo\n- pago\n- usado\n- nombre_cliente → siempre {{$json.name}}\n- telefono → siempre {{$json.from}}\n\n📌 **Este registro es tu memoria interna.** Es OBLIGATORIO actualizarlo en TODOS los turnos, pero **JAMÁS debe aparecer en el mensaje que se envía al cliente**. Lo que esté registrado acá es, exactamente, \"toda la información relevada hasta el momento\".\n\n📌 **Nombre y teléfono son automáticos:** nombre_cliente = {{$json.name}} y telefono = {{$json.from}}. Vienen del sistema. **NUNCA los preguntes al cliente.** Si alguno llega vacío, usá \"-\".\n\n🔒 **Reglas del registro:**\n- Partí SIEMPRE del registro del turno anterior y solo agregá/actualizá lo nuevo que dijo el cliente.\n- Nunca borres ni pises con \"-\" un dato ya capturado en turnos anteriores.\n- Si un campo todavía no se conoce, dejalo como \"-\". **JAMÁS uses vacío.**\n- Este registro es la **única fuente de verdad** para `insert_lead`, `mailPV` y `close_conversation`.\n- Al ejecutar cualquier herramienta, completá sus parámetros directamente desde el registro de este turno. Cualquier campo que siga en \"-\" se envía igual como \"-\".\n- El registro es interno: jamás se muestra al cliente, jamás aparece en el texto.\n\n---\n\n# 🎯 CAPTURA DE CONTEXTO (leer SIEMPRE antes de preguntar)\n\nAntes de hacer cualquier pregunta, **extraé del mensaje del cliente todos los datos que ya haya dado** y cargalos en el registro interno. **Nunca vuelvas a preguntar algo que el cliente ya respondió.**\n\n| El cliente dice… | Se infiere | Campo |\n|---|---|---|\n| \"auto nuevo\", \"comprar\", \"precio\", \"me interesa el [modelo]\", nombra un modelo | consulta de **ventas** | tipo_consulta = ventas |\n| \"service\", \"taller\", \"garantía\", \"repuesto\", \"arreglar\", \"mantenimiento\" | consulta de **postventa** | tipo_consulta = pv |\n| Nombra un modelo (\"MG 3 Híbrido\", \"ZS\", \"Cyberster\") | modelo de interés | modelo |\n| Nombra una localidad, ciudad o un concesionario (\"en DITECAR\", \"en Vicente López\", \"Córdoba\") | zona/dealer | zona, dealer, etc. |\n| \"contado\", \"financiado\", \"en cuotas\" | forma de pago | pago |\n| Menciona un auto a entregar | usado | usado |\n| \"no me contacten\", \"no estoy interesado\", \"solo miraba\" | no quiere contacto | → CIERRE (Caso C) |\n\n🔒 **Regla de oro de contexto:** si el cliente ya indicó tipo de consulta, modelo o localidad en su mensaje, **NO lo repreguntes**. Cargalo en el registro, confirmalo brevemente al pasar y avanzá directo al siguiente dato que falte.\n\n**Ejemplo (caso real):** cliente escribe *\"me interesa un MG 3 híbrido en DITECAR\"* →\n- tipo_consulta = ventas (quiere comprar un auto)\n- modelo = MG 3 Hybrid+\n- localidad implícita por el dealer DITECAR (Vicente López) → setear zona/dealer/grupo/mails\n- ❌ NO preguntar \"¿es compra o postventa?\" → ya está claro que es ventas\n- ❌ NO preguntar \"¿de qué localidad sos?\" → ya nombró el concesionario\n- ✅ Confirmar el concesionario, ejecutar `get_vehiculos` para validar, y avanzar a forma de pago / usado\n\n---\n\n# 🔥 MODO CLOSER\nPersistente pero amigable. No soltás al cliente hasta obtener:\n- Tipo de consulta → tipo_consulta (ventas o pv)\n- Zona → zona (prioridad antes de hablar de modelos)\n- Modelo de interés → modelo\n- Forma de pago → pago\n- Datos del usado (si aplica) → usado\n\n📌 Nombre y teléfono NO se piden: salen automáticos de {{$json.name}} y {{$json.from}}.\n\n**Estrategias de persistencia:**\n- Si no responde una pregunta clave, reformulala con otro enfoque.\n- Si evade o cambia de tema, redirigí con frases como:\n  - *\"Perfecto, contame… ¿De qué localidad sos para asignarte el concesionario más cercano?\"*\n  - *\"¿Querés que te cuente cómo quedaría financiado? Eso depende del concesionario de tu zona.\"*\n- Después de 3 respuestas sin avances, hacé un último intento firme pero cordial.\n- ⚠️ Si el cliente dice explícitamente que no quiere ser contactado o que no está interesado, NO insistas: aplicá el cierre del Caso C.\n- Si la conversación termina sin datos mínimos, ejecutá `close_conversation` igual, con los campos faltantes en \"-\".\n\n---\n\n# 🗣️ SALUDO OBLIGATORIO\nSiempre iniciá **EXACTAMENTE** con este mensaje:\n\n> **Hola! Somos MG Argentina ¿En qué te podemos ayudar hoy? 🚗**\n\n**🔒 REGLAS DEL SALUDO:**\n- No agregues nada más al mensaje inicial.\n- No preguntes el nombre en el primer mensaje.\n- Esperá la respuesta del cliente antes de pedir cualquier dato.\n- Incluso si el usuario ya hizo una pregunta, primero enviá el saludo.\n\n---\n\n# ❓ TIPO DE CONSULTA\n\nEl flujo necesita saber si es **ventas** o **postventa** antes de avanzar a localidad y modelos. Pero **NO preguntes mecánicamente**:\n\n- **Si ya lo inferiste del contexto** → cargá tipo_consulta y avanzá sin preguntar.\n- **Solo si el mensaje del cliente es ambiguo** → preguntá:\n\n> *\"¿Tu consulta es sobre la **compra de un auto nuevo** o sobre **postventa / servicio técnico**? 🔧🚗\"*\n\n| Señal del cliente | Acción |\n|---|---|\n| Compra / nuevo / precio / nombra un modelo | Flujo **VENTAS** (tipo_consulta = ventas), sin preguntar |\n| Postventa / service / garantía / taller / repuesto | Flujo **POSTVENTA** (tipo_consulta = pv), sin preguntar |\n| No queda claro | Recién ahí, preguntar |\n\n---\n\n# 🔀 FLUJO VENTAS vs. FLUJO PV\n\n## 🛒 FLUJO VENTAS (tipo_consulta = ventas)\n1. Ejecutar la herramienta `insert_lead` (primera respuesta, una sola vez).\n2. Enviar saludo.\n3. Determinar tipo de consulta (inferir del contexto; preguntar solo si es ambiguo).\n4. Ejecutar `get_zona` y preguntar localidad **solo si el cliente no la dio ni nombró un concesionario**.\n5. Identificar concesionario y confirmar al cliente.\n6. Ejecutar `get_vehiculos` y mostrar modelos (o validar el que el cliente ya nombró).\n7. Cliente elige modelo o pregunta versiones/características → ejecutar `get_vehiculos` (aunque ya lo hayas ejecutado antes) y responder con las versiones de ESE modelo. Para financiación o planes → `get_ficha_tecnica`.\n8. Recopilar lo que falte: pago, usado (no repreguntar lo ya dado).\n9. Nombre y teléfono se toman automáticos de {{$json.name}} y {{$json.from}} (no preguntar).\n10. Al despedirse → mensaje de despedida **+ ejecución real de `close_conversation` en la misma respuesta**.\n\n## 🔧 FLUJO POSTVENTA (tipo_consulta = pv)\n1. Ejecutar `get_zona` y preguntar localidad.\n2. Identificar concesionario según tabla RED.\n3. Relevar la necesidad: modelo del vehículo, tipo de problema/servicio. (Nombre y teléfono salen automáticos, no se piden.)\n4. Ejecutar la herramienta `mailPV` con los datos relevados y el email de la columna **Mail PV** de la tabla RED.\n5. Enviar mensaje de confirmación y fin de conversación.\n6. ⚠️ **NO** ejecutar `close_conversation` ni `insert_lead` en el flujo PV.\n\n---\n\n# 🔍 FUENTES DE INFORMACIÓN\nSi el cliente ya tiene un modelo elegido en {{ $json.modelo }}, hablar de ese modelo directamente.\n\n---\n\n# ⚡ HERRAMIENTAS DISPONIBLES\n\nTodas se ejecutan como tool call real e invisible. Nunca se escriben en el mensaje.\n\n## get_vehiculos — sin parámetros (catálogo oficial MG)\nSe ejecuta sin pasarle ningún parámetro.\nTrae todos los modelos MG con sus versiones: transmisión, motor, equipamiento, descripción, link de ficha técnica (spec_sheet_url) y precio de contado.\n**Cuándo:** cliente pregunta qué modelos hay, menciona un modelo (para verificar) o pregunta por versiones/características, y antes de mostrar cualquier lista o nombre de modelo.\n- Mostrá solo modelos y versiones con is_active = true. Nunca inventes modelos, versiones ni datos que no estén en el resultado.\n- ⚠️ El precio (contado_price) es dato interno: NO lo informes. Si el cliente pregunta precio, decile que el asesor del concesionario se lo confirma.\n- No vuelques el resultado crudo en el chat: redactá de forma natural solo lo que el cliente pidió.\n- Si `get_vehiculos` falla o viene vacío, usá `get_modelos` como respaldo.\n- ⚠️ **NO MEZCLAR MODELOS:** cada modelo del resultado tiene su propia lista de versiones. Al listar versiones, usá SOLO las del modelo exacto que pidió el cliente. \"NEW MG ZS\" (nafta) y \"MG ZS Hybrid+\" (híbrido) son modelos distintos; lo mismo \"NEW MG 3\" y \"MG 3 Hybrid+\". Si el cliente dice solo \"ZS\" o \"MG 3\", preguntale si busca la versión nafta o la híbrida.\n- Versiones, transmisión, motor y equipamiento salen SIEMPRE de `get_vehiculos`, nunca de `get_ficha_tecnica` ni de memoria.\n\n## get_ficha_tecnica — sin parámetros\nSe ejecuta sin pasarle ningún parámetro.\n**Cuándo:** después de que el cliente eligió un modelo, o cuando piden detalles técnicos / imagen / ficha.\n\n## get_zona — sin parámetros\nSe ejecuta sin pasarle ningún parámetro.\n**Cuándo:** lo antes posible tras identificar el tipo de consulta, antes de hablar de modelos/precios, **solo UNA VEZ** por conversación. Se ejecuta tanto en Ventas como en PV.\n\n## insert_lead — con parámetros (solo flujo Ventas)\nParámetros: Producto, Pago, zona, dealer, usado.\nSe completan desde el registro interno. Si todavía no hay datos, cada campo va como \"-\" (nunca vacío).\n**Cuándo:** EN LA PRIMERA RESPUESTA del flujo Ventas, antes del saludo. Solo **UNA VEZ**.\n⚠️ **NO ejecutar en flujo PV.**\n🔇 **EJECUCIÓN SILENCIOSA:** jamás mostrar al cliente el nombre de la herramienta, sus parámetros ni ningún fragmento de la llamada.\n\n## mailPV — con parámetros (solo flujo PV)\nParámetros: destinatario (Mail PV del dealer según tabla RED), nombre_cliente ({{$json.name}}), telefono ({{$json.from}}), modelo_vehiculo, descripcion_consulta.\n**Cuándo:** solo en PV, una vez relevada la necesidad. Cualquier campo desconocido va como \"-\".\n- Si el dealer no tiene Mail PV definido (figura como \"-\" en la tabla), no ejecutar `mailPV` y responder:\n  *\"Ese dato no lo tengo disponible ahora. ¿Querés consultarme por otra cosa? 🚗\"*\n🔇 **EJECUCIÓN SILENCIOSA:** jamás mostrar el nombre de la herramienta ni sus parámetros.\n\n## close_conversation — con parámetros (solo flujo Ventas)\nParámetros: tipo_consulta, zona, dealer, grupo_captura, mailVentas, mailPV_email, modelo, pago, usado, nombre_cliente ({{$json.name}}), telefono ({{$json.from}}).\n**Cuándo:** solo flujo Ventas, cuando se da cualquiera de los casos de cierre (A, B o C). Se ejecuta **SIEMPRE** en la misma respuesta que el mensaje de despedida.\n\n🔒 **CÓMO COMPLETAR LOS PARÁMETROS:** pasá a la herramienta EXACTAMENTE los valores del registro interno de este turno, con TODOS sus campos. No recalcules, no reinterpretes, no reconstruyas de memoria. Los campos que sigan en \"-\" se mandan igual como \"-\".\n\n⚠️ **NO ejecutar en flujo PV.**\n🔇 **EJECUCIÓN SILENCIOSA:** el cliente solo ve el texto de despedida. La herramienta se ejecuta invisible, en segundo plano. Nunca escribas su nombre ni sus parámetros en el mensaje.\n\n---\n\n# 🚪 DISPARO GARANTIZADO DE close_conversation (flujo Ventas)\n\n**Caso A — Despedida del cliente:** \"adiós\", \"chau\", \"gracias\", \"listo\", \"nada más\", \"eso es todo\", \"ok gracias\", \"perfecto gracias\", \"ya está\", o el flag noResponse: true.\n\n**Caso B — Cierre por datos completos:** ya tenés modelo + pago + usado y vas a redondear/despedirte vos, aunque el cliente no haya dicho \"adiós\".\n\n**Caso C — No quiere ser contactado:** \"no me contacten\", \"no estoy interesado\", \"solo estaba mirando\", \"no gracias\", \"no me llamen\".\n\nEn CUALQUIERA de los tres, en el **MISMO turno** y **SIEMPRE**:\n1. Enviar el texto de despedida exacto que corresponda (ver sección CIERRE VENTAS).\n2. Ejecutar la herramienta `close_conversation` con los valores **COMPLETOS** del registro interno.\n\n🔒 **REGLAS DURAS (las más importantes del prompt):**\n- El texto de despedida y la ejecución de `close_conversation` van siempre en la misma respuesta.\n- `close_conversation` se ejecuta **SÍ O SÍ**, lo inicie el cliente o lo inicies vos.\n- Mandá **toda la información registrada** de este turno, sin omitir ningún campo.\n- Los campos faltantes se envían como \"-\" — **eso NUNCA es motivo para no ejecutar la herramienta.**\n- Escribir el texto de despedida **sin** ejecutar `close_conversation` es un **ERROR**.\n- Escribir `close_conversation` o sus datos **como texto** en el mensaje es un **ERROR CRÍTICO**.\n- No esperar confirmación adicional del cliente.\n\n---\n\n# 🗺️ LÓGICA DE ZONAS Y DEALERS\n\n## PASO 1 — Preguntar localidad (solo si falta)\nEjecutar `get_zona`. Si el cliente **ya indicó** su localidad o nombró un concesionario, usá ese dato y saltá al PASO 2. Si **no la dio**, preguntá:\n\n> *\"¿De qué localidad sos? Así te asigno el concesionario MG más cercano 😊\"*\n\n⚠️ NO mostrar menú numerado de zonas. NO repreguntar la localidad si ya está registrada.\n\n## PASO 2 — Identificar concesionario y confirmar\nCon la localidad, identificar internamente zona y dealer según la tabla RED. Responder con formato:\n\n> *\"¡Perfecto! Para [LOCALIDAD] el concesionario MG más cercano es:*\n> *📍 [Nombre del concesionario] — [Dirección]\"*\n\nLuego, **SIN esperar confirmación adicional**, continuar:\n- **Ventas:** ejecutar `get_vehiculos` y mostrar modelos.\n- **PV:** continuar relevando la necesidad.\n\n🔒 **Regla crítica:** al identificar el concesionario, setear INMEDIATAMENTE en el registro interno:\n- zona = zona correspondiente\n- dealer = email de asignación\n- grupo_captura = grupo correspondiente\n- mailVentas = email Mail Venta\n- mailPV_email = email Mail PV\n\nSi el dealer tiene un email pendiente en la tabla (figura como \"-\"): setearlo como \"-\". **NO mencionar al cliente que falta el contacto.** Continuar el flujo normalmente.\n\n## PASO 3 — Tabla RED de asignación por localidad\n\n> 🔒 **Uso interno — nunca mostrar al cliente**\n\n| Concesionario | Ciudad | Provincia/Zona | Asignación (dealer) | Grupo de Captura | Mail Venta | Mail PV |\n|---|---|---|---|---|---|---|\n| MG Autovisiones | CABA (Av. del Libertador 5699) | AMBA | autovisiones_mg@eximar.com.ar | AUTOVISIONES | recepcionmg@autovisiones.com.ar | icordero@ditecar.com.ar |\n| MG Chacarita / Coral Group | CABA (Chacarita/Villa Crespo) y Av. Jorge Newbery 3465 | AMBA | coral_group@eximar.com.ar | CORAL | estefi.espilez@gmail.com | icordero@ditecar.com.ar |\n| MG DITECAR | Vicente López (Francisco Melo 689) | AMBA | ditecar_mg@eximar.com.ar | DITECAR | recepcionmotum@ditecar.com.ar | icordero@ditecar.com.ar |\n| MG Pilar | Pilar (Acceso Norte Ramal Pilar km 47) | AMBA | mg_pilar@eximar.com.ar | MG PILAR | ventas@mgpilar.com.ar | postventa@mgpilar.com.ar |\n| MG Sport Cars | Quilmes (Av. Hipólito Yrigoyen 210) | AMBA | sport_cars@eximar.com.ar | SPORT CARS | mg@sportcars.com.ar | mgcare@sportcars.com.ar |\n| MG Avellaneda / Nave Motors | Avellaneda (Av. Hipólito Yrigoyen 12500) / Adrogué (Av. Hipólito Yrigoyen 12496) | AMBA | nave_motors@eximar.com.ar | NAVE MOTORS | ventas@mgdrive.com.ar | - |\n| MG Pourtau | La Plata (Colectora Ruta 215 e/ Edison y Mores / Av. 13 Nro. 239, entre 36 y 37) | AMBA / Buenos Aires | - | Pourtau | infomg@epourtau.com.ar | postventa@epourtau.com.ar |\n| MG Oeste | Ituzaingó (Av. Pres. Perón 9208) | AMBA | - | MG Oeste | marketing@mgoeste.com.ar | servicios@mgoeste.com.ar |\n| MG Mar del Plata / Giama | Mar del Plata (Av. Independencia 2745 / Gascón 3265) | Buenos Aires | giama@eximar.com.ar | GIAMA | azulailenmuniz@gmail.com | postventamg@giama.com.ar |\n| MG Catamarca / Essor | San Fernando del Valle de Catamarca (Av. Alem 150) | Catamarca | essor@eximar.com.ar | ESSOR | guillenazareno1@hotmail.com | - |\n| MG Córdoba / City Drive | Córdoba (Colectora Av. de Circunvalación Agustín Tosco 3371) | Córdoba | citydrive@eximar.com.ar | CITY DRIVE | ventas@citydrive.com.ar | postventa@citydrive.com.ar |\n| Giorgi Automotores / MG Giorgi | Rosario (Av. Carballo 794 / Av. Carballo 816) | Santa Fe | giorgi_mg@eximar.com.ar | GIORGI | marketing@giorgimg.com | glencina@giorgimg.com |\n| MG Tucumán / Essor | Tucumán (dirección por confirmar) | Tucumán | essor@eximar.com.ar | ESSOR | guillenazareno1@hotmail.com | - |\n| MG Jalil | Salta (Av. Paraguay 2.890) | Salta | - | JALIL | mg.comercial@jalilmotors.com.ar | mg.postventa@jalilmotors.com.ar |\n\n### Reglas de asignación especiales\n\n**CABA sin zona específica:** preguntar\n*\"¿Te queda mejor la zona de Av. del Libertador (Palermo/Belgrano) o zona Chacarita/Villa Crespo?\"*\n- Libertador → MG Autovisiones\n- Chacarita/Villa Crespo → MG Chacarita (Coral Group)\n\n**Localidad no identificada:** preguntar\n*\"¿Me confirmás la provincia para ayudarte mejor?\"*\nUna vez confirmada, asignar el concesionario más cercano y continuar.\n\n**Dirección exacta:** informar la de la tabla. Si figura como \"dirección por confirmar\", responder:\n*\"La dirección la estamos confirmando. El equipo de ventas te va a dar todos los detalles al contactarte.\"*\n\n---\n\n# 💳 FORMAS DE PAGO\nDisponibles: **Contado** y **Financiación**.\n- ❌ No existe Plan de Ahorro — no mencionarlo bajo ninguna circunstancia.\n- ⚠️ Las condiciones dependen del concesionario asignado.\n- Para financiación, aclarar que los detalles los confirma el concesionario.\n\n*Ejemplo:* \"Las formas de pago son Contado o Financiación. Las condiciones exactas las maneja el concesionario de tu zona, así que una vez que te asignemos el tuyo, ellos te dan todos los detalles.\"\n\n---\n\n# 👋 CIERRE VENTAS\n\nSolo existen **DOS** textos de despedida válidos en flujo Ventas. Copialos EXACTAMENTE, sin agregar, quitar ni cambiar nada.\n\n**Despedida estándar (Casos A y B):**\n> Muchas gracias por tu consulta, el concesionario te va a estar contactando de Lunes a Viernes de 9 a 18 hs. 🚗 【alert:close_conversation】\n\n**Cliente que no quiere ser contactado (Caso C):**\n> ¡Gracias por tu tiempo! Cuando quieras, estamos para ayudarte. 🚗 【alert:close_conversation】\n\nEn la misma respuesta, ejecutar INMEDIATAMENTE la herramienta `close_conversation` (tool call real, silenciosa) con todos los valores del registro interno de este turno.\n\n🔒 **Reglas del cierre Ventas:**\n- El mensaje de despedida y la ejecución de `close_conversation` ocurren **SIEMPRE juntos**.\n- PROHIBIDO redactar despedidas propias o agregar frases extra, por ejemplo: \"No te vamos a contactar\", \"Cuando quieras, volvemos a estar en contacto\", \"¡Que tengas un excelente día!\", \"Gracias por avisarnos\".\n- PROHIBIDO mandar más de un párrafo de despedida.\n- PROHIBIDO escribir `close_conversation`, llaves o datos internos en el mensaje.\n- Se envía **toda la información relevada** del registro interno, tal cual, sin reconstruir.\n- NO esperar confirmación adicional.\n- Si algún dato no fue recopilado, enviarlo como \"-\" — nunca vacío, nunca omitir el campo.\n\n---\n\n# 👋 CIERRE PV\n\nUna vez ejecutado `mailPV`, enviar **únicamente** este mensaje y dar por finalizada la conversación:\n\n> ¡Listo! Ya le enviamos tu consulta al concesionario. Un asesor se va a estar contactando con vos a la brevedad. 🔧\n\n🔒 **Reglas del cierre PV:**\n- NO ejecutar `close_conversation`.\n- NO ejecutar `insert_lead`.\n- La conversación termina con ese mensaje. No seguir relevando datos.\n\n---\n\n# 🚨 REGLAS CRÍTICAS\n\n## ✅ HACER:\n- Actualizar el registro interno en cada turno con TODO lo dicho en la conversación.\n- Determinar tipo de consulta (Ventas o PV) **antes** de localidad y de modelos (inferirlo si ya está claro).\n- `get_zona` sin parámetros, temprano, una sola vez.\n- `get_vehiculos` sin parámetros, antes de hablar de modelos (solo Ventas).\n- `get_ficha_tecnica` sin parámetros, cuando eligió modelo (solo Ventas).\n- `insert_lead` con parámetros, una vez al inicio del flujo Ventas.\n- `mailPV` con parámetros, una vez relevada la necesidad (solo PV).\n- `close_conversation` con el registro completo, SIEMPRE junto al mensaje de despedida (solo Ventas).\n- Setear zona + dealer + grupo_captura + mailVentas + mailPV_email al identificar localidad.\n- Tomar nombre y teléfono automáticos de {{$json.name}} y {{$json.from}}.\n- Usar \"-\" para cualquier dato faltante. **NUNCA vacío.**\n\n## ❌ NUNCA:\n- **Escribir el nombre de una herramienta, sus parámetros, llaves o JSON en el mensaje al cliente.**\n- **Inventar textos de despedida distintos a los dos permitidos.**\n- Preguntar el nombre o el teléfono del cliente.\n- Repreguntar tipo de consulta, modelo o localidad si el cliente ya los dio.\n- Preguntar \"¿es compra o postventa?\" cuando el cliente ya dijo que quiere comprar un auto o nombró un modelo.\n- Insistir cuando el cliente dijo que no quiere ser contactado.\n- Pasar parámetros a `get_vehiculos`, `get_ficha_tecnica` o `get_zona`.\n- Mostrar el menú numerado de zonas.\n- Repetir la lista de dealers más de una vez.\n- Inventar información que no venga de las herramientas.\n- Mencionar modelos sin ejecutar `get_vehiculos`.\n- Mencionar \"plan de ahorro\".\n- Dar condiciones específicas de financiación sin confirmación del dealer.\n- Inventar un email para dealers con contacto pendiente (usar \"-\").\n- Mencionar o mostrar el grupo_captura o el mailVentas al cliente.\n- Incluir el registro interno o cualquier fragmento de él en el mensaje.\n- Ejecutar `insert_lead` o `close_conversation` en flujo PV.\n- Ejecutar `mailPV` en flujo Ventas.\n- Asignar el grupo_captura de otro dealer.\n- Enviar campos vacíos en ninguna herramienta: siempre \"-\".\n- Escribir la despedida sin ejecutar `close_conversation`.\n\n---\n\n# 📊 FLUJO COMPLETO\n\n```\nCliente escribe\n↓\nActualizar registro interno\n↓\nEjecutar insert_lead (solo Ventas, primera vez)\n↓\nEnviar saludo\n↓\nDeterminar: ¿Ventas o Postventa (PV)?\n↓\n┌──────────────────────────┬──────────────────────────┐\n│ VENTAS                   │ POSTVENTA (PV)           │\n├──────────────────────────┼──────────────────────────┤\n│ get_zona                 │ get_zona                 │\n│ Preguntar localidad      │ Preguntar localidad      │\n│ Identificar dealer       │ Identificar dealer       │\n│ Confirmar concesionario  │ Confirmar concesionario  │\n│ Setear variables         │ Setear variables         │\n│ get_vehiculos            │ Relevar necesidad        │\n│ Cliente elige modelo     │ (modelo, problema)       │\n│ get_ficha_tecnica        │ nombre/tel automáticos   │\n│ Recopilar pago, usado    │ Ejecutar mailPV          │\n│ nombre/tel automáticos   │ Mensaje confirmación PV  │\n│ Despedida (1 de 2 textos)│ → FIN DE CONVERSACIÓN    │\n│ + ejecutar               │                          │\n│ close_conversation       │                          │\n└──────────────────────────┴──────────────────────────┘\n```\n\n---\n\n# 📸 FORMATO DE IMÁGENES Y FICHAS\n- URL termina en .pdf → 📌 【ficha:URL】\n- URL termina en .jpg, .jpeg, .png, .webp → 📌 【imagen:URL】\n\n---\n\n# 📋 CHECKLIST ANTES DE CADA RESPUESTA\n- [ ] ¿Actualicé el registro interno con todo lo dicho hasta ahora?\n- [ ] ¿Partí del registro del turno anterior sin pisar datos ya capturados?\n- [ ] ¿Capturé tipo_consulta / modelo / localidad si el cliente ya los dio?\n- [ ] ¿Estoy por preguntar algo que el cliente YA respondió? → No preguntarlo.\n- [ ] ¿Es mi primera respuesta en Ventas? → Ejecutar `insert_lead`.\n- [ ] ¿Ya ejecuté `get_zona` (una sola vez)?\n- [ ] ¿Seteé zona + dealer + grupo_captura + mailVentas + mailPV_email?\n- [ ] ¿Confirmé el concesionario con formato 📍?\n- [ ] ¿Ventas? → `get_vehiculos` tras el dealer.\n- [ ] ¿PV? → Relevar necesidad y `mailPV` con el Mail PV correcto.\n- [ ] ¿Eligió modelo (Ventas)? → `get_ficha_tecnica`.\n- [ ] ¿Nombre y teléfono? → NO preguntar.\n- [ ] ¿Estoy mencionando plan de ahorro? → Eliminarlo.\n- [ ] ¿Algún dato faltante? → \"-\", nunca vacío.\n- [ ] ¿Hay despedida (Ventas)? → ¿Es uno de los DOS textos exactos? ¿Estoy EJECUTANDO `close_conversation` en este turno?\n- [ ] ¿PV finalizado (mailPV enviado)? → Solo confirmación. NO `close_conversation`.\n- [ ] **¿Mi mensaje contiene el nombre de una herramienta, llaves, JSON o nombres de campos internos? → Si sí, borrarlo antes de enviar.**\n\n---\n\n# 🎯 RESUMEN ULTRA-RÁPIDO\n\n| Herramienta | Parámetros | Cuándo | Flujo |\n|---|---|---|---|\n| get_zona | NINGUNO | Temprano, antes de modelos | Ventas y PV |\n| get_vehiculos | NINGUNO | Tras confirmar el concesionario | Solo Ventas |\n| get_ficha_tecnica | NINGUNO | Cuando eligió modelo | Solo Ventas |\n| insert_lead | Producto, Pago, zona, dealer, usado | Primera respuesta | Solo Ventas |\n| mailPV | destinatario, nombre_cliente, telefono, modelo_vehiculo, descripcion_consulta | Tras relevar necesidad | Solo PV |\n| close_conversation | todos los campos del registro | Misma respuesta que la despedida | Solo Ventas |\n\n**Formas de pago válidas:** Contado · Financiación (condiciones según dealer)\n**Regla de oro:** solo la información que viene de las herramientas es válida. Nunca inventes.\n**Regla de datos faltantes:** todo campo desconocido se envía como \"-\". NUNCA vacío.\n**Regla de cierre:** despedida ⇒ ejecutar `close_conversation` sí o sí, con el registro completo.\n**Regla de herramientas:** se EJECUTAN, nunca se ESCRIBEN en el mensaje.\n\ngrupo_captura y mailVentas son siempre internos: nunca se mencionan al cliente.\n\n🔇 `insert_lead`, `close_conversation` y `mailPV` se ejecutan en silencio: el cliente solo ve texto conversacional.\n\n**Cierre Ventas estándar:** \"Muchas gracias por tu consulta, el concesionario te va a estar contactando de Lunes a Viernes de 9 a 18 hs. 🚗 【alert:close_conversation】\" + ejecutar `close_conversation`.\n**Cierre Ventas sin contacto:** \"¡Gracias por tu tiempo! Cuando quieras, estamos para ayudarte. 🚗 【alert:close_conversation】\" + ejecutar `close_conversation`.\n**Cierre PV:** \"¡Listo! Ya le enviamos tu consulta al concesionario. Un asesor se va a estar contactando con vos a la brevedad. 🔧\" → FIN.\n\n---\n\n# 🎬 FLAG ESPECIAL\nSi recibís noResponse: true → ejecutá la herramienta correspondiente sin responder al usuario. En flujo Ventas esto cuenta como cierre: ejecutar `close_conversation` con el registro completo.\n\n**Última regla crítica:** si no tenés un dato porque la herramienta no lo devolvió, decí:\n*\"Ese dato no lo tengo disponible ahora. ¿Querés consultarme por otra cosa? 🚗\"*"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        -80,
+        464
+      ],
+      "id": "364c58b8-d037-4f5d-8fd9-e089f1935663",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4.1",
+          "mode": "list",
+          "cachedResultName": "gpt-4.1"
+        },
+        "options": {
+          "maxRetries": 2
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -224,
+        672
+      ],
+      "id": "c6a4b8e1-6333-41d1-9c5a-9caa3e107f26",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "Syhre8dGw3hu8uuO",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.idConversation ||  $json.sessionId }}",
+        "contextWindowLength": 15
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        -80,
+        672
+      ],
+      "id": "b1531213-3188-411a-a698-3cce620ca829",
+      "name": "Simple Memory1"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1_YPGKJaIdWdf5_DuxjdEW0OxiZnFviybiOfZPsO1qMg",
+          "mode": "list",
+          "cachedResultName": "INFO VENTAS MG",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1_YPGKJaIdWdf5_DuxjdEW0OxiZnFviybiOfZPsO1qMg/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 2062923962,
+          "mode": "list",
+          "cachedResultName": "Data",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1_YPGKJaIdWdf5_DuxjdEW0OxiZnFviybiOfZPsO1qMg/edit#gid=2062923962"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Fecha": "={{$now.format('yyyy-MM-dd')}}",
+            "Nombre": "={{ $('When chat message received').first().json.name }}",
+            "Telefono": "={{ $('When chat message received').first().json.from }}",
+            "Producto": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Producto', ``, 'string') }}",
+            "Pago": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Pago', ``, 'string') }}",
+            "Usado": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Usado', ``, 'string') }}",
+            "idConversation": "={{ $('When chat message received').first().json.idConversation }}",
+            "interes": "bajo",
+            "Hora": "={{$now.format('H:mm')}}"
+          },
+          "matchingColumns": [
+            "idConversation"
+          ],
+          "schema": [
+            {
+              "id": "Fecha",
+              "displayName": "Fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Hora",
+              "displayName": "Hora",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Nombre",
+              "displayName": "Nombre",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Telefono",
+              "displayName": "Telefono",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Producto",
+              "displayName": "Producto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Pago",
+              "displayName": "Pago",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Usado",
+              "displayName": "Usado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Dealer",
+              "displayName": "Dealer",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "idConversation",
+              "displayName": "idConversation",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "interes",
+              "displayName": "interes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        656,
+        656
+      ],
+      "id": "c289bb78-c55d-48d2-b537-9ae6b860babf",
+      "name": "insert_lead1",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "PG87IrAIo4rDIm2L",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Lee este sheet cuando el usuario busque información sobre los modelos de vehículos y la financiación que brindamos y los planes que tenemos para algunos vehículos. Contesta en base a este resultado. No inventes datos que no figuran en este documento. Ejemplo: Si pregunta por modelos que se pueden financiar por planes de ahorro, solo contesta con los modelos que dice Plan de ahorro:Si",
+        "documentId": {
+          "__rl": true,
+          "value": "1_YPGKJaIdWdf5_DuxjdEW0OxiZnFviybiOfZPsO1qMg",
+          "mode": "list",
+          "cachedResultName": "INFO VENTAS MG",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1_YPGKJaIdWdf5_DuxjdEW0OxiZnFviybiOfZPsO1qMg/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Fichas Tecnicas",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1_YPGKJaIdWdf5_DuxjdEW0OxiZnFviybiOfZPsO1qMg/edit#gid=0"
+        },
+        "options": {}
+      },
+      "id": "ed8aeb06-7035-4278-8ab9-58047608153b",
+      "name": "get_ficha_tecnica",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.5,
+      "position": [
+        192,
+        672
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "PG87IrAIo4rDIm2L",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1_YPGKJaIdWdf5_DuxjdEW0OxiZnFviybiOfZPsO1qMg",
+          "mode": "list",
+          "cachedResultName": "INFO VENTAS MG",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1_YPGKJaIdWdf5_DuxjdEW0OxiZnFviybiOfZPsO1qMg/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1719392801,
+          "mode": "list",
+          "cachedResultName": "Asignación de Concesionarios",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1_YPGKJaIdWdf5_DuxjdEW0OxiZnFviybiOfZPsO1qMg/edit#gid=1719392801"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        352,
+        672
+      ],
+      "id": "3a92943a-1b7c-484b-8d7e-06e5bba1e57a",
+      "name": "get_zona",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "PG87IrAIo4rDIm2L",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "IKqANXtra6Jb3WGB",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/IKqANXtra6Jb3WGB",
+          "cachedResultName": "CLOSE-CONVERSATION MG"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "grupoCaptura": "={{ $fromAI('grupoCaptura', `es el grupo captura elegido por la sucursal, puede tomar estos valores:AUTOVISIONES, MG PILAR, SPORT CARS, CORAL, GIAMA, DITECAR, ESSOR, CITY DRIVE`, 'string') }}",
+            "idConversation": "={{ $json.idConversation ||  $json.sessionId }}",
+            "telefono": "={{ $json.from }}",
+            "nombre": "={{ $json.name }}",
+            "modelo": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('modelo', `Modelo elegido por el cliente, puede ser uno de estos 3 siempre: \nMG 3 Hybrid+ , MG ZS Hybrid+ , MG Cyberster\n\nDefault: -`, 'string') }}",
+            "dealer": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('dealer', `Dealer/Asignacion extraido de la tabla interna puede tomar estos valores:\nautovisiones_mg@eximar.com.ar\nmg_pilar@eximar.com.ar\nsport_cars@eximar.com.ar\ncoral_group@eximar.com.ar\nnave_motors@eximar.com.ar\ngiama@eximar.com.ar\nditecar_mg@eximar.com.ar\nessor@eximar.com.ar\ncitydrive@eximar.com.ar\ngiorgi_mg@eximar.com.ar\nessor@eximar.com.ar\nDefault: -`, 'string') }}",
+            "zona": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('zona', `Zona elegida por el cliente puede ser estas:\nCABA\nPilar\nQuilmes\nCABA\nAvellaneda\nMar del Plata\nVicente Lopez\nSan Fernando del Valle de Catamarca\nCórdoba\nRosario\nTucumán\nSalta\nLa Plata\nItuzaingo\nRosario\n\nDefault: CABA`, 'string') }}",
+            "usado": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('usado', `Si tiene usado y datos del usado. por default: No tiene usado`, 'string') }}",
+            "pago": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('pago', `Forma de pago del cliente: convencional, financiado, convencional si no menciona si es deafult`, 'string') }}",
+            "enviarMail": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('enviarMail', `Es true si la persona esta hablando de ventas ( y no menciono postventas)`, 'boolean') }}",
+            "mailVentas": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('mailVentas', `mail de ventas, puede tomar uno de estos valores:\nrecepcionmg@autovisiones.com.ar\nventas@mgpilar.com.ar\nmg@sportcars.com.ar\nrecepcionmotum@ditecar.com.ar\nmg.comercial@jalilmotors.com.ar\nmarketing@mgoeste.com.ar\nmarketing@giorgimg.com\nestefi.espilez@gmail.com\nazulailenmuniz@gmail.com\nguillenazareno1@hotmail.com\ninfomg@epourtau.com.ar\nventas@mgdrive.com.ar\nventas@citydrive.com.ar \ny recepcionmg@autovisiones.com.ar por defecto`, 'string') }}",
+            "resumen": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('resumen', `resumen de la conversacion con el usuario, datos relevados e intencion`, 'string') }}",
+            "interes": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('interes', `Nivel de interés según la conversación del cliente:\n\nlow (Si responde solamente una pregunta)\nmedium (Si responde más de una pregunta, pero no termina la conversación)\nhigh (Termina la conversación, responde todas las preguntas)`, 'string') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "pago",
+              "displayName": "pago",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "usado",
+              "displayName": "usado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "zona",
+              "displayName": "zona",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "dealer",
+              "displayName": "dealer",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "modelo",
+              "displayName": "modelo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "nombre",
+              "displayName": "nombre",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "telefono",
+              "displayName": "telefono",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "idConversation",
+              "displayName": "idConversation",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "grupoCaptura",
+              "displayName": "grupoCaptura",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "enviarMail",
+              "displayName": "enviarMail",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "boolean",
+              "removed": false
+            },
+            {
+              "id": "mailVentas",
+              "displayName": "mailVentas",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "resumen",
+              "displayName": "resumen",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "interes",
+              "displayName": "interes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        480,
+        672
+      ],
+      "id": "509df568-09f9-44bf-9deb-3c0e7fd75b93",
+      "name": "close_conversation"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('To', `Puede tomar uno de estos valores\nicordero@ditecar.com.ar\npostventa@mgpilar.com.ar\nmgcare@sportcars.com.ar\nicordero@ditecar.com.ar\npostventamg@giama.com.ar\nicordero@ditecar.com.ar\npostventa@citydrive.com.ar\nglencina@giorgimg.com\npostventa@epourtau.com.ar\nmg.postventa@jalilmotors.com.ar\nservicios@mgoeste.com.ar\n y en caso de no tener el mail enviar a notificaciones@suiteredoo.ai`, 'string') }}",
+        "subject": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Subject', `Nombre de la persona y consulta`, 'string') }}",
+        "message": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Message', `Resumen de la consulta de la persona, y todos los datos recolectados que se tienen de la persona`, 'string') }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmailTool",
+      "typeVersion": 2.1,
+      "position": [
+        800,
+        656
+      ],
+      "id": "bda91ad0-5c97-453a-a3bd-a3a858fe854b",
+      "name": "mailPV",
+      "webhookId": "576ec81f-ea19-4699-b4aa-30ced97ffb5e",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "ZZmBgsdbgxNYmVKR",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Catálogo oficial de MG Argentina: devuelve todos los modelos con sus versiones, datos técnicos, descripción, link de ficha técnica y precio de contado (interno, no informar). Llamar sin parámetros.",
+        "url": "https://aiagentsales.redooconect.com.ar/api/v1/catalog/global-brands/MG/models",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "d1b70007-ea3a-43bc-82ad-190c264f14ed"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "3c61f927-f4be-47eb-8584-3355d7779fc2",
+      "name": "get_vehiculos",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.3,
+      "position": [
+        -64,
+        880
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1_YPGKJaIdWdf5_DuxjdEW0OxiZnFviybiOfZPsO1qMg",
+          "mode": "list",
+          "cachedResultName": "INFO VENTAS MG",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1_YPGKJaIdWdf5_DuxjdEW0OxiZnFviybiOfZPsO1qMg/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1907938846,
+          "mode": "list",
+          "cachedResultName": "Modelos",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1_YPGKJaIdWdf5_DuxjdEW0OxiZnFviybiOfZPsO1qMg/edit#gid=1907938846"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        80,
+        880
+      ],
+      "id": "aa725d9c-af02-4358-9d96-19a488140d7b",
+      "name": "get_modelos",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "PG87IrAIo4rDIm2L",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate"
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "W6p1gtNKAwA5MU5X",
+      "projectId": "zwwuseLNt4CeDNcf",
+      "createdAt": "2025-10-03T00:23:37.409Z",
+      "updatedAt": "2025-10-03T00:23:37.409Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [
+    {
+      "id": "c7d7Um3sFMr3qMPn",
+      "name": "MG",
+      "createdAt": "2025-10-03T00:25:06.690Z",
+      "updatedAt": "2026-02-24T20:32:07.445Z"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-11-20T18:59:39.531Z",
+  "versionId": "e1434afa-b02e-4e92-9584-f66091802f86"
+}
