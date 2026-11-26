@@ -1,0 +1,996 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "3dd9d1c9-ee4f-4729-8f97-e17247e2d443",
+    "workflowId": "STrBWKCOIKeMuXwl",
+    "nodes": [
+      {
+        "parameters": {
+          "workflowInputs": {
+            "values": [
+              {
+                "name": "goodLead",
+                "type": "any"
+              },
+              {
+                "name": "idConversation",
+                "type": "any"
+              },
+              {
+                "name": "number",
+                "type": "any"
+              },
+              {
+                "name": "name",
+                "type": "any"
+              },
+              {
+                "name": "pago",
+                "type": "any"
+              },
+              {
+                "name": "usado",
+                "type": "any"
+              },
+              {
+                "name": "interes",
+                "type": "any"
+              },
+              {
+                "name": "productoInteres",
+                "type": "any"
+              },
+              {
+                "name": "resumen",
+                "type": "any"
+              },
+              {
+                "name": "dni",
+                "type": "any"
+              },
+              {
+                "name": "email",
+                "type": "any"
+              },
+              {
+                "name": "sucursal",
+                "type": "any"
+              },
+              {
+                "name": "nombre_corregido",
+                "type": "any"
+              },
+              {
+                "name": "no_derivar",
+                "type": "any"
+              },
+              {
+                "name": "ml_lead_ids",
+                "type": "any"
+              },
+              {
+                "name": "ml_nombre",
+                "type": "any"
+              },
+              {
+                "name": "ml_email",
+                "type": "any"
+              },
+              {
+                "name": "ml_dni",
+                "type": "any"
+              },
+              {
+                "name": "ml_modelo",
+                "type": "any"
+              },
+              {
+                "name": "ml_phone",
+                "type": "any"
+              }
+            ]
+          }
+        },
+        "id": "89fcecef-d1e9-4c51-be81-f8136b6ef8cb",
+        "name": "When Executed by Another Workflow",
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "typeVersion": 1.1,
+        "position": [
+          0,
+          96
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// Prioridad: lo que corrigió el cliente en el chat > lo que vino de Mercado Libre > lo que mandó el bot\nconst i = $input.first().json;\nconst vacio = v => v === undefined || v === null || ['', '-', 'no especificado', 'null', 'undefined'].includes(String(v).trim().toLowerCase());\nconst pick = (...vals) => { const v = vals.find(x => !vacio(x)); return v === undefined ? '-' : String(v).trim(); };\n\nconst ids = String(i.ml_lead_ids || '').split(',').map(s => s.trim()).filter(s => /^[0-9a-f-]{36}$/i.test(s));\nconst telefono = pick(i.number, i.ml_phone);\nconst sufijo = telefono.replace(/\\D/g, '').slice(-8);\n// Sin conversación (carga por falta de respuesta): id numérico propio derivado del id de meli_leads.\n// Sirve de clave para el control de duplicados y no coincide con ninguna fila de conversations (que espera un número).\nconst idSinConversacion = ids[0] ? String(900000000000000 + parseInt(ids[0].replace(/-/g, '').slice(0, 12), 16) % 1e14) : '';\n\nreturn [{\n  json: {\n    ...i,\n    idConversation: vacio(i.idConversation) ? idSinConversacion : i.idConversation,\n    number: telefono,\n    name: pick(i.nombre_corregido, i.ml_nombre, i.name),\n    productoInteres: pick(i.ml_modelo, i.productoInteres),\n    dni: pick(i.dni, i.ml_dni),\n    email: pick(i.email, i.ml_email),\n    goodLead: String(i.goodLead ?? 'false'),\n    interes: pick(i.interes, 'cold'),\n    no_derivar: String(i.no_derivar).trim().toLowerCase() === 'true',\n    ids_sql: ids.length ? ids.map(id => `'${id}'`).join(',') : \"''\",\n    sufijo: sufijo.length === 8 ? sufijo : ''\n  }\n}];"
+        },
+        "id": "68bec25e-8b9f-4a81-9511-71b46f2636d9",
+        "name": "Completar con datos ML",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          224,
+          96
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "leftValue": "={{ $json.no_derivar }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "40ce9eb8-46bd-4775-9d4e-6ba317191bce",
+        "name": "No quiere ser derivado?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          448,
+          96
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "UPDATE meli_leads SET status = 'no_derivar', bot_uploaded = 1 WHERE user_id = 2702850938 AND (id IN ({{ $json.ids_sql }}) OR ('{{ $json.sufijo }}' <> '' AND RIGHT(REGEXP_REPLACE(buyer_phone, '[^0-9]', ''), 8) = '{{ $json.sufijo }}' AND status = 'in_conversation'))",
+          "options": {}
+        },
+        "id": "4b5e2d69-d6ff-4a07-ab67-16053ba67585",
+        "name": "meli_leads no_derivar",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          672,
+          0
+        ],
+        "credentials": {
+          "mySql": {
+            "id": "FezTcDnLo3SqPHvd",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "resp-nd",
+                "name": "response",
+                "value": "No derivado: el cliente pidio no ser contactado.",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "a12f5704-060d-4d89-870e-50f17022d0f1",
+        "name": "Respuesta no derivado",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [
+          896,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "value": "nW048ZVYNLrPomTR",
+            "mode": "list",
+            "cachedResultUrl": "/workflow/nW048ZVYNLrPomTR",
+            "cachedResultName": "close_conversation NISSAN ML"
+          },
+          "workflowInputs": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "goodLead": "={{ $json.goodLead }}",
+              "idConversation": "={{ $json.idConversation }}",
+              "number": "={{ $json.number }}",
+              "name": "={{ $json.name }}",
+              "pago": "={{ $json.pago }}",
+              "usado": "={{ $json.usado }}",
+              "interes": "={{ $json.interes }}",
+              "productoInteres": "={{ $json.productoInteres }}",
+              "resumen": "={{ $json.resumen }}",
+              "dni": "={{ $json.dni }}",
+              "email": "={{ $json.email }}",
+              "sucursal": "={{ $json.sucursal }}"
+            },
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "goodLead",
+                "displayName": "goodLead",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "idConversation",
+                "displayName": "idConversation",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "number",
+                "displayName": "number",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "name",
+                "displayName": "name",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "pago",
+                "displayName": "pago",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "usado",
+                "displayName": "usado",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "interes",
+                "displayName": "interes",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "productoInteres",
+                "displayName": "productoInteres",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "resumen",
+                "displayName": "resumen",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "dni",
+                "displayName": "dni",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "apellido",
+                "displayName": "apellido",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": true
+              },
+              {
+                "id": "email",
+                "displayName": "email",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "sucursal",
+                "displayName": "sucursal",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": false
+          },
+          "options": {
+            "waitForSubWorkflow": true
+          }
+        },
+        "id": "8d0ed14a-96c9-4621-ba7b-c64b50166c8c",
+        "name": "close_conversation NISSAN ML (actual)",
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1.2,
+        "position": [
+          672,
+          192
+        ],
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "UPDATE meli_leads SET status = '{{ String($('Completar con datos ML').first().json.goodLead) === 'true' ? 'sent' : 'not_loaded' }}', bot_uploaded = 1 WHERE user_id = 2702850938 AND (id IN ({{ $('Completar con datos ML').first().json.ids_sql }}) OR ('{{ $('Completar con datos ML').first().json.sufijo }}' <> '' AND RIGHT(REGEXP_REPLACE(buyer_phone, '[^0-9]', ''), 8) = '{{ $('Completar con datos ML').first().json.sufijo }}' AND status = 'in_conversation'))",
+          "options": {}
+        },
+        "id": "f98270df-92cc-47c6-8c19-839bc4a20803",
+        "name": "meli_leads sent",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          896,
+          192
+        ],
+        "executeOnce": true,
+        "credentials": {
+          "mySql": {
+            "id": "FezTcDnLo3SqPHvd",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "resp-ok",
+                "name": "response",
+                "value": "={{ $('close_conversation NISSAN ML (actual)').first().json.response || 'Ya nos quedo tu consulta. Un asesor te va a contactar.' }}",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "5358caf7-f1ea-4ffc-8f01-7ec87ccad951",
+        "name": "Respuesta",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [
+          1120,
+          192
+        ]
+      }
+    ],
+    "connections": {
+      "When Executed by Another Workflow": {
+        "main": [
+          [
+            {
+              "node": "Completar con datos ML",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Completar con datos ML": {
+        "main": [
+          [
+            {
+              "node": "No quiere ser derivado?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "No quiere ser derivado?": {
+        "main": [
+          [
+            {
+              "node": "meli_leads no_derivar",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "close_conversation NISSAN ML (actual)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "meli_leads no_derivar": {
+        "main": [
+          [
+            {
+              "node": "Respuesta no derivado",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "close_conversation NISSAN ML (actual)": {
+        "main": [
+          [
+            {
+              "node": "meli_leads sent",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "meli_leads sent": {
+        "main": [
+          [
+            {
+              "node": "Respuesta",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "MARCELO AGUSTIN DRI (via MCP)",
+    "name": "ID numérico de dedupe + marcar enviado siempre",
+    "description": "idConversation vacío -> número derivado del id de meli_leads (la tabla conversations espera número). El paso de carga siempre emite salida, así meli_leads queda 'sent' aunque el control de duplicados lo frene.",
+    "autosaved": false,
+    "createdAt": "2026-11-12T13:05:34.194Z",
+    "updatedAt": "2026-11-12T13:05:34.194Z"
+  },
+  "activeVersionId": "3dd9d1c9-ee4f-4729-8f97-e17247e2d443",
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Completar con datos ML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Completar con datos ML": {
+      "main": [
+        [
+          {
+            "node": "No quiere ser derivado?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "No quiere ser derivado?": {
+      "main": [
+        [
+          {
+            "node": "meli_leads no_derivar",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "close_conversation NISSAN ML (actual)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "meli_leads no_derivar": {
+      "main": [
+        [
+          {
+            "node": "Respuesta no derivado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "close_conversation NISSAN ML (actual)": {
+      "main": [
+        [
+          {
+            "node": "meli_leads sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "meli_leads sent": {
+      "main": [
+        [
+          {
+            "node": "Respuesta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-11-04T22:25:07.416Z",
+  "id": "STrBWKCOIKeMuXwl",
+  "isArchived": false,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "name": "close_conversation NISSAN ML v2",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "goodLead",
+              "type": "any"
+            },
+            {
+              "name": "idConversation",
+              "type": "any"
+            },
+            {
+              "name": "number",
+              "type": "any"
+            },
+            {
+              "name": "name",
+              "type": "any"
+            },
+            {
+              "name": "pago",
+              "type": "any"
+            },
+            {
+              "name": "usado",
+              "type": "any"
+            },
+            {
+              "name": "interes",
+              "type": "any"
+            },
+            {
+              "name": "productoInteres",
+              "type": "any"
+            },
+            {
+              "name": "resumen",
+              "type": "any"
+            },
+            {
+              "name": "dni",
+              "type": "any"
+            },
+            {
+              "name": "email",
+              "type": "any"
+            },
+            {
+              "name": "sucursal",
+              "type": "any"
+            },
+            {
+              "name": "nombre_corregido",
+              "type": "any"
+            },
+            {
+              "name": "no_derivar",
+              "type": "any"
+            },
+            {
+              "name": "ml_lead_ids",
+              "type": "any"
+            },
+            {
+              "name": "ml_nombre",
+              "type": "any"
+            },
+            {
+              "name": "ml_email",
+              "type": "any"
+            },
+            {
+              "name": "ml_dni",
+              "type": "any"
+            },
+            {
+              "name": "ml_modelo",
+              "type": "any"
+            },
+            {
+              "name": "ml_phone",
+              "type": "any"
+            }
+          ]
+        }
+      },
+      "id": "89fcecef-d1e9-4c51-be81-f8136b6ef8cb",
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prioridad: lo que corrigió el cliente en el chat > lo que vino de Mercado Libre > lo que mandó el bot\nconst i = $input.first().json;\nconst vacio = v => v === undefined || v === null || ['', '-', 'no especificado', 'null', 'undefined'].includes(String(v).trim().toLowerCase());\nconst pick = (...vals) => { const v = vals.find(x => !vacio(x)); return v === undefined ? '-' : String(v).trim(); };\n\nconst ids = String(i.ml_lead_ids || '').split(',').map(s => s.trim()).filter(s => /^[0-9a-f-]{36}$/i.test(s));\nconst telefono = pick(i.number, i.ml_phone);\nconst sufijo = telefono.replace(/\\D/g, '').slice(-8);\n// Sin conversación (carga por falta de respuesta): id numérico propio derivado del id de meli_leads.\n// Sirve de clave para el control de duplicados y no coincide con ninguna fila de conversations (que espera un número).\nconst idSinConversacion = ids[0] ? String(900000000000000 + parseInt(ids[0].replace(/-/g, '').slice(0, 12), 16) % 1e14) : '';\n\nreturn [{\n  json: {\n    ...i,\n    idConversation: vacio(i.idConversation) ? idSinConversacion : i.idConversation,\n    number: telefono,\n    name: pick(i.nombre_corregido, i.ml_nombre, i.name),\n    productoInteres: pick(i.ml_modelo, i.productoInteres),\n    dni: pick(i.dni, i.ml_dni),\n    email: pick(i.email, i.ml_email),\n    goodLead: String(i.goodLead ?? 'false'),\n    interes: pick(i.interes, 'cold'),\n    no_derivar: String(i.no_derivar).trim().toLowerCase() === 'true',\n    ids_sql: ids.length ? ids.map(id => `'${id}'`).join(',') : \"''\",\n    sufijo: sufijo.length === 8 ? sufijo : ''\n  }\n}];"
+      },
+      "id": "68bec25e-8b9f-4a81-9511-71b46f2636d9",
+      "name": "Completar con datos ML",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.no_derivar }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "40ce9eb8-46bd-4775-9d4e-6ba317191bce",
+      "name": "No quiere ser derivado?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE meli_leads SET status = 'no_derivar', bot_uploaded = 1 WHERE user_id = 2702850938 AND (id IN ({{ $json.ids_sql }}) OR ('{{ $json.sufijo }}' <> '' AND RIGHT(REGEXP_REPLACE(buyer_phone, '[^0-9]', ''), 8) = '{{ $json.sufijo }}' AND status = 'in_conversation'))",
+        "options": {}
+      },
+      "id": "4b5e2d69-d6ff-4a07-ab67-16053ba67585",
+      "name": "meli_leads no_derivar",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        672,
+        0
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "FezTcDnLo3SqPHvd",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "resp-nd",
+              "name": "response",
+              "value": "No derivado: el cliente pidio no ser contactado.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a12f5704-060d-4d89-870e-50f17022d0f1",
+      "name": "Respuesta no derivado",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        896,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "nW048ZVYNLrPomTR",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/nW048ZVYNLrPomTR",
+          "cachedResultName": "close_conversation NISSAN ML"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "goodLead": "={{ $json.goodLead }}",
+            "idConversation": "={{ $json.idConversation }}",
+            "number": "={{ $json.number }}",
+            "name": "={{ $json.name }}",
+            "pago": "={{ $json.pago }}",
+            "usado": "={{ $json.usado }}",
+            "interes": "={{ $json.interes }}",
+            "productoInteres": "={{ $json.productoInteres }}",
+            "resumen": "={{ $json.resumen }}",
+            "dni": "={{ $json.dni }}",
+            "email": "={{ $json.email }}",
+            "sucursal": "={{ $json.sucursal }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "goodLead",
+              "displayName": "goodLead",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "idConversation",
+              "displayName": "idConversation",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "number",
+              "displayName": "number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "pago",
+              "displayName": "pago",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "usado",
+              "displayName": "usado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "interes",
+              "displayName": "interes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "productoInteres",
+              "displayName": "productoInteres",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "resumen",
+              "displayName": "resumen",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "dni",
+              "displayName": "dni",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "apellido",
+              "displayName": "apellido",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "sucursal",
+              "displayName": "sucursal",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "8d0ed14a-96c9-4621-ba7b-c64b50166c8c",
+      "name": "close_conversation NISSAN ML (actual)",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        672,
+        192
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE meli_leads SET status = '{{ String($('Completar con datos ML').first().json.goodLead) === 'true' ? 'sent' : 'not_loaded' }}', bot_uploaded = 1 WHERE user_id = 2702850938 AND (id IN ({{ $('Completar con datos ML').first().json.ids_sql }}) OR ('{{ $('Completar con datos ML').first().json.sufijo }}' <> '' AND RIGHT(REGEXP_REPLACE(buyer_phone, '[^0-9]', ''), 8) = '{{ $('Completar con datos ML').first().json.sufijo }}' AND status = 'in_conversation'))",
+        "options": {}
+      },
+      "id": "f98270df-92cc-47c6-8c19-839bc4a20803",
+      "name": "meli_leads sent",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        896,
+        192
+      ],
+      "executeOnce": true,
+      "credentials": {
+        "mySql": {
+          "id": "FezTcDnLo3SqPHvd",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "resp-ok",
+              "name": "response",
+              "value": "={{ $('close_conversation NISSAN ML (actual)').first().json.response || 'Ya nos quedo tu consulta. Un asesor te va a contactar.' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5358caf7-f1ea-4ffc-8f01-7ec87ccad951",
+      "name": "Respuesta",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1120,
+        192
+      ]
+    }
+  ],
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate"
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "STrBWKCOIKeMuXwl",
+      "projectId": "K8p6XEqA0L6D2uVt",
+      "createdAt": "2026-11-04T22:25:07.419Z",
+      "updatedAt": "2026-11-04T22:25:07.419Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2026-11-12T13:05:34.191Z",
+  "versionId": "3dd9d1c9-ee4f-4729-8f97-e17247e2d443"
+}
