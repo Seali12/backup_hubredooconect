@@ -1,0 +1,375 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "441d7b90-0cf9-4295-924f-8ad8a55c0f93",
+    "workflowId": "OtbeqiDM86EQ7bkD",
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "7b3b90f9-3528-4b01-8e34-6e8997cdf182",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.1,
+        "position": [
+          0,
+          0
+        ],
+        "id": "5912c910-0a43-4007-b0c9-bc1d8232b604",
+        "name": "Webhook",
+        "webhookId": "7b3b90f9-3528-4b01-8e34-6e8997cdf182"
+      },
+      {
+        "id": "9806223f-4d31-4f6b-97f6-ccdea6657541",
+        "name": "Preparar envío",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          288,
+          0
+        ],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "// ======================================================\n// CONFIGURACION DE CAMPAÑAS TIAN MOTORS (company 230, grupo 791)\n// Cada campaña: id en campaigns-api y qué dato va en cada variable del template.\n// Para sumar una campaña nueva, agregala acá.\n// ======================================================\nconst CAMPANAS = {\n  bienvenida: { id: 4864, nombre: 'Bienvenida', vars: { '1': 'marca',  '2': 'administrativa' } },\n  unidad_asignada: { id: 4865, nombre: 'Unidad Asignada', vars: { '1': 'nombre', '2': 'marca' } },\n  unidad_patentada: { id: 4866, nombre: 'Unidad Patentada', vars: { '1': 'marca',  '2': 'modelo' } },\n  seguros: { id: 4867, nombre: 'Seguros', vars: { '1': 'nombre', '2': 'marca' } },\n  accesorios: { id: 4868, nombre: 'Accesorios', vars: { '1': 'nombre', '2': 'marca' } },\n};\n\n// Estado de Pilot (ADMIN_FILE_STATUS) -> campaña. Igual que el webhook viejo de Robayna.\n// Los estados se normalizan: \"BANDEJA DE ENTRADA\", \"Bandeja de entrada\" y \"bandeja_de_entrada\" son lo mismo.\nconst ESTADOS = {\n  bandeja_de_entrada: 'bienvenida',\n  bienvenida:         'bienvenida',\n  unidad_asignada:    'unidad_asignada',\n  unidad_patentada:   'unidad_patentada',\n  seguros:            'seguros',\n  accesorios:         'accesorios',\n  // calendarizacion_de_entrega: sin campaña en el módulo de campañas todavía\n};\n\nconst SENDER_PHONE = '5491166265024';\nconst COMPANY_ID = '230';\n\nconst body = $json.body || {};\nconst pick = (...keys) => {\n  for (const k of keys) {\n    const v = body[k];\n    if (v !== undefined && v !== null && String(v).trim() !== '') return String(v).trim().replace(/\\s+/g, ' ');\n  }\n  return '';\n};\nconst normClave = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '')\n  .toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');\n\n// Manda el campo ID si viene; si no, el estado del legajo (como el webhook viejo).\nconst claveId = normClave(pick('ID', 'id', 'campana', 'campaña', 'campaign', 'flujo', 'evento'));\nconst claveEstado = normClave(pick('estado', 'Estado', 'status'));\nconst clave = claveId || claveEstado;\nconst campKey = ESTADOS[clave] || (CAMPANAS[clave] ? clave : '');\n\n// Telefono argentino -> 549 + area + numero. Si no es valido, vacío (no se envía).\nconst norm = (raw) => {\n  let d = String(raw ?? '').replace(/\\D/g, '');\n  if (!d || /^0+$/.test(d)) return '';\n  d = d.replace(/^00/, '');\n  if (d.startsWith('54')) d = d.slice(2);\n  if (d.startsWith('9')) d = d.slice(1);\n  if (d.startsWith('0')) d = d.slice(1);\n  if (d.length === 12) {\n    const pos = d.startsWith('11') ? [2] : [3, 4, 2];\n    for (const p of pos) {\n      if (d.substr(p, 2) === '15') { d = d.slice(0, p) + d.slice(p + 2); break; }\n    }\n  }\n  return d.length === 10 ? '549' + d : '';\n};\n\nconst datos = {\n  nombre:         pick('cliente_nombre', 'nombre', 'Nombre', 'first_name'),\n  marca:          pick('marca', 'Marca', 'brand'),\n  modelo:         pick('modelo', 'Modelo', 'model', 'producto'),\n  administrativa: pick('administrativa', 'Administrativa', 'vendedor', 'Vendedor', 'asesor'),\n  guid:           pick('GUID', 'guid', 'lead_guid'),\n};\nconst telefono = norm(pick('cliente_cel', 'Telefono', 'telefono', 'celular')) || norm(pick('cliente_tel', 'phone'));\n\nconst camp = CAMPANAS[campKey];\nconst variables = {};\nconst faltan = [];\nif (camp) {\n  for (const [n, campo] of Object.entries(camp.vars)) {\n    variables[n] = datos[campo];\n    if (!datos[campo]) faltan.push(campo);\n  }\n}\nif (!telefono) faltan.push('telefono valido');\n\nlet motivo = '';\nif (!camp) motivo = `Estado/campaña sin campaña asignada: \"${clave || '(vacío)'}\". Válidos: ${Object.keys(ESTADOS).join(', ')}`;\nelse if (faltan.length) motivo = `Faltan datos para ${camp.nombre}: ${faltan.join(', ')}`;\n\nreturn {\n  json: {\n    enviar: !motivo,\n    motivo,\n    estado_recibido: pick('estado', 'Estado', 'status'),\n    campana: camp ? camp.nombre : clave,\n    campaign_id: camp ? camp.id : null,\n    telefono,\n    variables,\n    company_id: COMPANY_ID,\n    request: {\n      phone_number: telefono,\n      sender_phone: SENDER_PHONE,\n      destination_country: 'AR',\n      enqueue_if_no_credit: true,\n      daily_envio: true,\n      ...(datos.guid ? { crm_lead_guid: datos.guid } : {}),\n      variables,\n    },\n  },\n};\n"
+        }
+      },
+      {
+        "id": "ecc467c7-0ccb-407e-a513-e28c01010010",
+        "name": "¿Datos completos?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          512,
+          0
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "ok1",
+                "leftValue": "={{ $json.enviar }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "5045df6e-fc4b-4225-8eae-8ed8792a470b",
+        "name": "Enviar campaña",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          736,
+          -96
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "=https://campaigns.redooconect.com.ar/api/v1/campaigns/{{ $json.campaign_id }}/send-single",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-API-Key",
+                "value": "31ff1ec5-e4cc-4869-91a7-1ec695e2556f"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($json.request) }}",
+          "options": {}
+        },
+        "onError": "continueRegularOutput",
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
+      },
+      {
+        "id": "0bf86e8c-b61e-4840-86b6-0d4c0a414a1c",
+        "name": "Descartado",
+        "type": "n8n-nodes-base.noOp",
+        "typeVersion": 1,
+        "position": [
+          736,
+          96
+        ],
+        "parameters": {},
+        "notes": "No se envía: campaña no reconocida o faltan datos (ver campo motivo)"
+      },
+      {
+        "id": "2641a4cc-6859-4905-8c28-98f51931717c",
+        "name": "Nota campañas",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          -16,
+          -200
+        ],
+        "parameters": {
+          "width": 980,
+          "height": 460,
+          "content": "## Disparo de campañas (módulo campañas)\nPOST desde Pilot. Elige la campaña por `ID` o, si no viene, por `estado` (ADMIN_FILE_STATUS), como el webhook viejo:\nBANDEJA DE ENTRADA → Bienvenida | unidad_asignada | unidad_patentada | seguros | accesorios\nCampos: `cliente_nombre`, `cliente_cel`/`cliente_tel`, `marca`, `modelo`, `administrativa`, `GUID` (opcional).\nTodas las plantillas usan **marca**. Si falta un dato o el teléfono no es válido, no se envía (ver `motivo`)."
+        }
+      }
+    ],
+    "connections": {
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "Preparar envío",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Preparar envío": {
+        "main": [
+          [
+            {
+              "node": "¿Datos completos?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "¿Datos completos?": {
+        "main": [
+          [
+            {
+              "node": "Enviar campaña",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Descartado",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "MARCELO AGUSTIN DRI (via MCP)",
+    "name": "Disparo por estado de Pilot (como webhook viejo)",
+    "description": "Lee ID o, si no viene, estado (ADMIN_FILE_STATUS). BANDEJA DE ENTRADA -> Bienvenida. Teléfono inválido no se envía.",
+    "autosaved": false,
+    "createdAt": "2026-11-10T17:49:11.798Z",
+    "updatedAt": "2026-11-10T17:49:11.798Z"
+  },
+  "activeVersionId": "441d7b90-0cf9-4295-924f-8ad8a55c0f93",
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Preparar envío",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar envío": {
+      "main": [
+        [
+          {
+            "node": "¿Datos completos?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Datos completos?": {
+      "main": [
+        [
+          {
+            "node": "Enviar campaña",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Descartado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-10-21T13:32:40.540Z",
+  "id": "OtbeqiDM86EQ7bkD",
+  "isArchived": false,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "name": "TIAN WEBHOOK",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "7b3b90f9-3528-4b01-8e34-6e8997cdf182",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "5912c910-0a43-4007-b0c9-bc1d8232b604",
+      "name": "Webhook",
+      "webhookId": "7b3b90f9-3528-4b01-8e34-6e8997cdf182"
+    },
+    {
+      "id": "9806223f-4d31-4f6b-97f6-ccdea6657541",
+      "name": "Preparar envío",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        288,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// ======================================================\n// CONFIGURACION DE CAMPAÑAS TIAN MOTORS (company 230, grupo 791)\n// Cada campaña: id en campaigns-api y qué dato va en cada variable del template.\n// Para sumar una campaña nueva, agregala acá.\n// ======================================================\nconst CAMPANAS = {\n  bienvenida: { id: 4864, nombre: 'Bienvenida', vars: { '1': 'marca',  '2': 'administrativa' } },\n  unidad_asignada: { id: 4865, nombre: 'Unidad Asignada', vars: { '1': 'nombre', '2': 'marca' } },\n  unidad_patentada: { id: 4866, nombre: 'Unidad Patentada', vars: { '1': 'marca',  '2': 'modelo' } },\n  seguros: { id: 4867, nombre: 'Seguros', vars: { '1': 'nombre', '2': 'marca' } },\n  accesorios: { id: 4868, nombre: 'Accesorios', vars: { '1': 'nombre', '2': 'marca' } },\n};\n\n// Estado de Pilot (ADMIN_FILE_STATUS) -> campaña. Igual que el webhook viejo de Robayna.\n// Los estados se normalizan: \"BANDEJA DE ENTRADA\", \"Bandeja de entrada\" y \"bandeja_de_entrada\" son lo mismo.\nconst ESTADOS = {\n  bandeja_de_entrada: 'bienvenida',\n  bienvenida:         'bienvenida',\n  unidad_asignada:    'unidad_asignada',\n  unidad_patentada:   'unidad_patentada',\n  seguros:            'seguros',\n  accesorios:         'accesorios',\n  // calendarizacion_de_entrega: sin campaña en el módulo de campañas todavía\n};\n\nconst SENDER_PHONE = '5491166265024';\nconst COMPANY_ID = '230';\n\nconst body = $json.body || {};\nconst pick = (...keys) => {\n  for (const k of keys) {\n    const v = body[k];\n    if (v !== undefined && v !== null && String(v).trim() !== '') return String(v).trim().replace(/\\s+/g, ' ');\n  }\n  return '';\n};\nconst normClave = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '')\n  .toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');\n\n// Manda el campo ID si viene; si no, el estado del legajo (como el webhook viejo).\nconst claveId = normClave(pick('ID', 'id', 'campana', 'campaña', 'campaign', 'flujo', 'evento'));\nconst claveEstado = normClave(pick('estado', 'Estado', 'status'));\nconst clave = claveId || claveEstado;\nconst campKey = ESTADOS[clave] || (CAMPANAS[clave] ? clave : '');\n\n// Telefono argentino -> 549 + area + numero. Si no es valido, vacío (no se envía).\nconst norm = (raw) => {\n  let d = String(raw ?? '').replace(/\\D/g, '');\n  if (!d || /^0+$/.test(d)) return '';\n  d = d.replace(/^00/, '');\n  if (d.startsWith('54')) d = d.slice(2);\n  if (d.startsWith('9')) d = d.slice(1);\n  if (d.startsWith('0')) d = d.slice(1);\n  if (d.length === 12) {\n    const pos = d.startsWith('11') ? [2] : [3, 4, 2];\n    for (const p of pos) {\n      if (d.substr(p, 2) === '15') { d = d.slice(0, p) + d.slice(p + 2); break; }\n    }\n  }\n  return d.length === 10 ? '549' + d : '';\n};\n\nconst datos = {\n  nombre:         pick('cliente_nombre', 'nombre', 'Nombre', 'first_name'),\n  marca:          pick('marca', 'Marca', 'brand'),\n  modelo:         pick('modelo', 'Modelo', 'model', 'producto'),\n  administrativa: pick('administrativa', 'Administrativa', 'vendedor', 'Vendedor', 'asesor'),\n  guid:           pick('GUID', 'guid', 'lead_guid'),\n};\nconst telefono = norm(pick('cliente_cel', 'Telefono', 'telefono', 'celular')) || norm(pick('cliente_tel', 'phone'));\n\nconst camp = CAMPANAS[campKey];\nconst variables = {};\nconst faltan = [];\nif (camp) {\n  for (const [n, campo] of Object.entries(camp.vars)) {\n    variables[n] = datos[campo];\n    if (!datos[campo]) faltan.push(campo);\n  }\n}\nif (!telefono) faltan.push('telefono valido');\n\nlet motivo = '';\nif (!camp) motivo = `Estado/campaña sin campaña asignada: \"${clave || '(vacío)'}\". Válidos: ${Object.keys(ESTADOS).join(', ')}`;\nelse if (faltan.length) motivo = `Faltan datos para ${camp.nombre}: ${faltan.join(', ')}`;\n\nreturn {\n  json: {\n    enviar: !motivo,\n    motivo,\n    estado_recibido: pick('estado', 'Estado', 'status'),\n    campana: camp ? camp.nombre : clave,\n    campaign_id: camp ? camp.id : null,\n    telefono,\n    variables,\n    company_id: COMPANY_ID,\n    request: {\n      phone_number: telefono,\n      sender_phone: SENDER_PHONE,\n      destination_country: 'AR',\n      enqueue_if_no_credit: true,\n      daily_envio: true,\n      ...(datos.guid ? { crm_lead_guid: datos.guid } : {}),\n      variables,\n    },\n  },\n};\n"
+      }
+    },
+    {
+      "id": "ecc467c7-0ccb-407e-a513-e28c01010010",
+      "name": "¿Datos completos?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        512,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "ok1",
+              "leftValue": "={{ $json.enviar }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "5045df6e-fc4b-4225-8eae-8ed8792a470b",
+      "name": "Enviar campaña",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        736,
+        -96
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://campaigns.redooconect.com.ar/api/v1/campaigns/{{ $json.campaign_id }}/send-single",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "31ff1ec5-e4cc-4869-91a7-1ec695e2556f"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.request) }}",
+        "options": {}
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "0bf86e8c-b61e-4840-86b6-0d4c0a414a1c",
+      "name": "Descartado",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        736,
+        96
+      ],
+      "parameters": {},
+      "notes": "No se envía: campaña no reconocida o faltan datos (ver campo motivo)"
+    },
+    {
+      "id": "2641a4cc-6859-4905-8c28-98f51931717c",
+      "name": "Nota campañas",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -16,
+        -200
+      ],
+      "parameters": {
+        "width": 980,
+        "height": 460,
+        "content": "## Disparo de campañas (módulo campañas)\nPOST desde Pilot. Elige la campaña por `ID` o, si no viene, por `estado` (ADMIN_FILE_STATUS), como el webhook viejo:\nBANDEJA DE ENTRADA → Bienvenida | unidad_asignada | unidad_patentada | seguros | accesorios\nCampos: `cliente_nombre`, `cliente_cel`/`cliente_tel`, `marca`, `modelo`, `administrativa`, `GUID` (opcional).\nTodas las plantillas usan **marca**. Si falta un dato o el teléfono no es válido, no se envía (ver `motivo`)."
+      }
+    }
+  ],
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "OtbeqiDM86EQ7bkD",
+      "projectId": "K8p6XEqA0L6D2uVt",
+      "createdAt": "2026-10-21T13:32:40.547Z",
+      "updatedAt": "2026-10-21T13:32:40.547Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2026-11-10T17:49:11.796Z",
+  "versionId": "441d7b90-0cf9-4295-924f-8ad8a55c0f93"
+}
