@@ -1,0 +1,211 @@
+{
+  "active": false,
+  "activeVersion": null,
+  "activeVersionId": null,
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Pilot authentication",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pilot authentication": {
+      "main": [
+        [
+          {
+            "node": "Pilot authorization",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pilot authorization": {
+      "main": [
+        [
+          {
+            "node": "Leads noviembre",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leads noviembre": {
+      "main": [
+        [
+          {
+            "node": "Leer lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer lead": {
+      "main": [
+        [
+          {
+            "node": "Resumen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-11-17T13:27:07.109Z",
+  "id": "Hx407AbaGZeW0j5H",
+  "isArchived": true,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "name": "TEMP Ford - leer en Pilot todos los leads de noviembre",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "id": "dfbad4c4-4f40-4842-b826-22845bb27e97",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "3555eeef-0793-47b1-9bac-2a87a5dbb932",
+      "name": "Pilot authentication",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        224,
+        0
+      ],
+      "parameters": {
+        "url": "https://api.pilotsolution.net/v1/users/authentication.php",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "options": {}
+      },
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "NHXyrkv9ca6Njn8R",
+          "name": "PILOT FORD COLOMBIA"
+        }
+      }
+    },
+    {
+      "id": "105728d8-3b5c-4d31-80f8-263aa3899d59",
+      "name": "Pilot authorization",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        448,
+        0
+      ],
+      "parameters": {
+        "url": "https://api.pilotsolution.net/v1/users/authorization.php",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "identity_token",
+              "value": "={{ $json.result.entitydata.accounts[0].token }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "2f84f62d-a635-4847-83a6-e4cbc15b087e",
+      "name": "Leads noviembre",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        672,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, pilot_tracking_id FROM ford_colombia WHERE created_at >= '2026-11-01 05:00' AND pilot_tracking_id IS NOT NULL AND pilot_tracking_id <> '' ORDER BY id;",
+        "options": {}
+      },
+      "credentials": {
+        "mySql": {
+          "id": "Vl0rIdPXBmN5yKfQ",
+          "name": "MSQL-FORD-COLOMBIA"
+        }
+      }
+    },
+    {
+      "id": "32a18820-6a63-41e4-9061-ce27bdcc8641",
+      "name": "Leer lead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        896,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.pilotsolution.net/v1/welcomes/read.php",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ data: { id: $json.pilot_tracking_id }, header: { FlowName: \"lead_read\", SequenceId: 1, TimeStamp: 1248377, TrackingId: \"FD1C4A1A-CAFB-467E-825B-7FFB86CC21E3\", access_token: $(\"Pilot authorization\").first().json.result.entitydata.session.identityToken } }) }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 1050
+            }
+          }
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "f0e4f945-cb95-4675-b02f-4c9f95b1276e",
+      "name": "Resumen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const src = $('Leads noviembre').all();\nreturn $input.all().map((it, i) => { const e = (it.json.result || {}).entitydata || {}; const a = e.asigned || {}; const d = e.desist || {}; return { json: { i: src[i].json.id, g: (e.interest_level || {}).name || '', s: (e.status || {}).name || '', b: (a.branch || {}).name || '', u: (a.user || {}).fullname || '', d: (d.status || {}).name || '', du: (d.user || {}).fullname || '', m: ((e.modified || {}).user || {}).fullname || '', err: it.json.error ? 1 : 0 } }; });"
+      }
+    }
+  ],
+  "pinData": null,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "Hx407AbaGZeW0j5H",
+      "projectId": "K8p6XEqA0L6D2uVt",
+      "createdAt": "2026-11-17T13:27:07.115Z",
+      "updatedAt": "2026-11-17T13:27:07.115Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2026-11-17T13:29:08.000Z",
+  "versionId": "19182b98-6f7c-4336-832a-bb3f4c63fc00"
+}
