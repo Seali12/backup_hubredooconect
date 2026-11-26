@@ -1,0 +1,297 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "e49741d5-911e-4bd0-b483-801aadf92661",
+    "workflowId": "dEvgRLvubxWg3zAm",
+    "nodes": [
+      {
+        "id": "27f4f6d8-8e9a-48ec-b8a5-0b9bc5e267b7",
+        "name": "Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.1,
+        "position": [
+          0,
+          0
+        ],
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "5d1bb461-159d-405d-9556-f382343bcb78",
+          "options": {}
+        },
+        "webhookId": "e66536ce-b614-437d-a267-12521f941192"
+      },
+      {
+        "id": "e1be97a7-a2d7-4cbc-91d5-e2ceeda0ad0d",
+        "name": "Preparar datos",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          224,
+          0
+        ],
+        "parameters": {
+          "jsCode": "function normalizarTelefonoArgentina(numero) {\n  if (!numero) return null;\n  let d = String(numero).replace(/\\D/g, '');\n  if (d.startsWith('549') && d.length === 13) return d;\n  if (d.startsWith('54') && d.length === 12) return '549' + d.slice(2);\n  if (d.startsWith('0')) d = d.slice(1);\n  if (d.startsWith('1115') && d.length === 12) d = '11' + d.slice(4);\n  if (d.length === 10) return '549' + d;\n  return null;\n}\nconst norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/\\s+/g, ' ').trim();\n\n// Webhook Pilot -> campaña de la suite según pilot_negocio (FIAT/PEUGEOT x plan/0km)\nconst body = $input.first().json.body || {};\nconst negocio = String(body.pilot_negocio || body.negocio || '').trim();\nconst nombre = [body.pilot_firstname, body.pilot_lastname].filter(v => v && String(v).trim()).map(v => String(v).trim()).join(' ') || 'Cliente';\n\nlet telefono = body.pilot_cellphone || body.pilot_phone || null;\nif (!telefono && body.pilot_notes) {\n  const m = String(body.pilot_notes).match(/n[uú]mero_de_whatsapp:\\s*([+\\d\\s()-]+)/i);\n  if (m) telefono = m[1].trim();\n}\nconst phone = normalizarTelefonoArgentina(telefono);\n\nconst n = norm(negocio);\nconst fiat = n.includes('FIAT'), peugeot = n.includes('PEUGEOT');\nconst plan = n.includes('AHORRO') || n.includes('PLAN');\nconst okm = /(^|\\s)0\\s*KM(\\s|$)/.test(n) || n.includes('0KM');\n\n// Campañas de la suite. La variable del campaign_id la inyecta la suite: no se manda.\n// Imagen por marca: concesionaria FIAT / concesionaria Peugeot.\nconst IMG_FIAT = 'Fiat-1878_20251028_100924.jpg';\nconst IMG_PEUGEOT = 'WhatsApp-Image-2025-07-14-at-12.32.12-PM_20251110_100927.jpeg';\nconst c = [\n  { ok: fiat && plan, id: 5978, label: 'nocomprafiatplansinmodelo', img: IMG_FIAT },\n  { ok: peugeot && plan, id: 5979, label: 'nocomprapeugeotplansinmodelo', img: IMG_PEUGEOT },\n  { ok: fiat && okm, id: 5976, label: 'nocomprafiatconvencionalsinmodelo', img: IMG_FIAT },\n  { ok: peugeot && okm, id: 5980, label: 'nocomprapeugeotconvencionalsinmodelo', img: IMG_PEUGEOT },\n].find(x => x.ok) || null;\n\nreturn [{ json: {\n  valido: Boolean(phone && c),\n  campaign_id: c ? c.id : 0,\n  campana: c ? c.label : null,\n  phone_number: phone,\n  telefono_original: telefono,\n  negocio,\n  variables: c ? { '1': nombre, '2': c.img } : {},\n} }];\n"
+        }
+      },
+      {
+        "id": "e6972af3-9b86-43fb-8d4b-10120474b404",
+        "name": "¿Datos OK?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          448,
+          0
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose"
+            },
+            "conditions": [
+              {
+                "leftValue": "={{ $json.valido }}",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                },
+                "rightValue": ""
+              }
+            ],
+            "combinator": "and"
+          }
+        }
+      },
+      {
+        "id": "a5203565-09c0-42de-b925-086debb5f7eb",
+        "name": "Enviar campaña suite",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          672,
+          0
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "=https://campaigns.redooconect.com.ar/api/v1/campaigns/{{ $json.campaign_id }}/send-single",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-API-Key",
+                "value": "6955995d-7c77-4c76-a029-f2bc3acbc579"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ phone_number: $json.phone_number, sender_phone: '5491125599175', destination_country: 'AR', enqueue_if_no_credit: true, variables: $json.variables }) }}",
+          "options": {}
+        },
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
+      }
+    ],
+    "connections": {
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "Preparar datos",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Preparar datos": {
+        "main": [
+          [
+            {
+              "node": "¿Datos OK?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "¿Datos OK?": {
+        "main": [
+          [
+            {
+              "node": "Enviar campaña suite",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "Redoo Desarrollo (via MCP)",
+    "name": "Pase a producción: path del webhook viejo",
+    "description": "Updated nodes: Webhook",
+    "autosaved": false,
+    "createdAt": "2026-10-29T21:46:03.566Z",
+    "updatedAt": "2026-10-29T21:46:03.566Z"
+  },
+  "activeVersionId": "e49741d5-911e-4bd0-b483-801aadf92661",
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Preparar datos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar datos": {
+      "main": [
+        [
+          {
+            "node": "¿Datos OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Datos OK?": {
+      "main": [
+        [
+          {
+            "node": "Enviar campaña suite",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-10-29T21:21:59.395Z",
+  "id": "dEvgRLvubxWg3zAm",
+  "isArchived": false,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "name": "[SUITE] API PILOT",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "id": "27f4f6d8-8e9a-48ec-b8a5-0b9bc5e267b7",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "5d1bb461-159d-405d-9556-f382343bcb78",
+        "options": {}
+      },
+      "webhookId": "e66536ce-b614-437d-a267-12521f941192"
+    },
+    {
+      "id": "e1be97a7-a2d7-4cbc-91d5-e2ceeda0ad0d",
+      "name": "Preparar datos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ],
+      "parameters": {
+        "jsCode": "function normalizarTelefonoArgentina(numero) {\n  if (!numero) return null;\n  let d = String(numero).replace(/\\D/g, '');\n  if (d.startsWith('549') && d.length === 13) return d;\n  if (d.startsWith('54') && d.length === 12) return '549' + d.slice(2);\n  if (d.startsWith('0')) d = d.slice(1);\n  if (d.startsWith('1115') && d.length === 12) d = '11' + d.slice(4);\n  if (d.length === 10) return '549' + d;\n  return null;\n}\nconst norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/\\s+/g, ' ').trim();\n\n// Webhook Pilot -> campaña de la suite según pilot_negocio (FIAT/PEUGEOT x plan/0km)\nconst body = $input.first().json.body || {};\nconst negocio = String(body.pilot_negocio || body.negocio || '').trim();\nconst nombre = [body.pilot_firstname, body.pilot_lastname].filter(v => v && String(v).trim()).map(v => String(v).trim()).join(' ') || 'Cliente';\n\nlet telefono = body.pilot_cellphone || body.pilot_phone || null;\nif (!telefono && body.pilot_notes) {\n  const m = String(body.pilot_notes).match(/n[uú]mero_de_whatsapp:\\s*([+\\d\\s()-]+)/i);\n  if (m) telefono = m[1].trim();\n}\nconst phone = normalizarTelefonoArgentina(telefono);\n\nconst n = norm(negocio);\nconst fiat = n.includes('FIAT'), peugeot = n.includes('PEUGEOT');\nconst plan = n.includes('AHORRO') || n.includes('PLAN');\nconst okm = /(^|\\s)0\\s*KM(\\s|$)/.test(n) || n.includes('0KM');\n\n// Campañas de la suite. La variable del campaign_id la inyecta la suite: no se manda.\n// Imagen por marca: concesionaria FIAT / concesionaria Peugeot.\nconst IMG_FIAT = 'Fiat-1878_20251028_100924.jpg';\nconst IMG_PEUGEOT = 'WhatsApp-Image-2025-07-14-at-12.32.12-PM_20251110_100927.jpeg';\nconst c = [\n  { ok: fiat && plan, id: 5978, label: 'nocomprafiatplansinmodelo', img: IMG_FIAT },\n  { ok: peugeot && plan, id: 5979, label: 'nocomprapeugeotplansinmodelo', img: IMG_PEUGEOT },\n  { ok: fiat && okm, id: 5976, label: 'nocomprafiatconvencionalsinmodelo', img: IMG_FIAT },\n  { ok: peugeot && okm, id: 5980, label: 'nocomprapeugeotconvencionalsinmodelo', img: IMG_PEUGEOT },\n].find(x => x.ok) || null;\n\nreturn [{ json: {\n  valido: Boolean(phone && c),\n  campaign_id: c ? c.id : 0,\n  campana: c ? c.label : null,\n  phone_number: phone,\n  telefono_original: telefono,\n  negocio,\n  variables: c ? { '1': nombre, '2': c.img } : {},\n} }];\n"
+      }
+    },
+    {
+      "id": "e6972af3-9b86-43fb-8d4b-10120474b404",
+      "name": "¿Datos OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.valido }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "a5203565-09c0-42de-b925-086debb5f7eb",
+      "name": "Enviar campaña suite",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        672,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://campaigns.redooconect.com.ar/api/v1/campaigns/{{ $json.campaign_id }}/send-single",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "6955995d-7c77-4c76-a029-f2bc3acbc579"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ phone_number: $json.phone_number, sender_phone: '5491125599175', destination_country: 'AR', enqueue_if_no_credit: true, variables: $json.variables }) }}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    }
+  ],
+  "pinData": null,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "dEvgRLvubxWg3zAm",
+      "projectId": "XDNGkKAM4jxvPjG8",
+      "createdAt": "2026-10-29T21:21:59.397Z",
+      "updatedAt": "2026-10-29T21:21:59.397Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2026-10-29T21:46:03.565Z",
+  "versionId": "e49741d5-911e-4bd0-b483-801aadf92661"
+}
