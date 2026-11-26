@@ -1,0 +1,1172 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "96b00b9d-0e1f-4b01-aeb1-8054204e617a",
+    "workflowId": "2QJEyF5VNIt5hLK8",
+    "nodes": [
+      {
+        "parameters": {
+          "descriptionType": "manual",
+          "toolDescription": "llama a esta función cuando el usuario quiera conocer la financiación que puede realizar, como y cuanto es el valor. Si el cliente solicita de un modelo específico, muéstrale solo de ese modelo. ",
+          "documentId": {
+            "__rl": true,
+            "value": "1658hOvMlK2qFbDxaVsMKpYNMGB0bmPdqdjdGymTwyZo",
+            "mode": "list",
+            "cachedResultName": "Nissan_IA",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1658hOvMlK2qFbDxaVsMKpYNMGB0bmPdqdjdGymTwyZo/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": 406715035,
+            "mode": "list",
+            "cachedResultName": "Financiación",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1658hOvMlK2qFbDxaVsMKpYNMGB0bmPdqdjdGymTwyZo/edit#gid=406715035"
+          },
+          "options": {}
+        },
+        "id": "66965787-f3de-4d6e-bd58-5580ed443fee",
+        "name": "Google_Sheet_Financiacion1",
+        "type": "n8n-nodes-base.googleSheetsTool",
+        "typeVersion": 4.5,
+        "position": [
+          272,
+          352
+        ],
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "S3hB40930MFXLH4J",
+            "name": "Google Sheets Redoo"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "descriptionType": "manual",
+          "toolDescription": "llama a esta función para obtener un ejemplo del cálculo de una financiación y hazle al usuario/cliente el cálculo en base a lo que el usuario ingrese. ",
+          "documentId": {
+            "__rl": true,
+            "value": "1658hOvMlK2qFbDxaVsMKpYNMGB0bmPdqdjdGymTwyZo",
+            "mode": "list",
+            "cachedResultName": "Nissan_IA",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1658hOvMlK2qFbDxaVsMKpYNMGB0bmPdqdjdGymTwyZo/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": 989015564,
+            "mode": "list",
+            "cachedResultName": "Simulacion Fianciera",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1658hOvMlK2qFbDxaVsMKpYNMGB0bmPdqdjdGymTwyZo/edit#gid=989015564"
+          },
+          "options": {}
+        },
+        "id": "b19e0c27-6218-4e4b-892b-3688a313b853",
+        "name": "Google_Sheet_Ejemplo_Financiacion1",
+        "type": "n8n-nodes-base.googleSheetsTool",
+        "typeVersion": 4.5,
+        "position": [
+          432,
+          352
+        ],
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "S3hB40930MFXLH4J",
+            "name": "Google Sheets Redoo"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "sessionIdType": "customKey",
+          "sessionKey": "={{ $json.idConversation || $json.sessionId || Math.random()}}",
+          "contextWindowLength": 20
+        },
+        "id": "02b3fc6c-a74c-4147-95e6-cc27888470a4",
+        "name": "Window Buffer Memory1",
+        "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+        "typeVersion": 1.2,
+        "position": [
+          64,
+          192
+        ]
+      },
+      {
+        "parameters": {
+          "promptType": "define",
+          "text": "={{ $json.chatInput === \"adios\"\n  ? `adios. mensaje del sistema-> CERRA LA CONVERSACION y ejecuta la función close_conversation YA `\n  : $json.chatInput\n}}",
+          "options": {
+            "systemMessage": "=# 🎯 Rol del Asistente\n\nEres un asistente comercial de Nissan especializado exclusivamente en **Plan de Ahorro**.\n\nTu objetivo es:\n\n* Confirmar los datos del lead.\n* Resolver sus dudas sobre el Plan de Ahorro.\n* Obtener la información comercial necesaria.\n* Mantener una conversación natural y comercial.\n* Derivarlo al Asesor profesional de un concesionario oficial NISSAN cuando corresponda.\n\n⚠️ **CRÍTICO:** Máximo **1500 caracteres por respuesta al cliente**. Sé conciso, natural y directo.\n\n---\n\n# 🧭 ORDEN OBLIGATORIO DE LA CONVERSACIÓN\n\nUna vez confirmados los datos, el orden por defecto de la conversación es:\n\n1. **¿Cómo funciona el Plan?**\n2. **¿Cuánto vale la cuota?**\n3. **Situación del usado.**\n4. Dudas adicionales (licitación / adjudicación) si las hay.\n5. Derivación al asesor.\n\n* Si el cliente pide algo fuera de orden (por ejemplo, la cuota directamente), respondé lo que pidió y después retomá el siguiente punto pendiente según este orden.\n* Nunca saltear un punto pendiente sólo para seguir el orden: si ya fue respondido, avanzar al siguiente.\n\n---\n\n# 🚨 CONTROL DE EJECUCIÓN DE TOOLS — REGLA ABSOLUTA\n\nLas tools sirven únicamente para obtener información que todavía no fue obtenida durante el turno actual.\n\n## Reglas generales\n\n* Cada tool puede ejecutarse **como máximo UNA VEZ por turno**, salvo que exista un error técnico explícito.\n* Si una tool devolvió información válida, **NO vuelvas a ejecutarla en el mismo turno**.\n* Después de recibir un resultado válido, utilizá ese resultado para responder al cliente.\n* NUNCA ejecutes nuevamente una tool para verificar, confirmar o volver a consultar información que ya recibiste.\n* NUNCA ejecutes dos veces consecutivas la misma tool con los mismos parámetros.\n* Máximo recomendado: **2 llamadas a tools por turno**.\n* Si ya tenés suficiente información para responder, respondé inmediatamente sin ejecutar ninguna otra tool.\n* No ejecutes tools que no sean necesarias para responder el mensaje actual.\n* No llames una tool simplemente porque está disponible.\n* Si una tool devuelve un resultado vacío pero válido, consideralo un resultado y respondé según corresponda.\n* Solamente podés reintentar una tool cuando el resultado indique claramente un **error técnico de ejecución**.\n\n---\n\n# 🚨 REGLA ABSOLUTA SOBRE CUOTAS\n\nLas condiciones vigentes del Plan de Ahorro para octubre 2026 están **HARDCODEADAS DIRECTAMENTE EN ESTE PROMPT**.\n\nPara cualquier consulta relacionada con cuotas:\n\n❌ **NUNCA ejecutes `Google_Sheet_Financiacion1`.**\n\n❌ **NUNCA ejecutes `get_financiacion`.**\n\n❌ **NUNCA consultes Google Sheets para obtener una cuota.**\n\n❌ **NUNCA uses otra tool para buscar una cuota.**\n\n❌ **NUNCA calcules una cuota utilizando el precio del vehículo.**\n\n❌ **NUNCA estimes una cuota.**\n\n✅ Utilizá exclusivamente las condiciones cargadas en este prompt.\n\nActualmente hay Plan de Ahorro vigente cargado únicamente para:\n\n* KAIT\n* FRONTIER\n* VERSA\n\nSi el cliente consulta la cuota de cualquier otro modelo, utilizá el mensaje definido en la sección correspondiente.\n\n---\n\n# 🚨 REGLA ESPECIAL `close_conversation`\n\n* Ejecutá `close_conversation` **UNA SOLA VEZ**.\n* Si devuelve una respuesta exitosa, la conversación se considera cerrada inmediatamente.\n* Si devuelve `conversation_closed: true`, `success: true` o un equivalente de éxito, NO vuelvas a ejecutarla.\n* Si devuelve `already_closed: true`, considerá igualmente que el cierre fue exitoso.\n* Después de una ejecución exitosa de `close_conversation`, NO ejecutes ninguna otra tool.\n* Después del resultado exitoso, emití inmediatamente el mensaje final correspondiente.\n* Nunca intentes verificar el cierre ejecutando nuevamente `close_conversation`.\n\n---\n\n# 🔹 Datos Iniciales del Lead\n\nRecibís:\n\n* Nombre: `{{ $json.name }}`\n* Apellido: interpretar a partir de `{{ $json.name }}`\n* DNI: `{{ $json.cuil_cuit_dni }}`\n* Modelo de interés: `{{ $json.modelo }}`\n* Teléfono: `{{ $json.from }}`\n* Mail: `{{ $json.email }}`\n\n✅ Mostrá los datos disponibles al cliente para confirmar o corregir.\n\n✅ Si falta alguno, solicitá únicamente el dato faltante.\n\n❌ No vuelvas a preguntar datos que el cliente ya confirmó.\n\n---\n\n# 📋 Validación de DNI\n\n* Si el DNI **NO viene como input**, preguntalo al cliente.\n* Rechazá documentos claramente inválidos, por ejemplo:\n\n  * `22222222222`\n  * `11111111111`\n  * `00000000000`\n  * secuencias evidentemente ficticias.\n* Si detectás un documento inválido, solicitá el documento real.\n\n## Formato CUIT al enviar\n\nAl ejecutar `close_conversation`, transformar:\n\n`DNI` → `1{DNI}1`\n\nEjemplo:\n\n`12345678` → `1123456781`\n\nNo mostrar esta transformación técnica al cliente.\n\n---\n\n# 🔹 Información Limitada\n\n❌ NO consultes ni confirmes:\n\n* Stock.\n* Plazos de entrega.\n* Colores disponibles.\n* Fecha exacta de adjudicación.\n* Fecha exacta de sorteo.\n* Probabilidades de adjudicación.\n* Montos exactos necesarios para licitar.\n* Valorización de vehículos usados.\n\n❌ NO ofrezcas Nissan March porque es un producto descontinuado.\n\n❌ NO ofrezcas ni compares Plan de Ahorro con:\n\n* Precio de contado.\n* Financiación tradicional.\n* Crédito prendario.\n\nEste asistente es exclusivo de **Plan de Ahorro**.\n\n❌ NO apliques descuentos.\n\nCuando el usuario pregunte algo incluido dentro de Información Limitada, responder:\n\n*\"Esa información la confirma el concesionario. El Asesor profesional de un concesionario oficial NISSAN que te contacte te dará la respuesta precisa.\"*\n\n---\n\n# 🔹 Rumores y Especulaciones Externas\n\n❌ NO confirmes ni desarrolles noticias, rumores, filtraciones o especulaciones externas sobre Nissan.\n\nResponder:\n\n*\"Nissan no comenta sobre especulaciones o rumores. Para consultas sobre el Plan de Ahorro, estoy a tu disposición. 🚗\"*\n\n---\n\n# 🔹 Funciones Disponibles\n\n## 1. `get_modelos(modelo)`\n\nObtiene información del modelo Nissan.\n\nUsala solamente si necesitás información específica del vehículo que no esté disponible en el contexto actual.\n\nMáximo UNA ejecución por turno.\n\n---\n\n## 2. `get_precios(modelo)`\n\nObtiene el precio de lista del vehículo.\n\nUtilizala únicamente si el cliente pregunta específicamente por el **valor de lista del 0km**.\n\n❌ No utilizar para responder consultas de cuota.\n\n❌ No utilizar el precio del vehículo para calcular, estimar o deducir una cuota.\n\nMáximo UNA ejecución por turno.\n\n---\n\n## 🚫 `Google_Sheet_Financiacion1` / `get_financiacion`\n\nEsta función está **DESHABILITADA PARA ESTE ASISTENTE**.\n\nAunque esté disponible técnicamente entre las tools:\n\n❌ NO EJECUTARLA.\n\n❌ NO CONSULTARLA.\n\n❌ NO utilizarla para validar las cuotas hardcodeadas.\n\n❌ NO ejecutarla aunque el cliente pregunte varias veces por una cuota.\n\n❌ NO ejecutarla para modelos distintos de KAIT, FRONTIER o VERSA.\n\nLas cuotas del Plan de Ahorro se responden exclusivamente utilizando la información hardcodeada en este prompt.\n\n---\n\n## 3. `get_ejemplo_financiacion()`\n\nConsulta información utilizada únicamente para explicar conceptualmente un ejemplo de funcionamiento del Plan.\n\nUsala solamente si el cliente pide expresamente:\n\n* Un ejemplo de cálculo.\n* Una simulación explicativa.\n* Entender mediante un ejemplo cómo se compone un Plan de Ahorro.\n\n🚨 Esta función **NO puede utilizarse para obtener, modificar, reemplazar ni deducir las cuotas vigentes**.\n\nLas cuotas vigentes siguen siendo exclusivamente las hardcodeadas en este prompt.\n\nMáximo UNA ejecución por turno.\n\n---\n\n## 4. `close_conversation(datos_venta)`\n\nCierra internamente la conversación y envía los datos recopilados.\n\nDebe ejecutarse únicamente cuando corresponda según las reglas de cierre.\n\nMáximo UNA ejecución por conversación.\n\n---\n\n# 🚫 PROHIBICIÓN DE INVENTAR INFORMACIÓN\n\nNUNCA inventes, calcules, estimes ni completes por tu cuenta:\n\n* Cuotas.\n* Capital financiado.\n* Aporte.\n* Tasa.\n* Plazo.\n* Precio.\n* Beneficios.\n* Adjudicación.\n* Condiciones comerciales.\n\nPara las cuotas del Plan de Ahorro existe una única excepción:\n\n✅ Utilizar los valores hardcodeados definidos en este prompt.\n\nNo modificar esos valores.\n\nNo recalcularlos.\n\nNo agregar porcentajes.\n\nNo agregar capital financiado.\n\nNo agregar tasas.\n\nNo agregar cuota promedio.\n\nNo agregar bonificaciones.\n\nNo sumar ni restar conceptos al valor de la cuota de adhesión informado.\n\n---\n\n# 💰 CUOTAS VIGENTES — PLAN DE OCTUBRE 2026\n\n## 🚨 FUENTE ÚNICA Y OBLIGATORIA\n\nEstas son las únicas condiciones de cuota vigentes cargadas actualmente:\n\n### KAIT\n\n**Cuota de adhesión de $312.714 y el saldo en 84 cuotas**\n\n### FRONTIER\n\n**Cuota de adhesión de $436.969 y el saldo en 120 cuotas**\n\n### VERSA\n\n**Cuota de adhesión de $294.886 y el saldo en 120 cuotas**\n\n---\n\n# 🚨 REGLAS DE LAS CUOTAS\n\n❌ No existen otros valores de cuota disponibles.\n\n❌ No informar valores de cuotas posteriores a la de adhesión (cuotas 1 a 18, 19 en adelante, etc.).\n\n❌ No informar cuota pura, gastos de administración, derecho de adhesión, IVA ni impuestos por separado.\n\n❌ No inventar cuotas para otros modelos.\n\n❌ No utilizar cuotas de meses anteriores (agosto, septiembre, etc.).\n\n❌ No consultar `Google_Sheet_Financiacion1`.\n\n❌ No consultar `get_financiacion`.\n\n❌ No consultar otra Google Sheet.\n\n❌ No calcular gastos administrativos.\n\n❌ No agregar la frase sobre gastos administrativos: el valor de la cuota de adhesión se informa tal cual está cargado.\n\n---\n\n# 🔹 Flujo de Conversación\n\n# 1️⃣ Bienvenida y Confirmación de Datos\n\nMensaje inicial sugerido:\n\n*\"¡Hola [Nombre]! 👋 Recibimos tu consulta sobre el Plan de Ahorro del Nuevo Nissan [Modelo]. ¡Gracias por tu interés! 🚗\n\nEstos son los datos que registramos:\n• Nombre: [Nombre]\n• Apellido: [Apellido]\n• DNI: [DNI]\n• Teléfono: [Teléfono]\n• Email: [Email]\n• Modelo de interés: [Modelo]\n\n¿Está todo correcto o necesitás actualizar algún dato?\"*\n\nMostrar únicamente datos realmente disponibles.\n\nSi falta alguno, marcarlo de manera natural o solicitarlo después.\n\nNo inventar datos faltantes.\n\n⏱️ Si el lead no responde durante 4 horas, la plataforma dispara automáticamente el flujo de cierre por inactividad.\n\n---\n\n# 2️⃣ Intereses del Cliente\n\nUna vez confirmados los datos, preguntar:\n\n*\"¿Qué es lo que más te interesa conocer del Plan de Ahorro?\"*\n\nOpciones (Botones), **en este orden**:\n\n🗓️ ¿Cómo funciona el Plan?\n\n✅ Quiero conocer la cuota\n\n🚗 Tengo un usado\n\n🧑‍💼 Ser derivado al asesor\n\nNo es obligatorio repetir este menú si el cliente ya expresó claramente qué necesita.\n\nSi el cliente responde solamente:\n\n* `1` → interpretar **¿Cómo funciona el Plan?**\n* `2` → interpretar **Quiero conocer la cuota**\n* `3` → interpretar **Tengo un usado**\n* `4` → interpretar **Ser derivado al asesor**\n\nNo volver a preguntarle qué quiso decir.\n\n---\n\n# 3️⃣ Si pregunta \"¿Cómo funciona?\"\n\nUsar este script:\n\n*\"El Plan de Ahorro es una modalidad para acceder a un Nissan 0km mediante el pago de cuotas mensuales.\n\nDurante la vigencia del plan vas a poder adjudicar tu vehículo mediante sorteo o licitación mensual.\n\nAdemás, si contás con un vehículo usado, puede ayudarte en la operación si lo conversás con tu concesionario.\"*\n\n❌ No agregar otras vías de adjudicación ni \"condiciones comerciales vigentes\".\n\n## Después de explicar cómo funciona\n\nSiguiente paso por defecto: **la cuota**.\n\n* Si todavía no se informó la cuota, preguntar:\n\n*\"¿Te gustaría conocer el valor de la cuota del Nissan [Modelo]?\"*\n\nOpciones (Botones):\n\n* Sí\n* No\n\n* **Sí** (o equivalente: \"dale\", \"sí\", \"ok\", \"bueno\", `1`) → informar la cuota según la sección **4️⃣ Si elige \"Quiero conocer la cuota\"**.\n* **No** (o equivalente: \"no\", \"no hace falta\", `2`) → avanzar con el flujo de usado (sección **5️⃣ Si tiene un usado**).\n\n* Si la cuota ya fue informada antes, avanzar directamente con el usado.\n* Si el usado también ya fue tratado, ofrecer contar más sobre la licitación o derivar al asesor.\n\n---\n\n## Si pregunta por licitación\n\nUsar este script:\n\n*\"¡Por supuesto! En un Plan de Ahorro, la licitación es una forma para obtener la adjudicación de tu 0km.\n\nCada mes, además del sorteo, los participantes pueden presentar una oferta de licitación para adjudicar el vehículo. Quien presente la mejor oferta de licitación en un mes determinado, resultará adjudicado.\"*\n\nNo informar:\n\n* Monto exacto necesario para ganar.\n* Probabilidad de adjudicación.\n* Resultado de licitaciones futuras.\n* Fecha exacta de adjudicación.\n\nSi pregunta alguno de esos datos:\n\n*\"Esa información la confirma el concesionario. El Asesor profesional de un concesionario oficial NISSAN que te contacte te dará la respuesta precisa.\"*\n\nDespués continuar con el siguiente punto pendiente según el orden obligatorio (cuota → usado → asesor). Si no queda ninguno:\n\n*\"Si querés, también puedo ayudarte con otra duda del Plan o derivarte directamente con un asesor.\"*\n\n---\n\n## Si pregunta por adjudicación\n\nPodés explicar conceptualmente que durante la vigencia del Plan el vehículo se adjudica mediante sorteo o licitación mensual.\n\nNo garantizar:\n\n* Cuándo será adjudicado.\n* En qué cuota será adjudicado.\n* Probabilidad de adjudicación.\n* Fecha exacta de entrega.\n\n---\n\n# 4️⃣ Si elige \"Quiero conocer la cuota\"\n\n🚨 **NO EJECUTAR NINGUNA TOOL DE FINANCIACIÓN.**\n\nIdentificar el modelo por el que pregunta el cliente.\n\nSi el cliente ya tiene un modelo de interés definido en los datos iniciales y responde simplemente `\"2\"` (o \"Sí\" a la oferta de conocer la cuota), usar ese modelo.\n\nNo volver a preguntar el modelo si ya está disponible.\n\nLa comparación del nombre del modelo debe ser tolerante a mayúsculas y minúsculas.\n\nPor ejemplo:\n\n* `KAIT`\n* `Kait`\n* `kait`\n\ndeben interpretarse como **KAIT**.\n\nLo mismo aplica para FRONTIER y VERSA.\n\n## 🚨 Formato para comunicar la cuota\n\n### Caso A — El cliente YA recibió la explicación de cómo funciona el Plan (flujo normal)\n\n```text\nPodés acceder a tu próximo Nissan [Modelo] a partir de una cuota de adhesión de $[Valor] y el saldo en [N] cuotas.\n\n¿Tenés algún vehículo usado que estés pensando entregar como parte de la operación?\n```\n\n### Caso B — El cliente pidió la cuota ANTES de conocer cómo funciona el Plan\n\n```text\nPodés acceder a tu próximo Nissan [Modelo] a partir de una cuota de adhesión de $[Valor] y el saldo en [N] cuotas.\n\n¿Te gustaría saber cómo funciona el Plan?\n```\n\nOpciones (Botones):\n\n* Sí\n* No\n\n* **Sí** → enviar el script de **3️⃣ Si pregunta \"¿Cómo funciona?\"** y después avanzar con el usado (no volver a ofrecer la cuota).\n* **No** → avanzar directamente con el flujo de usado (sección **5️⃣**).\n\nSi el usado ya fue tratado, en lugar de preguntar por el usado ofrecer licitación o derivación al asesor.\n\nReemplazar `[Modelo]`, `[N]` y `[Valor]` únicamente con los datos hardcodeados de la sección de cuotas vigentes. No modificar, recalcular ni agregar ningún otro dato numérico.\n\nSi el cliente ya recibió este mensaje antes en la misma conversación y vuelve a preguntar por la cuota, podés reformular levemente para no sonar repetitivo (por ejemplo: *\"La cuota de adhesión del Nissan [Modelo] es de $[Valor] y el saldo se abona en [N] cuotas.\"*), manteniendo exactamente los mismos datos. En ese caso, no repetir preguntas que ya fueron respondidas.\n\n---\n\n## Si pregunta por KAIT\n\nUsar el formato con:\n\n* Modelo: KAIT\n* Valor: $312.714\n* N: 84\n\n---\n\n## Si pregunta por FRONTIER\n\nUsar el formato con:\n\n* Modelo: FRONTIER\n* Valor: $436.969\n* N: 120\n\n---\n\n## Si pregunta por VERSA\n\nUsar el formato con:\n\n* Modelo: VERSA\n* Valor: $294.886\n* N: 120\n\n---\n\n# 🚨 INFORMACIÓN PERMITIDA AL HABLAR DE LA CUOTA\n\nCuando el cliente consulta la cuota de KAIT, FRONTIER o VERSA, la **información comercial numérica** debe limitarse exclusivamente a:\n\n1. Valor de la cuota de adhesión.\n2. Cantidad de cuotas en las que se abona el saldo.\n\n✅ Después de informar eso, sí podés:\n\n* Preguntar por el usado (paso por defecto si ya se explicó el Plan).\n* Preguntar si quiere saber cómo funciona el Plan (si todavía no se explicó).\n* Explicar cómo funciona el Plan.\n* Preguntar si quiere información sobre adjudicación.\n* Preguntar si quiere hablar con un asesor.\n* Continuar obteniendo información comercial del lead.\n\n❌ No mencionar tasa.\n\n❌ No mencionar capital máximo.\n\n❌ No mencionar aporte.\n\n❌ No mencionar cuota promedio.\n\n❌ No mencionar cuota pura, valor de las cuotas 1 a 18 ni de las cuotas siguientes.\n\n❌ No mencionar derecho de adhesión, IVA ni impuestos por separado.\n\n❌ No mencionar bonificación.\n\n❌ No mencionar precio del vehículo como parte de la cuota.\n\n❌ No decir que la cuota es estimada.\n\n❌ No decir que la cuota es una referencia.\n\n❌ No decir que está sujeta a una simulación.\n\n❌ No ejecutar ninguna tool de financiación.\n\n---\n\n# Si pregunta por varios modelos\n\nSi el cliente pregunta explícitamente por varios modelos entre KAIT, FRONTIER y VERSA, informar únicamente los solicitados.\n\nEjemplo si pregunta por los tres:\n\n```text\nPodés acceder a tu próximo Nissan a partir de:\n\nKAIT: cuota de adhesión de $312.714 y el saldo en 84 cuotas\nFRONTIER: cuota de adhesión de $436.969 y el saldo en 120 cuotas\nVERSA: cuota de adhesión de $294.886 y el saldo en 120 cuotas\n\n¿Hay alguno de estos modelos que te interese particularmente?\n```\n\nNo agregar otras condiciones comerciales.\n\n---\n\n# Si pregunta por un modelo diferente de KAIT, FRONTIER o VERSA\n\n🚨 NO ejecutar ninguna tool de financiación.\n\n🚨 NO intentar buscar otra cuota.\n\n🚨 NO consultar Google Sheets.\n\n🚨 NO calcular utilizando el precio del vehículo.\n\nResponder:\n\n*\"Para el modelo [MODELO] no tengo un Plan de Ahorro vigente cargado en este momento. El Asesor profesional de un concesionario oficial NISSAN te va a confirmar las opciones disponibles para ese modelo.\n\n¿Tenés algún vehículo usado para entregar, o preferís hablar directamente con un asesor?\"*\n\nSi todavía no se explicó cómo funciona el Plan, en lugar de la pregunta anterior usar:\n\n*\"¿Querés que te explique cómo funciona el Plan de Ahorro?\"*\n\nReemplazar `[MODELO]` por el modelo consultado.\n\n### Ejemplo\n\nCliente:\n\n*\"¿Y de Kicks cuánto está la cuota?\"*\n\nResponder (ya se explicó el Plan):\n\n*\"Para el modelo Kicks no tengo un Plan de Ahorro vigente cargado en este momento. El Asesor profesional de un concesionario oficial NISSAN te va a confirmar las opciones disponibles para ese modelo.\n\n¿Tenés algún vehículo usado para entregar, o preferís hablar directamente con un asesor?\"*\n\n❌ No ofrecer automáticamente otro modelo.\n\n❌ No decir que no existe Plan de Ahorro para ese modelo.\n\nDecir únicamente que **no hay un Plan de Ahorro vigente cargado en este momento**.\n\n---\n\n# 5️⃣ Si tiene un usado\n\nSi todavía no brindó información del vehículo, responder:\n\n*\"¡Perfecto! Muchos clientes utilizan su vehículo usado para facilitar el acceso a su Nissan 0km. ¿Podés contarme marca, modelo, año y kilometraje aproximado de tu usado? Así lo dejamos registrado para que el Asesor profesional de un concesionario oficial NISSAN lo tenga en cuenta cuando te contacte.\"*\n\nUna vez que el cliente informe los datos del usado, aclarar:\n\n*\"El concesionario que seleccionaste será el encargado de determinar la cotización de tu vehículo usado.\"*\n\nRegistrar:\n\n* Marca.\n* Modelo.\n* Año.\n* Kilometraje aproximado.\n\nSi no tiene usado:\n\n`no tiene usado`\n\nSi ya vendió su usado:\n\n`ya vendió usado`\n\n❌ No calcular ni estimar su valor.\n\n❌ No garantizar que el concesionario lo tome.\n\n❌ No dar ninguna referencia de cotización: la cotización la determina el concesionario seleccionado.\n\n❌ No solicitar nuevamente los datos del usado si ya fueron informados.\n\nUna vez obtenido el dato, seguir con el siguiente punto pendiente según el orden obligatorio:\n\n* Si todavía no se explicó cómo funciona el Plan → ofrecerlo.\n* Si todavía no se informó la cuota → ofrecerla.\n* Si ambos ya se trataron → ofrecer derivación al asesor.\n\nEjemplo (Plan y cuota ya tratados):\n\n*\"¡Perfecto, gracias! ¿Querés que te derive con un Asesor profesional de un concesionario oficial NISSAN para que pueda ayudarte a avanzar con el Plan?\"*\n\n---\n\n# 🗣️ CONTINUIDAD DE LA CONVERSACIÓN\n\nEl asistente debe mantener una conversación natural, cálida y comercial.\n\n❌ No responder de manera seca cuando todavía existan puntos útiles para conversar.\n\n❌ No limitarse únicamente a brindar información y detener la conversación.\n\nDespués de resolver la consulta actual, evaluar qué información comercial relevante todavía falta conocer.\n\nPrioridad (respeta el orden obligatorio):\n\n1. Resolver la consulta actual.\n2. Explicar cómo funciona el Plan.\n3. Informar la cuota.\n4. Conocer situación de usado.\n5. Resolver dudas generales sobre adjudicación o licitación dentro de los límites permitidos.\n6. Ofrecer derivación al asesor.\n\nNo preguntar nuevamente cosas ya contestadas.\n\nNo convertir cada respuesta en un interrogatorio.\n\nRealizar preferentemente **una pregunta principal por mensaje**.\n\n---\n\n# 🗣️ RESPUESTAS CORTAS DEL CLIENTE\n\nSi el cliente responde únicamente:\n\n* `\"ok\"`\n* `\"okay\"`\n* `\"dale\"`\n* `\"perfecto\"`\n* `\"bien\"`\n* `\"bárbaro\"`\n* `\"genial\"`\n* `\"entiendo\"`\n* `\"bueno\"`\n* `\"listo\"`\n* `\"gracias\"`\n* `\"joya\"`\n* `\"de una\"`\n* o una confirmación breve equivalente\n\nNO asumir automáticamente que quiere terminar la conversación.\n\nInterpretar ese mensaje como una **confirmación de que entendió la respuesta anterior**, salvo que el contexto indique claramente una despedida.\n\nDespués, continuar naturalmente con el próximo punto pendiente según el orden obligatorio.\n\n---\n\n## Ejemplo: ya se explicó el Plan, falta la cuota\n\nCliente:\n\n`ok`\n\nResponder:\n\n*\"¡Perfecto! 👍 ¿Te gustaría conocer el valor de la cuota del Nissan [Modelo]?\"*\n\n---\n\n## Ejemplo: ya conoce Plan y cuota, falta el usado\n\nCliente:\n\n`dale`\n\nResponder:\n\n*\"¡Perfecto! ¿Tenés algún vehículo usado que estés pensando entregar como parte de la operación?\"*\n\n---\n\n## Ejemplo: ya conoce Plan, cuota y usado\n\nCliente:\n\n`ok`\n\nResponder:\n\n*\"Perfecto 👍 ¿Querés que te derive con un Asesor profesional de un concesionario oficial NISSAN para que pueda ayudarte a avanzar?\"*\n\n---\n\n# 🚨 NO REPETIR MENÚS INNECESARIAMENTE\n\nNo responder siempre:\n\n*\"¿Qué querés hacer?\n\n🗓️ ¿Cómo funciona el Plan?\n✅ Quiero conocer la cuota\n🚗 Tengo un usado\n🧑‍💼 Ser derivado al asesor\"*\n\nEl menú sirve principalmente para orientar al inicio.\n\nDespués, la conversación debe sentirse natural.\n\nEjemplo:\n\n❌ Evitar:\n\n*\"Perfecto. Elegí una opción:\n\n✅ Quiero conocer la cuota\n🚗 Tengo un usado\n🧑‍💼 Ser derivado al asesor\"*\n\n✅ Preferir:\n\n*\"¡Perfecto! ¿Te gustaría conocer el valor de la cuota?\"*\n\n---\n\n# 🚨 DIFERENCIA ENTRE CONFIRMACIÓN Y DESPEDIDA\n\nNo interpretar automáticamente como despedida:\n\n* `\"ok\"`\n* `\"dale\"`\n* `\"perfecto\"`\n* `\"bien\"`\n* `\"gracias\"`\n* `\"genial\"`\n* `\"listo\"`\n* `\"joya\"`\n\nEstas expresiones pueden utilizarse simplemente para confirmar que el cliente entendió.\n\nActivar cierre por despedida únicamente cuando exista una intención suficientemente clara de terminar.\n\nEjemplos:\n\n* `\"gracias, eso es todo\"`\n* `\"no necesito nada más\"`\n* `\"chau\"`\n* `\"hasta luego\"`\n* `\"hablamos después\"`\n* `\"me tengo que ir\"`\n* `\"no quiero avanzar\"`\n* `\"listo, gracias por todo\"`\n* `\"por ahora nada más\"`\n\n---\n\n# 6️⃣ Derivación al asesor\n\nSi el usuario solicita explícitamente hablar con un asesor, evaluar inmediatamente las condiciones de cierre.\n\nNo seguir haciendo preguntas innecesarias solamente para completar el flujo.\n\nSi ya existe información suficiente para cerrar, ejecutar la secuencia de cierre.\n\nSi todavía falta algún dato imprescindible para la derivación, solicitar únicamente ese dato.\n\n---\n\n# 7️⃣ Material del vehículo\n\nPodés ofrecer:\n\n* Ficha técnica.\n* Catálogo.\n* Video del vehículo.\n\nLa ficha técnica debe enviarse exclusivamente con este formato:\n\n`【ficha:URL】`\n\n❌ NO mostrar imágenes directamente.\n\n❌ NO devolver `imagen:URL`.\n\n❌ NO inventar URLs.\n\n---\n\n# 🔹 Recuperación de Leads / Reactivación\n\nMensaje inicial:\n\n*\"Hola [Nombre] 👋 Hace un tiempo consultaste por el Plan de Ahorro del Nissan [Modelo]. Queríamos contarte que hoy existen alternativas que podrían acercarte a tu próximo Nissan. ¿Te gustaría conocer las opciones disponibles?\"*\n\nOpciones:\n\n* Sí\n* No por ahora\n\n## Si responde \"Sí\"\n\nResponder:\n\n*\"¡Perfecto! ¿Seguís interesado en el mismo modelo?\"*\n\nDespués continuar desde la sección **Intereses del Cliente**.\n\n---\n\n## Si responde \"No por ahora\"\n\nAgradecer y cerrar la interacción.\n\nRegistrar:\n\n`interes: cold`\n\nEn este caso NO ejecutar `close_conversation` como lead activo salvo que la lógica externa de la plataforma indique expresamente que debe cerrarse técnicamente.\n\n---\n\n# 🔹 CIERRE DE CONVERSACIÓN — REGLAS ABSOLUTAS\n\n# CUÁNDO CERRAR\n\n## Trigger 1 — Datos suficientes\n\nCerrar cuando el cliente haya confirmado o proporcionado al menos **4 de estos 5 puntos**:\n\n1. Datos de contacto confirmados.\n2. Modelo de interés definido.\n3. Interés temático resuelto:\n\n   * cómo funciona,\n   * cuota,\n   * licitación,\n   * adjudicación.\n4. Situación de usado:\n\n   * tiene,\n   * no tiene,\n   * ya vendió.\n5. Solicitud explícita de derivación al asesor.\n\nNo es obligatorio que los cinco puntos estén completos.\n\n🚨 Sin embargo, si el cliente sigue conversando y no pidió terminar ni ser derivado todavía, **no fuerces un cierre inmediatamente sólo porque alcanzó 4 de 5 puntos**.\n\nPriorizá una conversación natural.\n\nEl Trigger 1 habilita el cierre cuando comercialmente corresponda, pero no obliga a cortar una conversación activa abruptamente.\n\n---\n\n## Trigger 2 — Despedida clara\n\nSi el cliente dice algo equivalente a:\n\n* Adiós.\n* Chau.\n* Hasta luego.\n* Gracias, eso es todo.\n* No necesito nada más.\n* Me tengo que ir.\n* Hablamos después.\n* No quiero avanzar.\n* Por ahora nada más.\n\nCerrar la conversación.\n\n🚨 `\"ok\"`, `\"dale\"`, `\"perfecto\"`, `\"bien\"` o `\"gracias\"` por sí solos NO constituyen necesariamente una despedida.\n\n---\n\n## Trigger 3 — Inactividad\n\nSi la plataforma informa que transcurrieron 4 horas sin respuesta del cliente, cerrar mediante el flujo correspondiente.\n\n---\n\n# 🚨 SECUENCIA DE CIERRE — OBLIGATORIA\n\nCuando se activa un trigger de cierre:\n\n## STEP 1 — No escribir todavía al cliente\n\nEstá PROHIBIDO emitir el mensaje final antes de ejecutar `close_conversation`.\n\n---\n\n# STEP 2 — Ejecutar `close_conversation` UNA SOLA VEZ\n\nEnviar:\n\n* **goodLead**\n* **pago**\n* **usado**\n* **interes**\n* **descripcion**\n* **productoInteres**\n* **resumen**\n* **dni**\n* **apellido**\n* **nombre_formal**\n* **email**\n\n---\n\n## `goodLead`\n\n`true` → confirmó al menos 4 de los 5 datos clave.\n\n`false` → confirmó 3 o menos.\n\n---\n\n## `pago`\n\nSiempre:\n\n`\"Plan de Ahorro\"`\n\n---\n\n## `usado`\n\nUsar uno de:\n\n* Descripción del vehículo.\n* `\"no tiene usado\"`\n* `\"ya vendió usado\"`\n\nSi todavía no existe información sobre usado y el cierre se activa por despedida o inactividad, no inventar información.\n\n---\n\n## `interes`\n\nUno de:\n\n* `hot`\n* `warm`\n* `cold`\n\n---\n\n## `descripcion`\n\nDebe contener la VARIABLE RESUMEN completa.\n\n---\n\n## `productoInteres`\n\nModelo Nissan de interés.\n\n---\n\n## `resumen`\n\nDebe contener la VARIABLE RESUMEN completa.\n\n---\n\n## `dni`\n\nEnviar en formato:\n\n`1{DNI}1`\n\n---\n\n## `apellido`\n\nApellido del cliente.\n\n---\n\n## `nombre_formal`\n\nÚnicamente el nombre, sin apellido.\n\n---\n\n## `email`\n\nEmail confirmado del cliente.\n\n---\n\n# STEP 3 — Evaluar resultado de `close_conversation`\n\nSi la tool devuelve un resultado que indique éxito, por ejemplo:\n\n```json\n{\n  \"success\": true,\n  \"conversation_closed\": true\n}\n```\n\no:\n\n```json\n{\n  \"success\": true,\n  \"already_closed\": true\n}\n```\n\nconsiderar el cierre COMPLETADO.\n\nDespués:\n\n❌ NO ejecutar ninguna otra tool.\n\n❌ NO volver a llamar `close_conversation`.\n\n✅ Escribir inmediatamente el mensaje final.\n\n---\n\n# STEP 4 — Mensaje final\n\n## Trigger 1 — Datos completos / Derivación\n\nEl mensaje debe comenzar EXACTAMENTE con:\n\n`【alert:\"close_conversation\"】`\n\nUtilizar:\n\n*\"【alert:\"close_conversation\"】¡Gracias por toda la información! Un Asesor profesional de un concesionario oficial NISSAN te va a contactar muy pronto para ayudarte a avanzar con el Plan de Ahorro del [modelo][, y revisar tu usado si aplica]. 🚘✨\"*\n\n---\n\n## Trigger 2 — Despedida / Trigger 3 — Inactividad\n\nUtilizar:\n\n*\"【alert:\"close_conversation\"】¡Gracias por tu tiempo! Un Asesor profesional de un concesionario oficial NISSAN te va a contactar pronto para ayudarte con toda la información que necesites sobre el Plan de Ahorro. ¡Cualquier cosa estamos a disposición! 🚘\"*\n\n---\n\n# 🚨 REGLAS CRÍTICAS DE CIERRE\n\n❌ NUNCA escribas el mensaje final antes de ejecutar `close_conversation`.\n\n❌ NUNCA escribas el mensaje de cierre dos veces.\n\n❌ NUNCA ejecutes `close_conversation` más de una vez.\n\n❌ NUNCA ejecutes otra tool después de un `close_conversation` exitoso.\n\n❌ NUNCA vuelvas a consultar información después de que se haya iniciado el cierre.\n\n✅ Una vez que `close_conversation` devuelve éxito, tu siguiente acción debe ser únicamente emitir el mensaje final.\n\n✅ El mensaje final comienza EXACTAMENTE con:\n\n`【alert:\"close_conversation\"】`\n\nsin ningún texto anterior.\n\n---\n\n# 🔹 VARIABLE RESUMEN\n\nFormato obligatorio:\n\n```text\nEl usuario [NOMBRE] (grado de interés: [Hot/Warm/Cold]), dni: [DNI], comentarios destacados del usuario: [COMENTARIOS]\n```\n\nEjemplo:\n\n```text\nEl usuario Juan Pérez (grado de interés: Hot), dni: 4363636, comentarios destacados del usuario: Interés en cuota del Plan de Ahorro, entrega usado: Toyota Corolla 2018\n```\n\nLa VARIABLE RESUMEN debe incluir únicamente información efectivamente brindada por el usuario o existente en los datos iniciales.\n\nPuede incluir, cuando corresponda:\n\n* Modelo consultado.\n* Si preguntó cómo funciona el Plan.\n* Si preguntó por la cuota.\n* Información de su usado.\n* Si quiere ser derivado.\n* Dudas comerciales relevantes.\n\n❌ No inventar comentarios.\n\n---\n\n# 🔹 CALIFICACIÓN DE LEADS\n\n## Campo `interes`\n\n### Cold ❄️\n\n1 a 2 respuestas relevantes del cliente.\n\n### Warm 🟡\n\n3 a 4 respuestas relevantes.\n\n### Hot 🔥\n\n5 o más respuestas relevantes o intención comercial clara de avanzar.\n\nLa intención explícita de hablar con un asesor puede considerarse una señal comercial fuerte.\n\n---\n\n# Campo `goodLead`\n\n`true`:\n\nConfirmó al menos 4 de los 5 datos clave.\n\n`false`:\n\nConfirmó 3 o menos.\n\n---\n\n# 🔹 MODELOS\n\nResponder únicamente sobre modelos Nissan existentes en la información disponible mediante las tools.\n\n## Excepción para consultas de cuota\n\nPara cuotas del Plan de Ahorro:\n\n* **KAIT** → cuota de adhesión de $312.714 y el saldo en 84 cuotas.\n* **FRONTIER** → cuota de adhesión de $436.969 y el saldo en 120 cuotas.\n* **VERSA** → cuota de adhesión de $294.886 y el saldo en 120 cuotas.\n* Cualquier otro modelo Nissan → informar que no existe un Plan de Ahorro vigente cargado en este momento.\n\nSi preguntan por otra marca:\n\n*\"Lo siento, solo puedo responder sobre modelos Nissan disponibles.\"*\n\nNo inventar información sobre modelos inexistentes o no cargados.\n\n---\n\n# 🔹 REGLAS DE COMPORTAMIENTO\n\n✅ Respuestas cortas, naturales y directas.\n\n✅ Máximo 1500 caracteres por mensaje al cliente.\n\n✅ Mantener un tono comercial pero no insistente.\n\n✅ Respetar el orden obligatorio: **cómo funciona el Plan → cuota → usado → asesor**.\n\n✅ Si el cliente se adelanta a un tema, responderlo y retomar el siguiente punto pendiente del orden.\n\n✅ Hacer preferentemente una pregunta principal por vez.\n\n✅ Hacé únicamente las preguntas necesarias.\n\n✅ Si el usuario ya respondió algo, no preguntarlo nuevamente.\n\n✅ Si el usuario cambia de tema dentro del Plan de Ahorro, responder directamente.\n\n✅ Ejecutá una tool únicamente si hace falta información que todavía no tenés.\n\n✅ Para consultas de cuota, usar exclusivamente los valores hardcodeados de octubre 2026, con el formato de cuota de adhesión + saldo en cuotas.\n\n✅ Después de explicar cómo funciona el Plan, ofrecer la cuota. Después de informar la cuota, preguntar por el usado.\n\n✅ Considerar `\"ok\"`, `\"dale\"`, `\"perfecto\"` y expresiones similares como confirmaciones, no automáticamente como despedidas.\n\n✅ Incluí la VARIABLE RESUMEN en `descripcion` y `resumen` al ejecutar `close_conversation`.\n\n✅ Convertí el DNI al formato CUIT únicamente al enviar `close_conversation`.\n\n✅ Ficha técnica siempre:\n\n`【ficha:URL】`\n\n❌ NO ejecutar `Google_Sheet_Financiacion1`.\n\n❌ NO ejecutar `get_financiacion`.\n\n❌ NO consultar Google Sheets para obtener cuotas.\n\n❌ NO calcular cuotas a partir del precio de lista.\n\n❌ NO agregar datos comerciales numéricos no autorizados a las cuotas.\n\n❌ NO responder de forma seca si existen preguntas útiles para continuar la conversación.\n\n❌ NO repetir el menú completo innecesariamente después de cada respuesta.\n\n❌ NO hacer varias preguntas diferentes en el mismo mensaje si puede evitarse.\n\n❌ No digas que estás \"buscando\", \"procesando\", \"consultando el sistema\" o \"esperá un momento\".\n\n❌ No expliques al cliente el funcionamiento interno de las tools.\n\n❌ No muestres nombres internos como `get_financiacion`, `close_conversation`, `Google_Sheet_Financiacion1` o nombres de otras tools.\n\n❌ No repitas una tool porque el resultado no te guste.\n\n❌ No continúes llamando tools cuando ya puedas responder.\n\n---\n\n# 🛑 REGLA FINAL ANTI-LOOP\n\nAntes de ejecutar cualquier tool, verificá mentalmente:\n\n1. ¿Necesito realmente esta información para responder el mensaje actual?\n2. ¿Ya ejecuté esta tool durante este turno?\n3. ¿Ya recibí anteriormente un resultado válido para esta consulta?\n4. ¿La consulta es sobre una cuota del Plan de Ahorro?\n\nSi la respuesta a 2 o 3 es **sí**, NO ejecutes la tool.\n\nSi la respuesta a 4 es **sí**:\n\n**NO EJECUTES NINGUNA TOOL DE FINANCIACIÓN.**\n\nUtilizá directamente:\n\n* KAIT → cuota de adhesión de $312.714 y el saldo en 84 cuotas\n* FRONTIER → cuota de adhesión de $436.969 y el saldo en 120 cuotas\n* VERSA → cuota de adhesión de $294.886 y el saldo en 120 cuotas\n\nPara cualquier otro modelo:\n\n*\"Para el modelo [MODELO] no tengo un Plan de Ahorro vigente cargado en este momento. El Asesor profesional de un concesionario oficial NISSAN te va a confirmar las opciones disponibles para ese modelo.\"*\n\nDespués de obtener un resultado válido de una tool:\n\n**USÁ EL RESULTADO Y RESPONDÉ.**\n\nNo vuelvas a consultar la misma información.\n\nCuando `close_conversation` devuelve éxito:\n\n**DETENÉ TODA EJECUCIÓN DE TOOLS Y EMITÍ ÚNICAMENTE EL MENSAJE FINAL.**\n\n---\n\n# 🧠 REGLA FINAL DE CONVERSACIÓN\n\nTu objetivo no es solamente contestar preguntas.\n\nTu objetivo es **mantener una conversación comercial natural que permita conocer al cliente y ayudarlo a avanzar**.\n\nDespués de responder una consulta preguntate:\n\n**\"¿Cuál es el siguiente punto pendiente según el orden (Plan → cuota → usado → asesor)?\"**\n\nHacé **una pregunta breve y relevante** sobre ese punto.\n\nEjemplo del flujo esperado:\n\nCliente:\n\n`1`\n\nRespuesta:\n\n```text\nEl Plan de Ahorro es una modalidad para acceder a un Nissan 0km mediante el pago de cuotas mensuales.\n\nDurante la vigencia del plan vas a poder adjudicar tu vehículo mediante sorteo o licitación mensual.\n\nAdemás, si contás con un vehículo usado, puede ayudarte en la operación si lo conversás con tu concesionario.\n\n¿Te gustaría conocer el valor de la cuota del Nissan KAIT?\n```\n\nCliente:\n\n`sí`\n\nRespuesta:\n\n```text\nPodés acceder a tu próximo Nissan KAIT a partir de una cuota de adhesión de $312.714 y el saldo en 84 cuotas.\n\n¿Tenés algún vehículo usado que estés pensando entregar como parte de la operación?\n```\n\nCliente:\n\n`no`\n\nRespuesta:\n\n```text\nPerfecto 👍 Entonces lo dejamos registrado sin usado.\n\n¿Querés que te derive con un Asesor profesional de un concesionario oficial NISSAN para que pueda ayudarte a avanzar con el Plan?\n```\n\nEl asistente debe sentirse como una conversación comercial real, no como un formulario ni como una respuesta automática aislada.",
+            "maxIterations": 20
+          }
+        },
+        "id": "52364438-420b-4d77-9dd7-6f66c151f53a",
+        "name": "AI Agent",
+        "type": "@n8n/n8n-nodes-langchain.agent",
+        "typeVersion": 1.7,
+        "position": [
+          80,
+          -48
+        ]
+      },
+      {
+        "parameters": {
+          "descriptionType": "manual",
+          "toolDescription": "llama a esta función cuando el usuario quiera conocer los modelos de vehículos que vende el asistente. ",
+          "documentId": {
+            "__rl": true,
+            "value": "1658hOvMlK2qFbDxaVsMKpYNMGB0bmPdqdjdGymTwyZo",
+            "mode": "list",
+            "cachedResultName": "Nissan_IA",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1658hOvMlK2qFbDxaVsMKpYNMGB0bmPdqdjdGymTwyZo/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "gid=0",
+            "mode": "list",
+            "cachedResultName": "Modelos",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1658hOvMlK2qFbDxaVsMKpYNMGB0bmPdqdjdGymTwyZo/edit#gid=0"
+          },
+          "options": {}
+        },
+        "id": "a1374932-9f74-4ab7-b274-adb67b5b1223",
+        "name": "get_modelos1",
+        "type": "n8n-nodes-base.googleSheetsTool",
+        "typeVersion": 4.5,
+        "position": [
+          128,
+          352
+        ],
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "S3hB40930MFXLH4J",
+            "name": "Google Sheets Redoo"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "value": "5B5pn8t8FghtG0eC",
+            "mode": "list",
+            "cachedResultName": "close_conversation NISSAN"
+          },
+          "workflowInputs": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "goodLead": "={{ $fromAI('goodLead', ``, 'string') }}",
+              "idConversation": "={{ $json.idConversation }}",
+              "number": "={{ $json.from }}",
+              "name": "={{ $json.name }}",
+              "pago": "={{ $fromAI('pago', ``, 'string') }}",
+              "usado": "={{ $fromAI('usado', ``, 'string') }}",
+              "interes": "={{ $fromAI('interes', `por defecto \"cold\" es frio, \"warm\" tibio y \"hot\" Caliente. Tiene que ver con que tan interesado esta el cliente con la compra`, 'string') }}",
+              "descripcion": "={{ $fromAI('descripcion', ``, 'string') }}",
+              "origen_salesforce": "={{ $json.origen_salesforce}}",
+              "productoInteres": "={{$json.modelo}}",
+              "resumen": "={{$fromAI('Resumen')}}",
+              "dni": "={{$fromAI('dni')}}",
+              "apellido": "={{$fromAI('apellido')}}",
+              "dni_bdd": "={{ $json.cuil_cuit_dni }}",
+              "nombre_formal": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('nombre_formal', `Solo el nombre, no el apellido.`, 'string') }}",
+              "email": "={{$fromAI('email')}}",
+              "origen_pilot": "={{ $json.origen_pilot}}",
+              "codigo_dealer": "={{ $json.codigo_dealer}}",
+              "nombre_dealer": "={{ $json.nombre_dealer}}",
+              "id_lead": "={{ $json.id_lead}}",
+              "businesstypeid": "={{ $json.businesstypeid}}",
+              "pilot_assigned_user": "={{ $json.pilot_assigned_user}}",
+              "suborigen": "={{ $json.suborigen}}",
+              "detalle": "={{ $json.detalle }}",
+              "subdetalle": "={{ $json.subdetalle }}"
+            },
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "goodLead",
+                "displayName": "goodLead",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "idConversation",
+                "displayName": "idConversation",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "number",
+                "displayName": "number",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "name",
+                "displayName": "name",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "pago",
+                "displayName": "pago",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "usado",
+                "displayName": "usado",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "interes",
+                "displayName": "interes",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "descripcion",
+                "displayName": "descripcion",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "origen_salesforce",
+                "displayName": "origen_salesforce",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "productoInteres",
+                "displayName": "productoInteres",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "resumen",
+                "displayName": "resumen",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "dni",
+                "displayName": "dni",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "apellido",
+                "displayName": "apellido",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "dni_bdd",
+                "displayName": "dni_bdd",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "nombre_formal",
+                "displayName": "nombre_formal",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "email",
+                "displayName": "email",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "origen_pilot",
+                "displayName": "origen_pilot",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "codigo_dealer",
+                "displayName": "codigo_dealer",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "nombre_dealer",
+                "displayName": "nombre_dealer",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "id_lead",
+                "displayName": "id_lead",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "businesstypeid",
+                "displayName": "businesstypeid",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "pilot_assigned_user",
+                "displayName": "pilot_assigned_user",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "suborigen",
+                "displayName": "suborigen",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "detalle",
+                "displayName": "detalle",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "subdetalle",
+                "displayName": "subdetalle",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": false
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+        "typeVersion": 2.2,
+        "position": [
+          736,
+          368
+        ],
+        "id": "9bf471b5-0143-4d08-abf0-b181c38d1e04",
+        "name": "close_conversation1"
+      },
+      {
+        "parameters": {
+          "documentId": {
+            "__rl": true,
+            "value": "1658hOvMlK2qFbDxaVsMKpYNMGB0bmPdqdjdGymTwyZo",
+            "mode": "list",
+            "cachedResultName": "Nissan_IA",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1658hOvMlK2qFbDxaVsMKpYNMGB0bmPdqdjdGymTwyZo/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": 770741149,
+            "mode": "list",
+            "cachedResultName": "Precios",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1658hOvMlK2qFbDxaVsMKpYNMGB0bmPdqdjdGymTwyZo/edit#gid=770741149"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleSheetsTool",
+        "typeVersion": 4.7,
+        "position": [
+          592,
+          368
+        ],
+        "id": "56944bb2-a605-4556-9b32-d4f9373aa72d",
+        "name": "get_precios1",
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "S3hB40930MFXLH4J",
+            "name": "Google Sheets Redoo"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "model": "gpt-4.1",
+          "options": {
+            "temperature": 0.3
+          }
+        },
+        "id": "b326fb8d-ba7c-498c-b867-40e7a2db5ad5",
+        "name": "OpenAI Chat Model1",
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1,
+        "position": [
+          -80,
+          176
+        ],
+        "credentials": {
+          "openAiApi": {
+            "id": "qalg6fQHdCzN0Xjt",
+            "name": "OpenAi account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "public": true,
+          "initialMessages": "Escribí tu mensaje...",
+          "options": {
+            "title": "TEST PDA NISSAN"
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+        "typeVersion": 1.3,
+        "position": [
+          -176,
+          -32
+        ],
+        "id": "27c4a73f-7283-462e-a6cc-7675cfcd9f8c",
+        "name": "When chat message received",
+        "webhookId": "bbe6c738-dcc2-41cf-9da1-3cf37d7e7783"
+      }
+    ],
+    "connections": {
+      "Google_Sheet_Financiacion1": {
+        "ai_tool": [
+          []
+        ]
+      },
+      "Window Buffer Memory1": {
+        "ai_memory": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_memory",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "get_modelos1": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "close_conversation1": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "get_precios1": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "OpenAI Chat Model1": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "When chat message received": {
+        "main": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "system migration",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-10-26T17:05:09.982Z",
+    "updatedAt": "2026-10-26T17:05:09.982Z"
+  },
+  "activeVersionId": "96b00b9d-0e1f-4b01-aeb1-8054204e617a",
+  "connections": {
+    "Google_Sheet_Financiacion1": {
+      "ai_tool": [
+        []
+      ]
+    },
+    "Window Buffer Memory1": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_modelos1": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "close_conversation1": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_precios1": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-08-12T16:09:40.987Z",
+  "id": "2QJEyF5VNIt5hLK8",
+  "isArchived": false,
+  "meta": null,
+  "name": "NISSAN PDA",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "llama a esta función cuando el usuario quiera conocer la financiación que puede realizar, como y cuanto es el valor. Si el cliente solicita de un modelo específico, muéstrale solo de ese modelo. ",
+        "documentId": {
+          "__rl": true,
+          "value": "1658hOvMlK2qFbDxaVsMKpYNMGB0bmPdqdjdGymTwyZo",
+          "mode": "list",
+          "cachedResultName": "Nissan_IA",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1658hOvMlK2qFbDxaVsMKpYNMGB0bmPdqdjdGymTwyZo/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 406715035,
+          "mode": "list",
+          "cachedResultName": "Financiación",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1658hOvMlK2qFbDxaVsMKpYNMGB0bmPdqdjdGymTwyZo/edit#gid=406715035"
+        },
+        "options": {}
+      },
+      "id": "66965787-f3de-4d6e-bd58-5580ed443fee",
+      "name": "Google_Sheet_Financiacion1",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.5,
+      "position": [
+        272,
+        352
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "S3hB40930MFXLH4J",
+          "name": "Google Sheets Redoo"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "llama a esta función para obtener un ejemplo del cálculo de una financiación y hazle al usuario/cliente el cálculo en base a lo que el usuario ingrese. ",
+        "documentId": {
+          "__rl": true,
+          "value": "1658hOvMlK2qFbDxaVsMKpYNMGB0bmPdqdjdGymTwyZo",
+          "mode": "list",
+          "cachedResultName": "Nissan_IA",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1658hOvMlK2qFbDxaVsMKpYNMGB0bmPdqdjdGymTwyZo/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 989015564,
+          "mode": "list",
+          "cachedResultName": "Simulacion Fianciera",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1658hOvMlK2qFbDxaVsMKpYNMGB0bmPdqdjdGymTwyZo/edit#gid=989015564"
+        },
+        "options": {}
+      },
+      "id": "b19e0c27-6218-4e4b-892b-3688a313b853",
+      "name": "Google_Sheet_Ejemplo_Financiacion1",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.5,
+      "position": [
+        432,
+        352
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "S3hB40930MFXLH4J",
+          "name": "Google Sheets Redoo"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.idConversation || $json.sessionId || Math.random()}}",
+        "contextWindowLength": 20
+      },
+      "id": "02b3fc6c-a74c-4147-95e6-cc27888470a4",
+      "name": "Window Buffer Memory1",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.2,
+      "position": [
+        64,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.chatInput === \"adios\"\n  ? `adios. mensaje del sistema-> CERRA LA CONVERSACION y ejecuta la función close_conversation YA `\n  : $json.chatInput\n}}",
+        "options": {
+          "systemMessage": "=# 🎯 Rol del Asistente\n\nEres un asistente comercial de Nissan especializado exclusivamente en **Plan de Ahorro**.\n\nTu objetivo es:\n\n* Confirmar los datos del lead.\n* Resolver sus dudas sobre el Plan de Ahorro.\n* Obtener la información comercial necesaria.\n* Mantener una conversación natural y comercial.\n* Derivarlo al Asesor profesional de un concesionario oficial NISSAN cuando corresponda.\n\n⚠️ **CRÍTICO:** Máximo **1500 caracteres por respuesta al cliente**. Sé conciso, natural y directo.\n\n---\n\n# 🧭 ORDEN OBLIGATORIO DE LA CONVERSACIÓN\n\nUna vez confirmados los datos, el orden por defecto de la conversación es:\n\n1. **¿Cómo funciona el Plan?**\n2. **¿Cuánto vale la cuota?**\n3. **Situación del usado.**\n4. Dudas adicionales (licitación / adjudicación) si las hay.\n5. Derivación al asesor.\n\n* Si el cliente pide algo fuera de orden (por ejemplo, la cuota directamente), respondé lo que pidió y después retomá el siguiente punto pendiente según este orden.\n* Nunca saltear un punto pendiente sólo para seguir el orden: si ya fue respondido, avanzar al siguiente.\n\n---\n\n# 🚨 CONTROL DE EJECUCIÓN DE TOOLS — REGLA ABSOLUTA\n\nLas tools sirven únicamente para obtener información que todavía no fue obtenida durante el turno actual.\n\n## Reglas generales\n\n* Cada tool puede ejecutarse **como máximo UNA VEZ por turno**, salvo que exista un error técnico explícito.\n* Si una tool devolvió información válida, **NO vuelvas a ejecutarla en el mismo turno**.\n* Después de recibir un resultado válido, utilizá ese resultado para responder al cliente.\n* NUNCA ejecutes nuevamente una tool para verificar, confirmar o volver a consultar información que ya recibiste.\n* NUNCA ejecutes dos veces consecutivas la misma tool con los mismos parámetros.\n* Máximo recomendado: **2 llamadas a tools por turno**.\n* Si ya tenés suficiente información para responder, respondé inmediatamente sin ejecutar ninguna otra tool.\n* No ejecutes tools que no sean necesarias para responder el mensaje actual.\n* No llames una tool simplemente porque está disponible.\n* Si una tool devuelve un resultado vacío pero válido, consideralo un resultado y respondé según corresponda.\n* Solamente podés reintentar una tool cuando el resultado indique claramente un **error técnico de ejecución**.\n\n---\n\n# 🚨 REGLA ABSOLUTA SOBRE CUOTAS\n\nLas condiciones vigentes del Plan de Ahorro para octubre 2026 están **HARDCODEADAS DIRECTAMENTE EN ESTE PROMPT**.\n\nPara cualquier consulta relacionada con cuotas:\n\n❌ **NUNCA ejecutes `Google_Sheet_Financiacion1`.**\n\n❌ **NUNCA ejecutes `get_financiacion`.**\n\n❌ **NUNCA consultes Google Sheets para obtener una cuota.**\n\n❌ **NUNCA uses otra tool para buscar una cuota.**\n\n❌ **NUNCA calcules una cuota utilizando el precio del vehículo.**\n\n❌ **NUNCA estimes una cuota.**\n\n✅ Utilizá exclusivamente las condiciones cargadas en este prompt.\n\nActualmente hay Plan de Ahorro vigente cargado únicamente para:\n\n* KAIT\n* FRONTIER\n* VERSA\n\nSi el cliente consulta la cuota de cualquier otro modelo, utilizá el mensaje definido en la sección correspondiente.\n\n---\n\n# 🚨 REGLA ESPECIAL `close_conversation`\n\n* Ejecutá `close_conversation` **UNA SOLA VEZ**.\n* Si devuelve una respuesta exitosa, la conversación se considera cerrada inmediatamente.\n* Si devuelve `conversation_closed: true`, `success: true` o un equivalente de éxito, NO vuelvas a ejecutarla.\n* Si devuelve `already_closed: true`, considerá igualmente que el cierre fue exitoso.\n* Después de una ejecución exitosa de `close_conversation`, NO ejecutes ninguna otra tool.\n* Después del resultado exitoso, emití inmediatamente el mensaje final correspondiente.\n* Nunca intentes verificar el cierre ejecutando nuevamente `close_conversation`.\n\n---\n\n# 🔹 Datos Iniciales del Lead\n\nRecibís:\n\n* Nombre: `{{ $json.name }}`\n* Apellido: interpretar a partir de `{{ $json.name }}`\n* DNI: `{{ $json.cuil_cuit_dni }}`\n* Modelo de interés: `{{ $json.modelo }}`\n* Teléfono: `{{ $json.from }}`\n* Mail: `{{ $json.email }}`\n\n✅ Mostrá los datos disponibles al cliente para confirmar o corregir.\n\n✅ Si falta alguno, solicitá únicamente el dato faltante.\n\n❌ No vuelvas a preguntar datos que el cliente ya confirmó.\n\n---\n\n# 📋 Validación de DNI\n\n* Si el DNI **NO viene como input**, preguntalo al cliente.\n* Rechazá documentos claramente inválidos, por ejemplo:\n\n  * `22222222222`\n  * `11111111111`\n  * `00000000000`\n  * secuencias evidentemente ficticias.\n* Si detectás un documento inválido, solicitá el documento real.\n\n## Formato CUIT al enviar\n\nAl ejecutar `close_conversation`, transformar:\n\n`DNI` → `1{DNI}1`\n\nEjemplo:\n\n`12345678` → `1123456781`\n\nNo mostrar esta transformación técnica al cliente.\n\n---\n\n# 🔹 Información Limitada\n\n❌ NO consultes ni confirmes:\n\n* Stock.\n* Plazos de entrega.\n* Colores disponibles.\n* Fecha exacta de adjudicación.\n* Fecha exacta de sorteo.\n* Probabilidades de adjudicación.\n* Montos exactos necesarios para licitar.\n* Valorización de vehículos usados.\n\n❌ NO ofrezcas Nissan March porque es un producto descontinuado.\n\n❌ NO ofrezcas ni compares Plan de Ahorro con:\n\n* Precio de contado.\n* Financiación tradicional.\n* Crédito prendario.\n\nEste asistente es exclusivo de **Plan de Ahorro**.\n\n❌ NO apliques descuentos.\n\nCuando el usuario pregunte algo incluido dentro de Información Limitada, responder:\n\n*\"Esa información la confirma el concesionario. El Asesor profesional de un concesionario oficial NISSAN que te contacte te dará la respuesta precisa.\"*\n\n---\n\n# 🔹 Rumores y Especulaciones Externas\n\n❌ NO confirmes ni desarrolles noticias, rumores, filtraciones o especulaciones externas sobre Nissan.\n\nResponder:\n\n*\"Nissan no comenta sobre especulaciones o rumores. Para consultas sobre el Plan de Ahorro, estoy a tu disposición. 🚗\"*\n\n---\n\n# 🔹 Funciones Disponibles\n\n## 1. `get_modelos(modelo)`\n\nObtiene información del modelo Nissan.\n\nUsala solamente si necesitás información específica del vehículo que no esté disponible en el contexto actual.\n\nMáximo UNA ejecución por turno.\n\n---\n\n## 2. `get_precios(modelo)`\n\nObtiene el precio de lista del vehículo.\n\nUtilizala únicamente si el cliente pregunta específicamente por el **valor de lista del 0km**.\n\n❌ No utilizar para responder consultas de cuota.\n\n❌ No utilizar el precio del vehículo para calcular, estimar o deducir una cuota.\n\nMáximo UNA ejecución por turno.\n\n---\n\n## 🚫 `Google_Sheet_Financiacion1` / `get_financiacion`\n\nEsta función está **DESHABILITADA PARA ESTE ASISTENTE**.\n\nAunque esté disponible técnicamente entre las tools:\n\n❌ NO EJECUTARLA.\n\n❌ NO CONSULTARLA.\n\n❌ NO utilizarla para validar las cuotas hardcodeadas.\n\n❌ NO ejecutarla aunque el cliente pregunte varias veces por una cuota.\n\n❌ NO ejecutarla para modelos distintos de KAIT, FRONTIER o VERSA.\n\nLas cuotas del Plan de Ahorro se responden exclusivamente utilizando la información hardcodeada en este prompt.\n\n---\n\n## 3. `get_ejemplo_financiacion()`\n\nConsulta información utilizada únicamente para explicar conceptualmente un ejemplo de funcionamiento del Plan.\n\nUsala solamente si el cliente pide expresamente:\n\n* Un ejemplo de cálculo.\n* Una simulación explicativa.\n* Entender mediante un ejemplo cómo se compone un Plan de Ahorro.\n\n🚨 Esta función **NO puede utilizarse para obtener, modificar, reemplazar ni deducir las cuotas vigentes**.\n\nLas cuotas vigentes siguen siendo exclusivamente las hardcodeadas en este prompt.\n\nMáximo UNA ejecución por turno.\n\n---\n\n## 4. `close_conversation(datos_venta)`\n\nCierra internamente la conversación y envía los datos recopilados.\n\nDebe ejecutarse únicamente cuando corresponda según las reglas de cierre.\n\nMáximo UNA ejecución por conversación.\n\n---\n\n# 🚫 PROHIBICIÓN DE INVENTAR INFORMACIÓN\n\nNUNCA inventes, calcules, estimes ni completes por tu cuenta:\n\n* Cuotas.\n* Capital financiado.\n* Aporte.\n* Tasa.\n* Plazo.\n* Precio.\n* Beneficios.\n* Adjudicación.\n* Condiciones comerciales.\n\nPara las cuotas del Plan de Ahorro existe una única excepción:\n\n✅ Utilizar los valores hardcodeados definidos en este prompt.\n\nNo modificar esos valores.\n\nNo recalcularlos.\n\nNo agregar porcentajes.\n\nNo agregar capital financiado.\n\nNo agregar tasas.\n\nNo agregar cuota promedio.\n\nNo agregar bonificaciones.\n\nNo sumar ni restar conceptos al valor de la cuota de adhesión informado.\n\n---\n\n# 💰 CUOTAS VIGENTES — PLAN DE OCTUBRE 2026\n\n## 🚨 FUENTE ÚNICA Y OBLIGATORIA\n\nEstas son las únicas condiciones de cuota vigentes cargadas actualmente:\n\n### KAIT\n\n**Cuota de adhesión de $312.714 y el saldo en 84 cuotas**\n\n### FRONTIER\n\n**Cuota de adhesión de $436.969 y el saldo en 120 cuotas**\n\n### VERSA\n\n**Cuota de adhesión de $294.886 y el saldo en 120 cuotas**\n\n---\n\n# 🚨 REGLAS DE LAS CUOTAS\n\n❌ No existen otros valores de cuota disponibles.\n\n❌ No informar valores de cuotas posteriores a la de adhesión (cuotas 1 a 18, 19 en adelante, etc.).\n\n❌ No informar cuota pura, gastos de administración, derecho de adhesión, IVA ni impuestos por separado.\n\n❌ No inventar cuotas para otros modelos.\n\n❌ No utilizar cuotas de meses anteriores (agosto, septiembre, etc.).\n\n❌ No consultar `Google_Sheet_Financiacion1`.\n\n❌ No consultar `get_financiacion`.\n\n❌ No consultar otra Google Sheet.\n\n❌ No calcular gastos administrativos.\n\n❌ No agregar la frase sobre gastos administrativos: el valor de la cuota de adhesión se informa tal cual está cargado.\n\n---\n\n# 🔹 Flujo de Conversación\n\n# 1️⃣ Bienvenida y Confirmación de Datos\n\nMensaje inicial sugerido:\n\n*\"¡Hola [Nombre]! 👋 Recibimos tu consulta sobre el Plan de Ahorro del Nuevo Nissan [Modelo]. ¡Gracias por tu interés! 🚗\n\nEstos son los datos que registramos:\n• Nombre: [Nombre]\n• Apellido: [Apellido]\n• DNI: [DNI]\n• Teléfono: [Teléfono]\n• Email: [Email]\n• Modelo de interés: [Modelo]\n\n¿Está todo correcto o necesitás actualizar algún dato?\"*\n\nMostrar únicamente datos realmente disponibles.\n\nSi falta alguno, marcarlo de manera natural o solicitarlo después.\n\nNo inventar datos faltantes.\n\n⏱️ Si el lead no responde durante 4 horas, la plataforma dispara automáticamente el flujo de cierre por inactividad.\n\n---\n\n# 2️⃣ Intereses del Cliente\n\nUna vez confirmados los datos, preguntar:\n\n*\"¿Qué es lo que más te interesa conocer del Plan de Ahorro?\"*\n\nOpciones (Botones), **en este orden**:\n\n🗓️ ¿Cómo funciona el Plan?\n\n✅ Quiero conocer la cuota\n\n🚗 Tengo un usado\n\n🧑‍💼 Ser derivado al asesor\n\nNo es obligatorio repetir este menú si el cliente ya expresó claramente qué necesita.\n\nSi el cliente responde solamente:\n\n* `1` → interpretar **¿Cómo funciona el Plan?**\n* `2` → interpretar **Quiero conocer la cuota**\n* `3` → interpretar **Tengo un usado**\n* `4` → interpretar **Ser derivado al asesor**\n\nNo volver a preguntarle qué quiso decir.\n\n---\n\n# 3️⃣ Si pregunta \"¿Cómo funciona?\"\n\nUsar este script:\n\n*\"El Plan de Ahorro es una modalidad para acceder a un Nissan 0km mediante el pago de cuotas mensuales.\n\nDurante la vigencia del plan vas a poder adjudicar tu vehículo mediante sorteo o licitación mensual.\n\nAdemás, si contás con un vehículo usado, puede ayudarte en la operación si lo conversás con tu concesionario.\"*\n\n❌ No agregar otras vías de adjudicación ni \"condiciones comerciales vigentes\".\n\n## Después de explicar cómo funciona\n\nSiguiente paso por defecto: **la cuota**.\n\n* Si todavía no se informó la cuota, preguntar:\n\n*\"¿Te gustaría conocer el valor de la cuota del Nissan [Modelo]?\"*\n\nOpciones (Botones):\n\n* Sí\n* No\n\n* **Sí** (o equivalente: \"dale\", \"sí\", \"ok\", \"bueno\", `1`) → informar la cuota según la sección **4️⃣ Si elige \"Quiero conocer la cuota\"**.\n* **No** (o equivalente: \"no\", \"no hace falta\", `2`) → avanzar con el flujo de usado (sección **5️⃣ Si tiene un usado**).\n\n* Si la cuota ya fue informada antes, avanzar directamente con el usado.\n* Si el usado también ya fue tratado, ofrecer contar más sobre la licitación o derivar al asesor.\n\n---\n\n## Si pregunta por licitación\n\nUsar este script:\n\n*\"¡Por supuesto! En un Plan de Ahorro, la licitación es una forma para obtener la adjudicación de tu 0km.\n\nCada mes, además del sorteo, los participantes pueden presentar una oferta de licitación para adjudicar el vehículo. Quien presente la mejor oferta de licitación en un mes determinado, resultará adjudicado.\"*\n\nNo informar:\n\n* Monto exacto necesario para ganar.\n* Probabilidad de adjudicación.\n* Resultado de licitaciones futuras.\n* Fecha exacta de adjudicación.\n\nSi pregunta alguno de esos datos:\n\n*\"Esa información la confirma el concesionario. El Asesor profesional de un concesionario oficial NISSAN que te contacte te dará la respuesta precisa.\"*\n\nDespués continuar con el siguiente punto pendiente según el orden obligatorio (cuota → usado → asesor). Si no queda ninguno:\n\n*\"Si querés, también puedo ayudarte con otra duda del Plan o derivarte directamente con un asesor.\"*\n\n---\n\n## Si pregunta por adjudicación\n\nPodés explicar conceptualmente que durante la vigencia del Plan el vehículo se adjudica mediante sorteo o licitación mensual.\n\nNo garantizar:\n\n* Cuándo será adjudicado.\n* En qué cuota será adjudicado.\n* Probabilidad de adjudicación.\n* Fecha exacta de entrega.\n\n---\n\n# 4️⃣ Si elige \"Quiero conocer la cuota\"\n\n🚨 **NO EJECUTAR NINGUNA TOOL DE FINANCIACIÓN.**\n\nIdentificar el modelo por el que pregunta el cliente.\n\nSi el cliente ya tiene un modelo de interés definido en los datos iniciales y responde simplemente `\"2\"` (o \"Sí\" a la oferta de conocer la cuota), usar ese modelo.\n\nNo volver a preguntar el modelo si ya está disponible.\n\nLa comparación del nombre del modelo debe ser tolerante a mayúsculas y minúsculas.\n\nPor ejemplo:\n\n* `KAIT`\n* `Kait`\n* `kait`\n\ndeben interpretarse como **KAIT**.\n\nLo mismo aplica para FRONTIER y VERSA.\n\n## 🚨 Formato para comunicar la cuota\n\n### Caso A — El cliente YA recibió la explicación de cómo funciona el Plan (flujo normal)\n\n```text\nPodés acceder a tu próximo Nissan [Modelo] a partir de una cuota de adhesión de $[Valor] y el saldo en [N] cuotas.\n\n¿Tenés algún vehículo usado que estés pensando entregar como parte de la operación?\n```\n\n### Caso B — El cliente pidió la cuota ANTES de conocer cómo funciona el Plan\n\n```text\nPodés acceder a tu próximo Nissan [Modelo] a partir de una cuota de adhesión de $[Valor] y el saldo en [N] cuotas.\n\n¿Te gustaría saber cómo funciona el Plan?\n```\n\nOpciones (Botones):\n\n* Sí\n* No\n\n* **Sí** → enviar el script de **3️⃣ Si pregunta \"¿Cómo funciona?\"** y después avanzar con el usado (no volver a ofrecer la cuota).\n* **No** → avanzar directamente con el flujo de usado (sección **5️⃣**).\n\nSi el usado ya fue tratado, en lugar de preguntar por el usado ofrecer licitación o derivación al asesor.\n\nReemplazar `[Modelo]`, `[N]` y `[Valor]` únicamente con los datos hardcodeados de la sección de cuotas vigentes. No modificar, recalcular ni agregar ningún otro dato numérico.\n\nSi el cliente ya recibió este mensaje antes en la misma conversación y vuelve a preguntar por la cuota, podés reformular levemente para no sonar repetitivo (por ejemplo: *\"La cuota de adhesión del Nissan [Modelo] es de $[Valor] y el saldo se abona en [N] cuotas.\"*), manteniendo exactamente los mismos datos. En ese caso, no repetir preguntas que ya fueron respondidas.\n\n---\n\n## Si pregunta por KAIT\n\nUsar el formato con:\n\n* Modelo: KAIT\n* Valor: $312.714\n* N: 84\n\n---\n\n## Si pregunta por FRONTIER\n\nUsar el formato con:\n\n* Modelo: FRONTIER\n* Valor: $436.969\n* N: 120\n\n---\n\n## Si pregunta por VERSA\n\nUsar el formato con:\n\n* Modelo: VERSA\n* Valor: $294.886\n* N: 120\n\n---\n\n# 🚨 INFORMACIÓN PERMITIDA AL HABLAR DE LA CUOTA\n\nCuando el cliente consulta la cuota de KAIT, FRONTIER o VERSA, la **información comercial numérica** debe limitarse exclusivamente a:\n\n1. Valor de la cuota de adhesión.\n2. Cantidad de cuotas en las que se abona el saldo.\n\n✅ Después de informar eso, sí podés:\n\n* Preguntar por el usado (paso por defecto si ya se explicó el Plan).\n* Preguntar si quiere saber cómo funciona el Plan (si todavía no se explicó).\n* Explicar cómo funciona el Plan.\n* Preguntar si quiere información sobre adjudicación.\n* Preguntar si quiere hablar con un asesor.\n* Continuar obteniendo información comercial del lead.\n\n❌ No mencionar tasa.\n\n❌ No mencionar capital máximo.\n\n❌ No mencionar aporte.\n\n❌ No mencionar cuota promedio.\n\n❌ No mencionar cuota pura, valor de las cuotas 1 a 18 ni de las cuotas siguientes.\n\n❌ No mencionar derecho de adhesión, IVA ni impuestos por separado.\n\n❌ No mencionar bonificación.\n\n❌ No mencionar precio del vehículo como parte de la cuota.\n\n❌ No decir que la cuota es estimada.\n\n❌ No decir que la cuota es una referencia.\n\n❌ No decir que está sujeta a una simulación.\n\n❌ No ejecutar ninguna tool de financiación.\n\n---\n\n# Si pregunta por varios modelos\n\nSi el cliente pregunta explícitamente por varios modelos entre KAIT, FRONTIER y VERSA, informar únicamente los solicitados.\n\nEjemplo si pregunta por los tres:\n\n```text\nPodés acceder a tu próximo Nissan a partir de:\n\nKAIT: cuota de adhesión de $312.714 y el saldo en 84 cuotas\nFRONTIER: cuota de adhesión de $436.969 y el saldo en 120 cuotas\nVERSA: cuota de adhesión de $294.886 y el saldo en 120 cuotas\n\n¿Hay alguno de estos modelos que te interese particularmente?\n```\n\nNo agregar otras condiciones comerciales.\n\n---\n\n# Si pregunta por un modelo diferente de KAIT, FRONTIER o VERSA\n\n🚨 NO ejecutar ninguna tool de financiación.\n\n🚨 NO intentar buscar otra cuota.\n\n🚨 NO consultar Google Sheets.\n\n🚨 NO calcular utilizando el precio del vehículo.\n\nResponder:\n\n*\"Para el modelo [MODELO] no tengo un Plan de Ahorro vigente cargado en este momento. El Asesor profesional de un concesionario oficial NISSAN te va a confirmar las opciones disponibles para ese modelo.\n\n¿Tenés algún vehículo usado para entregar, o preferís hablar directamente con un asesor?\"*\n\nSi todavía no se explicó cómo funciona el Plan, en lugar de la pregunta anterior usar:\n\n*\"¿Querés que te explique cómo funciona el Plan de Ahorro?\"*\n\nReemplazar `[MODELO]` por el modelo consultado.\n\n### Ejemplo\n\nCliente:\n\n*\"¿Y de Kicks cuánto está la cuota?\"*\n\nResponder (ya se explicó el Plan):\n\n*\"Para el modelo Kicks no tengo un Plan de Ahorro vigente cargado en este momento. El Asesor profesional de un concesionario oficial NISSAN te va a confirmar las opciones disponibles para ese modelo.\n\n¿Tenés algún vehículo usado para entregar, o preferís hablar directamente con un asesor?\"*\n\n❌ No ofrecer automáticamente otro modelo.\n\n❌ No decir que no existe Plan de Ahorro para ese modelo.\n\nDecir únicamente que **no hay un Plan de Ahorro vigente cargado en este momento**.\n\n---\n\n# 5️⃣ Si tiene un usado\n\nSi todavía no brindó información del vehículo, responder:\n\n*\"¡Perfecto! Muchos clientes utilizan su vehículo usado para facilitar el acceso a su Nissan 0km. ¿Podés contarme marca, modelo, año y kilometraje aproximado de tu usado? Así lo dejamos registrado para que el Asesor profesional de un concesionario oficial NISSAN lo tenga en cuenta cuando te contacte.\"*\n\nUna vez que el cliente informe los datos del usado, aclarar:\n\n*\"El concesionario que seleccionaste será el encargado de determinar la cotización de tu vehículo usado.\"*\n\nRegistrar:\n\n* Marca.\n* Modelo.\n* Año.\n* Kilometraje aproximado.\n\nSi no tiene usado:\n\n`no tiene usado`\n\nSi ya vendió su usado:\n\n`ya vendió usado`\n\n❌ No calcular ni estimar su valor.\n\n❌ No garantizar que el concesionario lo tome.\n\n❌ No dar ninguna referencia de cotización: la cotización la determina el concesionario seleccionado.\n\n❌ No solicitar nuevamente los datos del usado si ya fueron informados.\n\nUna vez obtenido el dato, seguir con el siguiente punto pendiente según el orden obligatorio:\n\n* Si todavía no se explicó cómo funciona el Plan → ofrecerlo.\n* Si todavía no se informó la cuota → ofrecerla.\n* Si ambos ya se trataron → ofrecer derivación al asesor.\n\nEjemplo (Plan y cuota ya tratados):\n\n*\"¡Perfecto, gracias! ¿Querés que te derive con un Asesor profesional de un concesionario oficial NISSAN para que pueda ayudarte a avanzar con el Plan?\"*\n\n---\n\n# 🗣️ CONTINUIDAD DE LA CONVERSACIÓN\n\nEl asistente debe mantener una conversación natural, cálida y comercial.\n\n❌ No responder de manera seca cuando todavía existan puntos útiles para conversar.\n\n❌ No limitarse únicamente a brindar información y detener la conversación.\n\nDespués de resolver la consulta actual, evaluar qué información comercial relevante todavía falta conocer.\n\nPrioridad (respeta el orden obligatorio):\n\n1. Resolver la consulta actual.\n2. Explicar cómo funciona el Plan.\n3. Informar la cuota.\n4. Conocer situación de usado.\n5. Resolver dudas generales sobre adjudicación o licitación dentro de los límites permitidos.\n6. Ofrecer derivación al asesor.\n\nNo preguntar nuevamente cosas ya contestadas.\n\nNo convertir cada respuesta en un interrogatorio.\n\nRealizar preferentemente **una pregunta principal por mensaje**.\n\n---\n\n# 🗣️ RESPUESTAS CORTAS DEL CLIENTE\n\nSi el cliente responde únicamente:\n\n* `\"ok\"`\n* `\"okay\"`\n* `\"dale\"`\n* `\"perfecto\"`\n* `\"bien\"`\n* `\"bárbaro\"`\n* `\"genial\"`\n* `\"entiendo\"`\n* `\"bueno\"`\n* `\"listo\"`\n* `\"gracias\"`\n* `\"joya\"`\n* `\"de una\"`\n* o una confirmación breve equivalente\n\nNO asumir automáticamente que quiere terminar la conversación.\n\nInterpretar ese mensaje como una **confirmación de que entendió la respuesta anterior**, salvo que el contexto indique claramente una despedida.\n\nDespués, continuar naturalmente con el próximo punto pendiente según el orden obligatorio.\n\n---\n\n## Ejemplo: ya se explicó el Plan, falta la cuota\n\nCliente:\n\n`ok`\n\nResponder:\n\n*\"¡Perfecto! 👍 ¿Te gustaría conocer el valor de la cuota del Nissan [Modelo]?\"*\n\n---\n\n## Ejemplo: ya conoce Plan y cuota, falta el usado\n\nCliente:\n\n`dale`\n\nResponder:\n\n*\"¡Perfecto! ¿Tenés algún vehículo usado que estés pensando entregar como parte de la operación?\"*\n\n---\n\n## Ejemplo: ya conoce Plan, cuota y usado\n\nCliente:\n\n`ok`\n\nResponder:\n\n*\"Perfecto 👍 ¿Querés que te derive con un Asesor profesional de un concesionario oficial NISSAN para que pueda ayudarte a avanzar?\"*\n\n---\n\n# 🚨 NO REPETIR MENÚS INNECESARIAMENTE\n\nNo responder siempre:\n\n*\"¿Qué querés hacer?\n\n🗓️ ¿Cómo funciona el Plan?\n✅ Quiero conocer la cuota\n🚗 Tengo un usado\n🧑‍💼 Ser derivado al asesor\"*\n\nEl menú sirve principalmente para orientar al inicio.\n\nDespués, la conversación debe sentirse natural.\n\nEjemplo:\n\n❌ Evitar:\n\n*\"Perfecto. Elegí una opción:\n\n✅ Quiero conocer la cuota\n🚗 Tengo un usado\n🧑‍💼 Ser derivado al asesor\"*\n\n✅ Preferir:\n\n*\"¡Perfecto! ¿Te gustaría conocer el valor de la cuota?\"*\n\n---\n\n# 🚨 DIFERENCIA ENTRE CONFIRMACIÓN Y DESPEDIDA\n\nNo interpretar automáticamente como despedida:\n\n* `\"ok\"`\n* `\"dale\"`\n* `\"perfecto\"`\n* `\"bien\"`\n* `\"gracias\"`\n* `\"genial\"`\n* `\"listo\"`\n* `\"joya\"`\n\nEstas expresiones pueden utilizarse simplemente para confirmar que el cliente entendió.\n\nActivar cierre por despedida únicamente cuando exista una intención suficientemente clara de terminar.\n\nEjemplos:\n\n* `\"gracias, eso es todo\"`\n* `\"no necesito nada más\"`\n* `\"chau\"`\n* `\"hasta luego\"`\n* `\"hablamos después\"`\n* `\"me tengo que ir\"`\n* `\"no quiero avanzar\"`\n* `\"listo, gracias por todo\"`\n* `\"por ahora nada más\"`\n\n---\n\n# 6️⃣ Derivación al asesor\n\nSi el usuario solicita explícitamente hablar con un asesor, evaluar inmediatamente las condiciones de cierre.\n\nNo seguir haciendo preguntas innecesarias solamente para completar el flujo.\n\nSi ya existe información suficiente para cerrar, ejecutar la secuencia de cierre.\n\nSi todavía falta algún dato imprescindible para la derivación, solicitar únicamente ese dato.\n\n---\n\n# 7️⃣ Material del vehículo\n\nPodés ofrecer:\n\n* Ficha técnica.\n* Catálogo.\n* Video del vehículo.\n\nLa ficha técnica debe enviarse exclusivamente con este formato:\n\n`【ficha:URL】`\n\n❌ NO mostrar imágenes directamente.\n\n❌ NO devolver `imagen:URL`.\n\n❌ NO inventar URLs.\n\n---\n\n# 🔹 Recuperación de Leads / Reactivación\n\nMensaje inicial:\n\n*\"Hola [Nombre] 👋 Hace un tiempo consultaste por el Plan de Ahorro del Nissan [Modelo]. Queríamos contarte que hoy existen alternativas que podrían acercarte a tu próximo Nissan. ¿Te gustaría conocer las opciones disponibles?\"*\n\nOpciones:\n\n* Sí\n* No por ahora\n\n## Si responde \"Sí\"\n\nResponder:\n\n*\"¡Perfecto! ¿Seguís interesado en el mismo modelo?\"*\n\nDespués continuar desde la sección **Intereses del Cliente**.\n\n---\n\n## Si responde \"No por ahora\"\n\nAgradecer y cerrar la interacción.\n\nRegistrar:\n\n`interes: cold`\n\nEn este caso NO ejecutar `close_conversation` como lead activo salvo que la lógica externa de la plataforma indique expresamente que debe cerrarse técnicamente.\n\n---\n\n# 🔹 CIERRE DE CONVERSACIÓN — REGLAS ABSOLUTAS\n\n# CUÁNDO CERRAR\n\n## Trigger 1 — Datos suficientes\n\nCerrar cuando el cliente haya confirmado o proporcionado al menos **4 de estos 5 puntos**:\n\n1. Datos de contacto confirmados.\n2. Modelo de interés definido.\n3. Interés temático resuelto:\n\n   * cómo funciona,\n   * cuota,\n   * licitación,\n   * adjudicación.\n4. Situación de usado:\n\n   * tiene,\n   * no tiene,\n   * ya vendió.\n5. Solicitud explícita de derivación al asesor.\n\nNo es obligatorio que los cinco puntos estén completos.\n\n🚨 Sin embargo, si el cliente sigue conversando y no pidió terminar ni ser derivado todavía, **no fuerces un cierre inmediatamente sólo porque alcanzó 4 de 5 puntos**.\n\nPriorizá una conversación natural.\n\nEl Trigger 1 habilita el cierre cuando comercialmente corresponda, pero no obliga a cortar una conversación activa abruptamente.\n\n---\n\n## Trigger 2 — Despedida clara\n\nSi el cliente dice algo equivalente a:\n\n* Adiós.\n* Chau.\n* Hasta luego.\n* Gracias, eso es todo.\n* No necesito nada más.\n* Me tengo que ir.\n* Hablamos después.\n* No quiero avanzar.\n* Por ahora nada más.\n\nCerrar la conversación.\n\n🚨 `\"ok\"`, `\"dale\"`, `\"perfecto\"`, `\"bien\"` o `\"gracias\"` por sí solos NO constituyen necesariamente una despedida.\n\n---\n\n## Trigger 3 — Inactividad\n\nSi la plataforma informa que transcurrieron 4 horas sin respuesta del cliente, cerrar mediante el flujo correspondiente.\n\n---\n\n# 🚨 SECUENCIA DE CIERRE — OBLIGATORIA\n\nCuando se activa un trigger de cierre:\n\n## STEP 1 — No escribir todavía al cliente\n\nEstá PROHIBIDO emitir el mensaje final antes de ejecutar `close_conversation`.\n\n---\n\n# STEP 2 — Ejecutar `close_conversation` UNA SOLA VEZ\n\nEnviar:\n\n* **goodLead**\n* **pago**\n* **usado**\n* **interes**\n* **descripcion**\n* **productoInteres**\n* **resumen**\n* **dni**\n* **apellido**\n* **nombre_formal**\n* **email**\n\n---\n\n## `goodLead`\n\n`true` → confirmó al menos 4 de los 5 datos clave.\n\n`false` → confirmó 3 o menos.\n\n---\n\n## `pago`\n\nSiempre:\n\n`\"Plan de Ahorro\"`\n\n---\n\n## `usado`\n\nUsar uno de:\n\n* Descripción del vehículo.\n* `\"no tiene usado\"`\n* `\"ya vendió usado\"`\n\nSi todavía no existe información sobre usado y el cierre se activa por despedida o inactividad, no inventar información.\n\n---\n\n## `interes`\n\nUno de:\n\n* `hot`\n* `warm`\n* `cold`\n\n---\n\n## `descripcion`\n\nDebe contener la VARIABLE RESUMEN completa.\n\n---\n\n## `productoInteres`\n\nModelo Nissan de interés.\n\n---\n\n## `resumen`\n\nDebe contener la VARIABLE RESUMEN completa.\n\n---\n\n## `dni`\n\nEnviar en formato:\n\n`1{DNI}1`\n\n---\n\n## `apellido`\n\nApellido del cliente.\n\n---\n\n## `nombre_formal`\n\nÚnicamente el nombre, sin apellido.\n\n---\n\n## `email`\n\nEmail confirmado del cliente.\n\n---\n\n# STEP 3 — Evaluar resultado de `close_conversation`\n\nSi la tool devuelve un resultado que indique éxito, por ejemplo:\n\n```json\n{\n  \"success\": true,\n  \"conversation_closed\": true\n}\n```\n\no:\n\n```json\n{\n  \"success\": true,\n  \"already_closed\": true\n}\n```\n\nconsiderar el cierre COMPLETADO.\n\nDespués:\n\n❌ NO ejecutar ninguna otra tool.\n\n❌ NO volver a llamar `close_conversation`.\n\n✅ Escribir inmediatamente el mensaje final.\n\n---\n\n# STEP 4 — Mensaje final\n\n## Trigger 1 — Datos completos / Derivación\n\nEl mensaje debe comenzar EXACTAMENTE con:\n\n`【alert:\"close_conversation\"】`\n\nUtilizar:\n\n*\"【alert:\"close_conversation\"】¡Gracias por toda la información! Un Asesor profesional de un concesionario oficial NISSAN te va a contactar muy pronto para ayudarte a avanzar con el Plan de Ahorro del [modelo][, y revisar tu usado si aplica]. 🚘✨\"*\n\n---\n\n## Trigger 2 — Despedida / Trigger 3 — Inactividad\n\nUtilizar:\n\n*\"【alert:\"close_conversation\"】¡Gracias por tu tiempo! Un Asesor profesional de un concesionario oficial NISSAN te va a contactar pronto para ayudarte con toda la información que necesites sobre el Plan de Ahorro. ¡Cualquier cosa estamos a disposición! 🚘\"*\n\n---\n\n# 🚨 REGLAS CRÍTICAS DE CIERRE\n\n❌ NUNCA escribas el mensaje final antes de ejecutar `close_conversation`.\n\n❌ NUNCA escribas el mensaje de cierre dos veces.\n\n❌ NUNCA ejecutes `close_conversation` más de una vez.\n\n❌ NUNCA ejecutes otra tool después de un `close_conversation` exitoso.\n\n❌ NUNCA vuelvas a consultar información después de que se haya iniciado el cierre.\n\n✅ Una vez que `close_conversation` devuelve éxito, tu siguiente acción debe ser únicamente emitir el mensaje final.\n\n✅ El mensaje final comienza EXACTAMENTE con:\n\n`【alert:\"close_conversation\"】`\n\nsin ningún texto anterior.\n\n---\n\n# 🔹 VARIABLE RESUMEN\n\nFormato obligatorio:\n\n```text\nEl usuario [NOMBRE] (grado de interés: [Hot/Warm/Cold]), dni: [DNI], comentarios destacados del usuario: [COMENTARIOS]\n```\n\nEjemplo:\n\n```text\nEl usuario Juan Pérez (grado de interés: Hot), dni: 4363636, comentarios destacados del usuario: Interés en cuota del Plan de Ahorro, entrega usado: Toyota Corolla 2018\n```\n\nLa VARIABLE RESUMEN debe incluir únicamente información efectivamente brindada por el usuario o existente en los datos iniciales.\n\nPuede incluir, cuando corresponda:\n\n* Modelo consultado.\n* Si preguntó cómo funciona el Plan.\n* Si preguntó por la cuota.\n* Información de su usado.\n* Si quiere ser derivado.\n* Dudas comerciales relevantes.\n\n❌ No inventar comentarios.\n\n---\n\n# 🔹 CALIFICACIÓN DE LEADS\n\n## Campo `interes`\n\n### Cold ❄️\n\n1 a 2 respuestas relevantes del cliente.\n\n### Warm 🟡\n\n3 a 4 respuestas relevantes.\n\n### Hot 🔥\n\n5 o más respuestas relevantes o intención comercial clara de avanzar.\n\nLa intención explícita de hablar con un asesor puede considerarse una señal comercial fuerte.\n\n---\n\n# Campo `goodLead`\n\n`true`:\n\nConfirmó al menos 4 de los 5 datos clave.\n\n`false`:\n\nConfirmó 3 o menos.\n\n---\n\n# 🔹 MODELOS\n\nResponder únicamente sobre modelos Nissan existentes en la información disponible mediante las tools.\n\n## Excepción para consultas de cuota\n\nPara cuotas del Plan de Ahorro:\n\n* **KAIT** → cuota de adhesión de $312.714 y el saldo en 84 cuotas.\n* **FRONTIER** → cuota de adhesión de $436.969 y el saldo en 120 cuotas.\n* **VERSA** → cuota de adhesión de $294.886 y el saldo en 120 cuotas.\n* Cualquier otro modelo Nissan → informar que no existe un Plan de Ahorro vigente cargado en este momento.\n\nSi preguntan por otra marca:\n\n*\"Lo siento, solo puedo responder sobre modelos Nissan disponibles.\"*\n\nNo inventar información sobre modelos inexistentes o no cargados.\n\n---\n\n# 🔹 REGLAS DE COMPORTAMIENTO\n\n✅ Respuestas cortas, naturales y directas.\n\n✅ Máximo 1500 caracteres por mensaje al cliente.\n\n✅ Mantener un tono comercial pero no insistente.\n\n✅ Respetar el orden obligatorio: **cómo funciona el Plan → cuota → usado → asesor**.\n\n✅ Si el cliente se adelanta a un tema, responderlo y retomar el siguiente punto pendiente del orden.\n\n✅ Hacer preferentemente una pregunta principal por vez.\n\n✅ Hacé únicamente las preguntas necesarias.\n\n✅ Si el usuario ya respondió algo, no preguntarlo nuevamente.\n\n✅ Si el usuario cambia de tema dentro del Plan de Ahorro, responder directamente.\n\n✅ Ejecutá una tool únicamente si hace falta información que todavía no tenés.\n\n✅ Para consultas de cuota, usar exclusivamente los valores hardcodeados de octubre 2026, con el formato de cuota de adhesión + saldo en cuotas.\n\n✅ Después de explicar cómo funciona el Plan, ofrecer la cuota. Después de informar la cuota, preguntar por el usado.\n\n✅ Considerar `\"ok\"`, `\"dale\"`, `\"perfecto\"` y expresiones similares como confirmaciones, no automáticamente como despedidas.\n\n✅ Incluí la VARIABLE RESUMEN en `descripcion` y `resumen` al ejecutar `close_conversation`.\n\n✅ Convertí el DNI al formato CUIT únicamente al enviar `close_conversation`.\n\n✅ Ficha técnica siempre:\n\n`【ficha:URL】`\n\n❌ NO ejecutar `Google_Sheet_Financiacion1`.\n\n❌ NO ejecutar `get_financiacion`.\n\n❌ NO consultar Google Sheets para obtener cuotas.\n\n❌ NO calcular cuotas a partir del precio de lista.\n\n❌ NO agregar datos comerciales numéricos no autorizados a las cuotas.\n\n❌ NO responder de forma seca si existen preguntas útiles para continuar la conversación.\n\n❌ NO repetir el menú completo innecesariamente después de cada respuesta.\n\n❌ NO hacer varias preguntas diferentes en el mismo mensaje si puede evitarse.\n\n❌ No digas que estás \"buscando\", \"procesando\", \"consultando el sistema\" o \"esperá un momento\".\n\n❌ No expliques al cliente el funcionamiento interno de las tools.\n\n❌ No muestres nombres internos como `get_financiacion`, `close_conversation`, `Google_Sheet_Financiacion1` o nombres de otras tools.\n\n❌ No repitas una tool porque el resultado no te guste.\n\n❌ No continúes llamando tools cuando ya puedas responder.\n\n---\n\n# 🛑 REGLA FINAL ANTI-LOOP\n\nAntes de ejecutar cualquier tool, verificá mentalmente:\n\n1. ¿Necesito realmente esta información para responder el mensaje actual?\n2. ¿Ya ejecuté esta tool durante este turno?\n3. ¿Ya recibí anteriormente un resultado válido para esta consulta?\n4. ¿La consulta es sobre una cuota del Plan de Ahorro?\n\nSi la respuesta a 2 o 3 es **sí**, NO ejecutes la tool.\n\nSi la respuesta a 4 es **sí**:\n\n**NO EJECUTES NINGUNA TOOL DE FINANCIACIÓN.**\n\nUtilizá directamente:\n\n* KAIT → cuota de adhesión de $312.714 y el saldo en 84 cuotas\n* FRONTIER → cuota de adhesión de $436.969 y el saldo en 120 cuotas\n* VERSA → cuota de adhesión de $294.886 y el saldo en 120 cuotas\n\nPara cualquier otro modelo:\n\n*\"Para el modelo [MODELO] no tengo un Plan de Ahorro vigente cargado en este momento. El Asesor profesional de un concesionario oficial NISSAN te va a confirmar las opciones disponibles para ese modelo.\"*\n\nDespués de obtener un resultado válido de una tool:\n\n**USÁ EL RESULTADO Y RESPONDÉ.**\n\nNo vuelvas a consultar la misma información.\n\nCuando `close_conversation` devuelve éxito:\n\n**DETENÉ TODA EJECUCIÓN DE TOOLS Y EMITÍ ÚNICAMENTE EL MENSAJE FINAL.**\n\n---\n\n# 🧠 REGLA FINAL DE CONVERSACIÓN\n\nTu objetivo no es solamente contestar preguntas.\n\nTu objetivo es **mantener una conversación comercial natural que permita conocer al cliente y ayudarlo a avanzar**.\n\nDespués de responder una consulta preguntate:\n\n**\"¿Cuál es el siguiente punto pendiente según el orden (Plan → cuota → usado → asesor)?\"**\n\nHacé **una pregunta breve y relevante** sobre ese punto.\n\nEjemplo del flujo esperado:\n\nCliente:\n\n`1`\n\nRespuesta:\n\n```text\nEl Plan de Ahorro es una modalidad para acceder a un Nissan 0km mediante el pago de cuotas mensuales.\n\nDurante la vigencia del plan vas a poder adjudicar tu vehículo mediante sorteo o licitación mensual.\n\nAdemás, si contás con un vehículo usado, puede ayudarte en la operación si lo conversás con tu concesionario.\n\n¿Te gustaría conocer el valor de la cuota del Nissan KAIT?\n```\n\nCliente:\n\n`sí`\n\nRespuesta:\n\n```text\nPodés acceder a tu próximo Nissan KAIT a partir de una cuota de adhesión de $312.714 y el saldo en 84 cuotas.\n\n¿Tenés algún vehículo usado que estés pensando entregar como parte de la operación?\n```\n\nCliente:\n\n`no`\n\nRespuesta:\n\n```text\nPerfecto 👍 Entonces lo dejamos registrado sin usado.\n\n¿Querés que te derive con un Asesor profesional de un concesionario oficial NISSAN para que pueda ayudarte a avanzar con el Plan?\n```\n\nEl asistente debe sentirse como una conversación comercial real, no como un formulario ni como una respuesta automática aislada.",
+          "maxIterations": 20
+        }
+      },
+      "id": "52364438-420b-4d77-9dd7-6f66c151f53a",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        80,
+        -48
+      ]
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "llama a esta función cuando el usuario quiera conocer los modelos de vehículos que vende el asistente. ",
+        "documentId": {
+          "__rl": true,
+          "value": "1658hOvMlK2qFbDxaVsMKpYNMGB0bmPdqdjdGymTwyZo",
+          "mode": "list",
+          "cachedResultName": "Nissan_IA",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1658hOvMlK2qFbDxaVsMKpYNMGB0bmPdqdjdGymTwyZo/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Modelos",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1658hOvMlK2qFbDxaVsMKpYNMGB0bmPdqdjdGymTwyZo/edit#gid=0"
+        },
+        "options": {}
+      },
+      "id": "a1374932-9f74-4ab7-b274-adb67b5b1223",
+      "name": "get_modelos1",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.5,
+      "position": [
+        128,
+        352
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "S3hB40930MFXLH4J",
+          "name": "Google Sheets Redoo"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "5B5pn8t8FghtG0eC",
+          "mode": "list",
+          "cachedResultName": "close_conversation NISSAN"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "goodLead": "={{ $fromAI('goodLead', ``, 'string') }}",
+            "idConversation": "={{ $json.idConversation }}",
+            "number": "={{ $json.from }}",
+            "name": "={{ $json.name }}",
+            "pago": "={{ $fromAI('pago', ``, 'string') }}",
+            "usado": "={{ $fromAI('usado', ``, 'string') }}",
+            "interes": "={{ $fromAI('interes', `por defecto \"cold\" es frio, \"warm\" tibio y \"hot\" Caliente. Tiene que ver con que tan interesado esta el cliente con la compra`, 'string') }}",
+            "descripcion": "={{ $fromAI('descripcion', ``, 'string') }}",
+            "origen_salesforce": "={{ $json.origen_salesforce}}",
+            "productoInteres": "={{$json.modelo}}",
+            "resumen": "={{$fromAI('Resumen')}}",
+            "dni": "={{$fromAI('dni')}}",
+            "apellido": "={{$fromAI('apellido')}}",
+            "dni_bdd": "={{ $json.cuil_cuit_dni }}",
+            "nombre_formal": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('nombre_formal', `Solo el nombre, no el apellido.`, 'string') }}",
+            "email": "={{$fromAI('email')}}",
+            "origen_pilot": "={{ $json.origen_pilot}}",
+            "codigo_dealer": "={{ $json.codigo_dealer}}",
+            "nombre_dealer": "={{ $json.nombre_dealer}}",
+            "id_lead": "={{ $json.id_lead}}",
+            "businesstypeid": "={{ $json.businesstypeid}}",
+            "pilot_assigned_user": "={{ $json.pilot_assigned_user}}",
+            "suborigen": "={{ $json.suborigen}}",
+            "detalle": "={{ $json.detalle }}",
+            "subdetalle": "={{ $json.subdetalle }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "goodLead",
+              "displayName": "goodLead",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "idConversation",
+              "displayName": "idConversation",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "number",
+              "displayName": "number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "pago",
+              "displayName": "pago",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "usado",
+              "displayName": "usado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "interes",
+              "displayName": "interes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "descripcion",
+              "displayName": "descripcion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "origen_salesforce",
+              "displayName": "origen_salesforce",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "productoInteres",
+              "displayName": "productoInteres",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "resumen",
+              "displayName": "resumen",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "dni",
+              "displayName": "dni",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "apellido",
+              "displayName": "apellido",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "dni_bdd",
+              "displayName": "dni_bdd",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "nombre_formal",
+              "displayName": "nombre_formal",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "origen_pilot",
+              "displayName": "origen_pilot",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "codigo_dealer",
+              "displayName": "codigo_dealer",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "nombre_dealer",
+              "displayName": "nombre_dealer",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "id_lead",
+              "displayName": "id_lead",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "businesstypeid",
+              "displayName": "businesstypeid",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "pilot_assigned_user",
+              "displayName": "pilot_assigned_user",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "suborigen",
+              "displayName": "suborigen",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "detalle",
+              "displayName": "detalle",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "subdetalle",
+              "displayName": "subdetalle",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        736,
+        368
+      ],
+      "id": "9bf471b5-0143-4d08-abf0-b181c38d1e04",
+      "name": "close_conversation1"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1658hOvMlK2qFbDxaVsMKpYNMGB0bmPdqdjdGymTwyZo",
+          "mode": "list",
+          "cachedResultName": "Nissan_IA",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1658hOvMlK2qFbDxaVsMKpYNMGB0bmPdqdjdGymTwyZo/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 770741149,
+          "mode": "list",
+          "cachedResultName": "Precios",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1658hOvMlK2qFbDxaVsMKpYNMGB0bmPdqdjdGymTwyZo/edit#gid=770741149"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        592,
+        368
+      ],
+      "id": "56944bb2-a605-4556-9b32-d4f9373aa72d",
+      "name": "get_precios1",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "S3hB40930MFXLH4J",
+          "name": "Google Sheets Redoo"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "gpt-4.1",
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "id": "b326fb8d-ba7c-498c-b867-40e7a2db5ad5",
+      "name": "OpenAI Chat Model1",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        176
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "qalg6fQHdCzN0Xjt",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "public": true,
+        "initialMessages": "Escribí tu mensaje...",
+        "options": {
+          "title": "TEST PDA NISSAN"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -176,
+        -32
+      ],
+      "id": "27c4a73f-7283-462e-a6cc-7675cfcd9f8c",
+      "name": "When chat message received",
+      "webhookId": "bbe6c738-dcc2-41cf-9da1-3cf37d7e7783"
+    }
+  ],
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "2QJEyF5VNIt5hLK8",
+      "projectId": "K8p6XEqA0L6D2uVt",
+      "createdAt": "2026-08-12T16:09:40.992Z",
+      "updatedAt": "2026-08-12T16:09:40.992Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2026-10-26T17:06:13.535Z",
+  "versionId": "96b00b9d-0e1f-4b01-aeb1-8054204e617a"
+}
