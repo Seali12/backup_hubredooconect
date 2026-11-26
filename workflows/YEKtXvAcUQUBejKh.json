@@ -1,0 +1,199 @@
+{
+  "active": false,
+  "activeVersion": null,
+  "activeVersionId": null,
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Pilot authentication",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pilot authentication": {
+      "main": [
+        [
+          {
+            "node": "Pilot authorization",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pilot authorization": {
+      "main": [
+        [
+          {
+            "node": "GUIDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GUIDs": {
+      "main": [
+        [
+          {
+            "node": "Leer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer": {
+      "main": [
+        [
+          {
+            "node": "Resumen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-11-26T16:30:54.816Z",
+  "id": "YEKtXvAcUQUBejKh",
+  "isArchived": true,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "name": "TEMP Ford - leer frios en concesionario",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "id": "fc1bc066-a6b6-4939-993d-45c2c914bd0a",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "77f2922c-841e-44fa-a046-fe913eb30eb2",
+      "name": "Pilot authentication",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        224,
+        0
+      ],
+      "parameters": {
+        "url": "https://api.pilotsolution.net/v1/users/authentication.php",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "options": {}
+      },
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "NHXyrkv9ca6Njn8R",
+          "name": "PILOT FORD COLOMBIA"
+        }
+      }
+    },
+    {
+      "id": "beb7f5e9-b66d-4869-ae7c-f62abc41d406",
+      "name": "Pilot authorization",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        448,
+        0
+      ],
+      "parameters": {
+        "url": "https://api.pilotsolution.net/v1/users/authorization.php",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "identity_token",
+              "value": "={{ $json.result.entitydata.accounts[0].token }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "022b20c9-d59b-4d08-8dab-83d5bc41aff3",
+      "name": "GUIDs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        0
+      ],
+      "parameters": {
+        "jsCode": "return [\"17792A34-5B18-4F4D-A3A6-0865EE91EFFB\", \"6D15F4E6-FD93-4410-859E-7AF9C039C70F\", \"8B690A11-162E-40D5-AA85-857B2095041E\", \"A6EE13F8-CAB2-4C0A-B7F8-850AE21B340B\", \"15513303-8718-4528-94D2-EDC1337DCC57\", \"906C8A05-1539-45B4-BDF4-3E98538BB6FE\", \"04AAA03E-59AE-4923-9C18-42240D11A489\", \"73F7C4A3-31C7-482C-B0EE-304BE23FD3AF\", \"CDA951DB-05E1-46CF-B209-1109E6AC5B85\", \"C000DDC0-E8D9-4595-ABD4-2748E64E3CBA\", \"95B5B0B7-8EA4-4F87-A6D1-ACC9A0E0756B\"].map(pid => ({ json: { pid } }));"
+      }
+    },
+    {
+      "id": "74f77975-92a8-4d31-bade-dab8a4778dd6",
+      "name": "Leer",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        896,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.pilotsolution.net/v1/welcomes/read.php",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ \"data\": { \"id\": $json.pid }, \"header\": { \"FlowName\": \"lead_read\", \"SequenceId\": 1, \"TimeStamp\": 1248377, \"TrackingId\": \"FD1C4A1A-CAFB-467E-825B-7FFB86CC21E3\", \"access_token\": $(\"Pilot authorization\").first().json.result.entitydata.session.identityToken } }) }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 3000
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "5199de5c-74b3-44cf-8108-1c277c669610",
+      "name": "Resumen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        0
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: { rows: $input.all().map(it => { const e = (it.json.result || {}).entitydata || {};\n  return { id: e.id, estado: (e.status || {}).name, grado: (e.interest_level || {}).name, asig: ((e.asigned || {}).user || {}).fullname, asig_dt: (e.asigned || {}).dt, reasig: e.reassign_qty, creado: (e.created || {}).dt, mod_user: ((e.modified || {}).user || {}).fullname, mod_dt: (e.modified || {}).dt, desist: ((e.desist || {}).status || {}).name, desist_user: ((e.desist || {}).user || {}).fullname, notes: String(e.notes || '').slice(0, 160) }; }) } }];"
+      }
+    }
+  ],
+  "pinData": null,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "YEKtXvAcUQUBejKh",
+      "projectId": "K8p6XEqA0L6D2uVt",
+      "createdAt": "2026-11-26T16:30:54.828Z",
+      "updatedAt": "2026-11-26T16:30:54.828Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2026-11-26T16:32:53.000Z",
+  "versionId": "b5a38fef-937e-490d-91cd-55353a1b739c"
+}
