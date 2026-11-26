@@ -1,0 +1,1403 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "fbdadc15-d400-4c40-b137-5c86c8c170c4",
+    "workflowId": "K89fCzMgZEG9dKSZ",
+    "nodes": [
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "f1dc333f-f212-4ea2-8280-2e551ab1bc83",
+                "leftValue": "={{ $json.data.welcome_guid }}",
+                "rightValue": "=true",
+                "operator": {
+                  "type": "string",
+                  "operation": "exists",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "7abf31a6-1cad-4da7-88b5-0a08d5d04506",
+        "name": "If2",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          864,
+          112
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "update",
+          "table": {
+            "__rl": true,
+            "value": "conversations",
+            "mode": "list",
+            "cachedResultName": "conversations"
+          },
+          "dataMode": "defineBelow",
+          "columnToMatchOn": "id",
+          "valueToMatchOn": "={{$json.idConversation}}",
+          "valuesToSend": {
+            "values": [
+              {
+                "column": "crm_name",
+                "value": "pilot"
+              },
+              {
+                "column": "crm_lead",
+                "value": "={{ $json.data.welcome_guid }}"
+              },
+              {
+                "column": "status",
+                "value": "closed"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "394de8c8-8712-49d4-90fd-8a3530a7c01b",
+        "name": "MySQL",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          1088,
+          32
+        ],
+        "credentials": {
+          "mySql": {
+            "id": "NmAQJMLo3qAYKnXx",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "9937f4fd-647d-4129-b4e6-d232a90f75e2",
+                "name": "response",
+                "value": "Lead creado correctamente!",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "0c572bc2-6be9-4dc6-83ca-557773776792",
+        "name": "Edit Fields",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [
+          1280,
+          32
+        ]
+      },
+      {
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "9937f4fd-647d-4129-b4e6-d232a90f75e2",
+                "name": "response",
+                "value": "Problemas al crear el lead. Intentar nuevamente. ",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "97a75463-b1dc-4064-8601-f0d69ad1ca12",
+        "name": "Edit Fields1",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [
+          1088,
+          176
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const input = $input.all()[0].json;\n\n// Función para parsear query cuando viene como string\nfunction parseQueryString(queryString) {\n  const result = {};\n  \n  const patterns = [\n    { key: 'origin', regex: /origin:\\s*([^,]+)/i },\n    { key: 'businesstypeid', regex: /businesstypeid:\\s*([^,]+)/i },\n    { key: 'grupoCaptura', regex: /grupoCaptura:\\s*([^,]+?)(?=,\\s*modelo:|$)/i },\n    { key: 'modelo', regex: /modelo:\\s*([^,]+?)(?=,\\s*pago:|$)/i },\n    { key: 'pago', regex: /pago:\\s*([^,]+?)(?=,\\s*usado:|$)/i },\n    { key: 'usado', regex: /usado:\\s*([^,]+?)(?=,\\s*interes:|$)/i },\n    { key: 'interes', regex: /interes:\\s*([^,]+)/i }\n  ];\n  \n  patterns.forEach(({ key, regex }) => {\n    const match = queryString.match(regex);\n    if (match) {\n      result[key] = match[1].trim();\n    }\n  });\n  \n  return result;\n}\n\n// Detectar si query es string u objeto\nlet parsedQuery = {};\nif (typeof input.query === 'string') {\n  // Caso 1: query es string \"origin: ..., modelo: ...\"\n  parsedQuery = parseQueryString(input.query);\n} else if (typeof input.query === 'object' && input.query !== null) {\n  // Caso 2: query es objeto { producto: \"X-TRAIL\", usado: \"...\", pago: \"...\" }\n  parsedQuery = {\n    modelo: input.query.producto || input.query.modelo,\n    pago: input.query.pago,\n    usado: input.query.usado,\n    interes: input.query.interes\n  };\n}\n\n// Extraer valores finales con fallbacks\nconst modelo = parsedQuery.modelo || \n              (input.producto !== 'undefined' ? input.producto : '') || '';\n              \nconst pago = parsedQuery.pago || \n            (input.pago !== 'undefined' ? input.pago : '') || '';\n            \nconst usado = parsedQuery.usado || \n             (input.usado !== 'undefined' ? input.usado : '') || '';\n             \nconst interes = parsedQuery.interes || \n               (modelo && pago && usado ? 'alto' : 'bajo');\n\n// Construir pilot_notes\nconst pilot_notes = `Modelo: ${modelo || 'No especificado'}\nPago: ${pago || 'No especificado'}\nUsado: ${usado || 'No especificado'}\nInterés: ${interes}`;\n\n// Output final\nconst output = {\n  name: input.name,\n  from: input.from,\n  idConversation: input.idConversation,\n  origin: parsedQuery.origin || input.origin || '',\n  \n  // Normalizar businesstypeid y grupoCaptura (con o sin espacio)\n  businesstypeid: parsedQuery.businesstypeid \n                   || input['businesstypeid ']?.trim() \n                   || input.businesstypeid?.trim() \n                   || '',\n                   \n  grupoCaptura: parsedQuery.grupoCaptura \n                   || input['grupoCaptura ']?.trim() \n                   || input.grupoCaptura?.trim() \n                   || '',\n\n  // 🔥 Agregados obligatorios al output:\n  producto: input.producto || parsedQuery.modelo || '',\n  usado: input.usado || parsedQuery.usado || '',\n  pago: input.pago || parsedQuery.pago || '',\n  ProductoInteres: input.ProductoInteres || input.producto || parsedQuery.modelo || '',\n\n  pilot_notes: pilot_notes\n};\n\nreturn { json: output };"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -560,
+          -48
+        ],
+        "id": "6cd0e9f0-0e45-46a0-b500-2d09959ca51f",
+        "name": "Code"
+      },
+      {
+        "parameters": {
+          "url": "https://api.pilotsolution.net/webhooks/welcome.php",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "appkey",
+                "value": "=FD1C4A1A-CAFB-467E-825B-7FFB86CC21E3"
+              },
+              {
+                "name": "pilot_firstname",
+                "value": "={{ $json.name }}"
+              },
+              {
+                "name": "pilot_cellphone",
+                "value": "={{ $json.number }}"
+              },
+              {
+                "name": "pilot_contact_type_id",
+                "value": "2"
+              },
+              {
+                "name": "pilot_suborigin_id",
+                "value": "={{$json.origin || 'FY48I85KIDZXWPP9G'}}"
+              },
+              {
+                "name": "pilot_business_type_id",
+                "value": "={{ $json.businesstypeid || 5 }}"
+              },
+              {
+                "name": "pilot_provider_service",
+                "value": "={{ $json[\"GRUPO DE CAPTURA\"] || $json.grupoCaptura || 'Nissan Car One'}}"
+              },
+              {
+                "name": "pilot_notes",
+                "value": "={{ $json.resumen }}"
+              },
+              {
+                "name": "pilot_product_of_interest",
+                "value": "={{ $json.ProductoInteres}}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "39c136b2-6200-4ebc-9095-85618f95a455",
+        "name": "HTTP Request1",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          176,
+          112
+        ],
+        "executeOnce": true
+      },
+      {
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "b223ceea-a793-41c8-8730-cce0790a5487",
+                "name": "token",
+                "value": "={{ $json.result.entitydata.accounts[3].token }}",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "43c4dcd0-66a0-4089-a33b-f7d3f56cec57",
+        "name": "Edit Fields2",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [
+          608,
+          368
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "597e468b-8152-43a2-afa4-574b23a83d03",
+                "leftValue": "={{ $('Code1').item.json.goodLead }}",
+                "rightValue": "true",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          896,
+          368
+        ],
+        "id": "44d17c6e-56d4-4c46-9bf2-c0196bc59340",
+        "name": "If"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.pilotsolution.net/v1/welcomes/qualification/good.php",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={\n  \"data\": {\n    \"id\": \"{{ $('HTTP Request1').item.json.data.welcome_guid }}\"\n  },\n  \"header\": {\n    \"FlowName\": \"lead_good\",\n    \"SequenceId\": 1,\n\t\"TimeStamp\": 1248377,\n\t\"TrackingId\": \"FD1C4A1A-CAFB-467E-825B-7FFB86CC21E3\",\n\t\"access_token\":\"{{ $json.result.entitydata.session.identityToken }}\"\n  }\n}",
+          "options": {}
+        },
+        "id": "116a74e7-e523-41b2-af80-f9573d694ccd",
+        "name": "goodLead",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1200,
+          304
+        ]
+      },
+      {
+        "parameters": {
+          "url": "=https://api.pilotsolution.net/v1/users/authentication.php",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpCustomAuth",
+          "options": {}
+        },
+        "id": "dea333db-289c-4514-ab25-ce48793dc04f",
+        "name": "Login",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          464,
+          368
+        ],
+        "credentials": {
+          "httpCustomAuth": {
+            "id": "fWkeR5SZQ6D48Mmc",
+            "name": "Custom Auth account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "url": "=https://api.pilotsolution.net/v1/users/authorization.php",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "identity_token",
+                "value": "={{ $json.token }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "b770142c-ee91-4444-b163-18e4f4924f70",
+        "name": "Login1",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          736,
+          368
+        ]
+      },
+      {
+        "parameters": {
+          "workflowInputs": {
+            "values": [
+              {
+                "name": "goodLead",
+                "type": "any"
+              },
+              {
+                "name": "idConversation",
+                "type": "any"
+              },
+              {
+                "name": "number",
+                "type": "any"
+              },
+              {
+                "name": "name",
+                "type": "any"
+              },
+              {
+                "name": "businesstypeid",
+                "type": "any"
+              },
+              {
+                "name": "grupoCaptura",
+                "type": "any"
+              },
+              {
+                "name": "pago",
+                "type": "any"
+              },
+              {
+                "name": "ProductoInteres",
+                "type": "any"
+              },
+              {
+                "name": "usado",
+                "type": "any"
+              },
+              {
+                "name": "interes",
+                "type": "any"
+              },
+              {
+                "name": "origin",
+                "type": "any"
+              },
+              {
+                "name": "resumen"
+              },
+              {
+                "name": "localidad"
+              }
+            ]
+          }
+        },
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "typeVersion": 1.1,
+        "position": [
+          -1216,
+          128
+        ],
+        "id": "74ebe3da-a199-453a-9267-cfb75c85e999",
+        "name": "When Executed by Another Workflow"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.pilotsolution.net/v1/welcomes/update.php",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={\n  \"data\": {\n    \"id\": \"{{ $('HTTP Request1').item.json.data.welcome_guid }}\",\n    \"interest_level_code\": \"{{ $('When Executed by Another Workflow').first().json.interes }}\"\n  },\n  \"header\": {\n    \"FlowName\": \"update_prospect\",\n    \"SequenceId\": 1,\n    \"TimeStamp\": 1248377,\n    \"TrackingId\": \"FD1C4A1A-CAFB-467E-825B-7FFB86CC21E3\",\n    \"access_token\": \"{{ $('Login1').item.json.result.entitydata.session.identityToken }}\"\n  }\n}",
+          "options": {}
+        },
+        "id": "3c095f4f-276e-4466-90f6-5745ad1b83e6",
+        "name": "updateLead",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1504,
+          384
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// ===============================\n// INPUTS\n// ===============================\nconst lead = $node[\"When Executed by Another Workflow\"].json;\nconst sheet = $input.all().map(i => i.json);\n\n// ===============================\n// HELPERS\n// ===============================\nconst norm = (v) => (v || '').toString().toUpperCase().trim();\n\n// ===============================\n// NORMALIZACIÓN\n// ===============================\nconst producto = norm(lead.ProductoInteres);\nconst resumen = norm(lead.resumen);\n\n// ===============================\n// MARCAS / BUSINESS TYPE\n// ===============================\n// NEVO va primero: comparte grupos con Changan y un resumen puede mencionar las dos marcas.\nconst fallback = [\n  { marca: 'NEVO', grupo: 'NEVO', id: '48' },\n  { marca: 'Q05', grupo: 'NEVO', id: '48' },\n  { marca: 'NISSAN', grupo: 'NISSAN', id: '5' },\n  { marca: 'RENAULT', grupo: 'RENAULT', id: '4' },\n  { marca: 'JMC', grupo: 'JMC', id: '30' },\n  { marca: 'MITSUBISHI', grupo: 'MITSUBISHI', id: '21' },\n  { marca: 'CHANGAN', grupo: 'CHANGAN', id: '31' },\n  { marca: 'GWM', grupo: 'GWM', id: '35' },\n  { marca: 'HAVAL', grupo: 'GWM', id: '35' },\n  { marca: 'TANK', grupo: 'GWM', id: '35' },\n  { marca: 'ORA', grupo: 'GWM', id: '35' },\n  { marca: 'OMODA', grupo: 'OMODA', id: '32' },\n  { marca: 'JAECOO', grupo: 'JAECOO', id: '33' },\n  { marca: 'ZEEKR', grupo: 'ZEEKR', id: '38' },\n  { marca: 'DEEPAL', grupo: 'DEEPAL', id: '43' },\n  { marca: 'XPENG', grupo: 'XPENG', id: '39' },\n  { marca: 'LEAPMOTOR', grupo: 'LEAPMOTOR', id: '36' },\n];\n\n// ===============================\n// SOLO PARA RENAULT CAR ONE\n// ===============================\nif (norm(lead.grupoCaptura) === 'RENAULT CAR ONE') {\n\n  const matchModelo = sheet.find(r =>\n    norm(r.Modelo) === producto\n  );\n\n  if (matchModelo) {\n    lead.grupoCaptura = norm(matchModelo['Grupo de Captura']);\n    lead.businesstypeid = String(matchModelo['ID TIPO DE NEGOCIO'] || '').trim();\n  } else {\n    const texto = `${producto} ${resumen}`;\n    const marcaMatch = fallback.find(f => texto.includes(f.marca));\n\n    if (marcaMatch) {\n      lead.grupoCaptura = marcaMatch.grupo;\n      lead.businesstypeid = marcaMatch.id;\n    }\n  }\n}\n\n// ===============================\n// NORMALIZAR goodLead\n// ===============================\nlead.goodLead =\n  lead.goodLead === true ||\n  lead.goodLead === 'true' ||\n  lead.goodLead === 'alto';\n\n// ===============================\n// CONFIG MARCAS / CONCESIONARIOS\n// ===============================\nconst marcasConfig = {\n  NISSAN: {\n    carOne: \"NISSAN CAR ONE\",\n    pde: \"Nissan Maldonado\",\n    nombre: \"Nissan\",\n    businessTypeId: \"5\",\n  },\n  RENAULT: {\n    carOne: \"RENAULT CAR ONE\",\n    pde: \"RENAULT PUNTA DEL ESTE\",\n    nombre: \"Renault\",\n    businessTypeId: \"4\",\n  },\n  OMODA: {\n    carOne: \"OMODA CAR ONE\",\n    pde: \"OMODA PUNTA DEL ESTE\",\n    nombre: \"Omoda\",\n    businessTypeId: \"32\",\n  },\n  JAECOO: {\n    carOne: \"JAECOO CAR ONE\",\n    pde: \"JAECOO PUNTA DEL ESTE\",\n    nombre: \"Jaecoo\",\n    businessTypeId: \"33\",\n  },\n  JMC: {\n    carOne: \"JMC CAR ONE\",\n    pde: \"JMC PUNTA DEL ESTE\",\n    nombre: \"JMC\",\n    businessTypeId: \"30\",\n  },\n  MITSUBISHI: {\n    carOne: \"MITSUBISHI CAR ONE\",\n    pde: \"MITSUBISHI CAR ONE\",\n    nombre: \"Mitsubishi\",\n    businessTypeId: \"21\",\n  },\n  CHANGAN: {\n    carOne: \"CHANGAN CAR ONE\",\n    pde: \"CHANGAN PUNTA DEL ESTE\",\n    nombre: \"Changan\",\n    businessTypeId: \"31\",\n  },\n  GWM: {\n    carOne: \"GWM CAR ONE\",\n    pde: \"GWM PUNTA DEL ESTE\",\n    nombre: \"GWM\",\n    businessTypeId: \"35\",\n  },\n  ZEEKR: {\n    carOne: \"ZEEKR CAR ONE\",\n    pde: \"ZEEKR PUNTA DEL ESTE\",\n    nombre: \"Zeekr\",\n    businessTypeId: \"38\",\n  },\n  DEEPAL: {\n    carOne: \"DEEPAL CAR ONE\",\n    pde: \"DEEPAL PUNTA DEL ESTE\",\n    nombre: \"Deepal\",\n    businessTypeId: \"43\",\n  },\n  // NEVO: clave de ruteo en Pilot \"Nevo Car One\" (pedido de Santa Rosa). Sin clave propia de Punta del Este: va a la misma.\n  NEVO: {\n    carOne: \"Nevo Car One\",\n    pde: \"Nevo Car One\",\n    nombre: \"Nevo\",\n    businessTypeId: \"48\",\n  },\n  XPENG: {\n    carOne: \"XPENG CAR ONE\",\n    pde: \"XPENG PUNTA DEL ESTE\",\n    nombre: \"Xpeng\",\n    businessTypeId: \"39\",\n  },\n  LEAPMOTOR: {\n    carOne: \"LEAPMOTOR CAR ONE\",\n    pde: \"LEAPMOTOR PUNTA DEL ESTE\",\n    nombre: \"Leapmotor\",\n    businessTypeId: \"36\",\n  },\n};\n\n// ===============================\n// NORMALIZAR GRUPO BASE\n// ===============================\nlet grupoBase = norm(lead.grupoCaptura || lead[\"GRUPO DE CAPTURA\"]);\n\n// Si ya viene como \"MARCA CAR ONE\", lo llevamos a \"MARCA\"\ngrupoBase = grupoBase\n  .replace(' CAR ONE', '')\n  .replace(' PUNTA DEL ESTE', '')\n  .replace(' MALDONADO', '')\n  .trim();\n\n// Caso especial Nissan Maldonado\nif (grupoBase === 'NISSAN') {\n  grupoBase = 'NISSAN';\n}\n\n// Si grupoCaptura viene vacío, intentamos detectar marca desde producto + resumen\nif (!grupoBase) {\n  const texto = `${producto} ${resumen}`;\n  const marcaMatch = fallback.find(f => texto.includes(f.marca));\n\n  if (marcaMatch) {\n    grupoBase = marcaMatch.grupo;\n    lead.grupoCaptura = marcaMatch.grupo;\n    lead.businesstypeid = marcaMatch.id;\n  }\n}\n\n// ===============================\n// COMPLETAR DATOS POR LOCALIDAD\n// ===============================\nconst localidad = norm(lead.localidad || lead.Localidad);\nconst config = marcasConfig[grupoBase];\n\nif (config) {\n\n  // Asegura business type si no vino antes\n  if (!lead.businesstypeid) {\n    lead.businesstypeid = config.businessTypeId;\n  }\n\n  // Default sin localidad => Car One\n  if (!localidad) {\n    lead.Departamento = \"CANELONES\";\n    lead.Localidad = \"CIUDAD DE LA COSTA\";\n    lead.Direccion = \"Ruta Interbalnearia y Cno de los Horneros\";\n    lead[\"Nombre de Fantasia\"] = `${config.nombre} Car One`;\n    lead[\"TIPO CONCESIONARIO\"] = \"CAR ONE\";\n    lead[\"GRUPO DE CAPTURA\"] = config.carOne;\n    lead.grupoCaptura = config.carOne;\n  }\n\n  // Ciudad de la Costa => Car One\n  else if (localidad === \"CIUDAD DE LA COSTA\") {\n    lead.Departamento = \"CANELONES\";\n    lead.Localidad = \"CIUDAD DE LA COSTA\";\n    lead.Direccion = \"Ruta Interbalnearia y Cno de los Horneros\";\n    lead[\"Nombre de Fantasia\"] = `${config.nombre} Car One`;\n    lead[\"TIPO CONCESIONARIO\"] = \"CAR ONE\";\n    lead[\"GRUPO DE CAPTURA\"] = config.carOne;\n    lead.grupoCaptura = config.carOne;\n  }\n\n  // Punta del Este => sucursal Maldonado/PDE\n  else if (localidad === \"PUNTA DEL ESTE\") {\n    lead.Departamento = \"MALDONADO\";\n    lead.Localidad = \"PUNTA DEL ESTE\";\n    lead.Direccion = \"Martiniano Chiossi y Thailandia\";\n    lead[\"Nombre de Fantasia\"] = `${config.nombre} Punta del Este`;\n    lead[\"TIPO CONCESIONARIO\"] = \"CAR ONE\";\n    lead[\"GRUPO DE CAPTURA\"] = config.pde;\n    lead.grupoCaptura = config.pde;\n  }\n\n  // Cualquier otra localidad => default Car One\n  else {\n    lead[\"GRUPO DE CAPTURA\"] = config.carOne;\n    lead.grupoCaptura = config.carOne;\n  }\n}\n\n// ===============================\n// OUTPUT\n// ===============================\nreturn [{ json: lead }];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -304,
+          112
+        ],
+        "id": "b656bcfb-3956-4651-ab96-eef9c217eb90",
+        "name": "Code1"
+      },
+      {
+        "parameters": {
+          "documentId": {
+            "__rl": true,
+            "value": "188CA0b8qRQn9ENgAN2XHg1BxyJkDWEf65wejHifDRic",
+            "mode": "list",
+            "cachedResultName": "CAR ONE IA",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/188CA0b8qRQn9ENgAN2XHg1BxyJkDWEf65wejHifDRic/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": 745096824,
+            "mode": "list",
+            "cachedResultName": "CTA",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/188CA0b8qRQn9ENgAN2XHg1BxyJkDWEf65wejHifDRic/edit#gid=745096824"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.7,
+        "position": [
+          -624,
+          112
+        ],
+        "id": "1ec1ff86-dec6-4d54-a6e4-94feed22f6a3",
+        "name": "CTA",
+        "retryOnFail": true,
+        "maxTries": 5,
+        "waitBetweenTries": 5000,
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "i1iItp2oVdRpZizz",
+            "name": "Google Sheets account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://leads.redooconect.com.ar/api/v1/leads",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-API-KEY",
+                "value": "df9bd5aa-9fe6-471f-a402-cdbb053a650a"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={\n  \"first_name\": \"{{ $json.name }}\",\n  \"phone\": \"{{ $json.number }}\",\n  \"priority\": \"{{ ({ '3': 'low', '07B7AC5A': 'medium', '2D43E90C': 'high', '7DAC65BA': 'high' })[$('When Executed by Another Workflow').first().json.interes] ?? 'medium' }}\",\n  \"source\": \"CARONE\",\n  \"additional_data\": {\n    \"grupoCaptura\": \"{{ $json.grupoCaptura }}\",\n    \"pago\": \"{{ $json.pago }}\",\n    \"modelo\": \"{{ $json.ProductoInteres }}\"\n  },\n  \"notes\": \"{{ $json.resumen }}\"\n}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -992,
+          128
+        ],
+        "id": "42ed69b6-3118-46ec-af64-f7dc31a20076",
+        "name": "LEADS4",
+        "retryOnFail": true,
+        "onError": "continueErrorOutput"
+      },
+      {
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "9937f4fd-647d-4129-b4e6-d232a90f75e2",
+                "name": "response",
+                "value": "Lead creado correctamente!",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "b8c5390e-ee3e-437a-ac1f-532d05afe630",
+        "name": "Edit Fields3",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [
+          -704,
+          336
+        ]
+      }
+    ],
+    "connections": {
+      "If2": {
+        "main": [
+          [
+            {
+              "node": "MySQL",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Edit Fields1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "MySQL": {
+        "main": [
+          [
+            {
+              "node": "Edit Fields",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code": {
+        "main": [
+          []
+        ]
+      },
+      "HTTP Request1": {
+        "main": [
+          [
+            {
+              "node": "Login",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "If2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "If": {
+        "main": [
+          [
+            {
+              "node": "goodLead",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "updateLead",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "goodLead": {
+        "main": [
+          [
+            {
+              "node": "updateLead",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Login": {
+        "main": [
+          [
+            {
+              "node": "Edit Fields2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Edit Fields2": {
+        "main": [
+          [
+            {
+              "node": "Login1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Login1": {
+        "main": [
+          [
+            {
+              "node": "If",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "When Executed by Another Workflow": {
+        "main": [
+          [
+            {
+              "node": "LEADS4",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code1": {
+        "main": [
+          [
+            {
+              "node": "HTTP Request1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "CTA": {
+        "main": [
+          [
+            {
+              "node": "Code1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "LEADS4": {
+        "main": [
+          [
+            {
+              "node": "CTA",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Edit Fields3",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "Redoo Desarrollo (via MCP)",
+    "name": "Alta marca NEVO (tipo de negocio 48, Nevo Car One)",
+    "description": "Updated nodes: Code1",
+    "autosaved": false,
+    "createdAt": "2026-11-24T16:39:45.546Z",
+    "updatedAt": "2026-11-24T16:39:45.546Z"
+  },
+  "activeVersionId": "fbdadc15-d400-4c40-b137-5c86c8c170c4",
+  "connections": {
+    "If2": {
+      "main": [
+        [
+          {
+            "node": "MySQL",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Edit Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MySQL": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        []
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "Login",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "If2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "goodLead",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "updateLead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "goodLead": {
+      "main": [
+        [
+          {
+            "node": "updateLead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Login": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields2": {
+      "main": [
+        [
+          {
+            "node": "Login1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Login1": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "LEADS4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code1": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CTA": {
+      "main": [
+        [
+          {
+            "node": "Code1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LEADS4": {
+      "main": [
+        [
+          {
+            "node": "CTA",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Edit Fields3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2025-11-28T14:48:31.314Z",
+  "id": "K89fCzMgZEG9dKSZ",
+  "isArchived": false,
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "name": "CLOSE-CONVERSATION-CARONE",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "f1dc333f-f212-4ea2-8280-2e551ab1bc83",
+              "leftValue": "={{ $json.data.welcome_guid }}",
+              "rightValue": "=true",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "7abf31a6-1cad-4da7-88b5-0a08d5d04506",
+      "name": "If2",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        864,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "table": {
+          "__rl": true,
+          "value": "conversations",
+          "mode": "list",
+          "cachedResultName": "conversations"
+        },
+        "dataMode": "defineBelow",
+        "columnToMatchOn": "id",
+        "valueToMatchOn": "={{$json.idConversation}}",
+        "valuesToSend": {
+          "values": [
+            {
+              "column": "crm_name",
+              "value": "pilot"
+            },
+            {
+              "column": "crm_lead",
+              "value": "={{ $json.data.welcome_guid }}"
+            },
+            {
+              "column": "status",
+              "value": "closed"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "394de8c8-8712-49d4-90fd-8a3530a7c01b",
+      "name": "MySQL",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        1088,
+        32
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "NmAQJMLo3qAYKnXx",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "9937f4fd-647d-4129-b4e6-d232a90f75e2",
+              "name": "response",
+              "value": "Lead creado correctamente!",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "0c572bc2-6be9-4dc6-83ca-557773776792",
+      "name": "Edit Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1280,
+        32
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "9937f4fd-647d-4129-b4e6-d232a90f75e2",
+              "name": "response",
+              "value": "Problemas al crear el lead. Intentar nuevamente. ",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "97a75463-b1dc-4064-8601-f0d69ad1ca12",
+      "name": "Edit Fields1",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1088,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.all()[0].json;\n\n// Función para parsear query cuando viene como string\nfunction parseQueryString(queryString) {\n  const result = {};\n  \n  const patterns = [\n    { key: 'origin', regex: /origin:\\s*([^,]+)/i },\n    { key: 'businesstypeid', regex: /businesstypeid:\\s*([^,]+)/i },\n    { key: 'grupoCaptura', regex: /grupoCaptura:\\s*([^,]+?)(?=,\\s*modelo:|$)/i },\n    { key: 'modelo', regex: /modelo:\\s*([^,]+?)(?=,\\s*pago:|$)/i },\n    { key: 'pago', regex: /pago:\\s*([^,]+?)(?=,\\s*usado:|$)/i },\n    { key: 'usado', regex: /usado:\\s*([^,]+?)(?=,\\s*interes:|$)/i },\n    { key: 'interes', regex: /interes:\\s*([^,]+)/i }\n  ];\n  \n  patterns.forEach(({ key, regex }) => {\n    const match = queryString.match(regex);\n    if (match) {\n      result[key] = match[1].trim();\n    }\n  });\n  \n  return result;\n}\n\n// Detectar si query es string u objeto\nlet parsedQuery = {};\nif (typeof input.query === 'string') {\n  // Caso 1: query es string \"origin: ..., modelo: ...\"\n  parsedQuery = parseQueryString(input.query);\n} else if (typeof input.query === 'object' && input.query !== null) {\n  // Caso 2: query es objeto { producto: \"X-TRAIL\", usado: \"...\", pago: \"...\" }\n  parsedQuery = {\n    modelo: input.query.producto || input.query.modelo,\n    pago: input.query.pago,\n    usado: input.query.usado,\n    interes: input.query.interes\n  };\n}\n\n// Extraer valores finales con fallbacks\nconst modelo = parsedQuery.modelo || \n              (input.producto !== 'undefined' ? input.producto : '') || '';\n              \nconst pago = parsedQuery.pago || \n            (input.pago !== 'undefined' ? input.pago : '') || '';\n            \nconst usado = parsedQuery.usado || \n             (input.usado !== 'undefined' ? input.usado : '') || '';\n             \nconst interes = parsedQuery.interes || \n               (modelo && pago && usado ? 'alto' : 'bajo');\n\n// Construir pilot_notes\nconst pilot_notes = `Modelo: ${modelo || 'No especificado'}\nPago: ${pago || 'No especificado'}\nUsado: ${usado || 'No especificado'}\nInterés: ${interes}`;\n\n// Output final\nconst output = {\n  name: input.name,\n  from: input.from,\n  idConversation: input.idConversation,\n  origin: parsedQuery.origin || input.origin || '',\n  \n  // Normalizar businesstypeid y grupoCaptura (con o sin espacio)\n  businesstypeid: parsedQuery.businesstypeid \n                   || input['businesstypeid ']?.trim() \n                   || input.businesstypeid?.trim() \n                   || '',\n                   \n  grupoCaptura: parsedQuery.grupoCaptura \n                   || input['grupoCaptura ']?.trim() \n                   || input.grupoCaptura?.trim() \n                   || '',\n\n  // 🔥 Agregados obligatorios al output:\n  producto: input.producto || parsedQuery.modelo || '',\n  usado: input.usado || parsedQuery.usado || '',\n  pago: input.pago || parsedQuery.pago || '',\n  ProductoInteres: input.ProductoInteres || input.producto || parsedQuery.modelo || '',\n\n  pilot_notes: pilot_notes\n};\n\nreturn { json: output };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -560,
+        -48
+      ],
+      "id": "6cd0e9f0-0e45-46a0-b500-2d09959ca51f",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "url": "https://api.pilotsolution.net/webhooks/welcome.php",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "appkey",
+              "value": "=FD1C4A1A-CAFB-467E-825B-7FFB86CC21E3"
+            },
+            {
+              "name": "pilot_firstname",
+              "value": "={{ $json.name }}"
+            },
+            {
+              "name": "pilot_cellphone",
+              "value": "={{ $json.number }}"
+            },
+            {
+              "name": "pilot_contact_type_id",
+              "value": "2"
+            },
+            {
+              "name": "pilot_suborigin_id",
+              "value": "={{$json.origin || 'FY48I85KIDZXWPP9G'}}"
+            },
+            {
+              "name": "pilot_business_type_id",
+              "value": "={{ $json.businesstypeid || 5 }}"
+            },
+            {
+              "name": "pilot_provider_service",
+              "value": "={{ $json[\"GRUPO DE CAPTURA\"] || $json.grupoCaptura || 'Nissan Car One'}}"
+            },
+            {
+              "name": "pilot_notes",
+              "value": "={{ $json.resumen }}"
+            },
+            {
+              "name": "pilot_product_of_interest",
+              "value": "={{ $json.ProductoInteres}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "39c136b2-6200-4ebc-9095-85618f95a455",
+      "name": "HTTP Request1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        176,
+        112
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b223ceea-a793-41c8-8730-cce0790a5487",
+              "name": "token",
+              "value": "={{ $json.result.entitydata.accounts[3].token }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "43c4dcd0-66a0-4089-a33b-f7d3f56cec57",
+      "name": "Edit Fields2",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        608,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "597e468b-8152-43a2-afa4-574b23a83d03",
+              "leftValue": "={{ $('Code1').item.json.goodLead }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        896,
+        368
+      ],
+      "id": "44d17c6e-56d4-4c46-9bf2-c0196bc59340",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.pilotsolution.net/v1/welcomes/qualification/good.php",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"data\": {\n    \"id\": \"{{ $('HTTP Request1').item.json.data.welcome_guid }}\"\n  },\n  \"header\": {\n    \"FlowName\": \"lead_good\",\n    \"SequenceId\": 1,\n\t\"TimeStamp\": 1248377,\n\t\"TrackingId\": \"FD1C4A1A-CAFB-467E-825B-7FFB86CC21E3\",\n\t\"access_token\":\"{{ $json.result.entitydata.session.identityToken }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "116a74e7-e523-41b2-af80-f9573d694ccd",
+      "name": "goodLead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1200,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.pilotsolution.net/v1/users/authentication.php",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "options": {}
+      },
+      "id": "dea333db-289c-4514-ab25-ce48793dc04f",
+      "name": "Login",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        464,
+        368
+      ],
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "fWkeR5SZQ6D48Mmc",
+          "name": "Custom Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://api.pilotsolution.net/v1/users/authorization.php",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "identity_token",
+              "value": "={{ $json.token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b770142c-ee91-4444-b163-18e4f4924f70",
+      "name": "Login1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        736,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "goodLead",
+              "type": "any"
+            },
+            {
+              "name": "idConversation",
+              "type": "any"
+            },
+            {
+              "name": "number",
+              "type": "any"
+            },
+            {
+              "name": "name",
+              "type": "any"
+            },
+            {
+              "name": "businesstypeid",
+              "type": "any"
+            },
+            {
+              "name": "grupoCaptura",
+              "type": "any"
+            },
+            {
+              "name": "pago",
+              "type": "any"
+            },
+            {
+              "name": "ProductoInteres",
+              "type": "any"
+            },
+            {
+              "name": "usado",
+              "type": "any"
+            },
+            {
+              "name": "interes",
+              "type": "any"
+            },
+            {
+              "name": "origin",
+              "type": "any"
+            },
+            {
+              "name": "resumen"
+            },
+            {
+              "name": "localidad"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1216,
+        128
+      ],
+      "id": "74ebe3da-a199-453a-9267-cfb75c85e999",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.pilotsolution.net/v1/welcomes/update.php",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"data\": {\n    \"id\": \"{{ $('HTTP Request1').item.json.data.welcome_guid }}\",\n    \"interest_level_code\": \"{{ $('When Executed by Another Workflow').first().json.interes }}\"\n  },\n  \"header\": {\n    \"FlowName\": \"update_prospect\",\n    \"SequenceId\": 1,\n    \"TimeStamp\": 1248377,\n    \"TrackingId\": \"FD1C4A1A-CAFB-467E-825B-7FFB86CC21E3\",\n    \"access_token\": \"{{ $('Login1').item.json.result.entitydata.session.identityToken }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "3c095f4f-276e-4466-90f6-5745ad1b83e6",
+      "name": "updateLead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1504,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ===============================\n// INPUTS\n// ===============================\nconst lead = $node[\"When Executed by Another Workflow\"].json;\nconst sheet = $input.all().map(i => i.json);\n\n// ===============================\n// HELPERS\n// ===============================\nconst norm = (v) => (v || '').toString().toUpperCase().trim();\n\n// ===============================\n// NORMALIZACIÓN\n// ===============================\nconst producto = norm(lead.ProductoInteres);\nconst resumen = norm(lead.resumen);\n\n// ===============================\n// MARCAS / BUSINESS TYPE\n// ===============================\n// NEVO va primero: comparte grupos con Changan y un resumen puede mencionar las dos marcas.\nconst fallback = [\n  { marca: 'NEVO', grupo: 'NEVO', id: '48' },\n  { marca: 'Q05', grupo: 'NEVO', id: '48' },\n  { marca: 'NISSAN', grupo: 'NISSAN', id: '5' },\n  { marca: 'RENAULT', grupo: 'RENAULT', id: '4' },\n  { marca: 'JMC', grupo: 'JMC', id: '30' },\n  { marca: 'MITSUBISHI', grupo: 'MITSUBISHI', id: '21' },\n  { marca: 'CHANGAN', grupo: 'CHANGAN', id: '31' },\n  { marca: 'GWM', grupo: 'GWM', id: '35' },\n  { marca: 'HAVAL', grupo: 'GWM', id: '35' },\n  { marca: 'TANK', grupo: 'GWM', id: '35' },\n  { marca: 'ORA', grupo: 'GWM', id: '35' },\n  { marca: 'OMODA', grupo: 'OMODA', id: '32' },\n  { marca: 'JAECOO', grupo: 'JAECOO', id: '33' },\n  { marca: 'ZEEKR', grupo: 'ZEEKR', id: '38' },\n  { marca: 'DEEPAL', grupo: 'DEEPAL', id: '43' },\n  { marca: 'XPENG', grupo: 'XPENG', id: '39' },\n  { marca: 'LEAPMOTOR', grupo: 'LEAPMOTOR', id: '36' },\n];\n\n// ===============================\n// SOLO PARA RENAULT CAR ONE\n// ===============================\nif (norm(lead.grupoCaptura) === 'RENAULT CAR ONE') {\n\n  const matchModelo = sheet.find(r =>\n    norm(r.Modelo) === producto\n  );\n\n  if (matchModelo) {\n    lead.grupoCaptura = norm(matchModelo['Grupo de Captura']);\n    lead.businesstypeid = String(matchModelo['ID TIPO DE NEGOCIO'] || '').trim();\n  } else {\n    const texto = `${producto} ${resumen}`;\n    const marcaMatch = fallback.find(f => texto.includes(f.marca));\n\n    if (marcaMatch) {\n      lead.grupoCaptura = marcaMatch.grupo;\n      lead.businesstypeid = marcaMatch.id;\n    }\n  }\n}\n\n// ===============================\n// NORMALIZAR goodLead\n// ===============================\nlead.goodLead =\n  lead.goodLead === true ||\n  lead.goodLead === 'true' ||\n  lead.goodLead === 'alto';\n\n// ===============================\n// CONFIG MARCAS / CONCESIONARIOS\n// ===============================\nconst marcasConfig = {\n  NISSAN: {\n    carOne: \"NISSAN CAR ONE\",\n    pde: \"Nissan Maldonado\",\n    nombre: \"Nissan\",\n    businessTypeId: \"5\",\n  },\n  RENAULT: {\n    carOne: \"RENAULT CAR ONE\",\n    pde: \"RENAULT PUNTA DEL ESTE\",\n    nombre: \"Renault\",\n    businessTypeId: \"4\",\n  },\n  OMODA: {\n    carOne: \"OMODA CAR ONE\",\n    pde: \"OMODA PUNTA DEL ESTE\",\n    nombre: \"Omoda\",\n    businessTypeId: \"32\",\n  },\n  JAECOO: {\n    carOne: \"JAECOO CAR ONE\",\n    pde: \"JAECOO PUNTA DEL ESTE\",\n    nombre: \"Jaecoo\",\n    businessTypeId: \"33\",\n  },\n  JMC: {\n    carOne: \"JMC CAR ONE\",\n    pde: \"JMC PUNTA DEL ESTE\",\n    nombre: \"JMC\",\n    businessTypeId: \"30\",\n  },\n  MITSUBISHI: {\n    carOne: \"MITSUBISHI CAR ONE\",\n    pde: \"MITSUBISHI CAR ONE\",\n    nombre: \"Mitsubishi\",\n    businessTypeId: \"21\",\n  },\n  CHANGAN: {\n    carOne: \"CHANGAN CAR ONE\",\n    pde: \"CHANGAN PUNTA DEL ESTE\",\n    nombre: \"Changan\",\n    businessTypeId: \"31\",\n  },\n  GWM: {\n    carOne: \"GWM CAR ONE\",\n    pde: \"GWM PUNTA DEL ESTE\",\n    nombre: \"GWM\",\n    businessTypeId: \"35\",\n  },\n  ZEEKR: {\n    carOne: \"ZEEKR CAR ONE\",\n    pde: \"ZEEKR PUNTA DEL ESTE\",\n    nombre: \"Zeekr\",\n    businessTypeId: \"38\",\n  },\n  DEEPAL: {\n    carOne: \"DEEPAL CAR ONE\",\n    pde: \"DEEPAL PUNTA DEL ESTE\",\n    nombre: \"Deepal\",\n    businessTypeId: \"43\",\n  },\n  // NEVO: clave de ruteo en Pilot \"Nevo Car One\" (pedido de Santa Rosa). Sin clave propia de Punta del Este: va a la misma.\n  NEVO: {\n    carOne: \"Nevo Car One\",\n    pde: \"Nevo Car One\",\n    nombre: \"Nevo\",\n    businessTypeId: \"48\",\n  },\n  XPENG: {\n    carOne: \"XPENG CAR ONE\",\n    pde: \"XPENG PUNTA DEL ESTE\",\n    nombre: \"Xpeng\",\n    businessTypeId: \"39\",\n  },\n  LEAPMOTOR: {\n    carOne: \"LEAPMOTOR CAR ONE\",\n    pde: \"LEAPMOTOR PUNTA DEL ESTE\",\n    nombre: \"Leapmotor\",\n    businessTypeId: \"36\",\n  },\n};\n\n// ===============================\n// NORMALIZAR GRUPO BASE\n// ===============================\nlet grupoBase = norm(lead.grupoCaptura || lead[\"GRUPO DE CAPTURA\"]);\n\n// Si ya viene como \"MARCA CAR ONE\", lo llevamos a \"MARCA\"\ngrupoBase = grupoBase\n  .replace(' CAR ONE', '')\n  .replace(' PUNTA DEL ESTE', '')\n  .replace(' MALDONADO', '')\n  .trim();\n\n// Caso especial Nissan Maldonado\nif (grupoBase === 'NISSAN') {\n  grupoBase = 'NISSAN';\n}\n\n// Si grupoCaptura viene vacío, intentamos detectar marca desde producto + resumen\nif (!grupoBase) {\n  const texto = `${producto} ${resumen}`;\n  const marcaMatch = fallback.find(f => texto.includes(f.marca));\n\n  if (marcaMatch) {\n    grupoBase = marcaMatch.grupo;\n    lead.grupoCaptura = marcaMatch.grupo;\n    lead.businesstypeid = marcaMatch.id;\n  }\n}\n\n// ===============================\n// COMPLETAR DATOS POR LOCALIDAD\n// ===============================\nconst localidad = norm(lead.localidad || lead.Localidad);\nconst config = marcasConfig[grupoBase];\n\nif (config) {\n\n  // Asegura business type si no vino antes\n  if (!lead.businesstypeid) {\n    lead.businesstypeid = config.businessTypeId;\n  }\n\n  // Default sin localidad => Car One\n  if (!localidad) {\n    lead.Departamento = \"CANELONES\";\n    lead.Localidad = \"CIUDAD DE LA COSTA\";\n    lead.Direccion = \"Ruta Interbalnearia y Cno de los Horneros\";\n    lead[\"Nombre de Fantasia\"] = `${config.nombre} Car One`;\n    lead[\"TIPO CONCESIONARIO\"] = \"CAR ONE\";\n    lead[\"GRUPO DE CAPTURA\"] = config.carOne;\n    lead.grupoCaptura = config.carOne;\n  }\n\n  // Ciudad de la Costa => Car One\n  else if (localidad === \"CIUDAD DE LA COSTA\") {\n    lead.Departamento = \"CANELONES\";\n    lead.Localidad = \"CIUDAD DE LA COSTA\";\n    lead.Direccion = \"Ruta Interbalnearia y Cno de los Horneros\";\n    lead[\"Nombre de Fantasia\"] = `${config.nombre} Car One`;\n    lead[\"TIPO CONCESIONARIO\"] = \"CAR ONE\";\n    lead[\"GRUPO DE CAPTURA\"] = config.carOne;\n    lead.grupoCaptura = config.carOne;\n  }\n\n  // Punta del Este => sucursal Maldonado/PDE\n  else if (localidad === \"PUNTA DEL ESTE\") {\n    lead.Departamento = \"MALDONADO\";\n    lead.Localidad = \"PUNTA DEL ESTE\";\n    lead.Direccion = \"Martiniano Chiossi y Thailandia\";\n    lead[\"Nombre de Fantasia\"] = `${config.nombre} Punta del Este`;\n    lead[\"TIPO CONCESIONARIO\"] = \"CAR ONE\";\n    lead[\"GRUPO DE CAPTURA\"] = config.pde;\n    lead.grupoCaptura = config.pde;\n  }\n\n  // Cualquier otra localidad => default Car One\n  else {\n    lead[\"GRUPO DE CAPTURA\"] = config.carOne;\n    lead.grupoCaptura = config.carOne;\n  }\n}\n\n// ===============================\n// OUTPUT\n// ===============================\nreturn [{ json: lead }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -304,
+        112
+      ],
+      "id": "b656bcfb-3956-4651-ab96-eef9c217eb90",
+      "name": "Code1"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "188CA0b8qRQn9ENgAN2XHg1BxyJkDWEf65wejHifDRic",
+          "mode": "list",
+          "cachedResultName": "CAR ONE IA",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/188CA0b8qRQn9ENgAN2XHg1BxyJkDWEf65wejHifDRic/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 745096824,
+          "mode": "list",
+          "cachedResultName": "CTA",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/188CA0b8qRQn9ENgAN2XHg1BxyJkDWEf65wejHifDRic/edit#gid=745096824"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -624,
+        112
+      ],
+      "id": "1ec1ff86-dec6-4d54-a6e4-94feed22f6a3",
+      "name": "CTA",
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "i1iItp2oVdRpZizz",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://leads.redooconect.com.ar/api/v1/leads",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-KEY",
+              "value": "df9bd5aa-9fe6-471f-a402-cdbb053a650a"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"first_name\": \"{{ $json.name }}\",\n  \"phone\": \"{{ $json.number }}\",\n  \"priority\": \"{{ ({ '3': 'low', '07B7AC5A': 'medium', '2D43E90C': 'high', '7DAC65BA': 'high' })[$('When Executed by Another Workflow').first().json.interes] ?? 'medium' }}\",\n  \"source\": \"CARONE\",\n  \"additional_data\": {\n    \"grupoCaptura\": \"{{ $json.grupoCaptura }}\",\n    \"pago\": \"{{ $json.pago }}\",\n    \"modelo\": \"{{ $json.ProductoInteres }}\"\n  },\n  \"notes\": \"{{ $json.resumen }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -992,
+        128
+      ],
+      "id": "42ed69b6-3118-46ec-af64-f7dc31a20076",
+      "name": "LEADS4",
+      "retryOnFail": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "9937f4fd-647d-4129-b4e6-d232a90f75e2",
+              "name": "response",
+              "value": "Lead creado correctamente!",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b8c5390e-ee3e-437a-ac1f-532d05afe630",
+      "name": "Edit Fields3",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -704,
+        336
+      ]
+    }
+  ],
+  "pinData": {
+    "When Executed by Another Workflow": [
+      {
+        "json": {
+          "goodLead": "true",
+          "idConversation": 883673,
+          "number": "+5491150997009",
+          "name": "Nacho Cabaleiro",
+          "businesstypeid": "30",
+          "grupoCaptura": "JMC CAR ONE",
+          "pago": "contado",
+          "ProductoInteres": "EV3",
+          "usado": "no",
+          "interes": "2D43E90C",
+          "origin": "FY48I85KIDZXWPP9G",
+          "resumen": "Cliente redoo test consultó por la pickup JMC EV3 en Ciudad de la Costa. Indicó pago contado y no tiene vehículo usado. Se cierra para contacto de asesor.",
+          "localidad": "CIUDAD DE LA COSTA"
+        }
+      }
+    ]
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "K89fCzMgZEG9dKSZ",
+      "projectId": "bYM6Pqg31ODjetqU",
+      "createdAt": "2025-11-28T14:48:31.316Z",
+      "updatedAt": "2025-11-28T14:48:31.316Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [
+    {
+      "id": "pmX59a5FR0aTkjPE",
+      "name": "carone",
+      "createdAt": "2026-02-27T20:05:26.892Z",
+      "updatedAt": "2026-02-27T20:05:26.892Z"
+    }
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2026-11-24T16:39:45.517Z",
+  "versionId": "fbdadc15-d400-4c40-b137-5c86c8c170c4"
+}
