@@ -1,0 +1,1000 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "a17c6075-840c-4fa2-814d-622e42e93334",
+    "workflowId": "hsymNkQuwjGsoRP6",
+    "nodes": [
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "minutes",
+                "minutesInterval": 10
+              }
+            ]
+          }
+        },
+        "id": "80d4028c-8dea-47a1-a1ae-8775182337e3",
+        "name": "⏰ Schedule Trigger",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          -352,
+          160
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT l.*, t.access_token, i.destino, i.destino_config, i.origen_sf \nFROM meli_leads l \nJOIN meli_tokens t ON l.user_id = t.user_id \nJOIN meli_integraciones i ON l.user_id = i.user_id \nWHERE l.status = 'active' \nAND l.buyer_id IS NOT NULL \nAND l.buyer_id != 0\nAND l.buyer_nombre IS NOT NULL\nAND l.user_id = 238066482\nAND l.received_at >= '2026-09-11 00:00:00'\nLIMIT 1000",
+          "options": {}
+        },
+        "id": "47b8620b-3176-4f7a-8ac2-e9c1f0b5d944",
+        "name": "🗄️ Buscar leads pending",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          -160,
+          160
+        ],
+        "credentials": {
+          "mySql": {
+            "id": "FezTcDnLo3SqPHvd",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {},
+            "conditions": [
+              {
+                "leftValue": "={{ $input.all().length }}",
+                "rightValue": 0,
+                "operator": {
+                  "type": "number",
+                  "operation": "gt"
+                }
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "61b767f0-7e93-47d0-819c-a4a20a06d26e",
+        "name": "🔍 Hay leads?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          112,
+          160
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT * FROM meli_asesores \nWHERE user_id = {{ $json.user_id }} \nAND (\n  RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo1 }}'\n  OR RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo2 }}'\n  OR telefono IS NULL\n  OR telefono = ''\n)\nORDER BY \n  CASE \n    WHEN RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo1 }}' THEN 0\n    WHEN RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo2 }}' THEN 1\n    ELSE 2 \n  END\nLIMIT 1",
+          "options": {}
+        },
+        "id": "b5559c8a-4441-4b35-8393-0c6fbb020456",
+        "name": "🗄️ Buscar asesor",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          720,
+          160
+        ],
+        "alwaysOutputData": true,
+        "credentials": {
+          "mySql": {
+            "id": "FezTcDnLo3SqPHvd",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "leftValue": "={{ $('Loop leads').item.json.destino }}",
+                "rightValue": "salesforce",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals"
+                },
+                "id": "bc74d2f0-c4d2-458c-9eba-f8482032f809"
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "5fb9e9f8-76b3-49a8-8aea-73643db24f8f",
+        "name": "🔍 Destino?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          1072,
+          160
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const sfResponse = $input.item.json;\nconst prev = $('🧩 PayloadVW').item.json;\n\nconst sfLeadId = sfResponse?.LeadId || sfResponse?.id || sfResponse?.leadId || sfResponse?.prospect_id || null;\nconst success = sfResponse && !sfResponse.error && !sfResponse.message?.toLowerCase().includes('error');\n\nreturn {\n  json: {\n    lead_id: prev.lead_id,\n    sf_lead_id: sfLeadId,\n    new_status: success ? 'sent' : 'error',\n    sf_response: JSON.stringify(sfResponse)\n  }\n};"
+        },
+        "id": "9f82cab9-5c09-4e92-9f18-b5e682b4db97",
+        "name": "⚙️ Procesar respuesta SF",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1568,
+          144
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "{{ $json.query }}",
+          "options": {}
+        },
+        "id": "dd3ed27a-504d-4698-be91-fae8e656fb45",
+        "name": "💾 Update status MySQL",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          1968,
+          144
+        ],
+        "credentials": {
+          "mySql": {
+            "id": "FezTcDnLo3SqPHvd",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "UPDATE meli_leads SET status = 'skipped' WHERE id = '{{ $('Loop leads').item.json.id }}'",
+          "options": {}
+        },
+        "id": "f3c716b9-0f5b-44e4-a169-22a4817488e9",
+        "name": "💾 Marcar skipped",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          1376,
+          304
+        ],
+        "credentials": {
+          "mySql": {
+            "id": "FezTcDnLo3SqPHvd",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "parameters": {},
+        "id": "384f5f1a-0894-4fb7-8078-e871148dd4a6",
+        "name": "✅ Volver al loop",
+        "type": "n8n-nodes-base.noOp",
+        "typeVersion": 1,
+        "position": [
+          1568,
+          304
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const data = $input.item.json;\n\nconst sfLeadId = data.sf_lead_id ? `'${data.sf_lead_id}'` : 'NULL';\nconst sfResponse = (data.sf_response || '').replace(/'/g, \"''\");\n\nreturn {\n  json: {\n    query: `UPDATE meli_leads SET status = '${data.new_status}', sf_lead_id = ${sfLeadId}, sf_response = '${sfResponse}' WHERE id = '${data.lead_id}'`\n  }\n};"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1776,
+          144
+        ],
+        "id": "079867fa-4eeb-4048-b52d-9c1d7bf275d1",
+        "name": "⚙️ Preparar query update"
+      },
+      {
+        "parameters": {
+          "options": {}
+        },
+        "id": "4f6fc024-8d99-467d-a27b-1b8c591a21e5",
+        "name": "Loop leads",
+        "type": "n8n-nodes-base.splitInBatches",
+        "typeVersion": 3,
+        "position": [
+          352,
+          144
+        ]
+      },
+      {
+        "parameters": {},
+        "type": "n8n-nodes-base.manualTrigger",
+        "typeVersion": 1,
+        "position": [
+          -144,
+          336
+        ],
+        "id": "a199845a-2829-4975-94ff-7b26bf1e7ccc",
+        "name": "When clicking ‘Execute workflow’"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://volkswagenargentina.my.site.com/services/apexrest/createNewLead",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Accept",
+                "value": "*/*"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($('🧩 PayloadVW').item.json) }}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1328,
+          144
+        ],
+        "id": "8d3b3983-3bd3-433c-a6e2-6aff9a5b1a96",
+        "name": "saleforce"
+      },
+      {
+        "parameters": {
+          "jsCode": "const lead = $('Normalizar teléfonos').item.json;\n\nconst phone = (lead.buyer_phone || '').replace(/\\D/g, '').replace(/^54/, '').slice(-10);\nconst nombreParts = (lead.buyer_nombre || '').trim().split(' ');\nconst firstName = nombreParts.slice(0, -1).join(' ') || nombreParts[0] || '';\nconst lastName = nombreParts.slice(-1)[0] || '';\nconst today = new Date().toISOString().split('T')[0];\nconst description = `Publicación: ${lead.item_id} | Precio: ${lead.item_precio}| Asesor: ${$input.first().json.email} | Link: ${lead.item_permalink || ''}`.substring(0, 255);\n\nreturn {\n  json: {\n    FirstName: firstName,\n    LastName: lastName,\n    Origin: \"Mercado Libre\",\n    Phone: phone,\n    Email: lead.buyer_email || 'noproporciono@email.com',\n    ConcesionarioId: \"001f200001tAFcqAAG\",\n    Description: description,\n    Product: lead.item_titulo || '',\n    City: \"Buenos Aires\",\n    State: \"Buenos Aires\",\n    Country: \"Argentina\",\n    MarketingAllowance: \"true\",\n    DateOfConsent: today,\n    lead_id: lead.id\n  }\n};"
+        },
+        "id": "f55b91e8-1e94-433d-a608-81ccee179d1f",
+        "name": "🧩 PayloadVW",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          912,
+          160
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const lead = $input.item.json;\n\nconst normalizarTel = (tel) => {\n  if (!tel) return null;\n  const digits = tel.toString().replace(/\\D/g, '');\n  return digits.slice(-8);\n};\n\nconst sufijo1 = normalizarTel(lead.asesor_phone);\nconst sufijo2 = normalizarTel(lead.asesor_phone2);\n\nreturn {\n  json: {\n    ...lead,\n    asesor_sufijo1: sufijo1 || '',\n    asesor_sufijo2: sufijo2 || ''\n  }\n};"
+        },
+        "id": "255b075a-fbad-4446-a385-6135b0d06829",
+        "name": "Normalizar teléfonos",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          512,
+          160
+        ]
+      }
+    ],
+    "connections": {
+      "⏰ Schedule Trigger": {
+        "main": [
+          [
+            {
+              "node": "🗄️ Buscar leads pending",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🗄️ Buscar leads pending": {
+        "main": [
+          [
+            {
+              "node": "🔍 Hay leads?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🔍 Hay leads?": {
+        "main": [
+          [
+            {
+              "node": "Loop leads",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🗄️ Buscar asesor": {
+        "main": [
+          [
+            {
+              "node": "🧩 PayloadVW",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🔍 Destino?": {
+        "main": [
+          [
+            {
+              "node": "saleforce",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Loop leads",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "⚙️ Procesar respuesta SF": {
+        "main": [
+          [
+            {
+              "node": "⚙️ Preparar query update",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "💾 Update status MySQL": {
+        "main": [
+          [
+            {
+              "node": "Loop leads",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "💾 Marcar skipped": {
+        "main": [
+          [
+            {
+              "node": "✅ Volver al loop",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "✅ Volver al loop": {
+        "main": [
+          [
+            {
+              "node": "Loop leads",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "⚙️ Preparar query update": {
+        "main": [
+          [
+            {
+              "node": "💾 Update status MySQL",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Loop leads": {
+        "main": [
+          [],
+          [
+            {
+              "node": "Normalizar teléfonos",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "When clicking ‘Execute workflow’": {
+        "main": [
+          [
+            {
+              "node": "🔍 Hay leads?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🧩 PayloadVW": {
+        "main": [
+          [
+            {
+              "node": "🔍 Destino?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Normalizar teléfonos": {
+        "main": [
+          [
+            {
+              "node": "🗄️ Buscar asesor",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "saleforce": {
+        "main": [
+          [
+            {
+              "node": "⚙️ Procesar respuesta SF",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "system migration",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-10-26T17:05:09.982Z",
+    "updatedAt": "2026-10-26T17:05:09.982Z"
+  },
+  "activeVersionId": "a17c6075-840c-4fa2-814d-622e42e93334",
+  "connections": {
+    "⏰ Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "🗄️ Buscar leads pending",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🗄️ Buscar leads pending": {
+      "main": [
+        [
+          {
+            "node": "🔍 Hay leads?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔍 Hay leads?": {
+      "main": [
+        [
+          {
+            "node": "Loop leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🗄️ Buscar asesor": {
+      "main": [
+        [
+          {
+            "node": "🧩 PayloadVW",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔍 Destino?": {
+      "main": [
+        [
+          {
+            "node": "saleforce",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⚙️ Procesar respuesta SF": {
+      "main": [
+        [
+          {
+            "node": "⚙️ Preparar query update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "💾 Update status MySQL": {
+      "main": [
+        [
+          {
+            "node": "Loop leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "💾 Marcar skipped": {
+      "main": [
+        [
+          {
+            "node": "✅ Volver al loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "✅ Volver al loop": {
+      "main": [
+        [
+          {
+            "node": "Loop leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⚙️ Preparar query update": {
+      "main": [
+        [
+          {
+            "node": "💾 Update status MySQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop leads": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Normalizar teléfonos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "🔍 Hay leads?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧩 PayloadVW": {
+      "main": [
+        [
+          {
+            "node": "🔍 Destino?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar teléfonos": {
+      "main": [
+        [
+          {
+            "node": "🗄️ Buscar asesor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "saleforce": {
+      "main": [
+        [
+          {
+            "node": "⚙️ Procesar respuesta SF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-09-10T16:21:07.779Z",
+  "id": "hsymNkQuwjGsoRP6",
+  "isArchived": false,
+  "meta": null,
+  "name": "SAUMA VW MELI",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 10
+            }
+          ]
+        }
+      },
+      "id": "80d4028c-8dea-47a1-a1ae-8775182337e3",
+      "name": "⏰ Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -352,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT l.*, t.access_token, i.destino, i.destino_config, i.origen_sf \nFROM meli_leads l \nJOIN meli_tokens t ON l.user_id = t.user_id \nJOIN meli_integraciones i ON l.user_id = i.user_id \nWHERE l.status = 'active' \nAND l.buyer_id IS NOT NULL \nAND l.buyer_id != 0\nAND l.buyer_nombre IS NOT NULL\nAND l.user_id = 238066482\nAND l.received_at >= '2026-09-11 00:00:00'\nLIMIT 1000",
+        "options": {}
+      },
+      "id": "47b8620b-3176-4f7a-8ac2-e9c1f0b5d944",
+      "name": "🗄️ Buscar leads pending",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        -160,
+        160
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "FezTcDnLo3SqPHvd",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {},
+          "conditions": [
+            {
+              "leftValue": "={{ $input.all().length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "61b767f0-7e93-47d0-819c-a4a20a06d26e",
+      "name": "🔍 Hay leads?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        112,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM meli_asesores \nWHERE user_id = {{ $json.user_id }} \nAND (\n  RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo1 }}'\n  OR RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo2 }}'\n  OR telefono IS NULL\n  OR telefono = ''\n)\nORDER BY \n  CASE \n    WHEN RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo1 }}' THEN 0\n    WHEN RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo2 }}' THEN 1\n    ELSE 2 \n  END\nLIMIT 1",
+        "options": {}
+      },
+      "id": "b5559c8a-4441-4b35-8393-0c6fbb020456",
+      "name": "🗄️ Buscar asesor",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        720,
+        160
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "mySql": {
+          "id": "FezTcDnLo3SqPHvd",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $('Loop leads').item.json.destino }}",
+              "rightValue": "salesforce",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "id": "bc74d2f0-c4d2-458c-9eba-f8482032f809"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "5fb9e9f8-76b3-49a8-8aea-73643db24f8f",
+      "name": "🔍 Destino?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1072,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const sfResponse = $input.item.json;\nconst prev = $('🧩 PayloadVW').item.json;\n\nconst sfLeadId = sfResponse?.LeadId || sfResponse?.id || sfResponse?.leadId || sfResponse?.prospect_id || null;\nconst success = sfResponse && !sfResponse.error && !sfResponse.message?.toLowerCase().includes('error');\n\nreturn {\n  json: {\n    lead_id: prev.lead_id,\n    sf_lead_id: sfLeadId,\n    new_status: success ? 'sent' : 'error',\n    sf_response: JSON.stringify(sfResponse)\n  }\n};"
+      },
+      "id": "9f82cab9-5c09-4e92-9f18-b5e682b4db97",
+      "name": "⚙️ Procesar respuesta SF",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "{{ $json.query }}",
+        "options": {}
+      },
+      "id": "dd3ed27a-504d-4698-be91-fae8e656fb45",
+      "name": "💾 Update status MySQL",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        1968,
+        144
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "FezTcDnLo3SqPHvd",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE meli_leads SET status = 'skipped' WHERE id = '{{ $('Loop leads').item.json.id }}'",
+        "options": {}
+      },
+      "id": "f3c716b9-0f5b-44e4-a169-22a4817488e9",
+      "name": "💾 Marcar skipped",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        1376,
+        304
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "FezTcDnLo3SqPHvd",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "384f5f1a-0894-4fb7-8078-e871148dd4a6",
+      "name": "✅ Volver al loop",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1568,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.item.json;\n\nconst sfLeadId = data.sf_lead_id ? `'${data.sf_lead_id}'` : 'NULL';\nconst sfResponse = (data.sf_response || '').replace(/'/g, \"''\");\n\nreturn {\n  json: {\n    query: `UPDATE meli_leads SET status = '${data.new_status}', sf_lead_id = ${sfLeadId}, sf_response = '${sfResponse}' WHERE id = '${data.lead_id}'`\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1776,
+        144
+      ],
+      "id": "079867fa-4eeb-4048-b52d-9c1d7bf275d1",
+      "name": "⚙️ Preparar query update"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "4f6fc024-8d99-467d-a27b-1b8c591a21e5",
+      "name": "Loop leads",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        352,
+        144
+      ]
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -144,
+        336
+      ],
+      "id": "a199845a-2829-4975-94ff-7b26bf1e7ccc",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://volkswagenargentina.my.site.com/services/apexrest/createNewLead",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "*/*"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('🧩 PayloadVW').item.json) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1328,
+        144
+      ],
+      "id": "8d3b3983-3bd3-433c-a6e2-6aff9a5b1a96",
+      "name": "saleforce"
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $('Normalizar teléfonos').item.json;\n\nconst phone = (lead.buyer_phone || '').replace(/\\D/g, '').replace(/^54/, '').slice(-10);\nconst nombreParts = (lead.buyer_nombre || '').trim().split(' ');\nconst firstName = nombreParts.slice(0, -1).join(' ') || nombreParts[0] || '';\nconst lastName = nombreParts.slice(-1)[0] || '';\nconst today = new Date().toISOString().split('T')[0];\nconst description = `Publicación: ${lead.item_id} | Precio: ${lead.item_precio}| Asesor: ${$input.first().json.email} | Link: ${lead.item_permalink || ''}`.substring(0, 255);\n\nreturn {\n  json: {\n    FirstName: firstName,\n    LastName: lastName,\n    Origin: \"Mercado Libre\",\n    Phone: phone,\n    Email: lead.buyer_email || 'noproporciono@email.com',\n    ConcesionarioId: \"001f200001tAFcqAAG\",\n    Description: description,\n    Product: lead.item_titulo || '',\n    City: \"Buenos Aires\",\n    State: \"Buenos Aires\",\n    Country: \"Argentina\",\n    MarketingAllowance: \"true\",\n    DateOfConsent: today,\n    lead_id: lead.id\n  }\n};"
+      },
+      "id": "f55b91e8-1e94-433d-a608-81ccee179d1f",
+      "name": "🧩 PayloadVW",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        912,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $input.item.json;\n\nconst normalizarTel = (tel) => {\n  if (!tel) return null;\n  const digits = tel.toString().replace(/\\D/g, '');\n  return digits.slice(-8);\n};\n\nconst sufijo1 = normalizarTel(lead.asesor_phone);\nconst sufijo2 = normalizarTel(lead.asesor_phone2);\n\nreturn {\n  json: {\n    ...lead,\n    asesor_sufijo1: sufijo1 || '',\n    asesor_sufijo2: sufijo2 || ''\n  }\n};"
+      },
+      "id": "255b075a-fbad-4446-a385-6135b0d06829",
+      "name": "Normalizar teléfonos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        512,
+        160
+      ]
+    }
+  ],
+  "pinData": {
+    "When clicking ‘Execute workflow’": [
+      {
+        "json": {
+          "id": "2028abc6-6067-49e6-bb06-121355a2efee",
+          "user_id": 3505679485,
+          "nombre_cuenta": null,
+          "item_id": "MLA3608385912",
+          "item_titulo": "Leapmotor B10 Ultra-híbrido",
+          "item_precio": 31990,
+          "item_permalink": "https://auto.mercadolibre.com.ar/MLA-3608385912-leapmotor-b10-ultra-hibrido-_JM",
+          "item_condition": "new",
+          "item_thumbnail": "http://http2.mlstatic.com/D_794308-MLA113687401022_072026-I.webp",
+          "item_currency": "USD",
+          "item_status": "active",
+          "buyer_id": 361070382,
+          "buyer_nombre": "MARTINA SIGLER",
+          "buyer_email": "martinasigler99@gmail.com",
+          "buyer_phone": "+54 1131479531",
+          "buyer_cuit": "27421457218",
+          "asesor_phone": null,
+          "asesor_phone2": null,
+          "contact_type": "contact_request",
+          "status": "active",
+          "seller_address": "Av Libertador 2442",
+          "seller_zip": "1636",
+          "seller_lat": "-34.508427",
+          "seller_lng": "-58.479349",
+          "received_at": "2026-08-06 18:52:19",
+          "created_at": "2026-08-06 18:52:21",
+          "sf_lead_id": null,
+          "pilot_lead_id": null,
+          "sf_response": null,
+          "bot_uploaded": 0,
+          "access_token": "APP_USR-5782358665537188-080614-b987e61d787a3b7228b401771ca40057-3505679485",
+          "destino": "salesforce",
+          "destino_config": {},
+          "origen_sf": "Mercado Libre Redoo"
+        }
+      }
+    ]
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "hsymNkQuwjGsoRP6",
+      "projectId": "K8p6XEqA0L6D2uVt",
+      "createdAt": "2026-09-10T16:21:07.783Z",
+      "updatedAt": "2026-09-10T16:21:07.783Z"
+    }
+  ],
+  "staticData": {
+    "node:⏰ Schedule Trigger": {
+      "recurrenceRules": [
+        null
+      ],
+      "recurrenceRuleSignatures": [
+        null
+      ]
+    }
+  },
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2026-10-26T17:06:13.535Z",
+  "versionId": "a17c6075-840c-4fa2-814d-622e42e93334"
+}
