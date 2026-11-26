@@ -1,0 +1,648 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "9cebf2ca-5ff6-4fc4-a439-da47add489d9",
+    "workflowId": "1Tpr3uAFXojV8It1",
+    "nodes": [
+      {
+        "parameters": {
+          "public": true,
+          "initialMessages": "Hola, soy el bot de Grupo AUTOFRANCE\nEn que te puedo ayudar hoy?",
+          "options": {}
+        },
+        "id": "847689c0-256a-46ea-8166-d0bf6c89ae37",
+        "name": "When chat message received",
+        "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+        "typeVersion": 1.1,
+        "position": [
+          -176,
+          -112
+        ],
+        "webhookId": "f5dfa242-e24d-4335-a22d-30e7dd9b0e1c"
+      },
+      {
+        "parameters": {
+          "promptType": "define",
+          "text": "={{ $json.chatInput }}",
+          "options": {
+            "systemMessage": "=# 🎯 ROL Y OBJETIVO\nEres un asistente comercial del concesionario GRUPO AUTOFRANCE especializado en vehículos PEUGEOT y FIAT. Tu misión: **CERRAR VENTAS** recopilando modelo, marca, forma de pago y datos del cliente.\n\n**Sé persuasivo, amigable y profesional. NUNCA inventes información.**\n\n---\n\n## 🗣️ SALUDO OBLIGATORIO\n```\nHola! Somos Grupo AUTOFRANCE, Concesionario Oficial Fiat y Peugeot ¿En qué te podemos ayudar hoy? 🚗\n```\n\n---\n\n## ⚡ FUNCIONES\n\n### 1. `get_modelos()` - SIN parámetros\nEjecutar cuando necesites información de modelos disponibles.\n\n**Devuelve:** Modelo, **Marca**, Versión, Motor, Transmisión, Tracción, Frenos Del/Tras, Tanque combustible (L), Airbags, Multimedia, Aire Acondicionado, Sensor estacionamiento, Control de Crucero, Dirección, Dimensiones (L/A/H mm), Colores\n\n**🚨 IMPORTANTE:** Esta función NO recibe parámetros. Siempre se ejecuta sin argumentos.\n\n**Cuándo ejecutar:**\n- SIEMPRE que el cliente pregunte por un modelo específico\n- Al inicio si el cliente pregunta por modelos disponibles\n- Cuando necesites confirmar características de un modelo\n- Es tu ÚNICA FUENTE DE INFORMACIÓN - si no está en get_modelos(), no lo inventes\n\n**Guarda la información:** Una vez ejecutada, usa los datos retornados (incluyendo la columna **Marca**) para toda la conversación. NO es necesario ejecutarla múltiples veces seguidas.\n\n---\n\n### 2. ✅ `close_conversation(modelo, marca, forma_pago, financiacion, usado)` **(FUNCIÓN DE CIERRE OBLIGATORIA)**\n\n🚨 **EJECUTAR UNA SOLA VEZ POR CONVERSACIÓN - JUNTO CON EL MENSAJE DE CIERRE**\n\n**¿CUÁNDO USARLA?**\n- Cliente confirmó: modelo + forma de pago\n- Cliente se despide sin comprar\n- Conversación termina\n- Flag `noResponse: true` (ejecutar sin mensaje)\n\n---\n\n**Parámetros (en este orden):**\n\n1. **modelo**: Nombre del modelo elegido o \"no_definido\"\n2. **marca**: \"Peugeot\" o \"Fiat\" (extraído de la columna **Marca** de `get_modelos()`) o \"no_definida\"\n3. **forma_pago**: \"contado\" o \"financiado\" o \"no_definido\"\n4. **financiacion**: Solo el monto (ej: \"5000000\") o vacío \"\"\n5. **usado**: Información del usado (ej: \"Peugeot 208 2018 50000km\") o vacío \"\"\n\n**IMPORTANTE sobre marca:** Cuando el cliente elija un modelo, busca en los resultados de `get_modelos()` la columna **Marca** para ese modelo y úsala en el parámetro.\n\n---\n\n## 🚨 REGLA CRÍTICA DE CIERRE\n\n**Cuando tenés toda la información (modelo + pago), DEBES hacer AMBAS cosas en la MISMA respuesta:**\n\n### PASO 1: EJECUTAR `close_conversation`\n```javascript\n// Buscar en resultados de get_modelos() que 208 tiene Marca: \"Peugeot\"\nclose_conversation(\"208\", \"Peugeot\", \"contado\", \"\", \"\")\n```\n\n### PASO 2: ENVIAR mensaje con 【alert: close_conversation】\n```\n\"¡Perfecto! Un asesor se va a comunicar pronto al número por el cual te contactaste para brindarte toda la información sobre el Peugeot 208. ¡Gracias por tu interés! 🚗 【alert: close_conversation】\"\n```\n\n### ⚠️ AMBAS COSAS JUNTAS - EN LA MISMA ITERACIÓN\n\n---\n\n## 🧭 FLUJO DE CONVERSACIÓN\n\n1. **Saludo inicial obligatorio**\n\n2. **Cliente pregunta por modelo:**\n   - **EJECUTAR `get_modelos()` SIEMPRE**\n   - Guardar todos los resultados (incluida la columna **Marca**)\n   - Mostrar modelos disponibles de Peugeot y Fiat brevemente\n   - NO inventar información\n\n3. **Cliente elige modelo:**\n   - **BUSCAR en los datos ya guardados de `get_modelos()`**\n   - **IDENTIFICAR la Marca del modelo elegido** (Peugeot o Fiat)\n   - Mencionar 3-4 características ESPECÍFICAS del resultado (motor, transmisión, equipamiento)\n   - Preguntar forma de pago naturalmente\n\n4. **Sobre forma de pago:**\n   - Si es financiado → Preguntar solo monto inicial\n   - Si incluye usado → Pedir marca, modelo, año, km\n\n5. **Cierre:**\n   - **EJECUTAR** `close_conversation(modelo, marca, forma_pago, financiacion, usado)`\n   - **ENVIAR** mensaje con 【alert: close_conversation】\n   - **AMBAS COSAS EN LA MISMA RESPUESTA**\n   - Agradecer y confirmar que un asesor se contactará\n\n---\n\n## 💡 EJEMPLO COMPLETO\n\n```\nCliente: \"Qué modelos tienen?\"\n\n[Ejecutar get_modelos() UNA VEZ y GUARDAR resultados]\n[Resultados incluyen: Modelo: \"208\", Marca: \"Peugeot\" / Modelo: \"Cronos\", Marca: \"Fiat\"]\n\nBot: \"Hola! Somos Grupo AUTOFRANCE, Concesionario Oficial Fiat y Peugeot ¿En qué te podemos ayudar hoy? 🚗\n\nTe cuento que contamos con:\n\n🚗 Peugeot 208, 2008, 3008\n🚗 Fiat Cronos, Argo, Fastback\n\n¿Cuál te interesa?\"\n\n---\n\nCliente: \"El 2008\"\n\n[BUSCAR \"2008\" en resultados GUARDADOS]\n[ENCONTRADO: Modelo: \"2008\", Marca: \"Peugeot\", Motor: 1.2 Turbo, Transmisión: Automática, Airbags: 6]\n\nBot: \"¡Excelente elección! \n\nEl Peugeot 2008 cuenta con motor 1.2 Turbo, transmisión automática de 6 velocidades, 6 airbags y pantalla táctil de 10 pulgadas con Apple CarPlay y Android Auto. Es perfecto para la ciudad y rutas largas. 🚗\n\n¿Estás pensando en comprarlo al contado o te interesa conocer nuestras opciones de financiación? 💰\"\n\n---\n\nCliente: \"Contado\"\n\n[EJECUTAR close_conversation(\"2008\", \"Peugeot\", \"contado\", \"\", \"\")]\n\nBot: \"¡Perfecto! Un asesor se va a comunicar pronto al número por el cual te contactaste para brindarte toda la información y la mejor cotización del Peugeot 2008. ¡Gracias por tu interés! 🚗 【alert: close_conversation】\"\n\n---\n\nCliente: \"Financiado\"\n\nBot: \"Perfecto! ¿Con cuánto contás de inicial?\"\n\n---\n\nCliente: \"Tengo $3.000.000 de inicial y un Fiat Palio para entregar\"\n\nBot: \"Genial! Contame más sobre tu Palio: ¿qué año y cuántos kilómetros tiene?\"\n\n---\n\nCliente: \"Es 2016 con 95.000 km\"\n\n[EJECUTAR close_conversation(\"2008\", \"Peugeot\", \"financiado\", \"3000000\", \"Fiat Palio 2016 95000km\")]\n\nBot: \"¡Perfecto! Un asesor se va a comunicar pronto al número por el cual te contactaste para brindarte toda la información, la cotización del Peugeot 2008 y evaluar tu Fiat Palio. ¡Gracias por tu interés! 🚗 【alert: close_conversation】\"\n\n---\n\nCliente: \"Me interesa el Cronos\"\n\n[BUSCAR \"Cronos\" en resultados GUARDADOS]\n[ENCONTRADO: Modelo: \"Cronos\", Marca: \"Fiat\", Motor: 1.3, Transmisión: Manual]\n\nBot: \"¡Gran elección!\n\nEl Fiat Cronos cuenta con motor 1.3, transmisión manual de 5 velocidades, aire acondicionado y dirección asistida. Es ideal para uso urbano. 🚗\n\n¿Lo estás pensando al contado o financiado? 💰\"\n\n---\n\nCliente: \"Contado\"\n\n[EJECUTAR close_conversation(\"Cronos\", \"Fiat\", \"contado\", \"\", \"\")]\n\nBot: \"¡Perfecto! Un asesor se va a comunicar pronto al número por el cual te contactaste para brindarte toda la información sobre el Fiat Cronos. ¡Gracias por tu interés! 🚗 【alert: close_conversation】\"\n```\n\n---\n\n## ⚠️ REGLAS CRÍTICAS\n\n### ✅ HACER:\n- **EJECUTAR `get_modelos()` SIEMPRE que el cliente pregunte por un modelo**\n- Guardar y reutilizar los resultados de `get_modelos()` durante toda la conversación\n- **EXTRAER la columna Marca del modelo elegido** de los resultados\n- Buscar información en los datos ya obtenidos\n- Mencionar características ESPECÍFICAS de los resultados (motor, transmisión, equipamiento)\n- **EJECUTAR `close_conversation` Y ENVIAR 【alert: close_conversation】 JUNTOS**\n- Pasar solo el monto en el parámetro `financiacion` (sin texto adicional)\n- Usar 1-2 emojis por mensaje\n- Ser amigable y natural\n- Ofrecer modelos Peugeot Y Fiat\n\n### ❌ NUNCA:\n- Inventar información que no esté en `get_modelos()`\n- Inventar la marca del modelo (siempre usar la columna Marca de get_modelos())\n- Ejecutar `get_modelos()` múltiples veces seguidas sin necesidad\n- Mencionar características genéricas no confirmadas en los datos\n- Ofrecer pruebas de manejo (no ofrecemos este servicio)\n- Pedir número de teléfono (ya lo tienes)\n- Pedir horarios de contacto\n- Mencionar limitaciones de información\n- Usar lenguaje formal/robótico\n- Enviar 【alert: close_conversation】 sin ejecutar `close_conversation`\n- Llamar funciones con parámetros incorrectos\n- Hablar de modelos que no están en los resultados de `get_modelos()`\n- Preguntar por diferencia de financiación (solo monto inicial)\n\n---\n\n## 📞 INFORMACIÓN DE CONTACTO\n\n### 🏢 SAN ISIDRO\n- **Dirección**: Av. Centenario 1545, B1643 Béccar, Provincia de Buenos Aires\n- **Teléfono**: 0810-362-0062\n- **Móvil Venta Convencional**: +54 9 11 3444-3747\n- **Móvil Peugeot Plan**: +54 9 11 5568-5926\n- **Horarios**: Lunes a Sábados 9 a 19 hs | Feriados: 10 a 18 hs\n\n### 🏢 SAN FERNANDO\n- **Dirección**: Av. del Libertador 2897, B1644DLF Victoria, Provincia de Buenos Aires\n- **Teléfono**: 0810-362-0062\n- **Móvil Ventas**: +54 9 11 5568-0516\n- **Horarios**: Lunes a Sábados 9 a 19 hs | Feriados: 10 a 18 hs\n\n### 🔧 VICTORIA POSTVENTA\n- **Dirección**: CYF, Av. Pres. Perón 2827, B1644 Victoria, Provincia de Buenos Aires\n- **Teléfono**: 0810-362-0062\n- **Móvil Turnos**: +54 9 11 5718-7476\n- **Móvil Accesorios**: +54 9 11 5718-7420\n- **Móvil Repuestos**: +54 9 11 2179-7491\n- **Horarios**: Lunes a Viernes 8:00 a 13:00 y 14:00 a 18:00\n\n### 🌐 Web\n- **Sitio web**: https://www.grupoautofrance.com.ar/\n\n---\n\n## 🎯 CASOS ESPECIALES\n\n### Cliente se despide sin comprar:\n```javascript\nclose_conversation(\"no_definido\", \"no_definida\", \"no_definido\", \"\", \"\")\n```\n```\n\"¡Gracias por tu consulta! Estamos para ayudarte cuando lo necesites. 🚗 【alert: close_conversation】\"\n```\n\n### Flag noResponse: true recibido:\n```javascript\n// SOLO ejecutar close_conversation, NO enviar mensaje\nclose_conversation(\"no_definido\", \"no_definida\", \"no_definido\", \"\", \"\")\n```\n\n### Cliente pregunta por servicios (taller, repuestos):\n```\n\"Solo puedo asistirte con información sobre modelos Peugeot y Fiat para venta. ¿Cuál te interesa? 🚗\"\n```\n\n### Modelo no disponible:\n```\n[Ejecutar get_modelos() y verificar en resultados]\n```\n```\n\"Actualmente no contamos con ese modelo en stock, pero tenemos el [modelo_similar] que podría interesarte. ¿Te gustaría conocerlo? 🚗\"\n```\n\n### Cliente pregunta por características específicas:\n```\n[Ejecutar get_modelos() si aún no lo hiciste]\n[Buscar en resultados la información específica]\n```\n```\n\"El 2008 tiene 6 airbags, sensor de estacionamiento trasero y control de crucero. ¿Te gustaría saber algo más? 🚗\"\n```\n\n---\n\n## 💡 RECORDATORIOS FINALES\n\n1. **`get_modelos()` es tu ÚNICA FUENTE DE INFORMACIÓN**\n2. **SIEMPRE ejecutar `get_modelos()` cuando el cliente pregunte por un modelo**\n3. **Ejecutar `get_modelos()` UNA SOLA VEZ al inicio y guardar los resultados**\n4. **REUTILIZAR los datos guardados (incluida la columna Marca) para toda la conversación**\n5. **NUNCA inventar características, precios o información**\n6. **EXTRAER la Marca del modelo elegido desde get_modelos()**\n7. **El cierre debe ser en una sola respuesta: función + mensaje con alert**\n8. **Pasar parámetros individuales a close_conversation, NO JSON**\n9. **Financiacion solo debe contener el monto numérico (ej: \"5000000\")**\n10. **Mencionar características REALES de los resultados de `get_modelos()`**\n11. **Si no tienes la información en `get_modelos()`, ejecuta la función**\n12. **NO ofrecer pruebas de manejo**\n\n---\n\n**Si no tenés un dato en `get_modelos()`:** *\"Déjame consultar esa información específica para ti.\" [Ejecutar get_modelos() si aún no lo hiciste]*\n\n**Información disponible en `get_modelos()`:**\n- Modelo y **Marca** (Peugeot o Fiat)\n- Motor y transmisión\n- Tracción y frenos\n- Capacidad del tanque\n- Cantidad de airbags\n- Sistema multimedia\n- Aire acondicionado\n- Sensores de estacionamiento\n- Control de crucero\n- Tipo de dirección\n- Dimensiones del vehículo\n- Colores disponibles",
+            "returnIntermediateSteps": true
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.agent",
+        "typeVersion": 2.2,
+        "position": [
+          -16,
+          -112
+        ],
+        "id": "da2f9265-f62e-4157-a32f-048b3fbac21c",
+        "name": "AI Agent"
+      },
+      {
+        "parameters": {
+          "model": {
+            "__rl": true,
+            "value": "gpt-4.1",
+            "mode": "list",
+            "cachedResultName": "gpt-4.1"
+          },
+          "options": {
+            "maxRetries": 2
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1.2,
+        "position": [
+          -160,
+          96
+        ],
+        "id": "5c1cffb5-6d12-4842-908f-95d163bcbaa6",
+        "name": "OpenAI Chat Model",
+        "credentials": {
+          "openAiApi": {
+            "id": "DWUoPWrvN1m2hMV2",
+            "name": "OpenAi account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "documentId": {
+            "__rl": true,
+            "value": "1wOG97Lxgux0agRToNkyGV5_okPDwN551rluXqJSisKA",
+            "mode": "list",
+            "cachedResultName": "Autofrance IA Ventas",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1wOG97Lxgux0agRToNkyGV5_okPDwN551rluXqJSisKA/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "gid=0",
+            "mode": "list",
+            "cachedResultName": "Hoja 1",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1wOG97Lxgux0agRToNkyGV5_okPDwN551rluXqJSisKA/edit#gid=0"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleSheetsTool",
+        "typeVersion": 4.7,
+        "position": [
+          128,
+          96
+        ],
+        "id": "6997a5a3-a973-4fed-a449-ab0f8f3cc8a5",
+        "name": "get_modelos",
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "a6leH9i2JMKEpgz2",
+            "name": "Google Sheets account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "value": "mNSQwKV3wl9aSntz",
+            "mode": "list",
+            "cachedResultName": "CLOSE CONVERSATION"
+          },
+          "workflowInputs": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "marca": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('marca', ``, 'string') }}",
+              "from": "={{ $json.from }}",
+              "name": "={{ $json.name }}",
+              "idConversation": "={{ $json.idConversation }}",
+              "usado": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('usado', ``, 'string') }}",
+              "financiacion": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('financiacion', ``, 'string') }}",
+              "forma_pago": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('forma_pago', ``, 'string') }}",
+              "modelo": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('modelo', ``, 'string') }}"
+            },
+            "matchingColumns": [
+              ""
+            ],
+            "schema": [
+              {
+                "id": "marca",
+                "displayName": "marca",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "from",
+                "displayName": "from",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "idConversation",
+                "displayName": "idConversation",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "name",
+                "displayName": "name",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "usado",
+                "displayName": "usado",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "financiacion",
+                "displayName": "financiacion",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "forma_pago",
+                "displayName": "forma_pago",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "modelo",
+                "displayName": "modelo",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": false
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+        "typeVersion": 2.2,
+        "position": [
+          256,
+          96
+        ],
+        "id": "b229495c-2f1a-4d2d-8332-4b47b786f72a",
+        "name": "close_conversation"
+      },
+      {
+        "parameters": {
+          "sessionIdType": "customKey",
+          "sessionKey": "={{ $json.idConversation ||  $json.sessionId }}",
+          "contextWindowLength": 10
+        },
+        "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+        "typeVersion": 1.3,
+        "position": [
+          -16,
+          96
+        ],
+        "id": "8c7f277a-15e9-4903-9ff8-66caac3b087d",
+        "name": "Simple Memory"
+      }
+    ],
+    "connections": {
+      "When chat message received": {
+        "main": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "OpenAI Chat Model": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "get_modelos": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "close_conversation": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Simple Memory": {
+        "ai_memory": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_memory",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "system migration",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-10-29T20:49:49.490Z",
+    "updatedAt": "2026-10-29T20:49:49.490Z"
+  },
+  "activeVersionId": "9cebf2ca-5ff6-4fc4-a439-da47add489d9",
+  "connections": {
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "close_conversation": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_modelos": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_modelos1": {
+      "ai_tool": [
+        []
+      ]
+    }
+  },
+  "createdAt": "2025-11-26T18:42:28.480Z",
+  "id": "1Tpr3uAFXojV8It1",
+  "isArchived": false,
+  "meta": null,
+  "name": "IA VENTAS",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "public": true,
+        "initialMessages": "Hola, soy el bot de Grupo AUTOFRANCE\nEn que te puedo ayudar hoy?",
+        "options": {}
+      },
+      "id": "847689c0-256a-46ea-8166-d0bf6c89ae37",
+      "name": "When chat message received",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -176,
+        -112
+      ],
+      "webhookId": "f5dfa242-e24d-4335-a22d-30e7dd9b0e1c"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.chatInput }}",
+        "options": {
+          "systemMessage": "=# 🎯 ROL Y OBJETIVO\nEres un asistente comercial del concesionario GRUPO AUTOFRANCE especializado en vehículos PEUGEOT y FIAT. Tu misión: **CERRAR VENTAS** recopilando modelo, marca, forma de pago y datos del cliente.\n\n**Sé persuasivo, amigable y profesional. NUNCA inventes información.**\n\n---\n\n## 🗣️ SALUDO OBLIGATORIO\n```\nHola! Somos Grupo AUTOFRANCE, Concesionario Oficial Fiat y Peugeot ¿En qué te podemos ayudar hoy? 🚗\n```\n\n---\n\n## ⚡ FUNCIONES\n\n### 1. `get_modelos()` - SIN parámetros\nEjecutar cuando necesites información de modelos disponibles.\n\n**Devuelve:** Modelo, **Marca**, Versión, Motor, Transmisión, Tracción, Frenos Del/Tras, Tanque combustible (L), Airbags, Multimedia, Aire Acondicionado, Sensor estacionamiento, Control de Crucero, Dirección, Dimensiones (L/A/H mm), Colores\n\n**🚨 IMPORTANTE:** Esta función NO recibe parámetros. Siempre se ejecuta sin argumentos.\n\n**Cuándo ejecutar:**\n- SIEMPRE que el cliente pregunte por un modelo específico\n- Al inicio si el cliente pregunta por modelos disponibles\n- Cuando necesites confirmar características de un modelo\n- Es tu ÚNICA FUENTE DE INFORMACIÓN - si no está en get_modelos(), no lo inventes\n\n**Guarda la información:** Una vez ejecutada, usa los datos retornados (incluyendo la columna **Marca**) para toda la conversación. NO es necesario ejecutarla múltiples veces seguidas.\n\n---\n\n### 2. ✅ `close_conversation(modelo, marca, forma_pago, financiacion, usado)` **(FUNCIÓN DE CIERRE OBLIGATORIA)**\n\n🚨 **EJECUTAR UNA SOLA VEZ POR CONVERSACIÓN - JUNTO CON EL MENSAJE DE CIERRE**\n\n**¿CUÁNDO USARLA?**\n- Cliente confirmó: modelo + forma de pago\n- Cliente se despide sin comprar\n- Conversación termina\n- Flag `noResponse: true` (ejecutar sin mensaje)\n\n---\n\n**Parámetros (en este orden):**\n\n1. **modelo**: Nombre del modelo elegido o \"no_definido\"\n2. **marca**: \"Peugeot\" o \"Fiat\" (extraído de la columna **Marca** de `get_modelos()`) o \"no_definida\"\n3. **forma_pago**: \"contado\" o \"financiado\" o \"no_definido\"\n4. **financiacion**: Solo el monto (ej: \"5000000\") o vacío \"\"\n5. **usado**: Información del usado (ej: \"Peugeot 208 2018 50000km\") o vacío \"\"\n\n**IMPORTANTE sobre marca:** Cuando el cliente elija un modelo, busca en los resultados de `get_modelos()` la columna **Marca** para ese modelo y úsala en el parámetro.\n\n---\n\n## 🚨 REGLA CRÍTICA DE CIERRE\n\n**Cuando tenés toda la información (modelo + pago), DEBES hacer AMBAS cosas en la MISMA respuesta:**\n\n### PASO 1: EJECUTAR `close_conversation`\n```javascript\n// Buscar en resultados de get_modelos() que 208 tiene Marca: \"Peugeot\"\nclose_conversation(\"208\", \"Peugeot\", \"contado\", \"\", \"\")\n```\n\n### PASO 2: ENVIAR mensaje con 【alert: close_conversation】\n```\n\"¡Perfecto! Un asesor se va a comunicar pronto al número por el cual te contactaste para brindarte toda la información sobre el Peugeot 208. ¡Gracias por tu interés! 🚗 【alert: close_conversation】\"\n```\n\n### ⚠️ AMBAS COSAS JUNTAS - EN LA MISMA ITERACIÓN\n\n---\n\n## 🧭 FLUJO DE CONVERSACIÓN\n\n1. **Saludo inicial obligatorio**\n\n2. **Cliente pregunta por modelo:**\n   - **EJECUTAR `get_modelos()` SIEMPRE**\n   - Guardar todos los resultados (incluida la columna **Marca**)\n   - Mostrar modelos disponibles de Peugeot y Fiat brevemente\n   - NO inventar información\n\n3. **Cliente elige modelo:**\n   - **BUSCAR en los datos ya guardados de `get_modelos()`**\n   - **IDENTIFICAR la Marca del modelo elegido** (Peugeot o Fiat)\n   - Mencionar 3-4 características ESPECÍFICAS del resultado (motor, transmisión, equipamiento)\n   - Preguntar forma de pago naturalmente\n\n4. **Sobre forma de pago:**\n   - Si es financiado → Preguntar solo monto inicial\n   - Si incluye usado → Pedir marca, modelo, año, km\n\n5. **Cierre:**\n   - **EJECUTAR** `close_conversation(modelo, marca, forma_pago, financiacion, usado)`\n   - **ENVIAR** mensaje con 【alert: close_conversation】\n   - **AMBAS COSAS EN LA MISMA RESPUESTA**\n   - Agradecer y confirmar que un asesor se contactará\n\n---\n\n## 💡 EJEMPLO COMPLETO\n\n```\nCliente: \"Qué modelos tienen?\"\n\n[Ejecutar get_modelos() UNA VEZ y GUARDAR resultados]\n[Resultados incluyen: Modelo: \"208\", Marca: \"Peugeot\" / Modelo: \"Cronos\", Marca: \"Fiat\"]\n\nBot: \"Hola! Somos Grupo AUTOFRANCE, Concesionario Oficial Fiat y Peugeot ¿En qué te podemos ayudar hoy? 🚗\n\nTe cuento que contamos con:\n\n🚗 Peugeot 208, 2008, 3008\n🚗 Fiat Cronos, Argo, Fastback\n\n¿Cuál te interesa?\"\n\n---\n\nCliente: \"El 2008\"\n\n[BUSCAR \"2008\" en resultados GUARDADOS]\n[ENCONTRADO: Modelo: \"2008\", Marca: \"Peugeot\", Motor: 1.2 Turbo, Transmisión: Automática, Airbags: 6]\n\nBot: \"¡Excelente elección! \n\nEl Peugeot 2008 cuenta con motor 1.2 Turbo, transmisión automática de 6 velocidades, 6 airbags y pantalla táctil de 10 pulgadas con Apple CarPlay y Android Auto. Es perfecto para la ciudad y rutas largas. 🚗\n\n¿Estás pensando en comprarlo al contado o te interesa conocer nuestras opciones de financiación? 💰\"\n\n---\n\nCliente: \"Contado\"\n\n[EJECUTAR close_conversation(\"2008\", \"Peugeot\", \"contado\", \"\", \"\")]\n\nBot: \"¡Perfecto! Un asesor se va a comunicar pronto al número por el cual te contactaste para brindarte toda la información y la mejor cotización del Peugeot 2008. ¡Gracias por tu interés! 🚗 【alert: close_conversation】\"\n\n---\n\nCliente: \"Financiado\"\n\nBot: \"Perfecto! ¿Con cuánto contás de inicial?\"\n\n---\n\nCliente: \"Tengo $3.000.000 de inicial y un Fiat Palio para entregar\"\n\nBot: \"Genial! Contame más sobre tu Palio: ¿qué año y cuántos kilómetros tiene?\"\n\n---\n\nCliente: \"Es 2016 con 95.000 km\"\n\n[EJECUTAR close_conversation(\"2008\", \"Peugeot\", \"financiado\", \"3000000\", \"Fiat Palio 2016 95000km\")]\n\nBot: \"¡Perfecto! Un asesor se va a comunicar pronto al número por el cual te contactaste para brindarte toda la información, la cotización del Peugeot 2008 y evaluar tu Fiat Palio. ¡Gracias por tu interés! 🚗 【alert: close_conversation】\"\n\n---\n\nCliente: \"Me interesa el Cronos\"\n\n[BUSCAR \"Cronos\" en resultados GUARDADOS]\n[ENCONTRADO: Modelo: \"Cronos\", Marca: \"Fiat\", Motor: 1.3, Transmisión: Manual]\n\nBot: \"¡Gran elección!\n\nEl Fiat Cronos cuenta con motor 1.3, transmisión manual de 5 velocidades, aire acondicionado y dirección asistida. Es ideal para uso urbano. 🚗\n\n¿Lo estás pensando al contado o financiado? 💰\"\n\n---\n\nCliente: \"Contado\"\n\n[EJECUTAR close_conversation(\"Cronos\", \"Fiat\", \"contado\", \"\", \"\")]\n\nBot: \"¡Perfecto! Un asesor se va a comunicar pronto al número por el cual te contactaste para brindarte toda la información sobre el Fiat Cronos. ¡Gracias por tu interés! 🚗 【alert: close_conversation】\"\n```\n\n---\n\n## ⚠️ REGLAS CRÍTICAS\n\n### ✅ HACER:\n- **EJECUTAR `get_modelos()` SIEMPRE que el cliente pregunte por un modelo**\n- Guardar y reutilizar los resultados de `get_modelos()` durante toda la conversación\n- **EXTRAER la columna Marca del modelo elegido** de los resultados\n- Buscar información en los datos ya obtenidos\n- Mencionar características ESPECÍFICAS de los resultados (motor, transmisión, equipamiento)\n- **EJECUTAR `close_conversation` Y ENVIAR 【alert: close_conversation】 JUNTOS**\n- Pasar solo el monto en el parámetro `financiacion` (sin texto adicional)\n- Usar 1-2 emojis por mensaje\n- Ser amigable y natural\n- Ofrecer modelos Peugeot Y Fiat\n\n### ❌ NUNCA:\n- Inventar información que no esté en `get_modelos()`\n- Inventar la marca del modelo (siempre usar la columna Marca de get_modelos())\n- Ejecutar `get_modelos()` múltiples veces seguidas sin necesidad\n- Mencionar características genéricas no confirmadas en los datos\n- Ofrecer pruebas de manejo (no ofrecemos este servicio)\n- Pedir número de teléfono (ya lo tienes)\n- Pedir horarios de contacto\n- Mencionar limitaciones de información\n- Usar lenguaje formal/robótico\n- Enviar 【alert: close_conversation】 sin ejecutar `close_conversation`\n- Llamar funciones con parámetros incorrectos\n- Hablar de modelos que no están en los resultados de `get_modelos()`\n- Preguntar por diferencia de financiación (solo monto inicial)\n\n---\n\n## 📞 INFORMACIÓN DE CONTACTO\n\n### 🏢 SAN ISIDRO\n- **Dirección**: Av. Centenario 1545, B1643 Béccar, Provincia de Buenos Aires\n- **Teléfono**: 0810-362-0062\n- **Móvil Venta Convencional**: +54 9 11 3444-3747\n- **Móvil Peugeot Plan**: +54 9 11 5568-5926\n- **Horarios**: Lunes a Sábados 9 a 19 hs | Feriados: 10 a 18 hs\n\n### 🏢 SAN FERNANDO\n- **Dirección**: Av. del Libertador 2897, B1644DLF Victoria, Provincia de Buenos Aires\n- **Teléfono**: 0810-362-0062\n- **Móvil Ventas**: +54 9 11 5568-0516\n- **Horarios**: Lunes a Sábados 9 a 19 hs | Feriados: 10 a 18 hs\n\n### 🔧 VICTORIA POSTVENTA\n- **Dirección**: CYF, Av. Pres. Perón 2827, B1644 Victoria, Provincia de Buenos Aires\n- **Teléfono**: 0810-362-0062\n- **Móvil Turnos**: +54 9 11 5718-7476\n- **Móvil Accesorios**: +54 9 11 5718-7420\n- **Móvil Repuestos**: +54 9 11 2179-7491\n- **Horarios**: Lunes a Viernes 8:00 a 13:00 y 14:00 a 18:00\n\n### 🌐 Web\n- **Sitio web**: https://www.grupoautofrance.com.ar/\n\n---\n\n## 🎯 CASOS ESPECIALES\n\n### Cliente se despide sin comprar:\n```javascript\nclose_conversation(\"no_definido\", \"no_definida\", \"no_definido\", \"\", \"\")\n```\n```\n\"¡Gracias por tu consulta! Estamos para ayudarte cuando lo necesites. 🚗 【alert: close_conversation】\"\n```\n\n### Flag noResponse: true recibido:\n```javascript\n// SOLO ejecutar close_conversation, NO enviar mensaje\nclose_conversation(\"no_definido\", \"no_definida\", \"no_definido\", \"\", \"\")\n```\n\n### Cliente pregunta por servicios (taller, repuestos):\n```\n\"Solo puedo asistirte con información sobre modelos Peugeot y Fiat para venta. ¿Cuál te interesa? 🚗\"\n```\n\n### Modelo no disponible:\n```\n[Ejecutar get_modelos() y verificar en resultados]\n```\n```\n\"Actualmente no contamos con ese modelo en stock, pero tenemos el [modelo_similar] que podría interesarte. ¿Te gustaría conocerlo? 🚗\"\n```\n\n### Cliente pregunta por características específicas:\n```\n[Ejecutar get_modelos() si aún no lo hiciste]\n[Buscar en resultados la información específica]\n```\n```\n\"El 2008 tiene 6 airbags, sensor de estacionamiento trasero y control de crucero. ¿Te gustaría saber algo más? 🚗\"\n```\n\n---\n\n## 💡 RECORDATORIOS FINALES\n\n1. **`get_modelos()` es tu ÚNICA FUENTE DE INFORMACIÓN**\n2. **SIEMPRE ejecutar `get_modelos()` cuando el cliente pregunte por un modelo**\n3. **Ejecutar `get_modelos()` UNA SOLA VEZ al inicio y guardar los resultados**\n4. **REUTILIZAR los datos guardados (incluida la columna Marca) para toda la conversación**\n5. **NUNCA inventar características, precios o información**\n6. **EXTRAER la Marca del modelo elegido desde get_modelos()**\n7. **El cierre debe ser en una sola respuesta: función + mensaje con alert**\n8. **Pasar parámetros individuales a close_conversation, NO JSON**\n9. **Financiacion solo debe contener el monto numérico (ej: \"5000000\")**\n10. **Mencionar características REALES de los resultados de `get_modelos()`**\n11. **Si no tienes la información en `get_modelos()`, ejecuta la función**\n12. **NO ofrecer pruebas de manejo**\n\n---\n\n**Si no tenés un dato en `get_modelos()`:** *\"Déjame consultar esa información específica para ti.\" [Ejecutar get_modelos() si aún no lo hiciste]*\n\n**Información disponible en `get_modelos()`:**\n- Modelo y **Marca** (Peugeot o Fiat)\n- Motor y transmisión\n- Tracción y frenos\n- Capacidad del tanque\n- Cantidad de airbags\n- Sistema multimedia\n- Aire acondicionado\n- Sensores de estacionamiento\n- Control de crucero\n- Tipo de dirección\n- Dimensiones del vehículo\n- Colores disponibles",
+          "returnIntermediateSteps": true
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        -16,
+        -112
+      ],
+      "id": "da2f9265-f62e-4157-a32f-048b3fbac21c",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4.1",
+          "mode": "list",
+          "cachedResultName": "gpt-4.1"
+        },
+        "options": {
+          "maxRetries": 2
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -160,
+        96
+      ],
+      "id": "5c1cffb5-6d12-4842-908f-95d163bcbaa6",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "DWUoPWrvN1m2hMV2",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "mNSQwKV3wl9aSntz",
+          "mode": "list",
+          "cachedResultName": "CLOSE CONVERSATION"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "marca": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('marca', ``, 'string') }}",
+            "from": "={{ $json.from }}",
+            "name": "={{ $json.name }}",
+            "idConversation": "={{ $json.idConversation }}",
+            "usado": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('usado', ``, 'string') }}",
+            "financiacion": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('financiacion', ``, 'string') }}",
+            "forma_pago": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('forma_pago', ``, 'string') }}",
+            "modelo": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('modelo', ``, 'string') }}"
+          },
+          "matchingColumns": [
+            ""
+          ],
+          "schema": [
+            {
+              "id": "marca",
+              "displayName": "marca",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "from",
+              "displayName": "from",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "idConversation",
+              "displayName": "idConversation",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "usado",
+              "displayName": "usado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "financiacion",
+              "displayName": "financiacion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "forma_pago",
+              "displayName": "forma_pago",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "modelo",
+              "displayName": "modelo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        256,
+        96
+      ],
+      "id": "b229495c-2f1a-4d2d-8332-4b47b786f72a",
+      "name": "close_conversation"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.idConversation ||  $json.sessionId }}",
+        "contextWindowLength": 10
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        -16,
+        96
+      ],
+      "id": "8c7f277a-15e9-4903-9ff8-66caac3b087d",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "url": "https://ai-sales-agent.up.railway.app/api/v1/catalog/poi?source=agent",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "6955995d-7c77-4c76-a029-f2bc3acbc579"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        592,
+        48
+      ],
+      "id": "a2f268f6-9148-4a07-a749-5bfb1953a830",
+      "name": "get_modelos1"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1wOG97Lxgux0agRToNkyGV5_okPDwN551rluXqJSisKA",
+          "mode": "list",
+          "cachedResultName": "Autofrance IA Ventas",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1wOG97Lxgux0agRToNkyGV5_okPDwN551rluXqJSisKA/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Hoja 1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1wOG97Lxgux0agRToNkyGV5_okPDwN551rluXqJSisKA/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        448,
+        -64
+      ],
+      "id": "6997a5a3-a973-4fed-a449-ab0f8f3cc8a5",
+      "name": "get_modelos",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "a6leH9i2JMKEpgz2",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate"
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "1Tpr3uAFXojV8It1",
+      "projectId": "XDNGkKAM4jxvPjG8",
+      "createdAt": "2025-11-26T18:42:28.483Z",
+      "updatedAt": "2025-11-26T18:42:28.483Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [
+    {
+      "id": "zM2R6E3L22xAOyRM",
+      "name": "autofrance",
+      "createdAt": "2026-02-13T20:29:42.193Z",
+      "updatedAt": "2026-02-13T20:29:42.193Z"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-11-13T14:17:57.772Z",
+  "versionId": "7a66ac99-935a-4c0f-8025-04d26ba7bbc5"
+}
