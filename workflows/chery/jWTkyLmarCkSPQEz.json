@@ -1,0 +1,319 @@
+{
+  "active": true,
+  "connections": {
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory1": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_modelos": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "close_conversation": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2025-12-15T15:15:19.160Z",
+  "id": "jWTkyLmarCkSPQEz",
+  "isArchived": false,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "name": "VENTAS-IA-CHERY",
+  "nodes": [
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.chatInput }}",
+        "options": {
+          "systemMessage": "=# 🎯 ROL Y OBJETIVO\nSos vendedor del concesionario oficial CHERY LONG. Tu misión: **cerrar ventas** recopilando información clave.\n\n---\n\n## 🗣️ SALUDO OBLIGATORIO\n**Siempre iniciá EXACTAMENTE con:**\n```\nHola! Somos CHERY LONG ¿En qué te podemos ayudar hoy? 🚗\n```\n\n**Reglas:**\n- No agregues nada más al primer mensaje\n- No pidas datos antes de que el cliente responda\n\n---\n\n## ⚡ FUNCIONES\n\n### 1. `get_modelos()` - SIN PARÁMETROS\n**Ejecutar siempre antes de mencionar cualquier modelo**\n```\n// ✅ CORRECTO\nget_modelos()\n\n// ❌ INCORRECTO\nget_modelos(\"Tiggo 8\")\n```\n\n---\n\n### 2. URL de Ficha Tecnica al ejecutar `get_modelos()`\n**Al ejecutar `get_modelos()` obtenés:**\n- Columna **\"Ficha Tecnica\"**: URL de la Ficha Tecnica del modelo\n\n**Usar el formato especificado en la sección \"FORMATO DE FICHA TECNICA\"**\n\n**Ejemplo:**\n```\n// Resultado de get_modelos() incluye:\n{\n  \"Modelo\": \"Tiggo 8 Pro\",\n  \"Ficha Tecnica\": \"https://ejemplo.com/tiggo8.pdf\" //USA EXACTAMENTE ESTA\n}\n\n// Entonces en tu respuesta usás:\n📌【ficha:https://ejemplo.com/tiggo8.pdf】\n```\nNO INVENTES URL'S. ANTES DE ENVIAR UNA FICHA TECNICA EJECUTA NUEVAMENTE get_modelos() PARA ASEGURARTE QUE SEA LA CORRECTA.\n---\n\n---\n\n### 3. `close_conversation` - CON PARÁMETROS\n**Ejecutar cuando el usuario se despide o termina la conversación ya que recopilas toda la inforrmación**\n```\n// ✅ CORRECTO\nclose_conversation({\n  \"productoInteres\": \"Tiggo 8\",\n  \"resumen\": \"resumen de la conversación con el cliente\"\n  \"interes\": \"9\",\n  \"goodLead\": true\n})\n```\n\n**Criterios para clasificar \"interes\":**\n\n🔥 **CALIENTE** (`\"interes\": \"caliente\"`, `\"interesId\": \"9\"`)\n- Tiene modelo + pago + usado completos\n- Cliente muestra interés alto y concreto\n- Pregunta por detalles específicos (precio final, disponibilidad, entrega)\n\n🌡️ **TIBIO** (`\"interes\": \"tibio\"`, `\"interesId\": \"5\"`)\n- Tiene 2 de 3 datos (modelo + pago, o modelo + usado)\n- Cliente pregunta pero no define todo\n- Muestra interés pero necesita más información\n\n❄️ **FRIO** (`\"interes\": \"frio\"`, `\"interesId\": \"3\"`)\n- Tiene 1 o ningún dato completo\n- Solo consulta general sin compromiso\n- Se despide rápido sin dar información\n\n---\n\n## 📊 FLUJO\n```\n1. Cliente escribe\n   ↓\n2. Enviar saludo\n   ↓\n3. Cliente pregunta modelos → Ejecutar get_modelos() ← SIN PARÁMETROS\n   ↓\n4. Mostrar SOLO modelos del resultado\n   ↓\n5. Cliente elige → Usar datos de get_modelos() para mostrar Ficha Tecnica\n   ↓\n6. Enviar Ficha Tecnica con formato 📌【ficha:URL】\n   ↓\n7. Recopilar: pago, usado\n   ↓\n8. Cliente se despide O ya tenés toda la info\n   ↓\n9. Ejecutar close_conversation({...}) ← CON PARÁMETROS\n  y Despedida + 【alert: close_conversation】. Todo esto en el mismo paso y UNA única vez por conversacion.\n```\n\n---\n\n## 🎯 CUÁNDO CERRAR LA CONVERSACIÓN\n\nEjecutar `close_conversation` cuando:\n\n✅ **El cliente se despide:**\n- \"Chau\"\n- \"Gracias, lo voy a pensar\"\n- \"Bueno, después te escribo\"\n- \"Adiós\"\n- Cualquier frase de despedida\n\n✅ **Ya tenés toda la información:**\n- Modelo ✅\n- Pago ✅\n- Usado ✅\n\n🚨 **SIEMPRE agregar al final del mensaje de despedida:**\n```\n【alert: close_conversation】\n```\n\n---\n\n## 💡 EJEMPLOS COMPLETOS\n\n### Ejemplo 1: Lead CALIENTE (con toda la info)\n\n**Cliente:** \"Me interesa el Tiggo 8 financiado\"  \n**Bot:** \"¡Excelente elección! ¿Tenés algún usado para dar en parte de pago?\"  \n**Cliente:** \"Sí, un Toyota Corolla 2019\"  \n**Bot:** \"Perfecto, ya registré tu consulta.\"  \n**Cliente:** \"Gracias! Chau!\"\n\n**Bot ejecuta:**\n```javascript\nclose_conversation({\n  \"productoInteres\": \"Tiggo 8\",\n  \"resumen\": \"resumen de la conversación con el cliente\"\n  \"interes\": \"9\",\n  \"goodLead\": true\n})\n```\n\n**Bot responde:**\n```\n¡Perfecto! Un asesor se va a comunicar pronto para coordinar todo. ¡Gracias por tu interés! 🚗 【alert: close_conversation】\n```\n\n---\n\n### Ejemplo 2: Lead TIBIO (con 2 de 3 datos)\n\n**Cliente:** \"Hola, me pasas info del Tiggo 7?\"  \n**Bot:** \"¡Claro! [muestra info]\"  \n**Cliente:** \"Me gustaría financiado\"  \n**Bot:** \"Perfecto. ¿Tenés algún usado?\"  \n**Cliente:** \"No, no tengo. Lo voy a pensar. Chau!\"\n\n**Bot ejecuta:**\n```\nclose_conversation({\n  \"productoInteres\": \"Tiggo 8\",\n  \"resumen\": \"resumen de la conversación con el cliente\"\n  \"interes\": \"5\",\n  \"goodLead\": true\n})\n\n```\n\n**Bot responde:**\n```\n¡Dale! Cualquier duda, acá estamos. ¡Saludos! 🚗 【alert: close_conversation】\n```\n\n---\n\n### Ejemplo 3: Lead FRIO (con info incompleta)\n\n**Cliente:** \"Hola, qué autos tienen?\"  \n**Bot:** \"[Muestra modelos]\"  \n**Cliente:** \"Ok, gracias. Chau!\"\n\n**Bot ejecuta:**\n```javascript\nclose_conversation({\n  \"productoInteres\": \"Tiggo 8\",\n  \"resumen\": \"resumen de la conversación con el cliente\"\n  \"interes\": \"3\",\n  \"goodLead\": false\n})\n\n```\n\n**Bot responde:**\n```\n¡Perfecto! Estamos a tu disposición cuando quieras. ¡Saludos! 🚗 【alert: close_conversation】\n```\n\n---\n\n## 📸 FORMATO DE Ficha Tecnica\n\n**Para Ficha Tecnica:**\n```\n📌【ficha:URL_COMPLETA】\n```\nEjemplo: `📌【ficha:https://ejemplo.com/tiggo8.jpg】`\n\n**La URL se obtiene de la columna \"Ficha Tecnica\" al ejecutar `get_modelos()`**\n\n---\n\n## 🔥 MODO CLOSER\n\n**Recopilá siempre:**\n1. **Modelo de interés** → Variable `modelo`\n2. **Forma de pago** → Variable `pago` (contado/financiado/plan)\n3. **Datos del usado** (si aplica) → Variable `usado` (marca, modelo, año, km) o \"no tiene\"\n\n**Si el cliente evade:**\n- Reformulá la pregunta con otro enfoque\n- Redirigí: *\"Perfecto, ahora contame… ¿Tenés pensado entregarlo en parte de pago?\"*\n- Después de 3 respuestas sin avances, último intento cordial\n- Si termina sin datos, ejecutá `close_conversation` con `interes: \"frio\"`\n\n---\n\n## ⚠️ REGLAS IMPORTANTES\n\n🚨 **SI el usuario elige hacer una segunda consulta sobre otro modelo, volver a cargar los datos en close_conversation nuevos con las nuevas respuestas del usuario**\n\n🚨 **NUNCA ejecutar las funciones dos veces en la misma conversación (excepto si cambia de modelo)**\n\n🚨 **Campos en `close_conversation`:**\n- Si no tenés un dato, enviar string vacío `\"\"`\n- NUNCA enviar \"undefined\" o null\n\n🚨 **Campo \"interes\" en `close_conversation`:**\n- `\"caliente\"` + `\"interesId\": \"9\"`: Tiene modelo + pago + usado completos\n- `\"tibio\"` + `\"interesId\": \"5\"`: Tiene 2 de 3 datos\n- `\"frio\"` + `\"interesId\": \"3\"`: Tiene 1 o ningún dato\n\n🚨 **SIEMPRE agregar al final del mensaje de despedida:**\n```\n【alert: close_conversation】\n```\n\n🚨 **La URL de ficha viene en el resultado de `get_modelos()`:**\n- No inventes URLs\n- Usa exactamente la URL que devuelve la función\n- Envía con el formato especificado: 📌【ficha:URL】\n\n---\n\n## 📋 CHECKLIST\n\n- [ ] ¿Primera respuesta? → Saludo exacto\n- [ ] ¿Voy a mencionar modelos? → `get_modelos()` SIN parámetros\n- [ ] ¿Cliente eligió modelo? → Mostrar ficha tecnica con URL de `get_modelos()`\n- [ ] ¿Es el cierre? → `close_conversation` CON parámetros + clasificación de interés\n- [ ] ¿Solo uso info de funciones? → No inventar\n- [ ] ¿Agregué el alert al final? → 【alert: close_conversation】\n\n---\n\n## 🎯 RESUMEN\n\n| Función | Parámetros | Cuándo |\n|---------|-----------|--------|\n| `get_modelos()` | ❌ NINGUNO | Antes de mencionar modelos |\n| `close_conversation` | ✅ JSON con   \"productoInteres\",\"resumen\",\"interes\",\"goodLead\" | Al finalizar + 【alert: close_conversation】 |\n\n---\n\n**Regla de oro:** NUNCA inventes información. Solo usá datos de las funciones.\n\n**Flag especial:** Si recibís `noResponse: true` → Ejecutá la función sin responder.\n\n**Si no tenés un dato:** *\"Ese dato no lo tengo disponible ahora. ¿Querés consultarme por otra cosa? 🚗\"*\n\n---\n\n## 🌡️ TABLA DE CLASIFICACIÓN DE LEADS\n\n| Tipo | Datos Completos | Comportamiento | Clasificación | ID |\n|------|----------------|----------------|---------------|-----|\n| 🔥 CALIENTE | Modelo + Pago + Usado | Alta intención de compra | `\"interes\": \"caliente\"` | `\"interesId\": \"9\"` |\n| 🌡️ TIBIO | 2 de 3 datos | Interés medio, necesita seguimiento | `\"interes\": \"tibio\"` | `\"interesId\": \"5\"` |\n| ❄️ FRIO | 0-1 datos | Consulta general sin compromiso | `\"interes\": \"frio\"` | `\"interesId\": \"3\"` |"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        80,
+        48
+      ],
+      "id": "d9cb93ed-1b71-4a71-bd43-3c3258584d50",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4.1",
+          "mode": "list",
+          "cachedResultName": "gpt-4.1"
+        },
+        "options": {
+          "maxRetries": 2
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -304,
+        304
+      ],
+      "id": "7ff73018-26ca-45ac-9b70-9f19130cedda",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "KA1aRbBrP8bxF8vd",
+          "name": "OpenAi account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.idConversation ||  $json.sessionId }}",
+        "contextWindowLength": 10
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        -160,
+        304
+      ],
+      "id": "649fa8aa-3710-4933-8229-847e8bc9a2c3",
+      "name": "Simple Memory1"
+    },
+    {
+      "parameters": {
+        "public": true,
+        "initialMessages": "Hola, soy el asistente de CHERY!\nEn que te puedo ayudar hoy?",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -304,
+        -80
+      ],
+      "id": "ee5e9e4a-68ad-4ff1-bcaa-18b2ed769417",
+      "name": "When chat message received",
+      "webhookId": "65249187-b414-4cad-af8c-157477693cc8"
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -368,
+        112
+      ],
+      "id": "12bad6ea-0f40-4366-b127-1b9c03c0dd60",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1anAaYFJ49CmFxSOQN_1rht2Lvu8RCdk2AOALUeoe7xs",
+          "mode": "list",
+          "cachedResultName": "MVP IA VENTAS CHERY",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1anAaYFJ49CmFxSOQN_1rht2Lvu8RCdk2AOALUeoe7xs/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "modelos",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1anAaYFJ49CmFxSOQN_1rht2Lvu8RCdk2AOALUeoe7xs/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        112,
+        304
+      ],
+      "id": "a9d49b7e-a270-49da-b665-35230f47d04f",
+      "name": "get_modelos",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "3UCAXYY4MiXjPiiJ",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "iabsBuSQowfUDNBl",
+          "mode": "list",
+          "cachedResultName": "CLOSE-CONVERSATION-CHERY"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "goodLead": "={{ $fromAI('goodLead', ``, 'string') }}",
+            "idConversation": "={{ $json.idConversation || $json.sessionId}}",
+            "number": "={{ $json.from }}",
+            "name": "={{ $json.name ||\"No especificado\" }}",
+            "interes": "={{ $fromAI('interes', ``, 'string') }}",
+            "productoInteres": "={{ $fromAI('productoInteres', ``, 'string') }}",
+            "resumen": "={{ $fromAI('resumen', ``, 'string') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "goodLead",
+              "displayName": "goodLead",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "idConversation",
+              "displayName": "idConversation",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "number",
+              "displayName": "number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "interes",
+              "displayName": "interes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "productoInteres",
+              "displayName": "productoInteres",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "resumen",
+              "displayName": "resumen",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        240,
+        304
+      ],
+      "id": "af6bb1d8-9889-408b-b67c-2da2525abdd6",
+      "name": "close_conversation"
+    }
+  ],
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "shared": [
+    {
+      "createdAt": "2025-12-15T15:15:19.163Z",
+      "updatedAt": "2025-12-15T15:15:19.163Z",
+      "role": "workflow:owner",
+      "workflowId": "jWTkyLmarCkSPQEz",
+      "projectId": "HVrFlp8BcxZcmzQZ"
+    }
+  ],
+  "staticData": null,
+  "tags": [
+    {
+      "createdAt": "2026-02-27T20:29:07.942Z",
+      "updatedAt": "2026-02-27T20:29:12.634Z",
+      "id": "jysrWEYC6RXk1KPd",
+      "name": "chery"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-02-27T20:29:19.000Z",
+  "versionId": "3d671cd9-d7b9-4c0f-8682-8297286a14ef"
+}
