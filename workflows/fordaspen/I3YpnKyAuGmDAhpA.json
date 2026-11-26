@@ -1,0 +1,4903 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "7977aac7-88f8-4cff-a6b1-0e22e8ac6fc2",
+    "workflowId": "I3YpnKyAuGmDAhpA",
+    "nodes": [
+      {
+        "parameters": {
+          "workflowInputs": {
+            "values": [
+              {
+                "name": "date"
+              },
+              {
+                "name": "hour",
+                "type": "number"
+              },
+              {
+                "name": "patente"
+              },
+              {
+                "name": "customerK",
+                "type": "number"
+              },
+              {
+                "name": "months",
+                "type": "number"
+              },
+              {
+                "name": "id_conversation"
+              },
+              {
+                "name": "action"
+              },
+              {
+                "name": "sucursal",
+                "type": "any"
+              }
+            ]
+          }
+        },
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "typeVersion": 1.1,
+        "position": [
+          -928,
+          2704
+        ],
+        "id": "f306c37d-8179-470f-861d-48604f5ffc57",
+        "name": "When Executed by Another Workflow"
+      },
+      {
+        "parameters": {
+          "url": "=https://api.service.ford.com/agenda/gateway/agenda-scheduling/api/internal/xpress/schedule-date?countryCode=ARG&divisionK=1&dealerC={{$json.sucursal}}&user=b-kistn4&delivery=false&startDate={{$now.format('dd-MM-yyyy')}}",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpBearerAuth",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "countrycode",
+                "value": "ARG"
+              },
+              {
+                "name": "dealercode",
+                "value": "={{$json.sucursal}}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          368,
+          1168
+        ],
+        "id": "9acd9026-cfb3-4b94-b9a7-0899553d1224",
+        "name": "HTTP Request"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Primero verificamos la estructura del input\nconst inputData = $input.first().json;\n\n// El JSON puede venir directamente como objeto o como array\nlet responseData;\nif (Array.isArray(inputData)) {\n  responseData = inputData[0];\n} else {\n  responseData = inputData;\n}\n\nconst slotMap = responseData.slotMap;\nconst advisorList = responseData.advisorResponseList;\n\n// Crear un mapa de advisorId -> advisorName para búsqueda rápida\n// Eliminamos duplicados (mismo asesor puede aparecer con diferentes advisorType)\nconst advisorMap = {};\nadvisorList.forEach(advisor => {\n  if (!advisorMap[advisor.advisorId]) {\n    advisorMap[advisor.advisorId] = advisor.advisorName;\n  }\n});\n\nconst availableSlots = [];\n\n// El slotMap contiene objetos cuyas claves son las horas (ej: \"08:00\")\nfor (const hourKey in slotMap) {\n    // Aseguramos que la clave exista y no sea la clave de inicio/fin de día (\" \")\n    if (slotMap.hasOwnProperty(hourKey) && hourKey !== \" \") {\n        const dailySlots = slotMap[hourKey];\n        \n        // Iterar sobre los estados diarios (scheduleY) para esa hora\n        for (const slot of dailySlots) {\n            const libre = slot.livre;\n            const passante = slot.passante;\n            const ocupado = slot.ocupado || 0; // 🚨 NUEVO: Campo ocupado\n            const naoTrabalha = slot.naoTrabalha;\n            const fullDateTime = slot.scheduleY;\n            \n            // 🚨 REGLA DE ORO: Un turno está DISPONIBLE si:\n            // 1. NO hay citas confirmadas (ocupado === 0)\n            // 2. HAY capacidad operativa (passante + livre > 0)\n            // 3. El personal está trabajando (naoTrabalha === 0)\n            \n            const capacidadDisponible = passante + libre;\n            \n            if (ocupado === 0 && capacidadDisponible > 0 && naoTrabalha === 0) {\n                \n                // Formateamos la fecha y hora\n                const [date, time] = fullDateTime.split(' '); \n                \n                // Agregar un slot por cada asesor disponible\n                for (const advisorId in advisorMap) {\n                  availableSlots.push({\n                      json: {\n                          Fecha: date,\n                          Hora: time,\n                          advisorId: parseInt(advisorId),\n                          advisorName: advisorMap[advisorId],\n                          Slots_Libres: libre, \n                          Slots_Pasante: passante,\n                          Slots_Ocupados: ocupado, // 🚨 Incluimos para debug\n                          Capacidad_Total_Disponible: capacidadDisponible\n                      },\n                  });\n                }\n            }\n        }\n    }\n}\n\nreturn availableSlots;"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          528,
+          1168
+        ],
+        "id": "18babf77-d458-4774-9edd-a3943f28334e",
+        "name": "Code"
+      },
+      {
+        "parameters": {
+          "jsCode": "const hoy = new Date();\nhoy.setHours(0, 0, 0, 0); // Resetear horas para comparar solo fechas\n\nconst slotsConDisponibilidadFormal = [];\n\n// Recorrer los items del nodo anterior\nfor (const item of items) {\n    const data = item.json;\n    const slotsLibres = data.Slots_Libres;\n    const slotsPasante = data.Slots_Pasante || 0;\n    const slotsOcupados = data.Slots_Ocupados || 0;\n    const capacidadTotal = data.Capacidad_Total_Disponible || 0;\n    const fecha = data.Fecha;\n    const hora = data.Hora;\n    const advisorId = data.advisorId;\n    const advisorName = data.advisorName;\n    \n    // Crear objeto Date de la fecha del turno\n    const fechaTurno = new Date(fecha);\n    fechaTurno.setHours(0, 0, 0, 0);\n    \n    // 🚨 Filtro con Regla de Oro:\n    // 1. NO hay citas ocupadas (slotsOcupados === 0)\n    // 2. HAY capacidad disponible (capacidadTotal > 0)\n    // 3. La fecha es futura (mayor a hoy)\n    if (slotsOcupados === 0 && capacidadTotal > 0 && fechaTurno > hoy) {\n        slotsConDisponibilidadFormal.push({\n            json: {\n                Fecha: fecha,\n                Hora: hora,\n                advisorId: advisorId,\n                advisorName: advisorName,\n                Slots_Libres: slotsLibres,\n                Slots_Pasante: slotsPasante,\n                Slots_Ocupados: slotsOcupados,\n                Capacidad_Total_Disponible: capacidadTotal\n            }\n        });\n    }\n}\n\n// ORDENAR POR FECHA Y HORA\nslotsConDisponibilidadFormal.sort((a, b) => {\n    const fechaA = new Date(`${a.json.Fecha}T${a.json.Hora}`);\n    const fechaB = new Date(`${b.json.Fecha}T${b.json.Hora}`);\n    return fechaA - fechaB;\n});\n\n// AGRUPAR POR FECHA Y TURNO (Mañana/Tarde)\nconst slotsPorFechaYTurno = {};\n\nslotsConDisponibilidadFormal.forEach(slot => {\n    const fecha = slot.json.Fecha;\n    const hora = slot.json.Hora;\n    \n    // Extraer la hora como número (ej: \"07:40\" -> 7.66, \"14:30\" -> 14.5)\n    const [hh, mm] = hora.split(':').map(Number);\n    const horaDecimal = hh + mm / 60;\n    \n    // Determinar si es Mañana (antes de 13:00) o Tarde (13:00 en adelante)\n    const turno = horaDecimal < 13 ? 'mañana' : 'tarde';\n    \n    // Crear estructura de agrupación\n    if (!slotsPorFechaYTurno[fecha]) {\n        slotsPorFechaYTurno[fecha] = {\n            mañana: [],\n            tarde: []\n        };\n    }\n    \n    slotsPorFechaYTurno[fecha][turno].push(slot);\n});\n\n// SELECCIONAR 1 TURNO DE MAÑANA Y 1 DE TARDE POR DÍA (RANDOM)\nconst slotsSeleccionados = [];\n\nfor (const fecha in slotsPorFechaYTurno) {\n    const turnos = slotsPorFechaYTurno[fecha];\n    \n    // 🌅 MAÑANA: Seleccionar 1 turno random\n    if (turnos.mañana.length > 0) {\n        const shuffledMañana = turnos.mañana.sort(() => Math.random() - 0.5);\n        slotsSeleccionados.push(shuffledMañana[0]);\n    }\n    \n    // 🌆 TARDE: Seleccionar 1 turno random\n    if (turnos.tarde.length > 0) {\n        const shuffledTarde = turnos.tarde.sort(() => Math.random() - 0.5);\n        slotsSeleccionados.push(shuffledTarde[0]);\n    }\n}\n\n// ORDENAR RESULTADO FINAL POR FECHA Y HORA\nslotsSeleccionados.sort((a, b) => {\n    const fechaA = new Date(`${a.json.Fecha}T${a.json.Hora}`);\n    const fechaB = new Date(`${b.json.Fecha}T${b.json.Hora}`);\n    return fechaA - fechaB;\n});\n\nreturn slotsSeleccionados;"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          896,
+          1296
+        ],
+        "id": "a6d74ad1-3278-48bd-85d7-0a7633c52ddf",
+        "name": "SOLO LIBRES"
+      },
+      {
+        "parameters": {
+          "content": "## Obtengo turnos",
+          "height": 480,
+          "width": 1392
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          -32,
+          1120
+        ],
+        "typeVersion": 1,
+        "id": "8cea9059-2604-4e05-96d4-1b6cef3c1b99",
+        "name": "Sticky Note"
+      },
+      {
+        "parameters": {
+          "url": "=https://api.service.ford.com/agenda/gateway/agenda-dealer/api/internal/advisor/advisor-to-shedule?dealerCode={{$json.sucursal}}&countryCode=ARG&divisionCode=1&scheduleHour={{$json.selected_hour}}&scheduleDate={{$json.selected_date}}\n",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpBearerAuth",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "countrycode",
+                "value": "ARG"
+              },
+              {
+                "name": "dealercode",
+                "value": "={{$json.sucursal}}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          208,
+          1776
+        ],
+        "id": "a1bd1d20-5a0a-42f8-b69c-659d8d8b9b18",
+        "name": "HTTP Request2"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Obtener el parámetro de sucursal desde el workflow\nconst sucursalSeleccionada = $(\"When Executed by Another Workflow\").first().json.sucursal;\n\n// Normalizar la sucursal (por si viene en mayúsculas o con tildes)\nconst sucursal = sucursalSeleccionada.toLowerCase().trim();\n\n// Definir los asesores por sucursal\nconst asesoresPorSucursal = {\n  'santa rosa': [\n    'AGUSTIN CABANILLAS',\n    'LEONARDO GALLARANI'\n  ],\n  'bahia blanca': [\n    'HERNANDEZ',           \n    'SERVICIO MOVIL',      \n    'SERVICIO MóVIL'      \n  ]\n};\n\n// Obtener la lista de asesores permitidos para la sucursal seleccionada\nconst asesoresPermitidos = asesoresPorSucursal[sucursal] || [];\n\n// Si no hay asesores definidos para la sucursal, retornar error\nif (asesoresPermitidos.length === 0) {\n  throw new Error(`Sucursal \"${sucursalSeleccionada}\" no válida. Use \"santa rosa\" o \"bahia blanca\"`);\n}\n\n// Obtener todos los items\nconst items = $input.all();\n\n// Filtrar asesores que pertenecen a la sucursal Y tienen schedules > 0\nconst advisorsWithSchedules = items.filter(item => {\n  const advisorName = item.json.advisorName ? item.json.advisorName.toUpperCase().trim() : '';\n  const hasSchedules = item.json.schedules > 0;\n  \n  // Verificar si el asesor pertenece a la sucursal seleccionada\n  const perteneceASucursal = asesoresPermitidos.some(asesor => \n    advisorName.includes(asesor.toUpperCase())\n  );\n  \n  // Debe cumplir AMBAS condiciones: tener schedules Y pertenecer a la sucursal\n  return hasSchedules && perteneceASucursal;\n});\n\n// Verificar si hay asesores disponibles\nif (advisorsWithSchedules.length === 0) {\n  return { \n    json: { \n      error: `No hay asesores con horarios disponibles en ${sucursal === 'santa rosa' ? 'Santa Rosa' : 'Bahía Blanca'}`,\n      sucursal: sucursal\n    } \n  };\n}\n\n// Seleccionar uno aleatorio\nconst randomIndex = Math.floor(Math.random() * advisorsWithSchedules.length);\nconst selectedAdvisor = advisorsWithSchedules[randomIndex].json;\n\nreturn { \n  json: { \n    advisorId: selectedAdvisor.advisorId, \n    advisorName: selectedAdvisor.advisorName,\n    schedules: selectedAdvisor.schedules,\n    sucursal: sucursal === 'santa rosa' ? 'Santa Rosa' : 'Bahía Blanca'\n  } \n};"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          352,
+          1776
+        ],
+        "id": "91440949-ab1c-48eb-bf72-43268457823a",
+        "name": "Code1"
+      },
+      {
+        "parameters": {
+          "content": "## Obtener ID disponible",
+          "height": 240,
+          "width": 800
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          -16,
+          1712
+        ],
+        "typeVersion": 1,
+        "id": "42d9b882-98f0-4900-9c72-4469008e1916",
+        "name": "Sticky Note1"
+      },
+      {
+        "parameters": {
+          "url": "=https://api.service.ford.com/agenda/gateway/agenda-scheduling/api/internal/modelVehicle/ARG/1",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpBearerAuth",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "countrycode",
+                "value": "ARG"
+              },
+              {
+                "name": "dealercode",
+                "value": "={{$json.sucursal}}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          272,
+          928
+        ],
+        "id": "62431047-8087-4406-b412-b292eb731e12",
+        "name": "HTTP Request3"
+      },
+      {
+        "parameters": {
+          "content": "## Obtener modelos",
+          "height": 240,
+          "width": 512
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          0,
+          848
+        ],
+        "typeVersion": 1,
+        "id": "0c065a7b-47dc-4125-98d2-152fee83e129",
+        "name": "Sticky Note2"
+      },
+      {
+        "parameters": {
+          "content": "## Buscar cliente por patente",
+          "height": 240,
+          "width": 944
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          0,
+          592
+        ],
+        "typeVersion": 1,
+        "id": "1624481f-d48a-41b7-baba-113cb10815df",
+        "name": "Sticky Note3"
+      },
+      {
+        "parameters": {
+          "content": "## Buscar cliente por VIN",
+          "height": 240,
+          "width": 512
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          1568,
+          1840
+        ],
+        "typeVersion": 1,
+        "id": "41b43f0e-2eda-4781-ba3a-4c9f3ec45b78",
+        "name": "Sticky Note4"
+      },
+      {
+        "parameters": {
+          "url": "=https://api.service.ford.com/agenda/gateway/transformation/api/internal/vehicle/chassis/3FTTW8F90NRA98406\n",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpBearerAuth",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "countrycode",
+                "value": "ARG"
+              },
+              {
+                "name": "dealercode",
+                "value": "60099"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1616,
+          1920
+        ],
+        "id": "baab8f82-6eed-4648-9f54-b0a1b641718d",
+        "name": "HTTP Request5"
+      },
+      {
+        "parameters": {
+          "url": "=https://api.service.ford.com/agenda/gateway/transformation/api/internal/offeredservices/by-dealer-with-model\n",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpBearerAuth",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "countrycode",
+                "value": "ARG"
+              },
+              {
+                "name": "dealercode",
+                "value": "={{$json.sucursal}}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          192,
+          2672
+        ],
+        "id": "ee709812-f5ee-4dde-89d3-0cc845141687",
+        "name": "HTTP Request6"
+      },
+      {
+        "parameters": {
+          "content": "## Adicionales",
+          "height": 240,
+          "width": 512
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          0,
+          2608
+        ],
+        "typeVersion": 1,
+        "id": "3859613e-f8cd-4f7f-b830-a35eb0cb8f99",
+        "name": "Sticky Note5"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.service.ford.com/agenda/gateway/transformation/api/internal/schedule/v2",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpBearerAuth",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "countrycode",
+                "value": "ARG"
+              },
+              {
+                "name": "dealercode",
+                "value": "60099"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={\n  \"offeredServices\": [{{ $json.additionals_id }}],\n  \"iolmParts\": [],\n  \"recallVOs\": [\n    {\n      \"id\": \"24S59\",\n      \"description\": \"IMAGEN DE LA CÁMARA TRASERA CONGELADA - REPARACIÓN DISPONIBLE\"\n    }\n  ],\n  \"campaignsId\": [],\n  \"country\": \"ARG\",\n  \"advisor\": {{ $json.advisorId }},\n  \"scheduleHour\": 840,\n  \"scheduleDate\": \"2025-12-17\",\n  \"createUser\": \"b-kistn4\",\n  \"dealer\": 60099,\n  \"division\": 1,\n  \"vin\": \"{{ $json.chassi }}\",\n    \"sendEmail\": {{ $('When Executed by Another Workflow').item.json.quiereMail || false}},\n  \"contactCountry\": \"ARG\",\n  \"vehiclePlate\": \"{{ $json.plate }}\",\n  \"returned\": null,\n  \"towTruckNeeded\":null,\n  \"towTruckType\": null,\n  \"towingReason\": null,\n  \"customerRemark\": null,\n  \"advisorRemark\": null,\n  \"contactCustomerId\": {{ $json.customerK }},\n  \"customerId\": {{ $json.customerK }},\n  \"isDriverInformation\": null,\n  \"scheduleSource\": \"D\",\n  \"scheduleType\": \"R\",\n  \"model\": \"\",\n  \"group\": {{ $json.model_id }},\n  \"createS\": \"{{$now}}\",\n  \"lastKm\": null,\n  \"oilLifeRemaining\": null,\n  \"iolmMonths\": null,\n  \"referredBy\": 0\n}\n",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1904,
+          3344
+        ],
+        "id": "13f76c35-96ca-4997-97f1-609a52ab5017",
+        "name": "HTTP Request7"
+      },
+      {
+        "parameters": {
+          "content": "## Crear turno\n",
+          "height": 240,
+          "width": 512
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          608,
+          3072
+        ],
+        "typeVersion": 1,
+        "id": "dc8122e5-6efd-4593-92be-0ed91fa1eb6a",
+        "name": "Sticky Note6"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Obtenemos todos los items del input\nconst items = $input.all();\n\nif (!items.length) {\n  throw new Error('No hay datos de entrada');\n}\n\n// El input puede venir como:\n// 1) item.json = [ { ...cliente... } ]\n// 2) item.json = { ...cliente... }\nlet raw = items[0].json;\n\nlet cliente;\nif (Array.isArray(raw)) {\n  if (!raw.length) throw new Error('El array de entrada está vacío');\n  cliente = raw[0];\n} else {\n  cliente = raw;\n}\n\nif (!cliente || typeof cliente !== 'object') {\n  throw new Error('Formato de entrada inválido');\n}\n\n// Armamos SOLO los campos que necesitamos\nconst resultado = {\n  customerK: cliente.customerK ?? null,\n  model: cliente.model || null,\n  model_id: cliente.groupR || null,\n  plate: cliente.plate || null,\n  chassi: cliente.chassi || null,\n  nationalId: cliente.nationalId || null,\n  firstname: cliente.firstname || null,\n  lastname: cliente.lastname || null,\n  email: cliente.email || null,\n  id_conversation: String($(\"When Executed by Another Workflow\").first().json.id_conversation)\n};\n\n// Devolvemos un único item con el objeto reducido\nreturn [\n  {\n    json: resultado,\n  },\n];\n"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          512,
+          672
+        ],
+        "id": "fae1a5d0-4878-4103-8185-d731002d1d41",
+        "name": "Code2"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Obtenemos todos los items del input\nreturn $input.first().json.response\n"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1776,
+          1920
+        ],
+        "id": "9cbc1a47-5a70-42a3-bc7f-f533514efc19",
+        "name": "Code4"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Obtenemos todos los items del input\nconst items = $input.all();\n\nif (!items.length) {\n  throw new Error('No hay datos de entrada');\n}\n\n// El input puede venir como:\n// [ { httpCode, message, response: [ { ...servicio }, ... ] } ]\nlet root = items[0].json;\n\nif (Array.isArray(root)) {\n  if (!root.length) throw new Error('El array raíz está vacío');\n  root = root[0];\n}\n\nif (!root || typeof root !== 'object') {\n  throw new Error('Formato de entrada inválido');\n}\n\nconst services = Array.isArray(root.response) ? root.response : [];\nif (!services.length) {\n  throw new Error('No se encontraron servicios en root.response');\n}\n\nconst output = [];\n\nfor (const svc of services) {\n  const servicesByModelGroup = Array.isArray(svc.servicesByModelGroup)\n    ? svc.servicesByModelGroup\n    : [];\n\n  // Buscamos la primera promo activa, si existe\n  let promo = null;\n  for (const mg of servicesByModelGroup) {\n    if (mg.promotionalActive) {\n      promo = mg;\n      break;\n    }\n  }\n\n  // Precio a mostrar: si hay promo activa, usar promo; si no, precio normal\n  const price = promo && typeof promo.promotionalPrice === 'number'\n    ? promo.promotionalPrice\n    : svc.servicePrice ?? null;\n\n  const simplified = {\n    serviceId: svc.serviceId,\n    name: svc.serviceName,       // nombre corto (para mostrar / body)\n    description: svc.name ?? null, // nombre largo\n    price,\n    normalPrice: svc.servicePrice ?? null,\n    isPromo: !!(promo && promo.promotionalActive),\n  };\n\n  output.push({ json: simplified });\n}\n\nreturn output;\n"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          384,
+          2672
+        ],
+        "id": "79e067d9-dbc2-4881-8876-2055a4dc72c1",
+        "name": "Code5"
+      },
+      {
+        "parameters": {
+          "url": "=https://api.service.ford.com/agenda/gateway/transformation/api/internal/maintenance/v1/schedule?country=ARG&dealer={{$json.sucursal}}&vin={{$json.chassi}}\n",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpBearerAuth",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "countrycode",
+                "value": "ARG"
+              },
+              {
+                "name": "dealercode",
+                "value": "={{$json.sucursal}}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          304,
+          2096
+        ],
+        "id": "1eadf182-f71b-4872-8adc-68a1fe360682",
+        "name": "HTTP Request9"
+      },
+      {
+        "parameters": {
+          "content": "## Obtener Servicios\n",
+          "height": 240,
+          "width": 816
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          0,
+          2016
+        ],
+        "typeVersion": 1,
+        "id": "f8096720-a05a-4e66-b78e-5860790b4e8b",
+        "name": "Sticky Note7"
+      },
+      {
+        "parameters": {
+          "url": "=https://api.service.ford.com/agenda/gateway/agenda-scheduling/api/internal/contact?countryCode=ARG&divisionCode=1&dealerCode=60099&user=b-kistn4&plate={{$('When Executed by Another Workflow').first().json.patente}}\n",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpBearerAuth",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "countrycode",
+                "value": "ARG"
+              },
+              {
+                "name": "dealercode",
+                "value": "60099"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1840,
+          2912
+        ],
+        "id": "7015f037-dec3-4864-a5b6-d2f314e1951d",
+        "name": "HTTP Request10"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Obtenemos todos los items del input\nconst items = $input.all();\n\nif (!items.length) {\n  throw new Error('No hay datos de entrada');\n}\n\n// El input puede venir como:\n// 1) item.json = [ { ...cliente... } ]\n// 2) item.json = { ...cliente... }\nlet raw = items[0].json;\n\nlet cliente;\nif (Array.isArray(raw)) {\n  if (!raw.length) throw new Error('El array de entrada está vacío');\n  cliente = raw[0];\n} else {\n  cliente = raw;\n}\n\nif (!cliente || typeof cliente !== 'object') {\n  throw new Error('Formato de entrada inválido');\n}\n\n// Armamos SOLO los campos que necesitamos\nconst resultado = {\n  patente: cliente.plate || null,          // alias de plate\n  customerK: cliente.customerK ?? null,\n  model: cliente.model || null,\n  plate: cliente.plate || null,\n  chassi: cliente.chassi || null,\n  nationalId: cliente.nationalId || null,\n  firstname: cliente.firstname || null,\n  lastname: cliente.lastname || null,\n  email: cliente.email || null,\n  token: $(\"When Executed by Another Workflow\").first().json.token\n\n};\n\n// Devolvemos un único item con el objeto reducido\nreturn [\n  {\n    json: resultado,\n  },\n];\n"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2000,
+          2912
+        ],
+        "id": "064ec9f9-ac35-456e-9f38-cd7dc2e52a79",
+        "name": "Code6"
+      },
+      {
+        "parameters": {
+          "url": "=https://api.service.ford.com/agenda/gateway/transformation/api/internal/revision/v3/ARG/1/{{ $json.chassi }}/{{$(\"When Executed by Another Workflow\").first().json.months}}",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpBearerAuth",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "countrycode",
+                "value": "ARG"
+              },
+              {
+                "name": "dealercode",
+                "value": "={{$json.sucursal}}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          288,
+          2352
+        ],
+        "id": "035b462e-d1c2-4b61-bd4b-65fe8ce05d5d",
+        "name": "Service x Mes"
+      },
+      {
+        "parameters": {
+          "content": "## Que incluye el servicio\n",
+          "height": 240,
+          "width": 736
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          0,
+          2288
+        ],
+        "typeVersion": 1,
+        "id": "6aedae5d-0573-47de-ae09-d8b722a8c4b9",
+        "name": "Sticky Note8"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Obtener input\nconst items = $input.all();\n\nif (!items.length) {\n  throw new Error('No hay datos de entrada');\n}\n\n// El input que mostraste es:\n// [ { httpCode, message, response: [ { ...mantenimiento }, ... ] } ]\nlet root = items[0].json;\n\nif (Array.isArray(root)) {\n  if (!root.length) throw new Error('El array raíz está vacío');\n  root = root[0];\n}\n\nif (!root || typeof root !== 'object') {\n  throw new Error('Formato de entrada inválido');\n}\n\nconst list = Array.isArray(root.response) ? root.response : [];\nif (!list.length) {\n  throw new Error('No se encontraron mantenimientos en root.response');\n}\n\n// Normalizamos fecha a \"solo día\"\nfunction toDateOnly(value) {\n  if (!value) return null;\n  const d = new Date(value);\n  if (isNaN(d.getTime())) return null;\n  d.setHours(0, 0, 0, 0);\n  return d;\n}\n\nconst now = new Date();\nnow.setHours(0, 0, 0, 0);\n\nconst output = [];\n\nfor (const item of list) {\n  const start = toDateOnly(item.modelStartDate);\n  const end = toDateOnly(item.modelEndDate);\n\n  if (!start || !end) {\n    continue; // si no tiene fechas válidas, lo salteamos\n  }\n\n  // vigente si: start <= now <= end\n  if (start <= now && now <= end) {\n    output.push({\n      json: {\n        maintenanceCode: item.maintenanceCode,\n        months: item.mounths ?? null, // el campo viene como \"mounths\"\n        price: item.price ?? null,\n      },\n    });\n  }\n}\n\nreturn output;\n"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          448,
+          2096
+        ],
+        "id": "f24fbbb5-3bbb-47ef-91af-4c546e888be5",
+        "name": "Code8"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Obtenemos los items de entrada\nconst items = $input.all();\n\nif (!items.length) {\n  throw new Error('No hay datos de entrada');\n}\n\n// El input viene como:\n// [ { httpCode, message, response: [ { ...servicio }, ... ] } ]\nlet root = items[0].json;\n\nif (Array.isArray(root)) {\n  if (!root.length) {\n    throw new Error('El array raíz está vacío');\n  }\n  root = root[0];\n}\n\nif (!root || typeof root !== 'object') {\n  throw new Error('Formato de entrada inválido');\n}\n\nconst list = Array.isArray(root.response) ? root.response : [];\nif (!list.length) {\n  throw new Error('No se encontraron servicios en root.response');\n}\n\n// Helper para normalizar fechas a \"solo día\"\nfunction toDateOnly(value) {\n  if (!value) return null;\n  const d = new Date(value);\n  if (isNaN(d.getTime())) return null;\n  d.setHours(0, 0, 0, 0);\n  return d;\n}\n\n// Helper para parsear montos (string o number)\nfunction toNumber(value) {\n  if (value === null || value === undefined) return 0;\n  if (typeof value === 'number') return value;\n  const s = String(value).replace(',', '.');\n  const n = Number(s);\n  return isNaN(n) ? 0 : n;\n}\n\n// Fecha actual (Argentina, pero solo día nos alcanza)\nconst now = new Date();\nnow.setHours(0, 0, 0, 0);\n\n// Filtramos servicios vigentes hoy\nconst vigentes = list.filter(item => {\n  const start = toDateOnly(item.modelStartDate);\n  const end = toDateOnly(item.modelEndDate);\n  if (!start || !end) return false;\n  return start <= now && now <= end;\n});\n\nif (!vigentes.length) {\n  throw new Error('No hay servicios vigentes para la fecha actual');\n}\n\n// Tomamos el primero vigente (en tu caso el de diciembre)\nconst svc = vigentes[0];\n\n// Calculamos precio de ítems\nconst parts = Array.isArray(svc.revisionPartVOs) ? svc.revisionPartVOs : [];\n\nlet totalPartsPrice = 0;\nconst includedItems = parts.map(p => {\n  const qty = toNumber(p.quantity);\n  const price = toNumber(p.price);\n  const subtotal = qty * price;\n  totalPartsPrice += subtotal;\n\n  return {\n    description: p.longDescription || p.shortDescription || null,\n    quantity: qty,\n    unitPrice: price,\n    subtotal,\n  };\n});\n\n// Mano de obra\nconst labor = toNumber(svc.costLabor);\n\n// Precio total = mano de obra + repuestos\nconst totalPrice = labor + totalPartsPrice;\n\n// Armamos salida simple\nconst result = {\n  serviceId: svc.serviceId,\n  serviceCode: svc.service,             // ej: SM01\n  serviceDescription: svc.serviceDescription,\n  monthService: svc.monthService,\n\n  totalPrice,\n\n  includes: includedItems,\n};\n\nreturn [\n  {\n    json: result,\n  },\n];\n"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          480,
+          2352
+        ],
+        "id": "83797b51-a287-48e8-9b15-e6135f17f6f7",
+        "name": "Code9"
+      },
+      {
+        "parameters": {
+          "content": "## 1\n",
+          "height": 80,
+          "width": 150,
+          "color": 3
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          1120,
+          672
+        ],
+        "typeVersion": 1,
+        "id": "9caa01e3-daf4-4698-b1f5-5aedb3223058",
+        "name": "Sticky Note9"
+      },
+      {
+        "parameters": {
+          "content": "## 1\n",
+          "height": 80,
+          "width": 150,
+          "color": 3
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          2144,
+          1920
+        ],
+        "typeVersion": 1,
+        "id": "d9925cf4-ef19-4f4c-b1a6-0d9b413032b9",
+        "name": "Sticky Note10"
+      },
+      {
+        "parameters": {
+          "content": "## 2\n",
+          "height": 80,
+          "width": 278,
+          "color": 3
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          896,
+          928
+        ],
+        "typeVersion": 1,
+        "id": "e96ef2d4-9e74-47d2-a1c5-c52cd953fd7e",
+        "name": "Sticky Note11"
+      },
+      {
+        "parameters": {
+          "content": "## 3\n",
+          "height": 80,
+          "width": 150,
+          "color": 3
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          1440,
+          1312
+        ],
+        "typeVersion": 1,
+        "id": "e102e0fa-8cc6-4e59-9cf2-d7ba598deb29",
+        "name": "Sticky Note12"
+      },
+      {
+        "parameters": {
+          "content": "## 4\n",
+          "height": 80,
+          "width": 150,
+          "color": 3
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          912,
+          1792
+        ],
+        "typeVersion": 1,
+        "id": "1811436e-6171-4020-affc-0fd7d697fa4c",
+        "name": "Sticky Note13"
+      },
+      {
+        "parameters": {
+          "content": "## 5\n",
+          "height": 80,
+          "width": 150,
+          "color": 3
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          896,
+          2048
+        ],
+        "typeVersion": 1,
+        "id": "47b6a564-f1b4-4205-b799-5473978d7ece",
+        "name": "Sticky Note14"
+      },
+      {
+        "parameters": {
+          "content": "## 6\n",
+          "height": 80,
+          "width": 150,
+          "color": 3
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          880,
+          2352
+        ],
+        "typeVersion": 1,
+        "id": "0bc69d3e-e578-46df-b755-1496ad4d26a1",
+        "name": "Sticky Note15"
+      },
+      {
+        "parameters": {
+          "content": "## 7\n",
+          "height": 80,
+          "width": 150,
+          "color": 3
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          576,
+          2672
+        ],
+        "typeVersion": 1,
+        "id": "5ff26099-9bde-4a60-85cb-f9bbf4ecb012",
+        "name": "Sticky Note16"
+      },
+      {
+        "parameters": {
+          "content": "## 8\n",
+          "height": 80,
+          "width": 150,
+          "color": 3
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          -240,
+          3008
+        ],
+        "typeVersion": 1,
+        "id": "b84793d8-a79a-4c2d-8eab-dfdda68eca3b",
+        "name": "Sticky Note17"
+      },
+      {
+        "parameters": {
+          "content": "## MEH\n\n",
+          "height": 80,
+          "width": 150,
+          "color": 3
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          2320,
+          1920
+        ],
+        "typeVersion": 1,
+        "id": "55bfb48b-62c8-4d36-b36b-bd69aa732ab2",
+        "name": "Sticky Note18"
+      },
+      {
+        "parameters": {
+          "jsCode": "return $('Code2').all();"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          800,
+          672
+        ],
+        "id": "0c38e409-a9e5-4054-aa57-94e5ced4cd06",
+        "name": "Code10"
+      },
+      {
+        "parameters": {
+          "rules": {
+            "values": [
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 2
+                  },
+                  "conditions": [
+                    {
+                      "leftValue": "={{ $('When Executed by Another Workflow').first().json.action }}",
+                      "rightValue": "get_user",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      },
+                      "id": "943c1f10-3213-436b-82c6-5d0eee107e2e"
+                    }
+                  ],
+                  "combinator": "and"
+                }
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 2
+                  },
+                  "conditions": [
+                    {
+                      "id": "f14a3d71-2861-4fd1-bc37-b143a838fd50",
+                      "leftValue": "={{ $('When Executed by Another Workflow').first().json.action }}",
+                      "rightValue": "get_models",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals",
+                        "name": "filter.operator.equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                }
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 2
+                  },
+                  "conditions": [
+                    {
+                      "id": "a5d17094-f2f9-4d0b-99d8-62ad01e1634c",
+                      "leftValue": "={{ $('When Executed by Another Workflow').first().json.action }}",
+                      "rightValue": "get_turnos",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals",
+                        "name": "filter.operator.equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                }
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 2
+                  },
+                  "conditions": [
+                    {
+                      "id": "f9aed9a6-98e3-42d6-b673-13faa6a60cbd",
+                      "leftValue": "={{ $('When Executed by Another Workflow').first().json.action }}",
+                      "rightValue": "=get_id_asesor",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals",
+                        "name": "filter.operator.equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                }
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 2
+                  },
+                  "conditions": [
+                    {
+                      "id": "3a3c19d5-dd1b-41ee-a8fd-7e0511586332",
+                      "leftValue": "={{ $('When Executed by Another Workflow').first().json.action }}",
+                      "rightValue": "get_servicios",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals",
+                        "name": "filter.operator.equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                }
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 2
+                  },
+                  "conditions": [
+                    {
+                      "id": "60b15c80-ea57-4e0b-ad1a-9b4ad1fb1fcb",
+                      "leftValue": "={{ $('When Executed by Another Workflow').first().json.action }}",
+                      "rightValue": "get_detail_servicios",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals",
+                        "name": "filter.operator.equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                }
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 2
+                  },
+                  "conditions": [
+                    {
+                      "id": "6a4751b8-5991-4406-8b14-013aea8cf323",
+                      "leftValue": "={{ $('When Executed by Another Workflow').first().json.action }}",
+                      "rightValue": "get_adicionales",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals",
+                        "name": "filter.operator.equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                }
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 2
+                  },
+                  "conditions": [
+                    {
+                      "id": "29ef69c8-ec73-45df-92b1-05e709691f6b",
+                      "leftValue": "={{ $('When Executed by Another Workflow').first().json.action }}",
+                      "rightValue": "create_turno",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals",
+                        "name": "filter.operator.equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                }
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 2
+                  },
+                  "conditions": [
+                    {
+                      "id": "b3bb6595-0f1a-4bdd-b558-ec648a0c3594",
+                      "leftValue": "={{ $('When Executed by Another Workflow').first().json.action }}",
+                      "rightValue": "get_user_patente",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals",
+                        "name": "filter.operator.equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                }
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.switch",
+        "typeVersion": 3.2,
+        "position": [
+          -544,
+          2608
+        ],
+        "id": "508ce2f3-3586-455d-a270-d5547437295b",
+        "name": "Switch"
+      },
+      {
+        "parameters": {
+          "operation": "upsert",
+          "table": {
+            "__rl": true,
+            "value": "agenda_ford",
+            "mode": "list",
+            "cachedResultName": "agenda_ford"
+          },
+          "columnToMatchOn": "id_conversation",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          656,
+          672
+        ],
+        "id": "636c613a-4085-494b-9d51-a7978c977706",
+        "name": "Insert or update rows in a table"
+      },
+      {
+        "parameters": {},
+        "type": "n8n-nodes-base.merge",
+        "typeVersion": 3.2,
+        "position": [
+          752,
+          1296
+        ],
+        "id": "83a24248-4a64-407d-88b8-9b76e87441a5",
+        "name": "Merge"
+      },
+      {
+        "parameters": {
+          "url": "=https://api.service.ford.com/agenda/gateway/agenda-scheduling/api/internal/xpress/schedule-date?countryCode=ARG&divisionK=1&dealerC={{$json.sucursal}}&user=b-kistn4&delivery=false&startDate={{ $now.plus({days: (8 - $now.weekday) % 7 || 7}).format('dd-MM-yyyy') }}",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpBearerAuth",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "countrycode",
+                "value": "ARG"
+              },
+              {
+                "name": "dealercode",
+                "value": "={{$json.sucursal}}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          368,
+          1392
+        ],
+        "id": "b3182494-4e04-4a70-816b-88471a0f6206",
+        "name": "HTTP Request1"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Primero verificamos la estructura del input\nconst inputData = $input.first().json;\n\n// El JSON puede venir directamente como objeto o como array\nlet responseData;\nif (Array.isArray(inputData)) {\n  responseData = inputData[0];\n} else {\n  responseData = inputData;\n}\n\nconst slotMap = responseData.slotMap;\nconst advisorList = responseData.advisorResponseList;\n\n// Crear un mapa de advisorId -> advisorName para búsqueda rápida\n// Eliminamos duplicados (mismo asesor puede aparecer con diferentes advisorType)\nconst advisorMap = {};\nadvisorList.forEach(advisor => {\n  if (!advisorMap[advisor.advisorId]) {\n    advisorMap[advisor.advisorId] = advisor.advisorName;\n  }\n});\n\nconst availableSlots = [];\n\n// El slotMap contiene objetos cuyas claves son las horas (ej: \"08:00\")\nfor (const hourKey in slotMap) {\n    // Aseguramos que la clave exista y no sea la clave de inicio/fin de día (\" \")\n    if (slotMap.hasOwnProperty(hourKey) && hourKey !== \" \") {\n        const dailySlots = slotMap[hourKey];\n        \n        // Iterar sobre los estados diarios (scheduleY) para esa hora\n        for (const slot of dailySlots) {\n            const libre = slot.livre;\n            const passante = slot.passante;\n            const ocupado = slot.ocupado || 0; // 🚨 NUEVO: Campo ocupado\n            const naoTrabalha = slot.naoTrabalha;\n            const fullDateTime = slot.scheduleY;\n            \n            // 🚨 REGLA DE ORO: Un turno está DISPONIBLE si:\n            // 1. NO hay citas confirmadas (ocupado === 0)\n            // 2. HAY capacidad operativa (passante + livre > 0)\n            // 3. El personal está trabajando (naoTrabalha === 0)\n            \n            const capacidadDisponible = passante + libre;\n            \n            if (ocupado === 0 && capacidadDisponible > 0 && naoTrabalha === 0) {\n                \n                // Formateamos la fecha y hora\n                const [date, time] = fullDateTime.split(' '); \n                \n                // Agregar un slot por cada asesor disponible\n                for (const advisorId in advisorMap) {\n                  availableSlots.push({\n                      json: {\n                          Fecha: date,\n                          Hora: time,\n                          advisorId: parseInt(advisorId),\n                          advisorName: advisorMap[advisorId],\n                          Slots_Libres: libre, \n                          Slots_Pasante: passante,\n                          Slots_Ocupados: ocupado, // 🚨 Incluimos para debug\n                          Capacidad_Total_Disponible: capacidadDisponible\n                      },\n                  });\n                }\n            }\n        }\n    }\n}\n\nreturn availableSlots;"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          528,
+          1392
+        ],
+        "id": "02f45d76-b83f-4d46-a8d6-6a712a6e6369",
+        "name": "Code11"
+      },
+      {
+        "parameters": {
+          "content": "## PROXIMA SEMANA",
+          "height": 96,
+          "width": 150,
+          "color": 7
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          80,
+          1424
+        ],
+        "typeVersion": 1,
+        "id": "dac1eea3-5dbf-4fa3-ba96-d456017f7971",
+        "name": "Sticky Note19"
+      },
+      {
+        "parameters": {
+          "content": "## ESTA SEMANA",
+          "height": 96,
+          "width": 150,
+          "color": 7
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          80,
+          1152
+        ],
+        "typeVersion": 1,
+        "id": "dd7d2f85-ded5-4242-a46b-1f6d7a0d08b0",
+        "name": "Sticky Note20"
+      },
+      {
+        "parameters": {
+          "operation": "select",
+          "table": {
+            "__rl": true,
+            "value": "agenda_ford",
+            "mode": "list",
+            "cachedResultName": "agenda_ford"
+          },
+          "where": {
+            "values": [
+              {
+                "column": "id_conversation",
+                "value": "={{$(\"When Executed by Another Workflow\").first().json.id_conversation}}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          48,
+          1776
+        ],
+        "id": "583dc477-e476-40ea-93bf-13f7edbf4604",
+        "name": "Select rows from a table"
+      },
+      {
+        "parameters": {
+          "jsCode": "return $('Code1').all();"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          656,
+          1776
+        ],
+        "id": "93060d1a-23d2-4690-8524-b026542dce0f",
+        "name": "Code12"
+      },
+      {
+        "parameters": {
+          "operation": "update",
+          "table": {
+            "__rl": true,
+            "value": "agenda_ford",
+            "mode": "list",
+            "cachedResultName": "agenda_ford"
+          },
+          "dataMode": "defineBelow",
+          "columnToMatchOn": "id_conversation",
+          "valueToMatchOn": "={{ String($(\"When Executed by Another Workflow\").first().json.id_conversation) }}",
+          "valuesToSend": {
+            "values": [
+              {
+                "column": "advisorId",
+                "value": "={{ $json.advisorId }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          512,
+          1776
+        ],
+        "id": "0a5f0b13-3985-46e2-8543-3f77c53739d3",
+        "name": "Update rows in a table"
+      },
+      {
+        "parameters": {
+          "operation": "select",
+          "table": {
+            "__rl": true,
+            "value": "agenda_ford",
+            "mode": "list",
+            "cachedResultName": "agenda_ford"
+          },
+          "where": {
+            "values": [
+              {
+                "column": "id_conversation",
+                "value": "={{ String($(\"When Executed by Another Workflow\").first().json.id_conversation) }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          160,
+          2096
+        ],
+        "id": "7f50dab1-22be-43ee-ba73-53e392db2dc8",
+        "name": "Select rows from a table1"
+      },
+      {
+        "parameters": {
+          "operation": "select",
+          "table": {
+            "__rl": true,
+            "value": "agenda_ford",
+            "mode": "list",
+            "cachedResultName": "agenda_ford"
+          },
+          "where": {
+            "values": [
+              {
+                "column": "id_conversation",
+                "value": "={{ String($(\"When Executed by Another Workflow\").first().json.id_conversation) }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          144,
+          2352
+        ],
+        "id": "926f34e7-32df-4503-9cd4-adce9993b9d4",
+        "name": "Select rows from a table2"
+      },
+      {
+        "parameters": {
+          "operation": "select",
+          "table": {
+            "__rl": true,
+            "value": "agenda_ford",
+            "mode": "list",
+            "cachedResultName": "agenda_ford"
+          },
+          "where": {
+            "values": [
+              {
+                "column": "id_conversation",
+                "value": "={{$(\"When Executed by Another Workflow\").first().json.id_conversation}}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          1648,
+          3344
+        ],
+        "id": "44b194ff-50a9-42f1-b943-1e0a0d9da5c5",
+        "name": "Select rows from a table3"
+      },
+      {
+        "parameters": {
+          "url": "=https://api.service.ford.com/agenda/gateway/transformation/api/internal/revision/v3/ARG/1/{{ $json.chassi }}/{{$(\"When Executed by Another Workflow\").first().json.months}}",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpBearerAuth",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "countrycode",
+                "value": "ARG"
+              },
+              {
+                "name": "dealercode",
+                "value": "={{$json.code}}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          80,
+          2992
+        ],
+        "id": "09d168e4-2730-4e00-8efa-0a0a018ef864",
+        "name": "Service x Mes1"
+      },
+      {
+        "parameters": {
+          "content": "## FORMATEAR SERVICIOS\n",
+          "height": 240,
+          "width": 544
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          -16,
+          2912
+        ],
+        "typeVersion": 1,
+        "id": "c99af578-a2b4-42d1-b12b-de1dfdb9cc3b",
+        "name": "Sticky Note21"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Obtenemos los items de entrada\nconst items = $input.all();\nif (!items.length) {\n  throw new Error('No hay datos de entrada');\n}\n\n// El input viene como:\n// [ { httpCode, message, response: [ { ...servicio }, ... ] } ]\nlet root = items[0].json;\nif (Array.isArray(root)) {\n  if (!root.length) {\n    throw new Error('El array raíz está vacío');\n  }\n  root = root[0];\n}\n\nif (!root || typeof root !== 'object') {\n  throw new Error('Formato de entrada inválido');\n}\n\nconst list = Array.isArray(root.response) ? root.response : [];\nif (!list.length) {\n  throw new Error('No se encontraron servicios en root.response');\n}\n\n// Helper para normalizar fechas a \"solo día\"\nfunction toDateOnly(value) {\n  if (!value) return null;\n  const d = new Date(value);\n  if (isNaN(d.getTime())) return null;\n  d.setHours(0, 0, 0, 0);\n  return d;\n}\n\n// Helper para parsear montos (string o number)\nfunction toNumber(value) {\n  if (value === null || value === undefined) return 0;\n  if (typeof value === 'number') return value;\n  const s = String(value).replace(',', '.');\n  const n = Number(s);\n  return isNaN(n) ? 0 : n;\n}\n\n// Fecha actual (Argentina, pero solo día nos alcanza)\nconst now = new Date();\nnow.setHours(0, 0, 0, 0);\n\n// Filtramos servicios vigentes hoy\nconst vigentes = list.filter(item => {\n  const start = toDateOnly(item.modelStartDate);\n  const end = toDateOnly(item.modelEndDate);\n  if (!start || !end) return false;\n  return start <= now && now <= end;\n});\n\nif (!vigentes.length) {\n  throw new Error('No hay servicios vigentes para la fecha actual');\n}\n\n// Tomamos el primero vigente (en tu caso el de diciembre)\nconst svc = vigentes[0];\n\n// Transformamos las partes al formato quotationPartVOs\nconst parts = Array.isArray(svc.revisionPartVOs) ? svc.revisionPartVOs : [];\nconst quotationPartVOs = parts.map(p => ({\n  part: p.part,\n  longPartDescription: p.longDescription || '',\n  shortPartDescription: p.shortDescription || '',\n  isPart: p.isPart,\n  quantity: p.quantity,\n  price: p.price\n}));\n\n// Calculamos el precio total (mano de obra + repuestos)\nconst labor = toNumber(svc.costLabor);\nlet totalPartsPrice = 0;\nparts.forEach(p => {\n  const qty = toNumber(p.quantity);\n  const price = toNumber(p.price);\n  totalPartsPrice += qty * price;\n});\nconst totalPrice = labor + totalPartsPrice;\n\n// Armamos el objeto en el formato exacto que espera Ford\nconst quotationVO = {\n  campaigns: [],\n  serviceId: svc.serviceId,\n  service: svc.serviceDescription,\n  isInitialQuotation: \"Y\",\n  isApproved: \"Y\",\n  dmsCode: svc.dmsCode || \"\",\n  price: totalPrice,\n  promotionalPrice: null,\n  discount: totalPrice,  // Si el servicio es gratis, el descuento = precio\n  quotationPartVOs: quotationPartVOs,\n  reviewService: svc.service,  // SM01, SM04, etc\n  reviewTMA: svc.tma           // MVR\n};\n\n// Retornamos en el formato que necesitas\nreturn [\n  {\n    json: {\n      campaigns: [],\n  serviceId: svc.serviceId,\n  service: svc.serviceDescription,\n  isInitialQuotation: \"Y\",\n  isApproved: \"Y\",\n  dmsCode: svc.dmsCode || \"\",\n  price: totalPrice,\n  promotionalPrice: null,\n  discount: totalPrice,  // Si el servicio es gratis, el descuento = precio\n  quotationPartVOs: quotationPartVOs,\n  reviewService: svc.service,  // SM01, SM04, etc\n  reviewTMA: svc.tma \n      // serviceId: svc.serviceId,\n      // serviceCode: svc.service,\n      // serviceDescription: svc.serviceDescription\n    }\n  }\n];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          272,
+          2992
+        ],
+        "id": "170aa037-4305-4950-ad40-86b93c5c4a3b",
+        "name": "Code13"
+      },
+      {
+        "parameters": {
+          "operation": "select",
+          "table": {
+            "__rl": true,
+            "value": "agenda_ford",
+            "mode": "list",
+            "cachedResultName": "agenda_ford"
+          },
+          "where": {
+            "values": [
+              {
+                "column": "id_conversation",
+                "value": "={{ String($(\"When Executed by Another Workflow\").first().json.id_conversation) }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          -240,
+          3120
+        ],
+        "id": "e08a52c6-49cc-4a22-9271-d8e6d7a90f97",
+        "name": "Select rows from a table4"
+      },
+      {
+        "parameters": {
+          "url": "=https://api.service.ford.com/agenda/gateway/transformation/api/internal/offeredservices/by-dealer-with-model\n",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpBearerAuth",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "countrycode",
+                "value": "ARG"
+              },
+              {
+                "name": "dealercode",
+                "value": "={{$json.code}}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          80,
+          3280
+        ],
+        "id": "a43e0488-0a9a-46e5-bbf7-780d709472d1",
+        "name": "HTTP Request8"
+      },
+      {
+        "parameters": {
+          "content": "## FORMATEAR ADICIONALES\n",
+          "height": 240,
+          "width": 512
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          0,
+          3200
+        ],
+        "typeVersion": 1,
+        "id": "0a3b60d0-ee74-42c1-b702-9b1cff8b32c6",
+        "name": "Sticky Note22"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Obtener el array de IDs desde la base de datos\nconst dbData = $('Select rows from a table4').first().json;\nconst selectedIds = dbData.additionals_id || []; // Ej: [152, 162]\n\nif (!Array.isArray(selectedIds) || selectedIds.length === 0) {\n  return [];\n}\n\n// Obtener todos los adicionales del input actual\nconst inputData = $input.first().json;\nlet allServices = [];\n\n// Manejar diferentes estructuras de respuesta\nif (Array.isArray(inputData)) {\n  allServices = inputData;\n} else if (inputData.response && Array.isArray(inputData.response)) {\n  allServices = inputData.response;\n} else if (inputData.httpCode === 200 && inputData.response) {\n  allServices = inputData.response;\n}\n\n// Filtrar solo los servicios que están en selectedIds\nconst filteredServices = allServices.filter(svc => \n  selectedIds.includes(svc.serviceId)\n);\n\nif (filteredServices.length === 0) {\n  throw new Error(`No se encontraron servicios para los IDs: ${selectedIds.join(', ')}`);\n}\n\n// Transformar al formato quotationVO y retornar cada uno como item separado\nreturn filteredServices.map(svc => {\n  const isCostless = svc.costless === true || svc.servicePrice === 0;\n  const price = svc.servicePrice || svc.fordPrice || 0;\n  \n  // Objeto base\n  const quotation = {\n    campaigns: [],\n    serviceId: svc.serviceId,\n    service: svc.serviceName || svc.name || '',\n    isInitialQuotation: \"Y\",\n    isApproved: \"Y\",\n    dmsCode: svc.dmsCode || \"\",\n    discount: isCostless ? 0 : price,\n    costless: isCostless\n  };\n  \n  // Solo agregar price y promotionalPrice si NO es costless\n  if (!isCostless) {\n    quotation.price = price;\n    quotation.promotionalPrice = null;\n  }\n  \n  return { json: quotation };\n});"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          272,
+          3280
+        ],
+        "id": "e1dc1dc1-d05f-4c6a-955f-54da95fce07e",
+        "name": "Code7"
+      },
+      {
+        "parameters": {},
+        "type": "n8n-nodes-base.merge",
+        "typeVersion": 3.2,
+        "position": [
+          512,
+          3136
+        ],
+        "id": "7ddcc820-5455-4e04-9c01-9a658ca7798a",
+        "name": "Merge1"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Obtener datos\nconst dbData = $('Select rows from a table4').first().json;\nconst mergedServices = $input.all(); // Todos los items del merge\n\n// Extraer todos los quotationVOs\nconst allQuotationVOs = mergedServices.map(item => item.json);\n\n// Extraer todos los serviceIds\nconst allServiceIds = allQuotationVOs.map(q => q.serviceId);\n\n// Armar el body completo\nconst body = {\n  offeredServices: allServiceIds,\n  iolmParts: [],\n  recallVOs: [],\n  campaignsId: [],\n  country: \"ARG\",\n  advisor: parseInt(dbData.advisorId),\n  scheduleHour: parseInt(dbData.selected_hour),\n  scheduleDate: dbData.selected_date,\n  createUser: \"b-kistn4\",\n  dealer: parseInt(dbData.sucursal),\n  division: 1,\n  vin: dbData.chassi,\n  sendEmail: false,\n  contactCountry: \"ARG\",\n  vehiclePlate: dbData.plate,\n  returned: \"N\",\n  towTruckNeeded: \"N\",\n  towTruckType: null,\n  towingReason: null,\n  customerRemark: null,\n  advisorRemark: null,\n  contactCustomerId: dbData.customerK,\n  customerId: dbData.customerK,\n  isDriverInformation: null,\n  scheduleSource: \"D\",\n  scheduleType: \"R\",\n  model: \"\",\n  group: parseInt(dbData.model_id),  // ✅ parseInt\n  createS: new Date().toISOString().replace('Z', ''),  // ✅ Sin 'Z'\n  quotationScheduleVO: {\n    quotationVOs: allQuotationVOs\n  },\n  lastKm: null,\n  oilLifeRemaining: null,\n  iolmMonths: null,\n  referredBy: 0\n};\n\nreturn [{ json: body }];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          640,
+          3136
+        ],
+        "id": "8b8e0028-8f3f-4962-b0c8-bfbe8e740d12",
+        "name": "Code3"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.service.ford.com/agenda/gateway/transformation/api/internal/schedule/v2",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpBearerAuth",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "countrycode",
+                "value": "ARG"
+              },
+              {
+                "name": "dealercode",
+                "value": "={{$('Select rows from a table4').first().json.sucursal}}"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ $json }}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          816,
+          3136
+        ],
+        "id": "35203511-6dab-49f4-9d30-9fde80fa1983",
+        "name": "HTTP Request11"
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT * \nFROM mydatabase.token_agenda_ford \nORDER BY id DESC \nLIMIT 1;",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          -752,
+          2704
+        ],
+        "id": "73afe63c-660f-47c3-b162-21e9df2f2595",
+        "name": "getToken"
+      },
+      {
+        "parameters": {
+          "url": "=https://api.service.ford.com/agenda/gateway/agenda-scheduling/api/internal/contact?countryCode=ARG&divisionCode=1&dealerCode={{$json.sucursal}}&user=b-kistn4&plate={{$('When Executed by Another Workflow').first().json.patente.toUpperCase()}}\n",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpBearerAuth",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "countrycode",
+                "value": "ARG"
+              },
+              {
+                "name": "dealercode",
+                "value": "={{$json.sucursal}}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          368,
+          672
+        ],
+        "id": "cb1a1198-5dda-4f80-a732-ae0684aa1d3a",
+        "name": "HTTP Request4"
+      },
+      {
+        "parameters": {
+          "content": "## Buscar cliente por dni",
+          "height": 240,
+          "width": 944
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          0,
+          288
+        ],
+        "typeVersion": 1,
+        "id": "c8289e06-585a-4cac-874d-1f4054d0eb30",
+        "name": "Sticky Note23"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Obtenemos todos los items del input\nconst items = $input.all();\n\nif (!items.length) {\n  throw new Error('No hay datos de entrada');\n}\n\n// El input puede venir como:\n// 1) item.json = [ { ...cliente... } ]\n// 2) item.json = { ...cliente... }\nlet raw = items[0].json;\n\nlet cliente;\nif (Array.isArray(raw)) {\n  if (!raw.length) throw new Error('El array de entrada está vacío');\n  cliente = raw[0];\n} else {\n  cliente = raw;\n}\n\nif (!cliente || typeof cliente !== 'object') {\n  throw new Error('Formato de entrada inválido');\n}\n\n// Armamos SOLO los campos que necesitamos\nconst resultado = {\n  customerK: cliente.customerK ?? null,\n  model: cliente.model || null,\n  model_id: cliente.groupR || null,\n  plate: cliente.plate || null,\n  chassi: cliente.chassi || null,\n  nationalId: cliente.nationalId || null,\n  firstname: cliente.firstname || null,\n  lastname: cliente.lastname || null,\n  email: cliente.email || null,\n  id_conversation: String($(\"When Executed by Another Workflow\").first().json.id_conversation)\n};\n\n// Devolvemos un único item con el objeto reducido\nreturn [\n  {\n    json: resultado,\n  },\n];\n"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          240,
+          352
+        ],
+        "id": "a6ffea71-6093-4400-8135-679d70f01797",
+        "name": "Code14"
+      },
+      {
+        "parameters": {
+          "content": "## 1\n",
+          "height": 80,
+          "width": 150,
+          "color": 3
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          768,
+          304
+        ],
+        "typeVersion": 1,
+        "id": "2be477b6-fc87-4e61-8e60-00c072115471",
+        "name": "Sticky Note24"
+      },
+      {
+        "parameters": {
+          "jsCode": "return $('Code14').all();"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          528,
+          352
+        ],
+        "id": "96ab4651-41c9-494c-a975-3c621bec367f",
+        "name": "Code15"
+      },
+      {
+        "parameters": {
+          "operation": "upsert",
+          "table": {
+            "__rl": true,
+            "value": "agenda_ford",
+            "mode": "list",
+            "cachedResultName": "agenda_ford"
+          },
+          "columnToMatchOn": "id_conversation",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          384,
+          352
+        ],
+        "id": "a3859b2b-14a4-44e8-8dac-5e7d3a164086",
+        "name": "Insert or update rows in a table1"
+      },
+      {
+        "parameters": {
+          "url": "=https://api.service.ford.com/agenda/gateway/agenda-scheduling/api/internal/contact?countryCode=ARG&divisionCode=1&dealerCode=60099&user=b-kistn4&plate={{$('When Executed by Another Workflow').first().json.patente.toUpperCase()}}\n",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpBearerAuth",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "countrycode",
+                "value": "ARG"
+              },
+              {
+                "name": "dealercode",
+                "value": "60099"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          96,
+          352
+        ],
+        "id": "f8003d3e-2b60-4e34-ba49-e71f69a1ab14",
+        "name": "HTTP Request12"
+      },
+      {
+        "parameters": {
+          "content": "## Buscar cliente por vin",
+          "height": 240,
+          "width": 944
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          0,
+          0
+        ],
+        "typeVersion": 1,
+        "id": "04265b08-9af8-4149-aa05-049e6f281a3e",
+        "name": "Sticky Note25"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Obtenemos todos los items del input\nconst items = $input.all();\n\nif (!items.length) {\n  throw new Error('No hay datos de entrada');\n}\n\n// El input puede venir como:\n// 1) item.json = [ { ...cliente... } ]\n// 2) item.json = { ...cliente... }\nlet raw = items[0].json;\n\nlet cliente;\nif (Array.isArray(raw)) {\n  if (!raw.length) throw new Error('El array de entrada está vacío');\n  cliente = raw[0];\n} else {\n  cliente = raw;\n}\n\nif (!cliente || typeof cliente !== 'object') {\n  throw new Error('Formato de entrada inválido');\n}\n\n// Armamos SOLO los campos que necesitamos\nconst resultado = {\n  customerK: cliente.customerK ?? null,\n  model: cliente.model || null,\n  model_id: cliente.groupR || null,\n  plate: cliente.plate || null,\n  chassi: cliente.chassi || null,\n  nationalId: cliente.nationalId || null,\n  firstname: cliente.firstname || null,\n  lastname: cliente.lastname || null,\n  email: cliente.email || null,\n  id_conversation: String($(\"When Executed by Another Workflow\").first().json.id_conversation)\n};\n\n// Devolvemos un único item con el objeto reducido\nreturn [\n  {\n    json: resultado,\n  },\n];\n"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          240,
+          64
+        ],
+        "id": "d4d5c73e-2e56-4089-ab73-08e5db3b74e5",
+        "name": "Code16"
+      },
+      {
+        "parameters": {
+          "content": "## 1\n",
+          "height": 80,
+          "width": 150,
+          "color": 3
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          768,
+          16
+        ],
+        "typeVersion": 1,
+        "id": "10d31a8a-88bf-4138-9c35-78dd32f2d9df",
+        "name": "Sticky Note26"
+      },
+      {
+        "parameters": {
+          "jsCode": "return $('Code16').all();"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          528,
+          64
+        ],
+        "id": "9d120a0c-d820-44de-8f15-d0374e548748",
+        "name": "Code17"
+      },
+      {
+        "parameters": {
+          "operation": "upsert",
+          "table": {
+            "__rl": true,
+            "value": "agenda_ford",
+            "mode": "list",
+            "cachedResultName": "agenda_ford"
+          },
+          "columnToMatchOn": "id_conversation",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          384,
+          64
+        ],
+        "id": "3e2ef30e-da7f-4f16-8766-da6d6cdff89b",
+        "name": "Insert or update rows in a table2"
+      },
+      {
+        "parameters": {
+          "url": "=https://api.service.ford.com/agenda/gateway/agenda-scheduling/api/internal/contact?countryCode=ARG&divisionCode=1&dealerCode=60099&user=b-kistn4&chassis={{$('When Executed by Another Workflow').first().json.chassis.toUpperCase()}}\n",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpBearerAuth",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "countrycode",
+                "value": "ARG"
+              },
+              {
+                "name": "dealercode",
+                "value": "60099"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          96,
+          64
+        ],
+        "id": "0c928a32-3ed5-4bb3-b61d-02b3043ba40a",
+        "name": "HTTP Request13"
+      },
+      {
+        "parameters": {
+          "content": "## Buscar cliente por patente",
+          "height": 240,
+          "width": 528
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          -160,
+          3600
+        ],
+        "typeVersion": 1,
+        "id": "c7a40db0-4240-4559-86aa-8cccb2989679",
+        "name": "Sticky Note27"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Obtenemos todos los items del input\nconst items = $input.all();\n\nif (!items.length) {\n  throw new Error('No hay datos de entrada');\n}\n\n// El input puede venir como:\n// 1) item.json = [ { ...cliente... } ]\n// 2) item.json = { ...cliente... }\nlet raw = items[0].json;\n\nlet cliente;\nif (Array.isArray(raw)) {\n  if (!raw.length) throw new Error('El array de entrada está vacío');\n  cliente = raw[0];\n} else {\n  cliente = raw;\n}\n\nif (!cliente || typeof cliente !== 'object') {\n  throw new Error('Formato de entrada inválido');\n}\n\n// Armamos SOLO los campos que necesitamos\nconst resultado = {\n  customerK: cliente.customerK ?? null,\n  model: cliente.model || null,\n  model_id: cliente.groupR || null,\n  plate: cliente.plate || null,\n  chassi: cliente.chassi || null,\n  nationalId: cliente.nationalId || null,\n  firstname: cliente.firstname || null,\n  lastname: cliente.lastname || null,\n  email: cliente.email || null\n};\n\n// Devolvemos un único item con el objeto reducido\nreturn [\n  {\n    json: resultado,\n  },\n];\n"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          160,
+          3664
+        ],
+        "id": "69e1e24c-43c0-4856-8ce3-42c8cdaa0455",
+        "name": "Code18"
+      },
+      {
+        "parameters": {
+          "content": "## 1\n",
+          "height": 80,
+          "width": 150,
+          "color": 3
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          432,
+          3680
+        ],
+        "typeVersion": 1,
+        "id": "a80639cb-f4b6-4cc6-b178-3223d0a9cd32",
+        "name": "Sticky Note28"
+      },
+      {
+        "parameters": {
+          "url": "=https://api.service.ford.com/agenda/gateway/agenda-scheduling/api/internal/contact?countryCode=ARG&divisionCode=1&dealerCode={{$json.sucursal}}&user=b-kistn4&plate={{$('When Executed by Another Workflow').first().json.patente.toUpperCase()}}\n",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpBearerAuth",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "countrycode",
+                "value": "ARG"
+              },
+              {
+                "name": "dealercode",
+                "value": "={{$json.sucursal}}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          16,
+          3664
+        ],
+        "id": "82937b68-c29e-4b37-aeea-2eca94a60069",
+        "name": "HTTP Request14"
+      },
+      {
+        "parameters": {
+          "operation": "select",
+          "table": {
+            "__rl": true,
+            "value": "agenda_ford",
+            "mode": "list",
+            "cachedResultName": "agenda_ford"
+          },
+          "where": {
+            "values": [
+              {
+                "column": "id_conversation",
+                "value": "={{$(\"When Executed by Another Workflow\").first().json.id_conversation}}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          128,
+          1280
+        ],
+        "id": "39577077-50be-4fa6-afad-cd5a810e1834",
+        "name": "Select rows from a table5"
+      },
+      {
+        "parameters": {
+          "operation": "select",
+          "table": {
+            "__rl": true,
+            "value": "agenda_ford",
+            "mode": "list",
+            "cachedResultName": "agenda_ford"
+          },
+          "where": {
+            "values": [
+              {
+                "column": "id_conversation",
+                "value": "={{$(\"When Executed by Another Workflow\").first().json.id_conversation}}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          96,
+          928
+        ],
+        "id": "b9105941-a205-4c4a-86df-e4abd7167248",
+        "name": "Select rows from a table6"
+      },
+      {
+        "parameters": {
+          "operation": "select",
+          "table": {
+            "__rl": true,
+            "value": "agenda_ford",
+            "mode": "list",
+            "cachedResultName": "agenda_ford"
+          },
+          "where": {
+            "values": [
+              {
+                "column": "id_conversation",
+                "value": "={{$(\"When Executed by Another Workflow\").first().json.id_conversation}}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          128,
+          672
+        ],
+        "id": "70311545-3d8e-409d-b72e-85b909dcd41f",
+        "name": "Select rows from a table7"
+      },
+      {
+        "parameters": {
+          "operation": "select",
+          "table": {
+            "__rl": true,
+            "value": "agenda_ford",
+            "mode": "list",
+            "cachedResultName": "agenda_ford"
+          },
+          "where": {
+            "values": [
+              {
+                "column": "id_conversation",
+                "value": "={{ String($(\"When Executed by Another Workflow\").first().json.id_conversation) }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          32,
+          2672
+        ],
+        "id": "d8ef9c3c-6bb3-42ed-aa89-8e2509a53e9a",
+        "name": "Select rows from a table8"
+      },
+      {
+        "parameters": {
+          "operation": "select",
+          "table": {
+            "__rl": true,
+            "value": "agenda_ford",
+            "mode": "list",
+            "cachedResultName": "agenda_ford"
+          },
+          "where": {
+            "values": [
+              {
+                "column": "id_conversation",
+                "value": "={{ String($(\"When Executed by Another Workflow\").first().json.id_conversation) }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          -112,
+          3664
+        ],
+        "id": "caaf1646-316c-48eb-941b-31b533b50a0c",
+        "name": "Select rows from a table9"
+      }
+    ],
+    "connections": {
+      "When Executed by Another Workflow": {
+        "main": [
+          [
+            {
+              "node": "getToken",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "HTTP Request": {
+        "main": [
+          [
+            {
+              "node": "Code",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code": {
+        "main": [
+          [
+            {
+              "node": "Merge",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "HTTP Request2": {
+        "main": [
+          [
+            {
+              "node": "Code1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code1": {
+        "main": [
+          [
+            {
+              "node": "Update rows in a table",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "HTTP Request5": {
+        "main": [
+          [
+            {
+              "node": "Code4",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "HTTP Request6": {
+        "main": [
+          [
+            {
+              "node": "Code5",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "HTTP Request10": {
+        "main": [
+          [
+            {
+              "node": "Code6",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "HTTP Request9": {
+        "main": [
+          [
+            {
+              "node": "Code8",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Service x Mes": {
+        "main": [
+          [
+            {
+              "node": "Code9",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code2": {
+        "main": [
+          [
+            {
+              "node": "Insert or update rows in a table",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Switch": {
+        "main": [
+          [
+            {
+              "node": "Select rows from a table7",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Select rows from a table6",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Select rows from a table5",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Select rows from a table",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Select rows from a table1",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Select rows from a table2",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Select rows from a table8",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Select rows from a table4",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Select rows from a table9",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Insert or update rows in a table": {
+        "main": [
+          [
+            {
+              "node": "Code10",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Merge": {
+        "main": [
+          [
+            {
+              "node": "SOLO LIBRES",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "HTTP Request1": {
+        "main": [
+          [
+            {
+              "node": "Code11",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code11": {
+        "main": [
+          [
+            {
+              "node": "Merge",
+              "type": "main",
+              "index": 1
+            }
+          ]
+        ]
+      },
+      "Select rows from a table": {
+        "main": [
+          [
+            {
+              "node": "HTTP Request2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Update rows in a table": {
+        "main": [
+          [
+            {
+              "node": "Code12",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Select rows from a table1": {
+        "main": [
+          [
+            {
+              "node": "HTTP Request9",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Select rows from a table2": {
+        "main": [
+          [
+            {
+              "node": "Service x Mes",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Select rows from a table3": {
+        "main": [
+          [
+            {
+              "node": "HTTP Request7",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Service x Mes1": {
+        "main": [
+          [
+            {
+              "node": "Code13",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Select rows from a table4": {
+        "main": [
+          [
+            {
+              "node": "Service x Mes1",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "HTTP Request8",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "HTTP Request8": {
+        "main": [
+          [
+            {
+              "node": "Code7",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code13": {
+        "main": [
+          [
+            {
+              "node": "Merge1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code7": {
+        "main": [
+          [
+            {
+              "node": "Merge1",
+              "type": "main",
+              "index": 1
+            }
+          ]
+        ]
+      },
+      "Merge1": {
+        "main": [
+          [
+            {
+              "node": "Code3",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code3": {
+        "main": [
+          [
+            {
+              "node": "HTTP Request11",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "getToken": {
+        "main": [
+          [
+            {
+              "node": "Switch",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "HTTP Request4": {
+        "main": [
+          [
+            {
+              "node": "Code2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code14": {
+        "main": [
+          [
+            {
+              "node": "Insert or update rows in a table1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Insert or update rows in a table1": {
+        "main": [
+          [
+            {
+              "node": "Code15",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "HTTP Request12": {
+        "main": [
+          [
+            {
+              "node": "Code14",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code16": {
+        "main": [
+          [
+            {
+              "node": "Insert or update rows in a table2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Insert or update rows in a table2": {
+        "main": [
+          [
+            {
+              "node": "Code17",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "HTTP Request13": {
+        "main": [
+          [
+            {
+              "node": "Code16",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "HTTP Request14": {
+        "main": [
+          [
+            {
+              "node": "Code18",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Select rows from a table5": {
+        "main": [
+          [
+            {
+              "node": "HTTP Request1",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "HTTP Request",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Select rows from a table6": {
+        "main": [
+          [
+            {
+              "node": "HTTP Request3",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Select rows from a table7": {
+        "main": [
+          [
+            {
+              "node": "HTTP Request4",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Select rows from a table8": {
+        "main": [
+          [
+            {
+              "node": "HTTP Request6",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Select rows from a table9": {
+        "main": [
+          [
+            {
+              "node": "HTTP Request14",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "system migration",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-11-02T14:01:28.584Z",
+    "updatedAt": "2026-11-02T14:01:28.584Z"
+  },
+  "activeVersionId": "7977aac7-88f8-4cff-a6b1-0e22e8ac6fc2",
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "getToken",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request2": {
+      "main": [
+        [
+          {
+            "node": "Code1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code1": {
+      "main": [
+        [
+          {
+            "node": "Update rows in a table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request5": {
+      "main": [
+        [
+          {
+            "node": "Code4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request6": {
+      "main": [
+        [
+          {
+            "node": "Code5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request10": {
+      "main": [
+        [
+          {
+            "node": "Code6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request9": {
+      "main": [
+        [
+          {
+            "node": "Code8",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Service x Mes": {
+      "main": [
+        [
+          {
+            "node": "Code9",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code2": {
+      "main": [
+        [
+          {
+            "node": "Insert or update rows in a table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Select rows from a table7",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Select rows from a table6",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Select rows from a table5",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Select rows from a table",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Select rows from a table1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Select rows from a table2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Select rows from a table8",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Select rows from a table4",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Select rows from a table9",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert or update rows in a table": {
+      "main": [
+        [
+          {
+            "node": "Code10",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "SOLO LIBRES",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "Code11",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code11": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Select rows from a table": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update rows in a table": {
+      "main": [
+        [
+          {
+            "node": "Code12",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select rows from a table1": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request9",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select rows from a table2": {
+      "main": [
+        [
+          {
+            "node": "Service x Mes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select rows from a table3": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Service x Mes1": {
+      "main": [
+        [
+          {
+            "node": "Code13",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select rows from a table4": {
+      "main": [
+        [
+          {
+            "node": "Service x Mes1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HTTP Request8",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request8": {
+      "main": [
+        [
+          {
+            "node": "Code7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code13": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code7": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge1": {
+      "main": [
+        [
+          {
+            "node": "Code3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code3": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request11",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "getToken": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request4": {
+      "main": [
+        [
+          {
+            "node": "Code2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code14": {
+      "main": [
+        [
+          {
+            "node": "Insert or update rows in a table1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert or update rows in a table1": {
+      "main": [
+        [
+          {
+            "node": "Code15",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request12": {
+      "main": [
+        [
+          {
+            "node": "Code14",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code16": {
+      "main": [
+        [
+          {
+            "node": "Insert or update rows in a table2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert or update rows in a table2": {
+      "main": [
+        [
+          {
+            "node": "Code17",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request13": {
+      "main": [
+        [
+          {
+            "node": "Code16",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request14": {
+      "main": [
+        [
+          {
+            "node": "Code18",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select rows from a table5": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select rows from a table6": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select rows from a table7": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select rows from a table8": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select rows from a table9": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request14",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-02-10T15:07:30.333Z",
+  "id": "I3YpnKyAuGmDAhpA",
+  "isArchived": true,
+  "meta": null,
+  "name": "AGENDA FORD/ASPEN TOOLS",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "date"
+            },
+            {
+              "name": "hour",
+              "type": "number"
+            },
+            {
+              "name": "patente"
+            },
+            {
+              "name": "customerK",
+              "type": "number"
+            },
+            {
+              "name": "months",
+              "type": "number"
+            },
+            {
+              "name": "id_conversation"
+            },
+            {
+              "name": "action"
+            },
+            {
+              "name": "sucursal",
+              "type": "any"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -928,
+        2704
+      ],
+      "id": "f306c37d-8179-470f-861d-48604f5ffc57",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.service.ford.com/agenda/gateway/agenda-scheduling/api/internal/xpress/schedule-date?countryCode=ARG&divisionK=1&dealerC={{$json.sucursal}}&user=b-kistn4&delivery=false&startDate={{$now.format('dd-MM-yyyy')}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "countrycode",
+              "value": "ARG"
+            },
+            {
+              "name": "dealercode",
+              "value": "={{$json.sucursal}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        368,
+        1168
+      ],
+      "id": "9acd9026-cfb3-4b94-b9a7-0899553d1224",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Primero verificamos la estructura del input\nconst inputData = $input.first().json;\n\n// El JSON puede venir directamente como objeto o como array\nlet responseData;\nif (Array.isArray(inputData)) {\n  responseData = inputData[0];\n} else {\n  responseData = inputData;\n}\n\nconst slotMap = responseData.slotMap;\nconst advisorList = responseData.advisorResponseList;\n\n// Crear un mapa de advisorId -> advisorName para búsqueda rápida\n// Eliminamos duplicados (mismo asesor puede aparecer con diferentes advisorType)\nconst advisorMap = {};\nadvisorList.forEach(advisor => {\n  if (!advisorMap[advisor.advisorId]) {\n    advisorMap[advisor.advisorId] = advisor.advisorName;\n  }\n});\n\nconst availableSlots = [];\n\n// El slotMap contiene objetos cuyas claves son las horas (ej: \"08:00\")\nfor (const hourKey in slotMap) {\n    // Aseguramos que la clave exista y no sea la clave de inicio/fin de día (\" \")\n    if (slotMap.hasOwnProperty(hourKey) && hourKey !== \" \") {\n        const dailySlots = slotMap[hourKey];\n        \n        // Iterar sobre los estados diarios (scheduleY) para esa hora\n        for (const slot of dailySlots) {\n            const libre = slot.livre;\n            const passante = slot.passante;\n            const ocupado = slot.ocupado || 0; // 🚨 NUEVO: Campo ocupado\n            const naoTrabalha = slot.naoTrabalha;\n            const fullDateTime = slot.scheduleY;\n            \n            // 🚨 REGLA DE ORO: Un turno está DISPONIBLE si:\n            // 1. NO hay citas confirmadas (ocupado === 0)\n            // 2. HAY capacidad operativa (passante + livre > 0)\n            // 3. El personal está trabajando (naoTrabalha === 0)\n            \n            const capacidadDisponible = passante + libre;\n            \n            if (ocupado === 0 && capacidadDisponible > 0 && naoTrabalha === 0) {\n                \n                // Formateamos la fecha y hora\n                const [date, time] = fullDateTime.split(' '); \n                \n                // Agregar un slot por cada asesor disponible\n                for (const advisorId in advisorMap) {\n                  availableSlots.push({\n                      json: {\n                          Fecha: date,\n                          Hora: time,\n                          advisorId: parseInt(advisorId),\n                          advisorName: advisorMap[advisorId],\n                          Slots_Libres: libre, \n                          Slots_Pasante: passante,\n                          Slots_Ocupados: ocupado, // 🚨 Incluimos para debug\n                          Capacidad_Total_Disponible: capacidadDisponible\n                      },\n                  });\n                }\n            }\n        }\n    }\n}\n\nreturn availableSlots;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        528,
+        1168
+      ],
+      "id": "18babf77-d458-4774-9edd-a3943f28334e",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "jsCode": "const hoy = new Date();\nhoy.setHours(0, 0, 0, 0); // Resetear horas para comparar solo fechas\n\nconst slotsConDisponibilidadFormal = [];\n\n// Recorrer los items del nodo anterior\nfor (const item of items) {\n    const data = item.json;\n    const slotsLibres = data.Slots_Libres;\n    const slotsPasante = data.Slots_Pasante || 0;\n    const slotsOcupados = data.Slots_Ocupados || 0;\n    const capacidadTotal = data.Capacidad_Total_Disponible || 0;\n    const fecha = data.Fecha;\n    const hora = data.Hora;\n    const advisorId = data.advisorId;\n    const advisorName = data.advisorName;\n    \n    // Crear objeto Date de la fecha del turno\n    const fechaTurno = new Date(fecha);\n    fechaTurno.setHours(0, 0, 0, 0);\n    \n    // 🚨 Filtro con Regla de Oro:\n    // 1. NO hay citas ocupadas (slotsOcupados === 0)\n    // 2. HAY capacidad disponible (capacidadTotal > 0)\n    // 3. La fecha es futura (mayor a hoy)\n    if (slotsOcupados === 0 && capacidadTotal > 0 && fechaTurno > hoy) {\n        slotsConDisponibilidadFormal.push({\n            json: {\n                Fecha: fecha,\n                Hora: hora,\n                advisorId: advisorId,\n                advisorName: advisorName,\n                Slots_Libres: slotsLibres,\n                Slots_Pasante: slotsPasante,\n                Slots_Ocupados: slotsOcupados,\n                Capacidad_Total_Disponible: capacidadTotal\n            }\n        });\n    }\n}\n\n// ORDENAR POR FECHA Y HORA\nslotsConDisponibilidadFormal.sort((a, b) => {\n    const fechaA = new Date(`${a.json.Fecha}T${a.json.Hora}`);\n    const fechaB = new Date(`${b.json.Fecha}T${b.json.Hora}`);\n    return fechaA - fechaB;\n});\n\n// AGRUPAR POR FECHA Y TURNO (Mañana/Tarde)\nconst slotsPorFechaYTurno = {};\n\nslotsConDisponibilidadFormal.forEach(slot => {\n    const fecha = slot.json.Fecha;\n    const hora = slot.json.Hora;\n    \n    // Extraer la hora como número (ej: \"07:40\" -> 7.66, \"14:30\" -> 14.5)\n    const [hh, mm] = hora.split(':').map(Number);\n    const horaDecimal = hh + mm / 60;\n    \n    // Determinar si es Mañana (antes de 13:00) o Tarde (13:00 en adelante)\n    const turno = horaDecimal < 13 ? 'mañana' : 'tarde';\n    \n    // Crear estructura de agrupación\n    if (!slotsPorFechaYTurno[fecha]) {\n        slotsPorFechaYTurno[fecha] = {\n            mañana: [],\n            tarde: []\n        };\n    }\n    \n    slotsPorFechaYTurno[fecha][turno].push(slot);\n});\n\n// SELECCIONAR 1 TURNO DE MAÑANA Y 1 DE TARDE POR DÍA (RANDOM)\nconst slotsSeleccionados = [];\n\nfor (const fecha in slotsPorFechaYTurno) {\n    const turnos = slotsPorFechaYTurno[fecha];\n    \n    // 🌅 MAÑANA: Seleccionar 1 turno random\n    if (turnos.mañana.length > 0) {\n        const shuffledMañana = turnos.mañana.sort(() => Math.random() - 0.5);\n        slotsSeleccionados.push(shuffledMañana[0]);\n    }\n    \n    // 🌆 TARDE: Seleccionar 1 turno random\n    if (turnos.tarde.length > 0) {\n        const shuffledTarde = turnos.tarde.sort(() => Math.random() - 0.5);\n        slotsSeleccionados.push(shuffledTarde[0]);\n    }\n}\n\n// ORDENAR RESULTADO FINAL POR FECHA Y HORA\nslotsSeleccionados.sort((a, b) => {\n    const fechaA = new Date(`${a.json.Fecha}T${a.json.Hora}`);\n    const fechaB = new Date(`${b.json.Fecha}T${b.json.Hora}`);\n    return fechaA - fechaB;\n});\n\nreturn slotsSeleccionados;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        1296
+      ],
+      "id": "a6d74ad1-3278-48bd-85d7-0a7633c52ddf",
+      "name": "SOLO LIBRES"
+    },
+    {
+      "parameters": {
+        "content": "## Obtengo turnos",
+        "height": 480,
+        "width": 1392
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -32,
+        1120
+      ],
+      "typeVersion": 1,
+      "id": "8cea9059-2604-4e05-96d4-1b6cef3c1b99",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.service.ford.com/agenda/gateway/agenda-dealer/api/internal/advisor/advisor-to-shedule?dealerCode={{$json.sucursal}}&countryCode=ARG&divisionCode=1&scheduleHour={{$json.selected_hour}}&scheduleDate={{$json.selected_date}}\n",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "countrycode",
+              "value": "ARG"
+            },
+            {
+              "name": "dealercode",
+              "value": "={{$json.sucursal}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        208,
+        1776
+      ],
+      "id": "a1bd1d20-5a0a-42f8-b69c-659d8d8b9b18",
+      "name": "HTTP Request2"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Obtener el parámetro de sucursal desde el workflow\nconst sucursalSeleccionada = $(\"When Executed by Another Workflow\").first().json.sucursal;\n\n// Normalizar la sucursal (por si viene en mayúsculas o con tildes)\nconst sucursal = sucursalSeleccionada.toLowerCase().trim();\n\n// Definir los asesores por sucursal\nconst asesoresPorSucursal = {\n  'santa rosa': [\n    'AGUSTIN CABANILLAS',\n    'LEONARDO GALLARANI'\n  ],\n  'bahia blanca': [\n    'HERNANDEZ',           \n    'SERVICIO MOVIL',      \n    'SERVICIO MóVIL'      \n  ]\n};\n\n// Obtener la lista de asesores permitidos para la sucursal seleccionada\nconst asesoresPermitidos = asesoresPorSucursal[sucursal] || [];\n\n// Si no hay asesores definidos para la sucursal, retornar error\nif (asesoresPermitidos.length === 0) {\n  throw new Error(`Sucursal \"${sucursalSeleccionada}\" no válida. Use \"santa rosa\" o \"bahia blanca\"`);\n}\n\n// Obtener todos los items\nconst items = $input.all();\n\n// Filtrar asesores que pertenecen a la sucursal Y tienen schedules > 0\nconst advisorsWithSchedules = items.filter(item => {\n  const advisorName = item.json.advisorName ? item.json.advisorName.toUpperCase().trim() : '';\n  const hasSchedules = item.json.schedules > 0;\n  \n  // Verificar si el asesor pertenece a la sucursal seleccionada\n  const perteneceASucursal = asesoresPermitidos.some(asesor => \n    advisorName.includes(asesor.toUpperCase())\n  );\n  \n  // Debe cumplir AMBAS condiciones: tener schedules Y pertenecer a la sucursal\n  return hasSchedules && perteneceASucursal;\n});\n\n// Verificar si hay asesores disponibles\nif (advisorsWithSchedules.length === 0) {\n  return { \n    json: { \n      error: `No hay asesores con horarios disponibles en ${sucursal === 'santa rosa' ? 'Santa Rosa' : 'Bahía Blanca'}`,\n      sucursal: sucursal\n    } \n  };\n}\n\n// Seleccionar uno aleatorio\nconst randomIndex = Math.floor(Math.random() * advisorsWithSchedules.length);\nconst selectedAdvisor = advisorsWithSchedules[randomIndex].json;\n\nreturn { \n  json: { \n    advisorId: selectedAdvisor.advisorId, \n    advisorName: selectedAdvisor.advisorName,\n    schedules: selectedAdvisor.schedules,\n    sucursal: sucursal === 'santa rosa' ? 'Santa Rosa' : 'Bahía Blanca'\n  } \n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        352,
+        1776
+      ],
+      "id": "91440949-ab1c-48eb-bf72-43268457823a",
+      "name": "Code1"
+    },
+    {
+      "parameters": {
+        "content": "## Obtener ID disponible",
+        "height": 240,
+        "width": 800
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -16,
+        1712
+      ],
+      "typeVersion": 1,
+      "id": "42d9b882-98f0-4900-9c72-4469008e1916",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.service.ford.com/agenda/gateway/agenda-scheduling/api/internal/modelVehicle/ARG/1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "countrycode",
+              "value": "ARG"
+            },
+            {
+              "name": "dealercode",
+              "value": "={{$json.sucursal}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        272,
+        928
+      ],
+      "id": "62431047-8087-4406-b412-b292eb731e12",
+      "name": "HTTP Request3"
+    },
+    {
+      "parameters": {
+        "content": "## Obtener modelos",
+        "height": 240,
+        "width": 512
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        0,
+        848
+      ],
+      "typeVersion": 1,
+      "id": "0c065a7b-47dc-4125-98d2-152fee83e129",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "## Buscar cliente por patente",
+        "height": 240,
+        "width": 944
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        0,
+        592
+      ],
+      "typeVersion": 1,
+      "id": "1624481f-d48a-41b7-baba-113cb10815df",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "## Buscar cliente por VIN",
+        "height": 240,
+        "width": 512
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1568,
+        1840
+      ],
+      "typeVersion": 1,
+      "id": "41b43f0e-2eda-4781-ba3a-4c9f3ec45b78",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.service.ford.com/agenda/gateway/transformation/api/internal/vehicle/chassis/3FTTW8F90NRA98406\n",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "countrycode",
+              "value": "ARG"
+            },
+            {
+              "name": "dealercode",
+              "value": "60099"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1616,
+        1920
+      ],
+      "id": "baab8f82-6eed-4648-9f54-b0a1b641718d",
+      "name": "HTTP Request5"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.service.ford.com/agenda/gateway/transformation/api/internal/offeredservices/by-dealer-with-model\n",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "countrycode",
+              "value": "ARG"
+            },
+            {
+              "name": "dealercode",
+              "value": "={{$json.sucursal}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        192,
+        2672
+      ],
+      "id": "ee709812-f5ee-4dde-89d3-0cc845141687",
+      "name": "HTTP Request6"
+    },
+    {
+      "parameters": {
+        "content": "## Adicionales",
+        "height": 240,
+        "width": 512
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        0,
+        2608
+      ],
+      "typeVersion": 1,
+      "id": "3859613e-f8cd-4f7f-b830-a35eb0cb8f99",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.service.ford.com/agenda/gateway/transformation/api/internal/schedule/v2",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "countrycode",
+              "value": "ARG"
+            },
+            {
+              "name": "dealercode",
+              "value": "60099"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"offeredServices\": [{{ $json.additionals_id }}],\n  \"iolmParts\": [],\n  \"recallVOs\": [\n    {\n      \"id\": \"24S59\",\n      \"description\": \"IMAGEN DE LA CÁMARA TRASERA CONGELADA - REPARACIÓN DISPONIBLE\"\n    }\n  ],\n  \"campaignsId\": [],\n  \"country\": \"ARG\",\n  \"advisor\": {{ $json.advisorId }},\n  \"scheduleHour\": 840,\n  \"scheduleDate\": \"2025-12-17\",\n  \"createUser\": \"b-kistn4\",\n  \"dealer\": 60099,\n  \"division\": 1,\n  \"vin\": \"{{ $json.chassi }}\",\n    \"sendEmail\": {{ $('When Executed by Another Workflow').item.json.quiereMail || false}},\n  \"contactCountry\": \"ARG\",\n  \"vehiclePlate\": \"{{ $json.plate }}\",\n  \"returned\": null,\n  \"towTruckNeeded\":null,\n  \"towTruckType\": null,\n  \"towingReason\": null,\n  \"customerRemark\": null,\n  \"advisorRemark\": null,\n  \"contactCustomerId\": {{ $json.customerK }},\n  \"customerId\": {{ $json.customerK }},\n  \"isDriverInformation\": null,\n  \"scheduleSource\": \"D\",\n  \"scheduleType\": \"R\",\n  \"model\": \"\",\n  \"group\": {{ $json.model_id }},\n  \"createS\": \"{{$now}}\",\n  \"lastKm\": null,\n  \"oilLifeRemaining\": null,\n  \"iolmMonths\": null,\n  \"referredBy\": 0\n}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1904,
+        3344
+      ],
+      "id": "13f76c35-96ca-4997-97f1-609a52ab5017",
+      "name": "HTTP Request7"
+    },
+    {
+      "parameters": {
+        "content": "## Crear turno\n",
+        "height": 240,
+        "width": 512
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        608,
+        3072
+      ],
+      "typeVersion": 1,
+      "id": "dc8122e5-6efd-4593-92be-0ed91fa1eb6a",
+      "name": "Sticky Note6"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Obtenemos todos los items del input\nconst items = $input.all();\n\nif (!items.length) {\n  throw new Error('No hay datos de entrada');\n}\n\n// El input puede venir como:\n// 1) item.json = [ { ...cliente... } ]\n// 2) item.json = { ...cliente... }\nlet raw = items[0].json;\n\nlet cliente;\nif (Array.isArray(raw)) {\n  if (!raw.length) throw new Error('El array de entrada está vacío');\n  cliente = raw[0];\n} else {\n  cliente = raw;\n}\n\nif (!cliente || typeof cliente !== 'object') {\n  throw new Error('Formato de entrada inválido');\n}\n\n// Armamos SOLO los campos que necesitamos\nconst resultado = {\n  customerK: cliente.customerK ?? null,\n  model: cliente.model || null,\n  model_id: cliente.groupR || null,\n  plate: cliente.plate || null,\n  chassi: cliente.chassi || null,\n  nationalId: cliente.nationalId || null,\n  firstname: cliente.firstname || null,\n  lastname: cliente.lastname || null,\n  email: cliente.email || null,\n  id_conversation: String($(\"When Executed by Another Workflow\").first().json.id_conversation)\n};\n\n// Devolvemos un único item con el objeto reducido\nreturn [\n  {\n    json: resultado,\n  },\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        512,
+        672
+      ],
+      "id": "fae1a5d0-4878-4103-8185-d731002d1d41",
+      "name": "Code2"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Obtenemos todos los items del input\nreturn $input.first().json.response\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1776,
+        1920
+      ],
+      "id": "9cbc1a47-5a70-42a3-bc7f-f533514efc19",
+      "name": "Code4"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Obtenemos todos los items del input\nconst items = $input.all();\n\nif (!items.length) {\n  throw new Error('No hay datos de entrada');\n}\n\n// El input puede venir como:\n// [ { httpCode, message, response: [ { ...servicio }, ... ] } ]\nlet root = items[0].json;\n\nif (Array.isArray(root)) {\n  if (!root.length) throw new Error('El array raíz está vacío');\n  root = root[0];\n}\n\nif (!root || typeof root !== 'object') {\n  throw new Error('Formato de entrada inválido');\n}\n\nconst services = Array.isArray(root.response) ? root.response : [];\nif (!services.length) {\n  throw new Error('No se encontraron servicios en root.response');\n}\n\nconst output = [];\n\nfor (const svc of services) {\n  const servicesByModelGroup = Array.isArray(svc.servicesByModelGroup)\n    ? svc.servicesByModelGroup\n    : [];\n\n  // Buscamos la primera promo activa, si existe\n  let promo = null;\n  for (const mg of servicesByModelGroup) {\n    if (mg.promotionalActive) {\n      promo = mg;\n      break;\n    }\n  }\n\n  // Precio a mostrar: si hay promo activa, usar promo; si no, precio normal\n  const price = promo && typeof promo.promotionalPrice === 'number'\n    ? promo.promotionalPrice\n    : svc.servicePrice ?? null;\n\n  const simplified = {\n    serviceId: svc.serviceId,\n    name: svc.serviceName,       // nombre corto (para mostrar / body)\n    description: svc.name ?? null, // nombre largo\n    price,\n    normalPrice: svc.servicePrice ?? null,\n    isPromo: !!(promo && promo.promotionalActive),\n  };\n\n  output.push({ json: simplified });\n}\n\nreturn output;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        384,
+        2672
+      ],
+      "id": "79e067d9-dbc2-4881-8876-2055a4dc72c1",
+      "name": "Code5"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.service.ford.com/agenda/gateway/transformation/api/internal/maintenance/v1/schedule?country=ARG&dealer={{$json.sucursal}}&vin={{$json.chassi}}\n",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "countrycode",
+              "value": "ARG"
+            },
+            {
+              "name": "dealercode",
+              "value": "={{$json.sucursal}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        304,
+        2096
+      ],
+      "id": "1eadf182-f71b-4872-8adc-68a1fe360682",
+      "name": "HTTP Request9"
+    },
+    {
+      "parameters": {
+        "content": "## Obtener Servicios\n",
+        "height": 240,
+        "width": 816
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        0,
+        2016
+      ],
+      "typeVersion": 1,
+      "id": "f8096720-a05a-4e66-b78e-5860790b4e8b",
+      "name": "Sticky Note7"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.service.ford.com/agenda/gateway/agenda-scheduling/api/internal/contact?countryCode=ARG&divisionCode=1&dealerCode=60099&user=b-kistn4&plate={{$('When Executed by Another Workflow').first().json.patente}}\n",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "countrycode",
+              "value": "ARG"
+            },
+            {
+              "name": "dealercode",
+              "value": "60099"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1840,
+        2912
+      ],
+      "id": "7015f037-dec3-4864-a5b6-d2f314e1951d",
+      "name": "HTTP Request10"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Obtenemos todos los items del input\nconst items = $input.all();\n\nif (!items.length) {\n  throw new Error('No hay datos de entrada');\n}\n\n// El input puede venir como:\n// 1) item.json = [ { ...cliente... } ]\n// 2) item.json = { ...cliente... }\nlet raw = items[0].json;\n\nlet cliente;\nif (Array.isArray(raw)) {\n  if (!raw.length) throw new Error('El array de entrada está vacío');\n  cliente = raw[0];\n} else {\n  cliente = raw;\n}\n\nif (!cliente || typeof cliente !== 'object') {\n  throw new Error('Formato de entrada inválido');\n}\n\n// Armamos SOLO los campos que necesitamos\nconst resultado = {\n  patente: cliente.plate || null,          // alias de plate\n  customerK: cliente.customerK ?? null,\n  model: cliente.model || null,\n  plate: cliente.plate || null,\n  chassi: cliente.chassi || null,\n  nationalId: cliente.nationalId || null,\n  firstname: cliente.firstname || null,\n  lastname: cliente.lastname || null,\n  email: cliente.email || null,\n  token: $(\"When Executed by Another Workflow\").first().json.token\n\n};\n\n// Devolvemos un único item con el objeto reducido\nreturn [\n  {\n    json: resultado,\n  },\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2000,
+        2912
+      ],
+      "id": "064ec9f9-ac35-456e-9f38-cd7dc2e52a79",
+      "name": "Code6"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.service.ford.com/agenda/gateway/transformation/api/internal/revision/v3/ARG/1/{{ $json.chassi }}/{{$(\"When Executed by Another Workflow\").first().json.months}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "countrycode",
+              "value": "ARG"
+            },
+            {
+              "name": "dealercode",
+              "value": "={{$json.sucursal}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        288,
+        2352
+      ],
+      "id": "035b462e-d1c2-4b61-bd4b-65fe8ce05d5d",
+      "name": "Service x Mes"
+    },
+    {
+      "parameters": {
+        "content": "## Que incluye el servicio\n",
+        "height": 240,
+        "width": 736
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        0,
+        2288
+      ],
+      "typeVersion": 1,
+      "id": "6aedae5d-0573-47de-ae09-d8b722a8c4b9",
+      "name": "Sticky Note8"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Obtener input\nconst items = $input.all();\n\nif (!items.length) {\n  throw new Error('No hay datos de entrada');\n}\n\n// El input que mostraste es:\n// [ { httpCode, message, response: [ { ...mantenimiento }, ... ] } ]\nlet root = items[0].json;\n\nif (Array.isArray(root)) {\n  if (!root.length) throw new Error('El array raíz está vacío');\n  root = root[0];\n}\n\nif (!root || typeof root !== 'object') {\n  throw new Error('Formato de entrada inválido');\n}\n\nconst list = Array.isArray(root.response) ? root.response : [];\nif (!list.length) {\n  throw new Error('No se encontraron mantenimientos en root.response');\n}\n\n// Normalizamos fecha a \"solo día\"\nfunction toDateOnly(value) {\n  if (!value) return null;\n  const d = new Date(value);\n  if (isNaN(d.getTime())) return null;\n  d.setHours(0, 0, 0, 0);\n  return d;\n}\n\nconst now = new Date();\nnow.setHours(0, 0, 0, 0);\n\nconst output = [];\n\nfor (const item of list) {\n  const start = toDateOnly(item.modelStartDate);\n  const end = toDateOnly(item.modelEndDate);\n\n  if (!start || !end) {\n    continue; // si no tiene fechas válidas, lo salteamos\n  }\n\n  // vigente si: start <= now <= end\n  if (start <= now && now <= end) {\n    output.push({\n      json: {\n        maintenanceCode: item.maintenanceCode,\n        months: item.mounths ?? null, // el campo viene como \"mounths\"\n        price: item.price ?? null,\n      },\n    });\n  }\n}\n\nreturn output;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        2096
+      ],
+      "id": "f24fbbb5-3bbb-47ef-91af-4c546e888be5",
+      "name": "Code8"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Obtenemos los items de entrada\nconst items = $input.all();\n\nif (!items.length) {\n  throw new Error('No hay datos de entrada');\n}\n\n// El input viene como:\n// [ { httpCode, message, response: [ { ...servicio }, ... ] } ]\nlet root = items[0].json;\n\nif (Array.isArray(root)) {\n  if (!root.length) {\n    throw new Error('El array raíz está vacío');\n  }\n  root = root[0];\n}\n\nif (!root || typeof root !== 'object') {\n  throw new Error('Formato de entrada inválido');\n}\n\nconst list = Array.isArray(root.response) ? root.response : [];\nif (!list.length) {\n  throw new Error('No se encontraron servicios en root.response');\n}\n\n// Helper para normalizar fechas a \"solo día\"\nfunction toDateOnly(value) {\n  if (!value) return null;\n  const d = new Date(value);\n  if (isNaN(d.getTime())) return null;\n  d.setHours(0, 0, 0, 0);\n  return d;\n}\n\n// Helper para parsear montos (string o number)\nfunction toNumber(value) {\n  if (value === null || value === undefined) return 0;\n  if (typeof value === 'number') return value;\n  const s = String(value).replace(',', '.');\n  const n = Number(s);\n  return isNaN(n) ? 0 : n;\n}\n\n// Fecha actual (Argentina, pero solo día nos alcanza)\nconst now = new Date();\nnow.setHours(0, 0, 0, 0);\n\n// Filtramos servicios vigentes hoy\nconst vigentes = list.filter(item => {\n  const start = toDateOnly(item.modelStartDate);\n  const end = toDateOnly(item.modelEndDate);\n  if (!start || !end) return false;\n  return start <= now && now <= end;\n});\n\nif (!vigentes.length) {\n  throw new Error('No hay servicios vigentes para la fecha actual');\n}\n\n// Tomamos el primero vigente (en tu caso el de diciembre)\nconst svc = vigentes[0];\n\n// Calculamos precio de ítems\nconst parts = Array.isArray(svc.revisionPartVOs) ? svc.revisionPartVOs : [];\n\nlet totalPartsPrice = 0;\nconst includedItems = parts.map(p => {\n  const qty = toNumber(p.quantity);\n  const price = toNumber(p.price);\n  const subtotal = qty * price;\n  totalPartsPrice += subtotal;\n\n  return {\n    description: p.longDescription || p.shortDescription || null,\n    quantity: qty,\n    unitPrice: price,\n    subtotal,\n  };\n});\n\n// Mano de obra\nconst labor = toNumber(svc.costLabor);\n\n// Precio total = mano de obra + repuestos\nconst totalPrice = labor + totalPartsPrice;\n\n// Armamos salida simple\nconst result = {\n  serviceId: svc.serviceId,\n  serviceCode: svc.service,             // ej: SM01\n  serviceDescription: svc.serviceDescription,\n  monthService: svc.monthService,\n\n  totalPrice,\n\n  includes: includedItems,\n};\n\nreturn [\n  {\n    json: result,\n  },\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        2352
+      ],
+      "id": "83797b51-a287-48e8-9b15-e6135f17f6f7",
+      "name": "Code9"
+    },
+    {
+      "parameters": {
+        "content": "## 1\n",
+        "height": 80,
+        "width": 150,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1120,
+        672
+      ],
+      "typeVersion": 1,
+      "id": "9caa01e3-daf4-4698-b1f5-5aedb3223058",
+      "name": "Sticky Note9"
+    },
+    {
+      "parameters": {
+        "content": "## 1\n",
+        "height": 80,
+        "width": 150,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        2144,
+        1920
+      ],
+      "typeVersion": 1,
+      "id": "d9925cf4-ef19-4f4c-b1a6-0d9b413032b9",
+      "name": "Sticky Note10"
+    },
+    {
+      "parameters": {
+        "content": "## 2\n",
+        "height": 80,
+        "width": 278,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        896,
+        928
+      ],
+      "typeVersion": 1,
+      "id": "e96ef2d4-9e74-47d2-a1c5-c52cd953fd7e",
+      "name": "Sticky Note11"
+    },
+    {
+      "parameters": {
+        "content": "## 3\n",
+        "height": 80,
+        "width": 150,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1440,
+        1312
+      ],
+      "typeVersion": 1,
+      "id": "e102e0fa-8cc6-4e59-9cf2-d7ba598deb29",
+      "name": "Sticky Note12"
+    },
+    {
+      "parameters": {
+        "content": "## 4\n",
+        "height": 80,
+        "width": 150,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        912,
+        1792
+      ],
+      "typeVersion": 1,
+      "id": "1811436e-6171-4020-affc-0fd7d697fa4c",
+      "name": "Sticky Note13"
+    },
+    {
+      "parameters": {
+        "content": "## 5\n",
+        "height": 80,
+        "width": 150,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        896,
+        2048
+      ],
+      "typeVersion": 1,
+      "id": "47b6a564-f1b4-4205-b799-5473978d7ece",
+      "name": "Sticky Note14"
+    },
+    {
+      "parameters": {
+        "content": "## 6\n",
+        "height": 80,
+        "width": 150,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        880,
+        2352
+      ],
+      "typeVersion": 1,
+      "id": "0bc69d3e-e578-46df-b755-1496ad4d26a1",
+      "name": "Sticky Note15"
+    },
+    {
+      "parameters": {
+        "content": "## 7\n",
+        "height": 80,
+        "width": 150,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        576,
+        2672
+      ],
+      "typeVersion": 1,
+      "id": "5ff26099-9bde-4a60-85cb-f9bbf4ecb012",
+      "name": "Sticky Note16"
+    },
+    {
+      "parameters": {
+        "content": "## 8\n",
+        "height": 80,
+        "width": 150,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -240,
+        3008
+      ],
+      "typeVersion": 1,
+      "id": "b84793d8-a79a-4c2d-8eab-dfdda68eca3b",
+      "name": "Sticky Note17"
+    },
+    {
+      "parameters": {
+        "content": "## MEH\n\n",
+        "height": 80,
+        "width": 150,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        2320,
+        1920
+      ],
+      "typeVersion": 1,
+      "id": "55bfb48b-62c8-4d36-b36b-bd69aa732ab2",
+      "name": "Sticky Note18"
+    },
+    {
+      "parameters": {
+        "jsCode": "return $('Code2').all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        672
+      ],
+      "id": "0c38e409-a9e5-4054-aa57-94e5ced4cd06",
+      "name": "Code10"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('When Executed by Another Workflow').first().json.action }}",
+                    "rightValue": "get_user",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "943c1f10-3213-436b-82c6-5d0eee107e2e"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "f14a3d71-2861-4fd1-bc37-b143a838fd50",
+                    "leftValue": "={{ $('When Executed by Another Workflow').first().json.action }}",
+                    "rightValue": "get_models",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "a5d17094-f2f9-4d0b-99d8-62ad01e1634c",
+                    "leftValue": "={{ $('When Executed by Another Workflow').first().json.action }}",
+                    "rightValue": "get_turnos",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "f9aed9a6-98e3-42d6-b673-13faa6a60cbd",
+                    "leftValue": "={{ $('When Executed by Another Workflow').first().json.action }}",
+                    "rightValue": "=get_id_asesor",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "3a3c19d5-dd1b-41ee-a8fd-7e0511586332",
+                    "leftValue": "={{ $('When Executed by Another Workflow').first().json.action }}",
+                    "rightValue": "get_servicios",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "60b15c80-ea57-4e0b-ad1a-9b4ad1fb1fcb",
+                    "leftValue": "={{ $('When Executed by Another Workflow').first().json.action }}",
+                    "rightValue": "get_detail_servicios",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "6a4751b8-5991-4406-8b14-013aea8cf323",
+                    "leftValue": "={{ $('When Executed by Another Workflow').first().json.action }}",
+                    "rightValue": "get_adicionales",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "29ef69c8-ec73-45df-92b1-05e709691f6b",
+                    "leftValue": "={{ $('When Executed by Another Workflow').first().json.action }}",
+                    "rightValue": "create_turno",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "b3bb6595-0f1a-4bdd-b558-ec648a0c3594",
+                    "leftValue": "={{ $('When Executed by Another Workflow').first().json.action }}",
+                    "rightValue": "get_user_patente",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -544,
+        2608
+      ],
+      "id": "508ce2f3-3586-455d-a270-d5547437295b",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "table": {
+          "__rl": true,
+          "value": "agenda_ford",
+          "mode": "list",
+          "cachedResultName": "agenda_ford"
+        },
+        "columnToMatchOn": "id_conversation",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        656,
+        672
+      ],
+      "id": "636c613a-4085-494b-9d51-a7978c977706",
+      "name": "Insert or update rows in a table"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        752,
+        1296
+      ],
+      "id": "83a24248-4a64-407d-88b8-9b76e87441a5",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.service.ford.com/agenda/gateway/agenda-scheduling/api/internal/xpress/schedule-date?countryCode=ARG&divisionK=1&dealerC={{$json.sucursal}}&user=b-kistn4&delivery=false&startDate={{ $now.plus({days: (8 - $now.weekday) % 7 || 7}).format('dd-MM-yyyy') }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "countrycode",
+              "value": "ARG"
+            },
+            {
+              "name": "dealercode",
+              "value": "={{$json.sucursal}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        368,
+        1392
+      ],
+      "id": "b3182494-4e04-4a70-816b-88471a0f6206",
+      "name": "HTTP Request1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Primero verificamos la estructura del input\nconst inputData = $input.first().json;\n\n// El JSON puede venir directamente como objeto o como array\nlet responseData;\nif (Array.isArray(inputData)) {\n  responseData = inputData[0];\n} else {\n  responseData = inputData;\n}\n\nconst slotMap = responseData.slotMap;\nconst advisorList = responseData.advisorResponseList;\n\n// Crear un mapa de advisorId -> advisorName para búsqueda rápida\n// Eliminamos duplicados (mismo asesor puede aparecer con diferentes advisorType)\nconst advisorMap = {};\nadvisorList.forEach(advisor => {\n  if (!advisorMap[advisor.advisorId]) {\n    advisorMap[advisor.advisorId] = advisor.advisorName;\n  }\n});\n\nconst availableSlots = [];\n\n// El slotMap contiene objetos cuyas claves son las horas (ej: \"08:00\")\nfor (const hourKey in slotMap) {\n    // Aseguramos que la clave exista y no sea la clave de inicio/fin de día (\" \")\n    if (slotMap.hasOwnProperty(hourKey) && hourKey !== \" \") {\n        const dailySlots = slotMap[hourKey];\n        \n        // Iterar sobre los estados diarios (scheduleY) para esa hora\n        for (const slot of dailySlots) {\n            const libre = slot.livre;\n            const passante = slot.passante;\n            const ocupado = slot.ocupado || 0; // 🚨 NUEVO: Campo ocupado\n            const naoTrabalha = slot.naoTrabalha;\n            const fullDateTime = slot.scheduleY;\n            \n            // 🚨 REGLA DE ORO: Un turno está DISPONIBLE si:\n            // 1. NO hay citas confirmadas (ocupado === 0)\n            // 2. HAY capacidad operativa (passante + livre > 0)\n            // 3. El personal está trabajando (naoTrabalha === 0)\n            \n            const capacidadDisponible = passante + libre;\n            \n            if (ocupado === 0 && capacidadDisponible > 0 && naoTrabalha === 0) {\n                \n                // Formateamos la fecha y hora\n                const [date, time] = fullDateTime.split(' '); \n                \n                // Agregar un slot por cada asesor disponible\n                for (const advisorId in advisorMap) {\n                  availableSlots.push({\n                      json: {\n                          Fecha: date,\n                          Hora: time,\n                          advisorId: parseInt(advisorId),\n                          advisorName: advisorMap[advisorId],\n                          Slots_Libres: libre, \n                          Slots_Pasante: passante,\n                          Slots_Ocupados: ocupado, // 🚨 Incluimos para debug\n                          Capacidad_Total_Disponible: capacidadDisponible\n                      },\n                  });\n                }\n            }\n        }\n    }\n}\n\nreturn availableSlots;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        528,
+        1392
+      ],
+      "id": "02f45d76-b83f-4d46-a8d6-6a712a6e6369",
+      "name": "Code11"
+    },
+    {
+      "parameters": {
+        "content": "## PROXIMA SEMANA",
+        "height": 96,
+        "width": 150,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        80,
+        1424
+      ],
+      "typeVersion": 1,
+      "id": "dac1eea3-5dbf-4fa3-ba96-d456017f7971",
+      "name": "Sticky Note19"
+    },
+    {
+      "parameters": {
+        "content": "## ESTA SEMANA",
+        "height": 96,
+        "width": 150,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        80,
+        1152
+      ],
+      "typeVersion": 1,
+      "id": "dd7d2f85-ded5-4242-a46b-1f6d7a0d08b0",
+      "name": "Sticky Note20"
+    },
+    {
+      "parameters": {
+        "operation": "select",
+        "table": {
+          "__rl": true,
+          "value": "agenda_ford",
+          "mode": "list",
+          "cachedResultName": "agenda_ford"
+        },
+        "where": {
+          "values": [
+            {
+              "column": "id_conversation",
+              "value": "={{$(\"When Executed by Another Workflow\").first().json.id_conversation}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        48,
+        1776
+      ],
+      "id": "583dc477-e476-40ea-93bf-13f7edbf4604",
+      "name": "Select rows from a table"
+    },
+    {
+      "parameters": {
+        "jsCode": "return $('Code1').all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        656,
+        1776
+      ],
+      "id": "93060d1a-23d2-4690-8524-b026542dce0f",
+      "name": "Code12"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "table": {
+          "__rl": true,
+          "value": "agenda_ford",
+          "mode": "list",
+          "cachedResultName": "agenda_ford"
+        },
+        "dataMode": "defineBelow",
+        "columnToMatchOn": "id_conversation",
+        "valueToMatchOn": "={{ String($(\"When Executed by Another Workflow\").first().json.id_conversation) }}",
+        "valuesToSend": {
+          "values": [
+            {
+              "column": "advisorId",
+              "value": "={{ $json.advisorId }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        512,
+        1776
+      ],
+      "id": "0a5f0b13-3985-46e2-8543-3f77c53739d3",
+      "name": "Update rows in a table"
+    },
+    {
+      "parameters": {
+        "operation": "select",
+        "table": {
+          "__rl": true,
+          "value": "agenda_ford",
+          "mode": "list",
+          "cachedResultName": "agenda_ford"
+        },
+        "where": {
+          "values": [
+            {
+              "column": "id_conversation",
+              "value": "={{ String($(\"When Executed by Another Workflow\").first().json.id_conversation) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        160,
+        2096
+      ],
+      "id": "7f50dab1-22be-43ee-ba73-53e392db2dc8",
+      "name": "Select rows from a table1"
+    },
+    {
+      "parameters": {
+        "operation": "select",
+        "table": {
+          "__rl": true,
+          "value": "agenda_ford",
+          "mode": "list",
+          "cachedResultName": "agenda_ford"
+        },
+        "where": {
+          "values": [
+            {
+              "column": "id_conversation",
+              "value": "={{ String($(\"When Executed by Another Workflow\").first().json.id_conversation) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        144,
+        2352
+      ],
+      "id": "926f34e7-32df-4503-9cd4-adce9993b9d4",
+      "name": "Select rows from a table2"
+    },
+    {
+      "parameters": {
+        "operation": "select",
+        "table": {
+          "__rl": true,
+          "value": "agenda_ford",
+          "mode": "list",
+          "cachedResultName": "agenda_ford"
+        },
+        "where": {
+          "values": [
+            {
+              "column": "id_conversation",
+              "value": "={{$(\"When Executed by Another Workflow\").first().json.id_conversation}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        1648,
+        3344
+      ],
+      "id": "44b194ff-50a9-42f1-b943-1e0a0d9da5c5",
+      "name": "Select rows from a table3"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.service.ford.com/agenda/gateway/transformation/api/internal/revision/v3/ARG/1/{{ $json.chassi }}/{{$(\"When Executed by Another Workflow\").first().json.months}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "countrycode",
+              "value": "ARG"
+            },
+            {
+              "name": "dealercode",
+              "value": "={{$json.code}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        80,
+        2992
+      ],
+      "id": "09d168e4-2730-4e00-8efa-0a0a018ef864",
+      "name": "Service x Mes1"
+    },
+    {
+      "parameters": {
+        "content": "## FORMATEAR SERVICIOS\n",
+        "height": 240,
+        "width": 544
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -16,
+        2912
+      ],
+      "typeVersion": 1,
+      "id": "c99af578-a2b4-42d1-b12b-de1dfdb9cc3b",
+      "name": "Sticky Note21"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Obtenemos los items de entrada\nconst items = $input.all();\nif (!items.length) {\n  throw new Error('No hay datos de entrada');\n}\n\n// El input viene como:\n// [ { httpCode, message, response: [ { ...servicio }, ... ] } ]\nlet root = items[0].json;\nif (Array.isArray(root)) {\n  if (!root.length) {\n    throw new Error('El array raíz está vacío');\n  }\n  root = root[0];\n}\n\nif (!root || typeof root !== 'object') {\n  throw new Error('Formato de entrada inválido');\n}\n\nconst list = Array.isArray(root.response) ? root.response : [];\nif (!list.length) {\n  throw new Error('No se encontraron servicios en root.response');\n}\n\n// Helper para normalizar fechas a \"solo día\"\nfunction toDateOnly(value) {\n  if (!value) return null;\n  const d = new Date(value);\n  if (isNaN(d.getTime())) return null;\n  d.setHours(0, 0, 0, 0);\n  return d;\n}\n\n// Helper para parsear montos (string o number)\nfunction toNumber(value) {\n  if (value === null || value === undefined) return 0;\n  if (typeof value === 'number') return value;\n  const s = String(value).replace(',', '.');\n  const n = Number(s);\n  return isNaN(n) ? 0 : n;\n}\n\n// Fecha actual (Argentina, pero solo día nos alcanza)\nconst now = new Date();\nnow.setHours(0, 0, 0, 0);\n\n// Filtramos servicios vigentes hoy\nconst vigentes = list.filter(item => {\n  const start = toDateOnly(item.modelStartDate);\n  const end = toDateOnly(item.modelEndDate);\n  if (!start || !end) return false;\n  return start <= now && now <= end;\n});\n\nif (!vigentes.length) {\n  throw new Error('No hay servicios vigentes para la fecha actual');\n}\n\n// Tomamos el primero vigente (en tu caso el de diciembre)\nconst svc = vigentes[0];\n\n// Transformamos las partes al formato quotationPartVOs\nconst parts = Array.isArray(svc.revisionPartVOs) ? svc.revisionPartVOs : [];\nconst quotationPartVOs = parts.map(p => ({\n  part: p.part,\n  longPartDescription: p.longDescription || '',\n  shortPartDescription: p.shortDescription || '',\n  isPart: p.isPart,\n  quantity: p.quantity,\n  price: p.price\n}));\n\n// Calculamos el precio total (mano de obra + repuestos)\nconst labor = toNumber(svc.costLabor);\nlet totalPartsPrice = 0;\nparts.forEach(p => {\n  const qty = toNumber(p.quantity);\n  const price = toNumber(p.price);\n  totalPartsPrice += qty * price;\n});\nconst totalPrice = labor + totalPartsPrice;\n\n// Armamos el objeto en el formato exacto que espera Ford\nconst quotationVO = {\n  campaigns: [],\n  serviceId: svc.serviceId,\n  service: svc.serviceDescription,\n  isInitialQuotation: \"Y\",\n  isApproved: \"Y\",\n  dmsCode: svc.dmsCode || \"\",\n  price: totalPrice,\n  promotionalPrice: null,\n  discount: totalPrice,  // Si el servicio es gratis, el descuento = precio\n  quotationPartVOs: quotationPartVOs,\n  reviewService: svc.service,  // SM01, SM04, etc\n  reviewTMA: svc.tma           // MVR\n};\n\n// Retornamos en el formato que necesitas\nreturn [\n  {\n    json: {\n      campaigns: [],\n  serviceId: svc.serviceId,\n  service: svc.serviceDescription,\n  isInitialQuotation: \"Y\",\n  isApproved: \"Y\",\n  dmsCode: svc.dmsCode || \"\",\n  price: totalPrice,\n  promotionalPrice: null,\n  discount: totalPrice,  // Si el servicio es gratis, el descuento = precio\n  quotationPartVOs: quotationPartVOs,\n  reviewService: svc.service,  // SM01, SM04, etc\n  reviewTMA: svc.tma \n      // serviceId: svc.serviceId,\n      // serviceCode: svc.service,\n      // serviceDescription: svc.serviceDescription\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        272,
+        2992
+      ],
+      "id": "170aa037-4305-4950-ad40-86b93c5c4a3b",
+      "name": "Code13"
+    },
+    {
+      "parameters": {
+        "operation": "select",
+        "table": {
+          "__rl": true,
+          "value": "agenda_ford",
+          "mode": "list",
+          "cachedResultName": "agenda_ford"
+        },
+        "where": {
+          "values": [
+            {
+              "column": "id_conversation",
+              "value": "={{ String($(\"When Executed by Another Workflow\").first().json.id_conversation) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        -240,
+        3120
+      ],
+      "id": "e08a52c6-49cc-4a22-9271-d8e6d7a90f97",
+      "name": "Select rows from a table4"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.service.ford.com/agenda/gateway/transformation/api/internal/offeredservices/by-dealer-with-model\n",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "countrycode",
+              "value": "ARG"
+            },
+            {
+              "name": "dealercode",
+              "value": "={{$json.code}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        80,
+        3280
+      ],
+      "id": "a43e0488-0a9a-46e5-bbf7-780d709472d1",
+      "name": "HTTP Request8"
+    },
+    {
+      "parameters": {
+        "content": "## FORMATEAR ADICIONALES\n",
+        "height": 240,
+        "width": 512
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        0,
+        3200
+      ],
+      "typeVersion": 1,
+      "id": "0a3b60d0-ee74-42c1-b702-9b1cff8b32c6",
+      "name": "Sticky Note22"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Obtener el array de IDs desde la base de datos\nconst dbData = $('Select rows from a table4').first().json;\nconst selectedIds = dbData.additionals_id || []; // Ej: [152, 162]\n\nif (!Array.isArray(selectedIds) || selectedIds.length === 0) {\n  return [];\n}\n\n// Obtener todos los adicionales del input actual\nconst inputData = $input.first().json;\nlet allServices = [];\n\n// Manejar diferentes estructuras de respuesta\nif (Array.isArray(inputData)) {\n  allServices = inputData;\n} else if (inputData.response && Array.isArray(inputData.response)) {\n  allServices = inputData.response;\n} else if (inputData.httpCode === 200 && inputData.response) {\n  allServices = inputData.response;\n}\n\n// Filtrar solo los servicios que están en selectedIds\nconst filteredServices = allServices.filter(svc => \n  selectedIds.includes(svc.serviceId)\n);\n\nif (filteredServices.length === 0) {\n  throw new Error(`No se encontraron servicios para los IDs: ${selectedIds.join(', ')}`);\n}\n\n// Transformar al formato quotationVO y retornar cada uno como item separado\nreturn filteredServices.map(svc => {\n  const isCostless = svc.costless === true || svc.servicePrice === 0;\n  const price = svc.servicePrice || svc.fordPrice || 0;\n  \n  // Objeto base\n  const quotation = {\n    campaigns: [],\n    serviceId: svc.serviceId,\n    service: svc.serviceName || svc.name || '',\n    isInitialQuotation: \"Y\",\n    isApproved: \"Y\",\n    dmsCode: svc.dmsCode || \"\",\n    discount: isCostless ? 0 : price,\n    costless: isCostless\n  };\n  \n  // Solo agregar price y promotionalPrice si NO es costless\n  if (!isCostless) {\n    quotation.price = price;\n    quotation.promotionalPrice = null;\n  }\n  \n  return { json: quotation };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        272,
+        3280
+      ],
+      "id": "e1dc1dc1-d05f-4c6a-955f-54da95fce07e",
+      "name": "Code7"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        512,
+        3136
+      ],
+      "id": "7ddcc820-5455-4e04-9c01-9a658ca7798a",
+      "name": "Merge1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Obtener datos\nconst dbData = $('Select rows from a table4').first().json;\nconst mergedServices = $input.all(); // Todos los items del merge\n\n// Extraer todos los quotationVOs\nconst allQuotationVOs = mergedServices.map(item => item.json);\n\n// Extraer todos los serviceIds\nconst allServiceIds = allQuotationVOs.map(q => q.serviceId);\n\n// Armar el body completo\nconst body = {\n  offeredServices: allServiceIds,\n  iolmParts: [],\n  recallVOs: [],\n  campaignsId: [],\n  country: \"ARG\",\n  advisor: parseInt(dbData.advisorId),\n  scheduleHour: parseInt(dbData.selected_hour),\n  scheduleDate: dbData.selected_date,\n  createUser: \"b-kistn4\",\n  dealer: parseInt(dbData.sucursal),\n  division: 1,\n  vin: dbData.chassi,\n  sendEmail: false,\n  contactCountry: \"ARG\",\n  vehiclePlate: dbData.plate,\n  returned: \"N\",\n  towTruckNeeded: \"N\",\n  towTruckType: null,\n  towingReason: null,\n  customerRemark: null,\n  advisorRemark: null,\n  contactCustomerId: dbData.customerK,\n  customerId: dbData.customerK,\n  isDriverInformation: null,\n  scheduleSource: \"D\",\n  scheduleType: \"R\",\n  model: \"\",\n  group: parseInt(dbData.model_id),  // ✅ parseInt\n  createS: new Date().toISOString().replace('Z', ''),  // ✅ Sin 'Z'\n  quotationScheduleVO: {\n    quotationVOs: allQuotationVOs\n  },\n  lastKm: null,\n  oilLifeRemaining: null,\n  iolmMonths: null,\n  referredBy: 0\n};\n\nreturn [{ json: body }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        640,
+        3136
+      ],
+      "id": "8b8e0028-8f3f-4962-b0c8-bfbe8e740d12",
+      "name": "Code3"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.service.ford.com/agenda/gateway/transformation/api/internal/schedule/v2",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "countrycode",
+              "value": "ARG"
+            },
+            {
+              "name": "dealercode",
+              "value": "={{$('Select rows from a table4').first().json.sucursal}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        816,
+        3136
+      ],
+      "id": "35203511-6dab-49f4-9d30-9fde80fa1983",
+      "name": "HTTP Request11"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * \nFROM mydatabase.token_agenda_ford \nORDER BY id DESC \nLIMIT 1;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        -752,
+        2704
+      ],
+      "id": "73afe63c-660f-47c3-b162-21e9df2f2595",
+      "name": "getToken"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.service.ford.com/agenda/gateway/agenda-scheduling/api/internal/contact?countryCode=ARG&divisionCode=1&dealerCode={{$json.sucursal}}&user=b-kistn4&plate={{$('When Executed by Another Workflow').first().json.patente.toUpperCase()}}\n",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "countrycode",
+              "value": "ARG"
+            },
+            {
+              "name": "dealercode",
+              "value": "={{$json.sucursal}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        368,
+        672
+      ],
+      "id": "cb1a1198-5dda-4f80-a732-ae0684aa1d3a",
+      "name": "HTTP Request4"
+    },
+    {
+      "parameters": {
+        "content": "## Buscar cliente por dni",
+        "height": 240,
+        "width": 944
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        0,
+        288
+      ],
+      "typeVersion": 1,
+      "id": "c8289e06-585a-4cac-874d-1f4054d0eb30",
+      "name": "Sticky Note23"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Obtenemos todos los items del input\nconst items = $input.all();\n\nif (!items.length) {\n  throw new Error('No hay datos de entrada');\n}\n\n// El input puede venir como:\n// 1) item.json = [ { ...cliente... } ]\n// 2) item.json = { ...cliente... }\nlet raw = items[0].json;\n\nlet cliente;\nif (Array.isArray(raw)) {\n  if (!raw.length) throw new Error('El array de entrada está vacío');\n  cliente = raw[0];\n} else {\n  cliente = raw;\n}\n\nif (!cliente || typeof cliente !== 'object') {\n  throw new Error('Formato de entrada inválido');\n}\n\n// Armamos SOLO los campos que necesitamos\nconst resultado = {\n  customerK: cliente.customerK ?? null,\n  model: cliente.model || null,\n  model_id: cliente.groupR || null,\n  plate: cliente.plate || null,\n  chassi: cliente.chassi || null,\n  nationalId: cliente.nationalId || null,\n  firstname: cliente.firstname || null,\n  lastname: cliente.lastname || null,\n  email: cliente.email || null,\n  id_conversation: String($(\"When Executed by Another Workflow\").first().json.id_conversation)\n};\n\n// Devolvemos un único item con el objeto reducido\nreturn [\n  {\n    json: resultado,\n  },\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        352
+      ],
+      "id": "a6ffea71-6093-4400-8135-679d70f01797",
+      "name": "Code14"
+    },
+    {
+      "parameters": {
+        "content": "## 1\n",
+        "height": 80,
+        "width": 150,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        768,
+        304
+      ],
+      "typeVersion": 1,
+      "id": "2be477b6-fc87-4e61-8e60-00c072115471",
+      "name": "Sticky Note24"
+    },
+    {
+      "parameters": {
+        "jsCode": "return $('Code14').all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        528,
+        352
+      ],
+      "id": "96ab4651-41c9-494c-a975-3c621bec367f",
+      "name": "Code15"
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "table": {
+          "__rl": true,
+          "value": "agenda_ford",
+          "mode": "list",
+          "cachedResultName": "agenda_ford"
+        },
+        "columnToMatchOn": "id_conversation",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        384,
+        352
+      ],
+      "id": "a3859b2b-14a4-44e8-8dac-5e7d3a164086",
+      "name": "Insert or update rows in a table1"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.service.ford.com/agenda/gateway/agenda-scheduling/api/internal/contact?countryCode=ARG&divisionCode=1&dealerCode=60099&user=b-kistn4&plate={{$('When Executed by Another Workflow').first().json.patente.toUpperCase()}}\n",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "countrycode",
+              "value": "ARG"
+            },
+            {
+              "name": "dealercode",
+              "value": "60099"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        96,
+        352
+      ],
+      "id": "f8003d3e-2b60-4e34-ba49-e71f69a1ab14",
+      "name": "HTTP Request12"
+    },
+    {
+      "parameters": {
+        "content": "## Buscar cliente por vin",
+        "height": 240,
+        "width": 944
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        0,
+        0
+      ],
+      "typeVersion": 1,
+      "id": "04265b08-9af8-4149-aa05-049e6f281a3e",
+      "name": "Sticky Note25"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Obtenemos todos los items del input\nconst items = $input.all();\n\nif (!items.length) {\n  throw new Error('No hay datos de entrada');\n}\n\n// El input puede venir como:\n// 1) item.json = [ { ...cliente... } ]\n// 2) item.json = { ...cliente... }\nlet raw = items[0].json;\n\nlet cliente;\nif (Array.isArray(raw)) {\n  if (!raw.length) throw new Error('El array de entrada está vacío');\n  cliente = raw[0];\n} else {\n  cliente = raw;\n}\n\nif (!cliente || typeof cliente !== 'object') {\n  throw new Error('Formato de entrada inválido');\n}\n\n// Armamos SOLO los campos que necesitamos\nconst resultado = {\n  customerK: cliente.customerK ?? null,\n  model: cliente.model || null,\n  model_id: cliente.groupR || null,\n  plate: cliente.plate || null,\n  chassi: cliente.chassi || null,\n  nationalId: cliente.nationalId || null,\n  firstname: cliente.firstname || null,\n  lastname: cliente.lastname || null,\n  email: cliente.email || null,\n  id_conversation: String($(\"When Executed by Another Workflow\").first().json.id_conversation)\n};\n\n// Devolvemos un único item con el objeto reducido\nreturn [\n  {\n    json: resultado,\n  },\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        64
+      ],
+      "id": "d4d5c73e-2e56-4089-ab73-08e5db3b74e5",
+      "name": "Code16"
+    },
+    {
+      "parameters": {
+        "content": "## 1\n",
+        "height": 80,
+        "width": 150,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        768,
+        16
+      ],
+      "typeVersion": 1,
+      "id": "10d31a8a-88bf-4138-9c35-78dd32f2d9df",
+      "name": "Sticky Note26"
+    },
+    {
+      "parameters": {
+        "jsCode": "return $('Code16').all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        528,
+        64
+      ],
+      "id": "9d120a0c-d820-44de-8f15-d0374e548748",
+      "name": "Code17"
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "table": {
+          "__rl": true,
+          "value": "agenda_ford",
+          "mode": "list",
+          "cachedResultName": "agenda_ford"
+        },
+        "columnToMatchOn": "id_conversation",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        384,
+        64
+      ],
+      "id": "3e2ef30e-da7f-4f16-8766-da6d6cdff89b",
+      "name": "Insert or update rows in a table2"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.service.ford.com/agenda/gateway/agenda-scheduling/api/internal/contact?countryCode=ARG&divisionCode=1&dealerCode=60099&user=b-kistn4&chassis={{$('When Executed by Another Workflow').first().json.chassis.toUpperCase()}}\n",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "countrycode",
+              "value": "ARG"
+            },
+            {
+              "name": "dealercode",
+              "value": "60099"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        96,
+        64
+      ],
+      "id": "0c928a32-3ed5-4bb3-b61d-02b3043ba40a",
+      "name": "HTTP Request13"
+    },
+    {
+      "parameters": {
+        "content": "## Buscar cliente por patente",
+        "height": 240,
+        "width": 528
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -160,
+        3600
+      ],
+      "typeVersion": 1,
+      "id": "c7a40db0-4240-4559-86aa-8cccb2989679",
+      "name": "Sticky Note27"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Obtenemos todos los items del input\nconst items = $input.all();\n\nif (!items.length) {\n  throw new Error('No hay datos de entrada');\n}\n\n// El input puede venir como:\n// 1) item.json = [ { ...cliente... } ]\n// 2) item.json = { ...cliente... }\nlet raw = items[0].json;\n\nlet cliente;\nif (Array.isArray(raw)) {\n  if (!raw.length) throw new Error('El array de entrada está vacío');\n  cliente = raw[0];\n} else {\n  cliente = raw;\n}\n\nif (!cliente || typeof cliente !== 'object') {\n  throw new Error('Formato de entrada inválido');\n}\n\n// Armamos SOLO los campos que necesitamos\nconst resultado = {\n  customerK: cliente.customerK ?? null,\n  model: cliente.model || null,\n  model_id: cliente.groupR || null,\n  plate: cliente.plate || null,\n  chassi: cliente.chassi || null,\n  nationalId: cliente.nationalId || null,\n  firstname: cliente.firstname || null,\n  lastname: cliente.lastname || null,\n  email: cliente.email || null\n};\n\n// Devolvemos un único item con el objeto reducido\nreturn [\n  {\n    json: resultado,\n  },\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        160,
+        3664
+      ],
+      "id": "69e1e24c-43c0-4856-8ce3-42c8cdaa0455",
+      "name": "Code18"
+    },
+    {
+      "parameters": {
+        "content": "## 1\n",
+        "height": 80,
+        "width": 150,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        432,
+        3680
+      ],
+      "typeVersion": 1,
+      "id": "a80639cb-f4b6-4cc6-b178-3223d0a9cd32",
+      "name": "Sticky Note28"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.service.ford.com/agenda/gateway/agenda-scheduling/api/internal/contact?countryCode=ARG&divisionCode=1&dealerCode={{$json.sucursal}}&user=b-kistn4&plate={{$('When Executed by Another Workflow').first().json.patente.toUpperCase()}}\n",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "countrycode",
+              "value": "ARG"
+            },
+            {
+              "name": "dealercode",
+              "value": "={{$json.sucursal}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        16,
+        3664
+      ],
+      "id": "82937b68-c29e-4b37-aeea-2eca94a60069",
+      "name": "HTTP Request14"
+    },
+    {
+      "parameters": {
+        "operation": "select",
+        "table": {
+          "__rl": true,
+          "value": "agenda_ford",
+          "mode": "list",
+          "cachedResultName": "agenda_ford"
+        },
+        "where": {
+          "values": [
+            {
+              "column": "id_conversation",
+              "value": "={{$(\"When Executed by Another Workflow\").first().json.id_conversation}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        128,
+        1280
+      ],
+      "id": "39577077-50be-4fa6-afad-cd5a810e1834",
+      "name": "Select rows from a table5"
+    },
+    {
+      "parameters": {
+        "operation": "select",
+        "table": {
+          "__rl": true,
+          "value": "agenda_ford",
+          "mode": "list",
+          "cachedResultName": "agenda_ford"
+        },
+        "where": {
+          "values": [
+            {
+              "column": "id_conversation",
+              "value": "={{$(\"When Executed by Another Workflow\").first().json.id_conversation}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        96,
+        928
+      ],
+      "id": "b9105941-a205-4c4a-86df-e4abd7167248",
+      "name": "Select rows from a table6"
+    },
+    {
+      "parameters": {
+        "operation": "select",
+        "table": {
+          "__rl": true,
+          "value": "agenda_ford",
+          "mode": "list",
+          "cachedResultName": "agenda_ford"
+        },
+        "where": {
+          "values": [
+            {
+              "column": "id_conversation",
+              "value": "={{$(\"When Executed by Another Workflow\").first().json.id_conversation}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        128,
+        672
+      ],
+      "id": "70311545-3d8e-409d-b72e-85b909dcd41f",
+      "name": "Select rows from a table7"
+    },
+    {
+      "parameters": {
+        "operation": "select",
+        "table": {
+          "__rl": true,
+          "value": "agenda_ford",
+          "mode": "list",
+          "cachedResultName": "agenda_ford"
+        },
+        "where": {
+          "values": [
+            {
+              "column": "id_conversation",
+              "value": "={{ String($(\"When Executed by Another Workflow\").first().json.id_conversation) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        32,
+        2672
+      ],
+      "id": "d8ef9c3c-6bb3-42ed-aa89-8e2509a53e9a",
+      "name": "Select rows from a table8"
+    },
+    {
+      "parameters": {
+        "operation": "select",
+        "table": {
+          "__rl": true,
+          "value": "agenda_ford",
+          "mode": "list",
+          "cachedResultName": "agenda_ford"
+        },
+        "where": {
+          "values": [
+            {
+              "column": "id_conversation",
+              "value": "={{ String($(\"When Executed by Another Workflow\").first().json.id_conversation) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        -112,
+        3664
+      ],
+      "id": "caaf1646-316c-48eb-941b-31b533b50a0c",
+      "name": "Select rows from a table9"
+    }
+  ],
+  "pinData": {
+    "When Executed by Another Workflow": [
+      {
+        "json": {
+          "date": null,
+          "hour": null,
+          "patente": null,
+          "customerK": null,
+          "months": null,
+          "id_conversation": "f4d58c3d-4fd5-4af2-9864-86a5fa4e666e",
+          "action": "get_turnos",
+          "sucursal": "134"
+        }
+      }
+    ]
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "I3YpnKyAuGmDAhpA",
+      "projectId": "uctBMgzvi5ZzGu3j",
+      "createdAt": "2026-02-10T15:07:30.336Z",
+      "updatedAt": "2026-02-10T15:07:30.336Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [
+    {
+      "id": "FNPzFgOoNPIDLnnp",
+      "name": "AGENDA FORD",
+      "createdAt": "2026-02-10T15:04:20.021Z",
+      "updatedAt": "2026-02-10T15:04:20.021Z"
+    }
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2026-02-10T15:07:58.000Z",
+  "versionId": "7977aac7-88f8-4cff-a6b1-0e22e8ac6fc2"
+}
