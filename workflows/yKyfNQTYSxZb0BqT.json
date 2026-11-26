@@ -1,0 +1,235 @@
+{
+  "active": false,
+  "activeVersion": null,
+  "activeVersionId": null,
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Pilot authentication",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pilot authentication": {
+      "main": [
+        [
+          {
+            "node": "Pilot authorization",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pilot authorization": {
+      "main": [
+        [
+          {
+            "node": "GUIDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GUIDs": {
+      "main": [
+        [
+          {
+            "node": "Leer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer": {
+      "main": [
+        [
+          {
+            "node": "Armar body",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Armar body": {
+      "main": [
+        [
+          {
+            "node": "Mandar al webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-11-24T18:09:43.689Z",
+  "id": "yKyfNQTYSxZb0BqT",
+  "isArchived": true,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "name": "TEMP Ford - reinsertar 2 de la caida 24-11",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "id": "03cecba9-cbfb-4d22-ac08-2bc9f34be1e9",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "5696ecd9-d54b-46ea-b771-b0593438f733",
+      "name": "Pilot authentication",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        224,
+        0
+      ],
+      "parameters": {
+        "url": "https://api.pilotsolution.net/v1/users/authentication.php",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "options": {}
+      },
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "NHXyrkv9ca6Njn8R",
+          "name": "PILOT FORD COLOMBIA"
+        }
+      }
+    },
+    {
+      "id": "08ca8f30-f378-4e08-ad7a-a871a89d23c6",
+      "name": "Pilot authorization",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        448,
+        0
+      ],
+      "parameters": {
+        "url": "https://api.pilotsolution.net/v1/users/authorization.php",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "identity_token",
+              "value": "={{ $json.result.entitydata.accounts[0].token }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "e88b41d9-884d-412f-8098-2bffbea33d82",
+      "name": "GUIDs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        0
+      ],
+      "parameters": {
+        "jsCode": "return ['2364C34C-6E69-4882-AF6A-1F40A0051560','9E6C523D-B2F3-458C-8292-5497BA02DDA8'].map(pid => ({ json: { pid } }));"
+      }
+    },
+    {
+      "id": "b77f6694-e83a-44d3-98fc-42c547ea84e6",
+      "name": "Leer",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        896,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.pilotsolution.net/v1/welcomes/read.php",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ \"data\": { \"id\": $json.pid }, \"header\": { \"FlowName\": \"lead_read\", \"SequenceId\": 1, \"TimeStamp\": 1248377, \"TrackingId\": \"FD1C4A1A-CAFB-467E-825B-7FFB86CC21E3\", \"access_token\": $(\"Pilot authorization\").first().json.result.entitydata.session.identityToken } }) }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 3000
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "db0dc015-6530-43d4-a9fe-3a25b16ed67c",
+      "name": "Armar body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        0
+      ],
+      "parameters": {
+        "jsCode": "return $input.all().map(it => { const e = it.json.result.entitydata; const p = e.prospect || {}; const prod = e.product_of_interest || '';\n  if ((e.status||{}).code !== '100') throw new Error('Lead ' + e.id + ' ya no esta Sin Gestion: ' + (e.status||{}).name);\n  return { json: { action: 'create', pilot_firstname: p.firstname || '', pilot_lastname: p.lastname || '', pilot_second_lastname: p.second_lastname || '', pilot_phone: p.phone || '', pilot_cellphone: p.cellphone || '', pilot_email: p.email || '', pilot_contact_type_id: (e.contact_type||{}).code || '1', pilot_business_type_code: (e.business_type||{}).code || 'ford_vehiculo', pilot_suborigin_id: (e.origin||{}).code || 'ford_digital_colombia', pilot_provider_service: ((e.asigned||{}).user||{}).fullname || '', pilot_notes: 'Notas:Producto de Interes: ' + prod + ' | //Campa\\u00f1a:' + ((e.suborigin||{}).name || 'Website Colombia'), pilot_product_of_interest: prod, pilot_client_identity_document: p.tax_id || '', pilot_tracking_id: e.id } }; });"
+      }
+    },
+    {
+      "id": "303e1a9f-cc40-42d5-a5a3-def3142ad767",
+      "name": "Mandar al webhook",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1344,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://hub.redooconect.com.ar/webhook/1d161d28-f102-47d4-a67b-94d30b431f75",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 15000
+            }
+          }
+        }
+      }
+    }
+  ],
+  "pinData": null,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "yKyfNQTYSxZb0BqT",
+      "projectId": "K8p6XEqA0L6D2uVt",
+      "createdAt": "2026-11-24T18:09:43.693Z",
+      "updatedAt": "2026-11-24T18:09:43.693Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2026-11-24T18:10:14.000Z",
+  "versionId": "fc3707f2-912a-4343-9edf-d8a2fdede267"
+}
