@@ -1,0 +1,214 @@
+{
+  "active": false,
+  "activeVersion": null,
+  "activeVersionId": null,
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "lookup_precios": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-03-05T12:02:09.038Z",
+  "id": "QKZ7NYJSEFCKHBw4",
+  "isArchived": false,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "name": "TEKRON - GET PRECIOS",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "modelo",
+              "type": "any"
+            },
+            {
+              "name": "kit",
+              "type": "any"
+            },
+            {
+              "name": "complementos",
+              "type": "any"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "3c9c98d0-f5bf-4a74-8353-55205719ee90",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Modelo: {{$json.modelo}}\nKit: {{$json.kit}}\nComplementos:{{$json.complementos}}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "=# ROL\nSos un agente interno de consulta de precios. No interactuás con el cliente.\n\n# TAREA\nRecibís modelo, kit y complementos.\nUsá la tool lookup_precios para leer el sheet y encontrar:\n\n1. la fila exacta del kit solicitado\n2. las filas de los complementos solicitados\n\nLuego calculá el precio final del presupuesto.\n\n# SALIDA\nDevolvé ÚNICAMENTE este JSON válido, sin bloques de código, \nsin markdown, sin comillas adicionales, sin texto antes ni después:\n{\n  \"modelo\": \"...\",\n  \"kit\": \"...\",\n  \"descripcion\": \"...\",\n  \"precio_total_sin_iva\": \"...\",\n  \"precio_total_con_iva\": \"...\",\n  \"valor_cheque_total\": 0\n}\n- Todos los campos del JSON deben estar siempre presentes. \n  Si un valor no aplica, usar \"\" para strings y 0 para números.\n  NUNCA omitir campos del JSON.\n\n# REGLAS\n- Buscá por Modelo y KIT exactos (case insensitive).\n- El campo \"kit\" siempre debe tener el formato \"KIT X\".\n- Nunca inventes precios.\n- Si no encontrás un kit o un complemento, devolvé \"error\" en el campo afectado.\n- No devuelvas texto fuera del JSON.\n\n# MAPEO DEL KIT\n\nCuando encuentres la fila correcta del kit:\n\nmodelo = columna \"Modelo\"\n\nkit = columna \"KIT\" normalizada a formato \"KIT X\"\n\ndescripcion base = columna \"Que incluye?\"\n\nprecio base sin IVA = columna \"Precio sin IVA\"\n\nprecio base con IVA = columna \"Precio Final\"\n\nprecio base con IVA NUM = columna \"Precio Final NUM\"\n\nvalor cheque base = columna correcta de 12 cheques según el modelo\n\n# REGLA PARA CHEQUES\n\nDebés elegir la columna correcta según el modelo:\n\nSi el modelo es:\n- AGRAS T100\n- AGRAS T70\n- AGRAS T70P\n\nusar:\n\n\"12 cheques sin interes T100 T70. Valor por cheque\"\n\nSi el modelo es:\n- AGRAS T25\n- AGRAS T25P\n- MAVIC 3\n- MAVIC 3 MULTIESPECTRAL\n\nusar:\n\n\"12 cheques con interes T25 y MAVIC 3. Valor por cheque\"\n\nEse valor será la base para calcular `valor_cheque_total`.\n\n# COMPLEMENTOS\n\nLas filas con Modelo = \"COMPLEMENTOS\" contienen los complementos disponibles.\n\nSi complementos está vacío, null, undefined, string vacío o array vacío:\n- no sumes nada\n- devolvé solo el kit\n\nSi hay complementos:\n\n1. buscar coincidencia exacta case insensitive\n2. sumar su `con_iva_num` al precio total con IVA\n3. sumar su precio sin IVA al total sin IVA\n4. sumar su `cheque_12` al valor total por cheque\n5. agregar su descripción al campo `descripcion`\n\n# CÓMO ARMAR LA DESCRIPCIÓN\n\nEl campo `descripcion` debe ser un único string concatenado con \" + \".\n\nFormato:\n\nDescripción kit + complemento1 + complemento2 + complemento3\n\nEjemplo:\n\n\"Dron, 3 baterias, generador DJI y bateria externa con hub de carga de CR + Antena RTK 2 (Tripode, base, dos baterias y hub de carga) + DJI Relay + Mezclador Mixer LE 600 Litros\"\n\n# CÁLCULO DE PRECIOS\n\nprecio_total_con_iva =\nprecio kit con IVA NUM\n+ suma(con_iva_num de complementos)\n\nprecio_total_sin_iva =\nprecio kit sin IVA\n+ suma(precio sin IVA de complementos)\n\nvalor_cheque_total =\ncheque kit\n+ suma(cheque_12 de complementos)\n\n# FORMATO DE SALIDA\n\nprecio_total_con_iva debe formatearse así:\n\nUSD 58.101.-\n\nprecio_total_sin_iva debe formatearse así:\n\nUSD 52.580.-\n\nvalor_cheque_total debe devolverse como número.\n\n# MANEJO DE ERRORES\n\nSi no encontrás el kit exacto:\n\n{\n  \"modelo\": \"error\",\n  \"kit\": \"error\",\n  \"descripcion\": \"error\",\n  \"precio_total_sin_iva\": \"error\",\n  \"precio_total_con_iva\": \"error\",\n  \"valor_cheque_total\": \"error\"\n}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        208,
+        0
+      ],
+      "id": "67546fb7-f94f-4f79-a770-a3652f90842f",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4.1-mini"
+        },
+        "builtInTools": {},
+        "options": {
+          "temperature": 0.1
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        80,
+        208
+      ],
+      "id": "0a31b85f-b3a6-47f6-b392-c697e3baeacc",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "PJFLw1Gar0gnoGeS",
+          "name": "OpenAi RENTLY"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1WdRgwuje3mdQWW8EPpBMcKNTh5R6GWRsRlOQYNoVAGM",
+          "mode": "list",
+          "cachedResultName": "Tekron Facturador",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1WdRgwuje3mdQWW8EPpBMcKNTh5R6GWRsRlOQYNoVAGM/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1187250336,
+          "mode": "list",
+          "cachedResultName": "Precios",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1WdRgwuje3mdQWW8EPpBMcKNTh5R6GWRsRlOQYNoVAGM/edit#gid=1187250336"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        304,
+        208
+      ],
+      "id": "46fee52a-aacc-446c-94d6-88d26412af59",
+      "name": "lookup_precios",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Jl493CJvFgEDfXYx",
+          "name": "Google redoo2024@gmail.com"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"modelo\": \"AGRAS T100\",\n  \"kit\": \"KIT 2\",\n  \"descripcion\": \"Dron, 3 baterias, generador DJI y bateria externa con hub de carga de CR + Antena RTK 2 (Tripode, base, dos baterias y hub de carga) + DJI Relay + Mezclador Mixer LE 600 Litros\",\n  \"precio_total_sin_iva\": \"USD 52.580.-\",\n  \"precio_total_con_iva\": \"USD 58.101.-\",\n  \"valor_cheque_total\": 4841.75\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        464,
+        208
+      ],
+      "id": "39afc32c-6c3b-43f6-9837-e8699acaa3f1",
+      "name": "Structured Output Parser"
+    }
+  ],
+  "pinData": {
+    "When Executed by Another Workflow": [
+      {
+        "json": {
+          "modelo": "AGRAS T100",
+          "kit": "KIT 1",
+          "complementos": "[\"DJI Relay\"]"
+        }
+      }
+    ]
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "shared": [
+    {
+      "updatedAt": "2026-03-05T12:02:09.041Z",
+      "createdAt": "2026-03-05T12:02:09.041Z",
+      "role": "workflow:owner",
+      "workflowId": "QKZ7NYJSEFCKHBw4",
+      "projectId": "9yhNOuMy7X39UVXI"
+    }
+  ],
+  "staticData": null,
+  "tags": [
+    {
+      "updatedAt": "2026-03-09T12:39:38.787Z",
+      "createdAt": "2026-03-09T12:39:38.787Z",
+      "id": "neqmAMnHPwc1ZKsm",
+      "name": "TEKRON"
+    }
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2026-03-10T17:18:01.461Z",
+  "versionId": "8e9c73c8-ca3b-4ce3-a4ba-3a2e359f92c2"
+}
