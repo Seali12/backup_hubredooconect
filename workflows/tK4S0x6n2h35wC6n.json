@@ -1,0 +1,405 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "97c45fd0-1139-49e7-b1e5-702db68407e4",
+    "workflowId": "tK4S0x6n2h35wC6n",
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "1636ec11-733f-46d5-87cd-d04167969494",
+          "responseMode": "responseNode",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.1,
+        "position": [
+          592,
+          128
+        ],
+        "id": "e6c34c59-d494-4eaf-9d2f-094c45975543",
+        "name": "Webhook",
+        "webhookId": "1636ec11-733f-46d5-87cd-d04167969494"
+      },
+      {
+        "parameters": {
+          "jsCode": "const b = $json.body ?? {};\nconst payload = {\n  entidad: b.entidad ?? null,\n  invoice: b.invoice ?? {},\n  ocr_text: b.ocr_text ?? '',\n  ocr_lines: Array.isArray(b.ocr_lines) ? b.ocr_lines.slice(0, 120) : [],\n  screenshot_present: !!b.screenshot_png_base64,\n  screenshot_region: b.screenshot_region ?? null\n};\nreturn [{ json: { payload } }];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          816,
+          128
+        ],
+        "id": "6d4d9c3e-a75a-4a40-8837-ddb3dd955e2d",
+        "name": "Normalize Input"
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{$json}}",
+          "options": {
+            "responseCode": 200
+          }
+        },
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          1392,
+          128
+        ],
+        "id": "e8ca24b8-d657-48cd-955e-901a57c6f4b2",
+        "name": "Respond to Webhook"
+      },
+      {
+        "parameters": {
+          "promptType": "define",
+          "text": "=Input del usuario normalizado:\\n{{ JSON.stringify($json.payload, null, 2) }}",
+          "hasOutputParser": true,
+          "options": {
+            "systemMessage": "=Sos un planner de acciones RPA para \"Ingreso de Compras\".\\n\\nOBJETIVO\\nDevolver SOLO JSON válido con acciones concretas para que un bot haga click+escritura.\\n\\nINPUT\\n- entidad\\n- invoice (incluye amount, cost_group_input, cost_center_input, etc.)\\n- ocr_text\\n- ocr_lines\\n- screenshot_present (boolean)\\n- screenshot_region\\n\\nIMPORTANTE\\n- Si no hay suficiente información para ubicar filas con confianza, devolvé actions=[] y needs_review=true.\\n- No inventes coordenadas si no hay evidencia suficiente.\\n- Si podés resolver, devolvé 1 o más acciones.\\n- amount_value debe ser string decimal (ej: \"20000.00\").\\n\\nSALIDA OBLIGATORIA (SOLO JSON):\\n{\\n  \"actions\": [\\n    {\\n      \"amount_coord\": [1120, 410],\\n      \"amount_value\": \"20000.00\",\\n      \"amount_bucket\": \"gravado\",\\n      \"cost_center_coord\": [890, 410],\\n      \"cost_center_value\": \"ADMINISTRACION\",\\n      \"confidence\": 0.94,\\n      \"reason\": \"...\"\\n    }\\n  ],\\n  \"needs_review\": false,\\n  \"reason\": \"...\"\\n}\\n\\nREGLAS\\n- confidence entre 0 y 1\\n- needs_review=true si confianza global baja\\n- no markdown, no texto fuera del JSON"
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.agent",
+        "typeVersion": 2.2,
+        "position": [
+          1040,
+          128
+        ],
+        "id": "6ceb1b8b-dfbf-488f-8f79-e2c39d276a1f",
+        "name": "AI Agent1"
+      },
+      {
+        "parameters": {
+          "model": {
+            "__rl": true,
+            "mode": "list",
+            "value": "gpt-4.1-mini"
+          },
+          "options": {}
+        },
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1.2,
+        "position": [
+          1048,
+          352
+        ],
+        "id": "da515040-33c8-450c-b364-9772efc67b79",
+        "name": "OpenAI Chat Model1",
+        "credentials": {
+          "openAiApi": {
+            "id": "qalg6fQHdCzN0Xjt",
+            "name": "OpenAi account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsonSchemaExample": "{\n  \"actions\": [\n    {\n      \"amount_coord\": [1120, 410],\n      \"amount_value\": \"20000.00\",\n      \"amount_bucket\": \"gravado\",\n      \"cost_center_coord\": [890, 410],\n      \"cost_center_value\": \"ADMINISTRACION\",\n      \"confidence\": 0.94,\n      \"reason\": \"Coincidencia directa\"\n    }\n  ],\n  \"needs_review\": false,\n  \"reason\": \"Resolución satisfactoria\"\n}"
+        },
+        "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+        "typeVersion": 1.3,
+        "position": [
+          1176,
+          352
+        ],
+        "id": "3acb21b6-bcf3-47db-81c2-4c9b0d2421b3",
+        "name": "Structured Output Parser1"
+      }
+    ],
+    "connections": {
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "Normalize Input",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Normalize Input": {
+        "main": [
+          [
+            {
+              "node": "AI Agent1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "AI Agent1": {
+        "main": [
+          [
+            {
+              "node": "Respond to Webhook",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "OpenAI Chat Model1": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "AI Agent1",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Structured Output Parser1": {
+        "ai_outputParser": [
+          [
+            {
+              "node": "AI Agent1",
+              "type": "ai_outputParser",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "system migration",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-10-26T17:05:09.982Z",
+    "updatedAt": "2026-10-26T17:05:09.982Z"
+  },
+  "activeVersionId": "97c45fd0-1139-49e7-b1e5-702db68407e4",
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Normalize Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Input": {
+      "main": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent1": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser1": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-03-16T18:04:44.530Z",
+  "id": "tK4S0x6n2h35wC6n",
+  "isArchived": false,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "name": "WEBHOOK-FBS",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "1636ec11-733f-46d5-87cd-d04167969494",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        592,
+        128
+      ],
+      "id": "e6c34c59-d494-4eaf-9d2f-094c45975543",
+      "name": "Webhook",
+      "webhookId": "1636ec11-733f-46d5-87cd-d04167969494"
+    },
+    {
+      "parameters": {
+        "jsCode": "const b = $json.body ?? {};\nconst payload = {\n  entidad: b.entidad ?? null,\n  invoice: b.invoice ?? {},\n  ocr_text: b.ocr_text ?? '',\n  ocr_lines: Array.isArray(b.ocr_lines) ? b.ocr_lines.slice(0, 120) : [],\n  screenshot_present: !!b.screenshot_png_base64,\n  screenshot_region: b.screenshot_region ?? null\n};\nreturn [{ json: { payload } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        816,
+        128
+      ],
+      "id": "6d4d9c3e-a75a-4a40-8837-ddb3dd955e2d",
+      "name": "Normalize Input"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{$json}}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1392,
+        128
+      ],
+      "id": "e8ca24b8-d657-48cd-955e-901a57c6f4b2",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Input del usuario normalizado:\\n{{ JSON.stringify($json.payload, null, 2) }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "=Sos un planner de acciones RPA para \"Ingreso de Compras\".\\n\\nOBJETIVO\\nDevolver SOLO JSON válido con acciones concretas para que un bot haga click+escritura.\\n\\nINPUT\\n- entidad\\n- invoice (incluye amount, cost_group_input, cost_center_input, etc.)\\n- ocr_text\\n- ocr_lines\\n- screenshot_present (boolean)\\n- screenshot_region\\n\\nIMPORTANTE\\n- Si no hay suficiente información para ubicar filas con confianza, devolvé actions=[] y needs_review=true.\\n- No inventes coordenadas si no hay evidencia suficiente.\\n- Si podés resolver, devolvé 1 o más acciones.\\n- amount_value debe ser string decimal (ej: \"20000.00\").\\n\\nSALIDA OBLIGATORIA (SOLO JSON):\\n{\\n  \"actions\": [\\n    {\\n      \"amount_coord\": [1120, 410],\\n      \"amount_value\": \"20000.00\",\\n      \"amount_bucket\": \"gravado\",\\n      \"cost_center_coord\": [890, 410],\\n      \"cost_center_value\": \"ADMINISTRACION\",\\n      \"confidence\": 0.94,\\n      \"reason\": \"...\"\\n    }\\n  ],\\n  \"needs_review\": false,\\n  \"reason\": \"...\"\\n}\\n\\nREGLAS\\n- confidence entre 0 y 1\\n- needs_review=true si confianza global baja\\n- no markdown, no texto fuera del JSON"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        1040,
+        128
+      ],
+      "id": "6ceb1b8b-dfbf-488f-8f79-e2c39d276a1f",
+      "name": "AI Agent1"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4.1-mini"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1048,
+        352
+      ],
+      "id": "da515040-33c8-450c-b364-9772efc67b79",
+      "name": "OpenAI Chat Model1",
+      "credentials": {
+        "openAiApi": {
+          "id": "qalg6fQHdCzN0Xjt",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"actions\": [\n    {\n      \"amount_coord\": [1120, 410],\n      \"amount_value\": \"20000.00\",\n      \"amount_bucket\": \"gravado\",\n      \"cost_center_coord\": [890, 410],\n      \"cost_center_value\": \"ADMINISTRACION\",\n      \"confidence\": 0.94,\n      \"reason\": \"Coincidencia directa\"\n    }\n  ],\n  \"needs_review\": false,\n  \"reason\": \"Resolución satisfactoria\"\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        1176,
+        352
+      ],
+      "id": "3acb21b6-bcf3-47db-81c2-4c9b0d2421b3",
+      "name": "Structured Output Parser1"
+    }
+  ],
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "headers": {
+            "host": "hub.redooconect.com.ar",
+            "accept-encoding": "identity",
+            "user-agent": "Python-urllib/3.14",
+            "content-type": "application/json; charset=utf-8",
+            "x-forwarded-for": "186.137.151.236",
+            "x-forwarded-host": "hub.redooconect.com.ar",
+            "x-forwarded-server": "hub.redooconect.com.ar",
+            "content-length": "471",
+            "connection": "Keep-Alive"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "entidad": "WORK CLUB S.A.",
+            "invoice": {
+              "invoice_number": "0001-00001234",
+              "invoice_date": "2026-03-17",
+              "customer_name": "WORK CLUB S.A.",
+              "customer_tax_id": "30-71664365-0",
+              "amount": "150000.50",
+              "currency": "ARS",
+              "description": "Expensas marzo 2026",
+              "entidad": "WORK CLUB S.A.",
+              "invoice_number_part_1": "0001",
+              "invoice_number_part_2": "00001234",
+              "cost_group_input": "EXPENSAS INMUEBLES",
+              "cost_center_input": "ADMINISTRACION"
+            },
+            "ocr_text": "",
+            "ocr_lines": []
+          },
+          "webhookUrl": "https://hub.redooconect.com.ar/webhook/1636ec11-733f-46d5-87cd-d04167969494",
+          "executionMode": "production"
+        }
+      }
+    ]
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "tK4S0x6n2h35wC6n",
+      "projectId": "K8p6XEqA0L6D2uVt",
+      "createdAt": "2026-03-16T18:04:44.533Z",
+      "updatedAt": "2026-03-16T18:04:44.533Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2026-10-26T17:06:13.535Z",
+  "versionId": "97c45fd0-1139-49e7-b1e5-702db68407e4"
+}
