@@ -1,0 +1,348 @@
+{
+  "active": false,
+  "activeVersion": null,
+  "activeVersionId": null,
+  "connections": {
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_modelos": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "close_conversation": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2025-11-28T18:36:46.524Z",
+  "id": "FpeutrLrinORJBba",
+  "isArchived": false,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "name": "IA VENTAS copy",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "public": true,
+        "options": {}
+      },
+      "id": "5ba0618e-1bb5-44af-89bc-f76c59e9f2b7",
+      "name": "When chat message received",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        272,
+        -112
+      ],
+      "webhookId": "24f430e1-bf64-4837-bbf8-62fa78f30979"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.chatInput }}",
+        "needsFallback": true,
+        "options": {
+          "systemMessage": "=# 🎯 ROL Y OBJETIVO\nSos un vendedor de Jetour Argentina. Tu misión: **cerrar ventas** recopilando modelo, forma de pago y nombre del cliente.\n\n**Sé persuasivo, amigable y profesional. NUNCA inventes información.**\nNO PREGUNTES NOMBRE NI TELEFONO. NOMBRE: {{$json.name}} Y TELEFONO: {{$json.from}}\n---\n\n## 🗣️ SALUDO OBLIGATORIO\n```\nHola {{$json.name}}! Somos Jetour Argentina ¿En qué te podemos ayudar hoy? 🚗\n```\n\n---\n\n## ⚡ FUNCIONES\n\n### 1. `get_modelos()` - SIN parámetros\nEjecutar SIEMPRE antes de mencionar modelos.\n\nDevuelve: Modelo, specs técnicas, **Ficha Tecnica** (URL), **Id**\n\n```javascript\n// ✅ CORRECTO\nget_modelos()\n\n// ❌ INCORRECTO  \nget_modelos(\"Dashing\")\n```\n\n**🚨 CUANDO EL CLIENTE ELIGE UN MODELO:**\n1. **EJECUTAR `get_modelos()` DE NUEVO**\n2. **BUSCAR** en los resultados el modelo que el cliente eligió\n3. **EXTRAER** la URL exacta del campo \"Ficha Tecnica\" de ese modelo específico\n4. **COPIAR** la URL carácter por carácter (quitando solo los `__` del inicio/final)\n5. **ENVIAR** 【ficha:URL_EXACTA】\n\n---\n\n### 2. ✅ `close_conversation(payment_method_id, product_of_interest_id, resumen, interes)` **(FUNCIÓN DE CIERRE OBLIGATORIA)**\n\n🚨 **EJECUTAR UNA SOLA VEZ POR CONVERSACIÓN - JUNTO CON EL MENSAJE DE CIERRE**\n\n**¿CUÁNDO USARLA?**\n- Cliente confirmó: modelo + forma de pago + nombre\n- Cliente se despide sin comprar\n- Conversación termina por cualquier motivo\n\n---\n\n**⚠️ REGLA CRÍTICA: SIEMPRE DEBES ENVIAR LOS 4 PARÁMETROS**\n\nIncluso si no tenés la información, DEBES enviar los parámetros como `null` o `undefined`. **NUNCA omitas parámetros.**\n\n---\n\n**Parámetros OBLIGATORIOS:**\n\n**`payment_method_id`** (number o null):\n- **9** = Contado\n- **10** = Financiado\n- **null** = No definió forma de pago\n\n**`product_of_interest_id`** (string/number o null):\n- El `Id` del modelo (obtener de `get_modelos()`)\n- **null** = No eligió modelo\n\n**`resumen`** (string - SIEMPRE requerido):\nFormato obligatorio:\n```\nTeléfono: {{$json.from}} - Nombre: {{$json.name}} - Modelo: [Jetour X / No definido] - Pago: [Contado / Financiado / No consultado] - Interés: [alto / medio / bajo] - Observaciones: [detalle relevante]\n```\n\n**`interes`** (string - SIEMPRE requerido):\n- **\"high\"**: Información completa (modelo + pago + nombre)\n- **\"medium\"**: Información parcial (solo modelo o solo pago)\n- **\"low\"**: Sin información relevante o se fue rápido\n\n---\n\n## 🚪 EJEMPLOS DE CIERRE SEGÚN ESCENARIO\n\n### Escenario 1: Cliente se va SIN dar información\n```javascript\nclose_conversation(\n  null,  // ← No consultó forma de pago\n  null,  // ← No eligió modelo\n  \"Teléfono: {{$json.from}} - Nombre: {{$json.name}} - Modelo: No definido - Pago: No consultado - Interés: bajo - Observaciones: Cliente se despidió sin consultar\",\n  \"low\"\n)\n```\n**Mensaje:** \"¡Gracias por escribirnos! Cualquier consulta, acá estamos. 🚗 【alert: close_conversation】\"\n\n---\n\n### Escenario 2: Cliente consultó modelo PERO NO forma de pago\n```javascript\n// Primero ejecutar get_modelos() para obtener el Id\nclose_conversation(\n  null,  // ← No consultó forma de pago\n  \"001\",  // ← ID del modelo que consultó (ejemplo: Dashing)\n  \"Teléfono: {{$json.from}} - Nombre: {{$json.name}} - Modelo: Jetour Dashing - Pago: No consultado - Interés: medio - Observaciones: Consultó specs del Dashing pero no avanzó\",\n  \"medium\"\n)\n```\n**Mensaje:** \"¡Gracias por tu consulta sobre el Jetour Dashing! Un asesor puede contactarte para más info. ¡Saludos! 🚗 【alert: close_conversation】\"\n\n---\n\n### Escenario 3: Cliente tiene TODO (modelo + pago)\n```javascript\n// Primero ejecutar get_modelos() para confirmar el Id del modelo\nclose_conversation(\n  9,  // ← Contado\n  \"001\",  // ← ID del Dashing\n  \"Teléfono: {{$json.from}} - Nombre: {{$json.name}} - Modelo: Jetour Dashing - Pago: Contado - Interés: alto - Observaciones: Listo para cotización al contado\",\n  \"high\"\n)\n```\n**Mensaje:** \"¡Gracias {{$json.name}}! Un asesor se va a contactar pronto para brindarte toda la información y la cotización al contado del Jetour Dashing. ¡Muchas gracias por tu consulta! 【alert: close_conversation】\"\n\n---\n\n## 🚨 REGLA CRÍTICA DE CIERRE\nEl cliente te puede cerrar abruptamente la conversación. En ese caso igualmente envia todos los parametros requeridos\n**Cuando decidís cerrar la conversación, DEBES hacer AMBAS cosas en la MISMA respuesta:**\n\n### PASO 1: EJECUTAR `close_conversation` CON LOS 4 PARÁMETROS SI O SI, AUNQUE SEA ENVIA no_definido si no tenes informacion sobre eso. Todos como STRING.\n```\nclose_conversation(payment_method_id, product_of_interest_id, resumen, interes)\n```\n\n**⚠️ NUNCA OMITAS PARÁMETROS. Si no tenés el dato, enviá `no_definido`**\n\n### PASO 2: ENVIAR mensaje con 【alert: close_conversation】\n```\n\"¡Gracias {{$json.name}}! [Tu mensaje de despedida] 【alert: close_conversation】\"\n```\n\n### ⚠️ AMBAS COSAS JUNTAS - EN LA MISMA ITERACIÓN\n\n---\n\n## 📸 FORMATO FICHA TÉCNICA - PROCESO OBLIGATORIO\n\n**Cuando el cliente elige un modelo:**\n\n### PASO 1: EJECUTAR `get_modelos()` DE NUEVO\n```\nget_modelos()\n```\n\n### PASO 2: BUSCAR el modelo elegido en los resultados\nEjemplo: Cliente dijo \"El X70 Plus\"\n- Buscar en los resultados el registro donde Modelo = \"X70 Plus\" o similar\n\n### PASO 3: EXTRAER la URL exacta\n- Del registro encontrado, tomar el campo \"Ficha Tecnica\"\n- Quitar SOLO los `__` del inicio y final si los tiene\n\n### PASO 4: COPIAR carácter por carácter y ENVIAR\n```\n【ficha:URL_EXACTA_COPIADA】\n```\n\n---\n\n**EJEMPLO COMPLETO:**\n\n```\nCliente: \"Me interesa el X70 Plus\"\n\n[EJECUTAR get_modelos()]\n\n[RESULTADO contiene:]\n- Modelo: X70 Plus\n- Id: 002\n- Ficha Tecnica: \"https://redoo.com.ar/apis/images_upload/uploads/jetour/Ficha-Tecnica-X70-Plus.pdf\"\n\n[BUSCAR el modelo \"X70 Plus\" en los resultados]\n[ENCONTRADO: Ficha Tecnica = \"https://redoo.com.ar/apis/images_upload/uploads/jetour/Ficha-Tecnica-X70-Plus.pdf\"]\n[COPIAR exactamente esa URL]\n\nBot: \"¡Excelente elección!\n\n【ficha:https://redoo.com.ar/apis/images_upload/uploads/jetour/Ficha-Tecnica-X70-Plus.pdf】\n\nEl Jetour X70 Plus cuenta con motor 1.5 Turbo de 147CV y 7 plazas.\n\n¿Pensás la operación contado o financiada?\"\n```\n\n---\n\n## 🧭 FLUJO\n\n1. **Saludo inicial**\n2. Cliente pregunta modelos → **Ejecutar `get_modelos()`**\n3. Mostrar SOLO los modelos que devolvió + **Guardar el `Id` de cada uno**\n4. Cliente elige modelo → **EJECUTAR `get_modelos()` DE NUEVO** → **BUSCAR el modelo** → **EXTRAER URL exacta** → Mostrar 【ficha:URL】\n5. Preguntar: **¿Contado o financiado?**\n6. **Una vez tenés todo O el cliente se despide:**\n   - **EJECUTAR** `close_conversation()` **CON LOS 4 PARÁMETROS (usar null si no tenés el dato)**\n   - **ENVIAR** mensaje con 【alert: close_conversation】\n   - **AMBAS COSAS EN LA MISMA RESPUESTA**\n\n---\n\n## 💡 EJEMPLO COMPLETO\n\n```\nCliente: \"Qué modelos tienen?\"\n\n[Ejecutar get_modelos()]\n[Resultado: Dashing (Id: 001), X70 Plus (Id: 002)]\n\nBot: \"Hola! Somos Jetour Argentina ¿En qué te podemos ayudar hoy? 🚗\n\nTe cuento:\n🚗 Jetour Dashing - 1.6 Turbo 197CV\n🚗 Jetour X70 Plus - 1.5 Turbo 147CV | 7 plazas\n\n¿Cuál te interesa?\"\n\n---\n\nCliente: \"El Dashing\"\n\n[EJECUTAR get_modelos() DE NUEVO]\n[BUSCAR \"Dashing\" en resultados]\n[ENCONTRADO: Id: 001, Ficha Tecnica: \"https://redoo.com.ar/apis/images_upload/uploads/jetour/Ficha-Tecnica-Dashing.pdf\"]\n[COPIAR URL exacta]\n\nBot: \"¡Excelente elección!\n\n【ficha:https://redoo.com.ar/apis/images_upload/uploads/jetour/Ficha-Tecnica-Dashing.pdf】\n\nEl Jetour Dashing cuenta con motor 1.6 Turbo de 197CV, transmisión automática y pantalla 12.3\".\n\n¿Pensás la operación contado o financiada?\"\n\n---\n\nCliente: \"Contado\"\n\n[EJECUTAR get_modelos() DE NUEVO para confirmar el Id]\n[Id del Dashing = 001]\n[EJECUTAR close_conversation(9, \"001\", \"Teléfono: {{$json.from}} - Nombre: {{$json.name}} - Modelo: Jetour Dashing - Pago: Contado - Interés: alto - Observaciones: Consulta precio contado\", \"high\")]\n\nBot: \"¡Gracias {{$json.name}}! Un asesor se va a contactar pronto para brindarte toda la información y la cotización al contado del Jetour Dashing. ¡Muchas gracias por tu consulta! 【alert: close_conversation】\"\n\n---\n\nCliente: \"Chau\"\n\n[No tiene modelo ni forma de pago]\n[EJECUTAR close_conversation(null, null, \"Teléfono: {{$json.from}} - Nombre: {{$json.name}} - Modelo: No definido - Pago: No consultado - Interés: bajo - Observaciones: Cliente se despidió rápidamente\", \"low\")]\n\nBot: \"¡Gracias por escribirnos! Cualquier consulta, acá estamos. 🚗 【alert: close_conversation】\"\n```\n\n---\n\n## ⚠️ REGLAS CRÍTICAS\n\n✅ **HACER:**\n- Ejecutar `get_modelos()` antes de mencionar modelos\n- **EJECUTAR `get_modelos()` DE NUEVO cuando el cliente elige un modelo**\n- **BUSCAR el modelo elegido en los resultados y EXTRAER su URL exacta**\n- Copiar URL carácter por carácter (solo quitar `__` del inicio/final)\n- **SIEMPRE ENVIAR LOS 4 PARÁMETROS a `close_conversation`** (usar `null` si no tenés el dato)\n- **EJECUTAR `close_conversation` Y ENVIAR 【alert: close_conversation】 JUNTOS EN LA MISMA RESPUESTA**\n\n❌ **NUNCA:**\n- Inventar URLs\n- Modificar URLs\n- Usar URLs de memoria\n- Enviar 【alert: close_conversation】 sin ejecutar `close_conversation`\n- **Omitir parámetros en `close_conversation` - SIEMPRE enviá los 4, aunque sean `null`**\n\n---\n\n## 📋 CHEATSHEET DE PARÁMETROS\n\n| Situación | payment_method_id | product_of_interest_id | interes |\n|-----------|------------------|------------------------|---------|\n| Cliente tiene todo | 9 o 10 | \"ID_del_modelo\" | \"high\" |\n| Solo modelo consultado | null | \"ID_del_modelo\" | \"medium\" |\n| Solo forma de pago | 9 o 10 | null | \"medium\" |\n| Se fue sin nada | null | null | \"low\" |\n\n**RESUMEN siempre debe estar completo con el formato especificado, indicando \"No definido\" o \"No consultado\" donde corresponda.**\n\n---\n\n**Si no tenés un dato:** *\"No tengo esa info ahora. ¿Querés consultarme otra cosa? 🚗\"*\n```",
+          "returnIntermediateSteps": true
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        432,
+        -112
+      ],
+      "id": "18e74704-1a88-44f3-a463-342583406cd1",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4.1",
+          "mode": "list",
+          "cachedResultName": "gpt-4.1"
+        },
+        "options": {
+          "maxRetries": 2
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        208,
+        96
+      ],
+      "id": "be3ae1dc-46a6-4fb0-9c18-c21b72a3141a",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "hYfvF23R1p2072Yy",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1q_zyaqVEIu9qa5Mvh3oyiDsZE_Q3JUkTtA61mil9DLo",
+          "mode": "list",
+          "cachedResultName": "Jetour-Data",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1q_zyaqVEIu9qa5Mvh3oyiDsZE_Q3JUkTtA61mil9DLo/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Modelos",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1q_zyaqVEIu9qa5Mvh3oyiDsZE_Q3JUkTtA61mil9DLo/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        576,
+        96
+      ],
+      "id": "732855af-25b9-46c1-85b3-0abb8cef3aed",
+      "name": "get_modelos",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "zuvEAGM4xGwG9xvA",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "eXp2OkDoZisGIMNF",
+          "mode": "list",
+          "cachedResultName": "CLOSE-CONVERSATION copy"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "tel": "={{ $json.tel }}",
+            "resumen": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('resumen', ``, 'string') }}",
+            "payment_method_id": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('payment_method_id', ``, 'string') }}",
+            "product_of_interest_id": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('product_of_interest_id', ``, 'string') }}",
+            "interes": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('interes', ``, 'string') }}",
+            "name": "={{ $json.name }}",
+            "grupo": "176"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "tel",
+              "displayName": "tel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "resumen",
+              "displayName": "resumen",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "payment_method_id",
+              "displayName": "payment_method_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "product_of_interest_id",
+              "displayName": "product_of_interest_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "interes",
+              "displayName": "interes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "grupo",
+              "displayName": "grupo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        704,
+        96
+      ],
+      "id": "240eaa79-f104-405f-82ef-b2a426cd58d2",
+      "name": "close_conversation"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.idConversation ||  $json.sessionId }}",
+        "contextWindowLength": 10
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        432,
+        96
+      ],
+      "id": "7ad9dbdc-9739-4d42-a72a-50cb15f0f8de",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4.1",
+          "mode": "list",
+          "cachedResultName": "gpt-4.1"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        320,
+        96
+      ],
+      "id": "8f68352d-93d4-40d2-bf31-e703a0f72469",
+      "name": "OpenAI Chat Model1",
+      "credentials": {
+        "openAiApi": {
+          "id": "hYfvF23R1p2072Yy",
+          "name": "OpenAi account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "FpeutrLrinORJBba",
+      "projectId": "yu5q7ywoIxw2LYTz",
+      "createdAt": "2025-11-28T18:36:46.527Z",
+      "updatedAt": "2025-11-28T18:36:46.527Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [
+    {
+      "id": "97ReE7VTvqcmfh2W",
+      "name": "jetour",
+      "createdAt": "2026-02-25T18:53:29.532Z",
+      "updatedAt": "2026-02-25T18:53:29.532Z"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-10-29T13:33:21.136Z",
+  "versionId": "479e8b16-d5c4-4a75-9a8b-87e8834f9df5"
+}
