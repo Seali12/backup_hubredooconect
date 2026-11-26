@@ -1,0 +1,2143 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "95a695bf-802b-4b2b-9739-0c0808d13721",
+    "workflowId": "a4lVfU4vCXQOAn8F",
+    "nodes": [
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "minutes"
+              }
+            ]
+          }
+        },
+        "id": "fa3912af-07bf-4f01-9009-13ced601c38f",
+        "name": "⏰ Schedule Trigger",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          0,
+          192
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT l.*, t.access_token, i.destino, i.destino_config, i.origen_sf \nFROM meli_leads l \nJOIN meli_tokens t ON l.user_id = t.user_id \nJOIN meli_integraciones i ON l.user_id = i.user_id \nWHERE l.status = 'active' \nAND l.buyer_id IS NOT NULL \nAND l.buyer_id != 0\nAND l.buyer_nombre IS NOT NULL\nAND l.user_id IN (\n  -- BAIC\n  310104776,\n  3328612086,\n  2910875794,\n  -- FIAT\n  192973256,\n  255619619,\n  255619706,\n  2432747166,\n  2569671813,\n  1997834029,\n  -- PEUGEOT\n  296583094,\n  296583736,\n  296585502,\n  188299312,\n  3396636159,\n  2036674383,\n  -- CITROEN\n  3318954106,\n  3468075382,\n  -- DS\n  3317595043\n)\nAND l.bot_uploaded = 0\nAND l.received_at <= DATE_SUB(NOW(), INTERVAL 15 MINUTE)\nAND !(l.asesor_phone LIKE '%60236095%' OR l.asesor_phone2 LIKE '%60236095%')\nAND !(l.asesor_phone LIKE '%1144356606%' OR l.asesor_phone2 LIKE '%1144356606%')\nAND !(l.asesor_phone LIKE '%25910433%' OR l.asesor_phone2 LIKE '%25910433%')\nAND !(l.asesor_phone LIKE '%1176234775%' OR l.asesor_phone2 LIKE '%1176234775%')\nLIMIT 1000",
+          "options": {}
+        },
+        "id": "05ce2e75-dce0-4779-8fce-e8052f4820f8",
+        "name": "🗄️ Buscar leads pending",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          176,
+          192
+        ],
+        "credentials": {
+          "mySql": {
+            "id": "JdOFtQdAyHp9MpKF",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "leftValue": "={{ $input.all().length }}",
+                "rightValue": 0,
+                "operator": {
+                  "type": "number",
+                  "operation": "gt"
+                },
+                "id": "542a347f-7676-4b5d-8ec4-2d9e40db18a8"
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "0bafe6e2-3aa3-47b8-9961-c300083f4beb",
+        "name": "🔍 Hay leads?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          400,
+          192
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT * FROM meli_asesores \nWHERE (\n  user_id = {{ $json.user_id }}\n  OR user_id = 2910875794\n)\nAND (\n  RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo1 }}'\n  OR RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo2 }}'\n)\nLIMIT 10",
+          "options": {}
+        },
+        "id": "82ed1d60-903d-46eb-878e-e6934056e7b9",
+        "name": "🗄️ Buscar asesor",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          1008,
+          192
+        ],
+        "alwaysOutputData": true,
+        "credentials": {
+          "mySql": {
+            "id": "JdOFtQdAyHp9MpKF",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "{{ $json.query }}",
+          "options": {}
+        },
+        "id": "0537f1a0-df3f-45f2-9004-a65970c3de9e",
+        "name": "💾 Update status MySQL",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          2368,
+          176
+        ],
+        "credentials": {
+          "mySql": {
+            "id": "JdOFtQdAyHp9MpKF",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "UPDATE meli_leads SET status = 'skipped' WHERE id = '{{ $('Loop leads').item.json.id }}'",
+          "options": {}
+        },
+        "id": "365ccdb2-94b7-4c65-9357-9d09c0055555",
+        "name": "💾 Marcar skipped",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          1776,
+          384
+        ],
+        "credentials": {
+          "mySql": {
+            "id": "JdOFtQdAyHp9MpKF",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "parameters": {},
+        "id": "d5a83ca8-b7bf-42a0-a313-13475079eaf3",
+        "name": "✅ Volver al loop",
+        "type": "n8n-nodes-base.noOp",
+        "typeVersion": 1,
+        "position": [
+          1968,
+          384
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const data = $input.item.json;\n\nconst pilotLeadId = data.pilot_lead_id ? `'${data.pilot_lead_id}'` : 'NULL';\nconst pilotResponse = (data.pilot_response || '').replace(/'/g, \"''\");\n\nreturn {\n  json: {\n    query: `UPDATE meli_leads SET status = '${data.new_status}', pilot_lead_id = ${pilotLeadId}, sf_response = '${pilotResponse}' WHERE id = '${data.lead_id}'`\n  }\n};"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2176,
+          176
+        ],
+        "id": "487be95c-f155-44ee-b5e3-a032adc43340",
+        "name": "⚙️ Preparar query update"
+      },
+      {
+        "parameters": {
+          "options": {}
+        },
+        "id": "8adbe64a-a841-49cb-a6d2-e398b9dc3281",
+        "name": "Loop leads",
+        "type": "n8n-nodes-base.splitInBatches",
+        "typeVersion": 3,
+        "position": [
+          656,
+          176
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const body = $input.item.json.body;\nconst { tel_sufijo, updates } = body;\n\nif (!tel_sufijo || !updates || Object.keys(updates).length === 0) {\n  throw new Error('Faltan parámetros');\n}\n\nconst { publicacion_id, ...updatesFiltradas } = updates;\n\nif (Object.keys(updatesFiltradas).length === 0) {\n  throw new Error('No hay campos válidos para actualizar');\n}\n\nconst setClauses = Object.entries(updatesFiltradas)\n  .map(([key, value]) => {\n    if (typeof value === 'number') return `${key} = ${value}`;\n    return `${key} = '${String(value).replace(/'/g, \"''\")}'`;\n  })\n  .join(', ');\n\nreturn {\n  json: {\n    query: `UPDATE meli_leads SET ${setClauses} WHERE RIGHT(REGEXP_REPLACE(buyer_phone, '[^0-9]', ''), 8) = '${tel_sufijo}' AND status IN ('active', 'sent')`\n  }\n};"
+        },
+        "id": "25840136-6678-4ff0-a741-1ed3028ee937",
+        "name": "⚙️ Preparar query",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          192,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "{{ $json.query }}",
+          "options": {}
+        },
+        "id": "3627be5a-3517-467f-9a65-0bf377dbf2c0",
+        "name": "💾 Update MySQL",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          400,
+          0
+        ],
+        "credentials": {
+          "mySql": {
+            "id": "JdOFtQdAyHp9MpKF",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={ \"success\": true }",
+          "options": {}
+        },
+        "id": "fea13f42-2446-4f81-bf37-7ba69b44428b",
+        "name": "✅ Respuesta OK",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          656,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const lead = $('🔀 Resolver Asesor/Marca').item.json;\n\nconst CONTACT_TYPE_ID = 1;\n\nconst appkeyByMarca = {\n  'BAIC': 'A4016CE4-585B-4204-8043-86CA125EF352',\n  'FIAT': '0B709CC7-83F0-43C1-A541-9D78B829CDB1',\n  'PEUGEOT': '0B709CC7-83F0-43C1-A541-9D78B829CDB1',\n  'CITROEN': '0B709CC7-83F0-43C1-A541-9D78B829CDB1',\n  'DS': '0B709CC7-83F0-43C1-A541-9D78B829CDB1',\n  'USADOS': '0B709CC7-83F0-43C1-A541-9D78B829CDB1',\n};\n\nconst baiccentral_id = 2910875794;\nconst baiclong_ids = [310104776, 3328612086];\nconst autofrance_ids = [255619706, 192973256, 2432747166, 2569671813, 1997834029, 255619619, 188299312, 296583736, 296583094, 3396636159, 296585502, 2036674383, 3318954106, 3468075382, 3317595043];\n\nconst appkey = (lead.marca_detectada === 'BAIC') ? 'A4016CE4-585B-4204-8043-86CA125EF352' :\n               autofrance_ids.includes(lead.user_id) ? '0B709CC7-83F0-43C1-A541-9D78B829CDB1' :\n               baiclong_ids.includes(lead.user_id) ? 'A4016CE4-585B-4204-8043-86CA125EF352' :\n               lead.user_id === baiccentral_id ? 'A4016CE4-585B-4204-8043-86CA125EF352' : null;\nif (!appkey) {\n  console.warn(`No hay appkey para la marca: ${lead.marca_detectada}`);\n  return [];\n}\n\nconst canonicalModels = [\n  // BAIC\n  { keys: ['x55 ii hybrid', 'x55ii hybrid'], name: 'X55 II Hybrid' },\n  { keys: ['x55 ii', 'x55ii'], name: 'X55 II' },\n  { keys: ['x35'], name: 'X35' },\n  { keys: ['bj30e', 'bj 30e'], name: 'BJ30E' },\n  { keys: ['bj40', 'bj 40'], name: 'BJ40' },\n  { keys: ['bj60', 'bj 60'], name: 'BJ60' },\n  { keys: ['eu5'], name: 'EU5' },\n  { keys: ['u5'], name: 'U5' },\n  // FIAT\n  { keys: ['ducato'], name: 'Ducato' },\n  { keys: ['cronos'], name: 'Cronos' },\n  { keys: ['pulse'], name: 'Pulse' },\n  { keys: ['fastback'], name: 'Fastback' },\n  { keys: ['toro'], name: 'Toro' },\n  { keys: ['scudo'], name: 'Scudo' },\n  { keys: ['mobi'], name: 'Mobi' },\n  { keys: ['argo'], name: 'Argo' },\n  { keys: ['fiorino'], name: 'Fiorino' },\n  // PEUGEOT\n  { keys: ['e-208'], name: 'e-208' },\n  { keys: ['e-2008'], name: 'e-2008' },\n  { keys: ['2008'], name: '2008' },\n  { keys: ['3008'], name: '3008' },\n  { keys: ['5008'], name: '5008' },\n  { keys: ['208'], name: '208' },\n  { keys: ['308'], name: '308' },\n  { keys: ['408'], name: '408' },\n  { keys: ['partner'], name: 'Partner' },\n  { keys: ['expert'], name: 'Expert' },\n  { keys: ['landtrek'], name: 'Landtrek' },\n  // CITROEN\n  { keys: ['berlingo'], name: 'Berlingo' },\n  { keys: ['basalt'], name: 'Basalt' },\n  { keys: ['c-elysee', 'c elysee'], name: 'C-Elysee' },\n  { keys: ['c3 aircross', 'c3aircross'], name: 'C3 Aircross' },\n  { keys: ['c3'], name: 'C3' },\n  { keys: ['c4 cactus', 'c4cactus'], name: 'C4 Cactus' },\n  { keys: ['c4'], name: 'C4' },\n  { keys: ['c5'], name: 'C5' },\n  { keys: ['jumpy'], name: 'Jumpy' },\n  { keys: ['jumper'], name: 'Jumper' },\n  { keys: ['dispatch'], name: 'Dispatch' },\n  { keys: ['spacetourer'], name: 'Spacetourer' },\n  // DS\n  { keys: ['ds3'], name: 'DS3' },\n  { keys: ['ds4'], name: 'DS4' },\n  { keys: ['ds7'], name: 'DS7' },\n  { keys: ['ds9'], name: 'DS9' },\n];\n\nconst resolveModelo = (tituloOriginal) => {\n  const tituloLower = (tituloOriginal || '').toLowerCase();\n  for (const model of canonicalModels) {\n    if (model.keys.some(key => tituloLower.includes(key))) {\n      return model.name;\n    }\n  }\n  return (tituloOriginal || '').replace(/\\s*asesor\\s+.+$/i, '').trim();\n};\n\nconst name = (lead.buyer_nombre || '').trim();\nconst cellphone = (lead.buyer_phone || '').replace(/\\D/g, '');\nconst email = lead.buyer_email || '';\nconst modelo = resolveModelo(lead.item_titulo);\nconst notes = `Publicación: ${lead.item_id} | Precio: ${lead.item_precio} | Link: ${lead.item_permalink || ''} | Asesor: ${lead.asesor_nombre_match || ''} | Teléfono asesor: ${lead.asesor_phone || ''}`;\n\nconst contactParams = cellphone\n  ? `&pilot_cellphone=${encodeURIComponent(cellphone)}`\n  : `&pilot_email=${encodeURIComponent(email)}`;\n\n// Sin asesor (Baic Central): no se manda pilot_assigned_user y el lead queda sin asignar en el grupo de captura\nconst assignParams = (lead.pilot_assigned_user ? `&pilot_assigned_user=${encodeURIComponent(lead.pilot_assigned_user)}` : '') +\n  (lead.pilot_capture_group ? `&pilot_provider_service=${encodeURIComponent(lead.pilot_capture_group)}` : '');\n\nconst url = `https://api.pilotsolution.net/webhooks/welcome.php?action=create&appkey=${appkey}&pilot_firstname=${encodeURIComponent(name)}&pilot_contact_type_id=${CONTACT_TYPE_ID}&pilot_business_type_id=${lead.pilot_business_type_id}${contactParams}&pilot_notes=${encodeURIComponent(notes)}&pilot_suborigin_id=${lead.pilot_origin}&pilot_product_of_interest=${encodeURIComponent(modelo)}${assignParams}`;\n\nreturn {\n  json: {\n    lead_id: lead.id,\n    user_id: lead.user_id,\n    destino: lead.destino,\n    url,\n    modelo_resuelto: modelo,\n    pilot_origin: lead.pilot_origin,\n    pilot_business_type_id: lead.pilot_business_type_id,\n    pilot_assigned_user: lead.pilot_assigned_user,\n    pilot_capture_group: lead.pilot_capture_group || null,\n    asesor_fuente: lead.asesor_fuente || null,\n    marca_detectada: lead.marca_detectada,\n    appkey\n  }\n};\n"
+        },
+        "id": "3c4871f1-82f9-4c80-b95f-2ddbdbd0246e",
+        "name": "PayloadPilot",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1328,
+          192
+        ],
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "url": "={{ $('PayloadPilot').item.json.url }}",
+          "options": {}
+        },
+        "id": "a0d5cf17-8e46-4fcc-ae3e-0dd50ca7fc8e",
+        "name": "🚀 POST Pilot",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1776,
+          176
+        ],
+        "alwaysOutputData": false,
+        "onError": "continueErrorOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "const lead = $input.item.json;\nconst normalizarTel = (tel) => {\n  if (!tel) return null;\n  const digits = tel.toString().replace(/\\D/g, '');\n  return digits.slice(-8);\n};\nconst normalizarBuyerPhone = (tel) => {\n  if (!tel) return null;\n  let digits = tel.toString().replace(/\\D/g, '');\n  if (digits.startsWith('549')) return '+' + digits;\n  if (digits.startsWith('54')) return '+549' + digits.slice(2);\n  if (digits.startsWith('9') && digits.length >= 10) return '+54' + digits;\n  return '+549' + digits;\n};\nconst sufijo1 = normalizarTel(lead.asesor_phone);\nconst sufijo2 = normalizarTel(lead.asesor_phone2);\nreturn {\n  json: {\n    ...lead,\n    buyer_phone: normalizarBuyerPhone(lead.buyer_phone),\n    asesor_sufijo1: sufijo1 || '',\n    asesor_sufijo2: sufijo2 || ''\n  }\n};"
+        },
+        "id": "11f58c78-ff15-4d4d-a81f-760e2ed23a77",
+        "name": "Normalizar teléfonos",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          848,
+          192
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const lead = $('Normalizar teléfonos').item.json;\nconst asesores = $('🗄️ Buscar asesor').all().filter(a => a.json && a.json.email);\n\nconst getLast8 = (phone) => (phone || '').toString().replace(/\\D/g, '').slice(-8);\n\nconst BAIC_CENTRAL = 2910875794;\n// Baic Central: asesores del grupo \"Ventas ML\" (834) de la suite; el cliente lo mantiene ahí.\n// Sin asesor -> va sin asignar al grupo de captura de MercadoLibre, para no perder el lead.\nconst BAIC_CENTRAL_GRUPO_CAPTURA = 'GC - VN BAIC MERCADOLIBRE 3';\nconst usuariosSuite = (() => {\n  try { return $('obtenerAsesoresBaicCentral').first().json?.data?.users || []; }\n  catch (e) { return []; }\n})();\nconst sufijos = [lead.asesor_sufijo1, lead.asesor_sufijo2].filter(s => s && s.length === 8);\nconst asesorSuite = usuariosSuite.find(u => u.status === 'active' && u.email && sufijos.includes(getLast8(u.phone)));\n\nconst determineMarca = (lead) => {\n  const texto = (lead.item_titulo || '').toLowerCase();\n  if (texto.includes('baic') || texto.includes('arcfox')) return 'BAIC';\n  if (texto.includes('fiat') || texto.includes('ducato') || texto.includes('cronos') || texto.includes('pulse') || texto.includes('fastback') || texto.includes('toro') || texto.includes('scudo') || texto.includes('mobi') || texto.includes('argo') || texto.includes('fiorino')) return 'FIAT';\n  if (texto.includes('peugeot') || texto.includes('3008') || texto.includes('2008') || texto.includes('5008') || texto.includes('308') || texto.includes('408') || texto.includes('208') || texto.includes('partner') || texto.includes('expert') || texto.includes('landtrek')) return 'PEUGEOT';\nif (texto.includes('citroen') || texto.includes('citroën') || texto.includes('berlingo') || texto.includes('basalt') || texto.includes('aircross') || texto.includes('c3') || texto.includes('c4') || texto.includes('c5') || texto.includes('jumpy') || texto.includes('jumper') || texto.includes('dispatch') || texto.includes('c-elysee') || texto.includes('spacetourer')) return 'CITROEN';\n  if (texto.includes(' ds ') || texto.startsWith('ds ') || texto.includes('ds3') || texto.includes('ds4') || texto.includes('ds7') || texto.includes('ds9')) return 'DS';\n  return null;\n};\n\nconst getOrigin = (marca, tipo) => {\n  const origins = {\n    'FIAT':    { VN: 'G7UGU65Z3IEOEYC6C', PDA: 'G7UGVHHWLC99QB0Q9' },\n    'PEUGEOT': { VN: 'G7WFK23Z7I4SNYZNK', PDA: 'G7WFI1LGYY05VI40C' },\n    'CITROEN': { VN: 'G7WFQCUKP5F4OTKAO', PDA: 'G7WFRBR5KDCEC8PC1' },\n    'DS':      { VN: 'G7WFS8JIR2OSJSLQ9', PDA: 'G7WFS8JIR2OSJSLQ9' },\n    'BAIC':    { VN: 'G7UFEG023OJO3QXVK', PDA: 'G7UFEG023OJO3QXVK' },\n  };\n  return origins[marca]?.[tipo] || origins[marca]?.VN || null;\n};\n\nconst determineBusinessTypeId = (marca, tipo) => {\n  if (marca === 'BAIC') return tipo === 'PDA' ? 3 : 1;\n  if (marca === 'FIAT') return tipo === 'PDA' ? 8 : 7;\n  if (marca === 'PEUGEOT') return 3;\n  if (marca === 'CITROEN') return tipo === 'PDA' ? 17 : 16;\n  if (marca === 'DS') return 18;\n  return null;\n};\n\n// Si es usado, no importa la marca\nif (lead.item_condition === 'used') {\n  const asesor = asesores.find(a => a.json.user_id === lead.user_id) || asesores[0];\n  if (!asesor?.json?.email) {\n    console.warn(`No se encontró asesor para sufijos: ${lead.asesor_phone} / ${lead.asesor_phone2}`);\n    return [];\n  }\n  return {\n    json: {\n      ...lead,\n      pilot_assigned_user: asesor.json.email,\n      asesor_nombre_match: asesor.json.nombre,\n      asesor_tipo: asesor.json.tipo || 'VN',\n      marca_detectada: 'USADOS',\n      pilot_origin: 'G84OGKG4B30WJZSW1',\n      pilot_business_type_id: 2\n    }\n  };\n}\n\n// Si es nuevo, detecta la marca\nconst marca = determineMarca(lead);\n\nif (!marca) {\n  console.warn(`No se pudo determinar la marca. Título: ${lead.item_titulo}`);\n  return [];\n}\n\nconst esBaicCentral = marca === 'BAIC' && lead.user_id === BAIC_CENTRAL;\n\nif (esBaicCentral && asesorSuite) {\n  return {\n    json: {\n      ...lead,\n      pilot_assigned_user: asesorSuite.email.trim().toLowerCase(),\n      asesor_nombre_match: `${asesorSuite.first_name || ''} ${asesorSuite.last_name || ''}`.trim(),\n      asesor_tipo: 'VN',\n      asesor_fuente: 'suite',\n      marca_detectada: marca,\n      pilot_origin: getOrigin(marca, 'VN'),\n      pilot_business_type_id: determineBusinessTypeId(marca, 'VN')\n    }\n  };\n}\n\n// Para BAIC prioriza el asesor de Baic Central, para el resto el del user_id del lead\nconst asesor = marca === 'BAIC'\n  ? (asesores.find(a => a.json.user_id === 2910875794) || asesores.find(a => a.json.user_id === lead.user_id) || asesores[0])\n  : (asesores.find(a => a.json.user_id === lead.user_id) || asesores[0]);\n\nif (!asesor?.json?.email) {\n  if (esBaicCentral) {\n    return {\n      json: {\n        ...lead,\n        pilot_assigned_user: '',\n        asesor_nombre_match: '',\n        asesor_tipo: 'VN',\n        asesor_fuente: 'sin_asignar',\n        marca_detectada: marca,\n        pilot_origin: getOrigin(marca, 'VN'),\n        pilot_business_type_id: determineBusinessTypeId(marca, 'VN'),\n        pilot_capture_group: BAIC_CENTRAL_GRUPO_CAPTURA\n      }\n    };\n  }\n  console.warn(`No se encontró asesor con email para sufijos: ${lead.asesor_phone} / ${lead.asesor_phone2}`);\n  return [];\n}\n\nconst tipo = asesor.json.tipo || 'VN';\nconst pilot_origin = getOrigin(marca, tipo);\nconst pilot_assigned_user = asesor.json.email;\nconst asesor_nombre = asesor.json.nombre;\nconst business_type_id = determineBusinessTypeId(marca, tipo);\n\nreturn {\n  json: {\n    ...lead,\n    pilot_assigned_user,\n    asesor_nombre_match: asesor_nombre,\n    asesor_tipo: tipo,\n    asesor_fuente: 'meli_asesores',\n    marca_detectada: marca,\n    pilot_origin,\n    pilot_business_type_id: business_type_id\n  }\n};\n"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1168,
+          192
+        ],
+        "id": "1841d7f5-295d-4781-9410-501ab0dcfbf5",
+        "name": "🔀 Resolver Asesor/Marca",
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "jsCode": "const pilotResponse = $input.item.json;\nconst prev = $('PayloadPilot').item.json;\nconst pilotLeadId = pilotResponse?.data?.welcome_id || null;\nconst success = pilotResponse.success && !pilotResponse.error && !pilotResponse.message?.toLowerCase().includes('error');\n\nconst fullResponse = JSON.stringify(pilotResponse);\n\nreturn {\n  json: {\n    lead_id: prev.lead_id,\n    pilot_lead_id: pilotLeadId,\n    new_status: success ? 'sent' : 'error',\n    pilot_response: fullResponse.substring(0, 60000)\n  }\n};"
+        },
+        "id": "abb94a06-996f-45ff-87d3-2fca7284ccc6",
+        "name": "Procesar respuesta Pilot",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1968,
+          176
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "2671f590-90a5-433c-bffb-2cd44b334e06",
+                "leftValue": "={{ $json.url }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "string",
+                  "operation": "exists",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          1536,
+          192
+        ],
+        "id": "1aaf40f7-243f-48f8-8061-8bb37f78c043",
+        "name": "If"
+      },
+      {
+        "parameters": {},
+        "type": "n8n-nodes-base.wait",
+        "typeVersion": 1.1,
+        "position": [
+          2176,
+          384
+        ],
+        "id": "72c2b847-29b3-40b1-a606-66337e469602",
+        "name": "Wait",
+        "webhookId": "88daa413-3165-4bd2-a7ef-30e3e78e88db"
+      },
+      {
+        "parameters": {},
+        "type": "n8n-nodes-base.manualTrigger",
+        "typeVersion": 1,
+        "position": [
+          0,
+          368
+        ],
+        "id": "68e38f8c-4789-4986-874d-21965d7adee0",
+        "name": "When clicking ‘Execute workflow’"
+      },
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "47435204-0659-455a-9020-3b748d9199de",
+          "responseMode": "responseNode",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.1,
+        "position": [
+          0,
+          0
+        ],
+        "id": "2988e7f9-1e0f-4f35-a26b-d7ca3e8ece08",
+        "name": "Webhook1",
+        "webhookId": "47435204-0659-455a-9020-3b748d9199de"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.twilio.com/2010-04-01/Accounts/TWILIO_SID_OCULTO/Messages.json",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpBasicAuth",
+          "sendBody": true,
+          "contentType": "form-urlencoded",
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "From",
+                "value": "whatsapp:+5491161012770"
+              },
+              {
+                "name": "To",
+                "value": "={{ 'whatsapp:+' + $('Code1').first().json.telefono }}"
+              },
+              {
+                "name": "ContentSid",
+                "value": "HX8d3b1c47b5bc8a81a9e7f94e9589d4e5"
+              },
+              {
+                "name": "ContentVariables",
+                "value": "={{ $('Code1').first().json.contentVariables }}"
+              },
+              {
+                "name": "MessagingServiceSid",
+                "value": "MG2f017dd3c25d710216538e8064169bb7"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "37460ba2-c1a1-4441-a663-ca37766484b7",
+        "name": "Enviar WhatsApp asesor FIAT",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          3328,
+          272
+        ],
+        "credentials": {
+          "httpBasicAuth": {
+            "id": "HGznV7LXQ6vIhur8",
+            "name": "Twillio Autofrance"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.twilio.com/2010-04-01/Accounts/TWILIO_SID_OCULTO/Messages.json",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpBasicAuth",
+          "sendBody": true,
+          "contentType": "form-urlencoded",
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "From",
+                "value": "whatsapp:+5491180243654"
+              },
+              {
+                "name": "To",
+                "value": "={{ 'whatsapp:+' + $json.telefono }}"
+              },
+              {
+                "name": "ContentSid",
+                "value": "HXe685098ee6f7f961271f1fb3f547c115"
+              },
+              {
+                "name": "ContentVariables",
+                "value": "={{ $json.contentVariables }}"
+              },
+              {
+                "name": "MessagingServiceSid",
+                "value": "MG085b57d6e13cc5af223ab80477b9e12e"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "db10e2d5-ddf5-4ff2-9c58-da7cffce2c74",
+        "name": "Enviar WhatsApp asesor BAIC",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2992,
+          80
+        ],
+        "credentials": {
+          "httpBasicAuth": {
+            "id": "ZXziim4uLKKq8L8m",
+            "name": "BAIC CENTRAL"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "a9683f77-7135-4756-b98d-ab357d8c6ca3",
+                "leftValue": "={{ $('If').item.json.marca_detectada }}",
+                "rightValue": "BAIC",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals",
+                  "name": "filter.operator.equals"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          2528,
+          176
+        ],
+        "id": "76fd4b24-fb38-41d0-851b-3fbf014655a0",
+        "name": "If1"
+      },
+      {
+        "parameters": {
+          "jsCode": "const lead = $('Loop leads').first().json;\n\nconst toWA = (raw) => {\n  let d = String(raw || '').replace(/\\D/g, '').replace(/^00/, '');\n  if (!d) return null;\n  if (d.startsWith('54')) d = d.slice(2);\n  d = d.replace(/^9/, '').replace(/^0/, '');\n  return '549' + d;\n};\n\nconst telefono = toWA(lead.asesor_phone);\nconst telefonoCliente = toWA(lead.buyer_phone);\n\nreturn {\n  json: {\n    telefono,\n    contentVariables: JSON.stringify({\n      \"1\": lead.buyer_nombre || \"No definido\",\n      \"2\": telefonoCliente || \"No definido\",\n      \"3\": lead.item_titulo || \"No definido\",\n      \"4\": lead.dealership || \"No definida\",\n      \"5\": \"ML: \" + (lead.item_permalink || \"\")\n    })\n  }\n};"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2768,
+          80
+        ],
+        "id": "da560e0f-45b1-4fe6-9b3d-9c14cf3ae150",
+        "name": "Code"
+      },
+      {
+        "parameters": {
+          "jsCode": "const lead = $('Loop leads').first().json;\n\nconst toWA = (raw) => {\n  let d = String(raw || '').replace(/\\D/g, '').replace(/^00/, '');\n  if (!d) return null;\n  if (d.startsWith('54')) d = d.slice(2);\n  d = d.replace(/^9/, '').replace(/^0/, '');\n  return '549' + d;\n};\n\nconst telefono = toWA(lead.asesor_phone);\nconst telefonoCliente = toWA(lead.buyer_phone);\n\nreturn {\n  json: {\n    telefono,\n    contentVariables: JSON.stringify({\n      \"1\": lead.buyer_nombre || \"No definido\",\n      \"2\": telefonoCliente || \"No definido\",\n      \"3\": lead.item_titulo || \"No definido\",\n      \"4\": lead.dealership || \"No definida\",\n      \"5\": \"ML: \" + (lead.item_permalink || \"\")\n    })\n  }\n};"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2784,
+          288
+        ],
+        "id": "4a81bfc3-9194-47dc-a958-b7625c1d41a2",
+        "name": "Code1"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api-redoo.up.railway.app/api/v1/companies/me/messages-balance/consume",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-API-Key",
+                "value": "6955995d-7c77-4c76-a029-f2bc3acbc579"
+              }
+            ]
+          },
+          "options": {
+            "response": {
+              "response": {
+                "fullResponse": true,
+                "neverError": true
+              }
+            }
+          }
+        },
+        "id": "b65b768c-78da-48cb-82e4-557bd3c42212",
+        "name": "Consume −1",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2928,
+          288
+        ],
+        "disabled": true
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "number": [
+              {
+                "value1": "={{ $json.statusCode }}",
+                "operation": "equal",
+                "value2": 200
+              }
+            ]
+          }
+        },
+        "id": "3a431111-26ae-42c6-b26f-0555a102ffa8",
+        "name": "¿Hay saldo?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 1,
+        "position": [
+          3104,
+          288
+        ],
+        "disabled": true
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api-redoo.up.railway.app/api/v1/companies/me/outbound-jobs",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-API-Key",
+                "value": "TU_API_KEY_EMPRESA"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ status: 'blocked_no_credit', channel: 'whatsapp', to_phone: $('Code1').item.json.telefono, from_phone: 'whatsapp:+5491161012770', messaging_service_sid: 'MG2f017dd3c25d710216538e8064169bb7', content_sid: 'HX8d3b1c47b5bc8a81a9e7f94e9589d4e5', content_variables: $('Code1').item.json.contentVariables, twilio_credential_ref: 'Twillio Autofrance', account_sid: 'TWILIO_SID_OCULTO', source: 'n8n:fiat-asesor', payload_json: $('Code1').item.json }) }}",
+          "options": {}
+        },
+        "id": "18f26573-965d-46e4-b6c6-d3d6cf66c0a8",
+        "name": "Guardar job pendiente",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          3328,
+          464
+        ],
+        "disabled": true
+      },
+      {
+        "id": "dbaed0a0-9526-40e6-9bf2-fced23e6de45",
+        "name": "obtenerAsesoresBaicCentral",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          88,
+          320
+        ],
+        "parameters": {
+          "url": "https://admin-api-suite.up.railway.app/api/v1/groups/834",
+          "options": {
+            "timeout": 15000
+          }
+        },
+        "notes": "Grupo 834 'Ventas ML' de la suite (Baic Central). El cliente lo mantiene ahí.",
+        "onError": "continueRegularOutput",
+        "alwaysOutputData": true
+      },
+      {
+        "id": "792eb219-8e73-439a-9d8c-06f54971fa59",
+        "name": "¿Tiene asesor?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          2448,
+          336
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "7d0c5a51-2a1e-4a55-9a0e-2f5b1c3e9b10",
+                "leftValue": "={{ $('PayloadPilot').item.json.pilot_assigned_user }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "string",
+                  "operation": "notEmpty",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "notes": "Sin asesor asignado (Baic Central sin asignar): no se manda WhatsApp."
+      }
+    ],
+    "connections": {
+      "🗄️ Buscar leads pending": {
+        "main": [
+          [
+            {
+              "node": "🔍 Hay leads?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🔍 Hay leads?": {
+        "main": [
+          [
+            {
+              "node": "Loop leads",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🗄️ Buscar asesor": {
+        "main": [
+          [
+            {
+              "node": "🔀 Resolver Asesor/Marca",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "💾 Marcar skipped": {
+        "main": [
+          [
+            {
+              "node": "✅ Volver al loop",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "✅ Volver al loop": {
+        "main": [
+          [
+            {
+              "node": "Loop leads",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "⚙️ Preparar query update": {
+        "main": [
+          [
+            {
+              "node": "💾 Update status MySQL",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Loop leads": {
+        "main": [
+          [],
+          [
+            {
+              "node": "Normalizar teléfonos",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "⚙️ Preparar query": {
+        "main": [
+          [
+            {
+              "node": "💾 Update MySQL",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "💾 Update MySQL": {
+        "main": [
+          [
+            {
+              "node": "✅ Respuesta OK",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "PayloadPilot": {
+        "main": [
+          [
+            {
+              "node": "If",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🚀 POST Pilot": {
+        "main": [
+          [
+            {
+              "node": "Procesar respuesta Pilot",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Wait",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Normalizar teléfonos": {
+        "main": [
+          [
+            {
+              "node": "🗄️ Buscar asesor",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🔀 Resolver Asesor/Marca": {
+        "main": [
+          [
+            {
+              "node": "PayloadPilot",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Procesar respuesta Pilot": {
+        "main": [
+          [
+            {
+              "node": "⚙️ Preparar query update",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "If": {
+        "main": [
+          [
+            {
+              "node": "🚀 POST Pilot",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Loop leads",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Wait": {
+        "main": [
+          [
+            {
+              "node": "Loop leads",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Webhook1": {
+        "main": [
+          [
+            {
+              "node": "⚙️ Preparar query",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "If1": {
+        "main": [
+          [
+            {
+              "node": "Code",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Code1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code": {
+        "main": [
+          [
+            {
+              "node": "Enviar WhatsApp asesor BAIC",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code1": {
+        "main": [
+          [
+            {
+              "node": "Consume −1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Enviar WhatsApp asesor FIAT": {
+        "main": [
+          [
+            {
+              "node": "Loop leads",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Enviar WhatsApp asesor BAIC": {
+        "main": [
+          [
+            {
+              "node": "Loop leads",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Consume −1": {
+        "main": [
+          [
+            {
+              "node": "¿Hay saldo?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "¿Hay saldo?": {
+        "main": [
+          [
+            {
+              "node": "Enviar WhatsApp asesor FIAT",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          []
+        ]
+      },
+      "Guardar job pendiente": {
+        "main": [
+          [
+            {
+              "node": "Loop leads",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "⏰ Schedule Trigger": {
+        "main": [
+          [
+            {
+              "node": "obtenerAsesoresBaicCentral",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "When clicking ‘Execute workflow’": {
+        "main": [
+          [
+            {
+              "node": "obtenerAsesoresBaicCentral",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "obtenerAsesoresBaicCentral": {
+        "main": [
+          [
+            {
+              "node": "🗄️ Buscar leads pending",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "💾 Update status MySQL": {
+        "main": [
+          [
+            {
+              "node": "¿Tiene asesor?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "¿Tiene asesor?": {
+        "main": [
+          [
+            {
+              "node": "If1",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Loop leads",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "Redoo Desarrollo (via MCP)",
+    "name": "Baic Central: Resolver y PayloadPilot con suite y sin asignar",
+    "description": "Updated nodes: PayloadPilot, 🔀 Resolver Asesor/Marca",
+    "autosaved": false,
+    "createdAt": "2026-11-03T13:33:38.960Z",
+    "updatedAt": "2026-11-03T13:33:38.960Z"
+  },
+  "activeVersionId": "95a695bf-802b-4b2b-9739-0c0808d13721",
+  "connections": {
+    "🗄️ Buscar leads pending": {
+      "main": [
+        [
+          {
+            "node": "🔍 Hay leads?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔍 Hay leads?": {
+      "main": [
+        [
+          {
+            "node": "Loop leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🗄️ Buscar asesor": {
+      "main": [
+        [
+          {
+            "node": "🔀 Resolver Asesor/Marca",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "💾 Marcar skipped": {
+      "main": [
+        [
+          {
+            "node": "✅ Volver al loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "✅ Volver al loop": {
+      "main": [
+        [
+          {
+            "node": "Loop leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⚙️ Preparar query update": {
+      "main": [
+        [
+          {
+            "node": "💾 Update status MySQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop leads": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Normalizar teléfonos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⚙️ Preparar query": {
+      "main": [
+        [
+          {
+            "node": "💾 Update MySQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "💾 Update MySQL": {
+      "main": [
+        [
+          {
+            "node": "✅ Respuesta OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PayloadPilot": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🚀 POST Pilot": {
+      "main": [
+        [
+          {
+            "node": "Procesar respuesta Pilot",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar teléfonos": {
+      "main": [
+        [
+          {
+            "node": "🗄️ Buscar asesor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔀 Resolver Asesor/Marca": {
+      "main": [
+        [
+          {
+            "node": "PayloadPilot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Procesar respuesta Pilot": {
+      "main": [
+        [
+          {
+            "node": "⚙️ Preparar query update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "🚀 POST Pilot",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Loop leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook1": {
+      "main": [
+        [
+          {
+            "node": "⚙️ Preparar query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "Enviar WhatsApp asesor BAIC",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code1": {
+      "main": [
+        [
+          {
+            "node": "Consume −1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar WhatsApp asesor FIAT": {
+      "main": [
+        [
+          {
+            "node": "Loop leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar WhatsApp asesor BAIC": {
+      "main": [
+        [
+          {
+            "node": "Loop leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consume −1": {
+      "main": [
+        [
+          {
+            "node": "¿Hay saldo?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Hay saldo?": {
+      "main": [
+        [
+          {
+            "node": "Enviar WhatsApp asesor FIAT",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Guardar job pendiente": {
+      "main": [
+        [
+          {
+            "node": "Loop leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⏰ Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "obtenerAsesoresBaicCentral",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "obtenerAsesoresBaicCentral",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "obtenerAsesoresBaicCentral": {
+      "main": [
+        [
+          {
+            "node": "🗄️ Buscar leads pending",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "💾 Update status MySQL": {
+      "main": [
+        [
+          {
+            "node": "¿Tiene asesor?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Tiene asesor?": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-09-01T19:41:58.044Z",
+  "id": "a4lVfU4vCXQOAn8F",
+  "isArchived": false,
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "name": "PILOT-MELI",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes"
+            }
+          ]
+        }
+      },
+      "id": "fa3912af-07bf-4f01-9009-13ced601c38f",
+      "name": "⏰ Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT l.*, t.access_token, i.destino, i.destino_config, i.origen_sf \nFROM meli_leads l \nJOIN meli_tokens t ON l.user_id = t.user_id \nJOIN meli_integraciones i ON l.user_id = i.user_id \nWHERE l.status = 'active' \nAND l.buyer_id IS NOT NULL \nAND l.buyer_id != 0\nAND l.buyer_nombre IS NOT NULL\nAND l.user_id IN (\n  -- BAIC\n  310104776,\n  3328612086,\n  2910875794,\n  -- FIAT\n  192973256,\n  255619619,\n  255619706,\n  2432747166,\n  2569671813,\n  1997834029,\n  -- PEUGEOT\n  296583094,\n  296583736,\n  296585502,\n  188299312,\n  3396636159,\n  2036674383,\n  -- CITROEN\n  3318954106,\n  3468075382,\n  -- DS\n  3317595043\n)\nAND l.bot_uploaded = 0\nAND l.received_at <= DATE_SUB(NOW(), INTERVAL 15 MINUTE)\nAND !(l.asesor_phone LIKE '%60236095%' OR l.asesor_phone2 LIKE '%60236095%')\nAND !(l.asesor_phone LIKE '%1144356606%' OR l.asesor_phone2 LIKE '%1144356606%')\nAND !(l.asesor_phone LIKE '%25910433%' OR l.asesor_phone2 LIKE '%25910433%')\nAND !(l.asesor_phone LIKE '%1176234775%' OR l.asesor_phone2 LIKE '%1176234775%')\nLIMIT 1000",
+        "options": {}
+      },
+      "id": "05ce2e75-dce0-4779-8fce-e8052f4820f8",
+      "name": "🗄️ Buscar leads pending",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        176,
+        192
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "JdOFtQdAyHp9MpKF",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $input.all().length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              },
+              "id": "542a347f-7676-4b5d-8ec4-2d9e40db18a8"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "0bafe6e2-3aa3-47b8-9961-c300083f4beb",
+      "name": "🔍 Hay leads?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        400,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM meli_asesores \nWHERE (\n  user_id = {{ $json.user_id }}\n  OR user_id = 2910875794\n)\nAND (\n  RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo1 }}'\n  OR RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo2 }}'\n)\nLIMIT 10",
+        "options": {}
+      },
+      "id": "82ed1d60-903d-46eb-878e-e6934056e7b9",
+      "name": "🗄️ Buscar asesor",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        1008,
+        192
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "mySql": {
+          "id": "JdOFtQdAyHp9MpKF",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "{{ $json.query }}",
+        "options": {}
+      },
+      "id": "0537f1a0-df3f-45f2-9004-a65970c3de9e",
+      "name": "💾 Update status MySQL",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        2368,
+        176
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "JdOFtQdAyHp9MpKF",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE meli_leads SET status = 'skipped' WHERE id = '{{ $('Loop leads').item.json.id }}'",
+        "options": {}
+      },
+      "id": "365ccdb2-94b7-4c65-9357-9d09c0055555",
+      "name": "💾 Marcar skipped",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        1776,
+        384
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "JdOFtQdAyHp9MpKF",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "d5a83ca8-b7bf-42a0-a313-13475079eaf3",
+      "name": "✅ Volver al loop",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1968,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.item.json;\n\nconst pilotLeadId = data.pilot_lead_id ? `'${data.pilot_lead_id}'` : 'NULL';\nconst pilotResponse = (data.pilot_response || '').replace(/'/g, \"''\");\n\nreturn {\n  json: {\n    query: `UPDATE meli_leads SET status = '${data.new_status}', pilot_lead_id = ${pilotLeadId}, sf_response = '${pilotResponse}' WHERE id = '${data.lead_id}'`\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2176,
+        176
+      ],
+      "id": "487be95c-f155-44ee-b5e3-a032adc43340",
+      "name": "⚙️ Preparar query update"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "8adbe64a-a841-49cb-a6d2-e398b9dc3281",
+      "name": "Loop leads",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        656,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.item.json.body;\nconst { tel_sufijo, updates } = body;\n\nif (!tel_sufijo || !updates || Object.keys(updates).length === 0) {\n  throw new Error('Faltan parámetros');\n}\n\nconst { publicacion_id, ...updatesFiltradas } = updates;\n\nif (Object.keys(updatesFiltradas).length === 0) {\n  throw new Error('No hay campos válidos para actualizar');\n}\n\nconst setClauses = Object.entries(updatesFiltradas)\n  .map(([key, value]) => {\n    if (typeof value === 'number') return `${key} = ${value}`;\n    return `${key} = '${String(value).replace(/'/g, \"''\")}'`;\n  })\n  .join(', ');\n\nreturn {\n  json: {\n    query: `UPDATE meli_leads SET ${setClauses} WHERE RIGHT(REGEXP_REPLACE(buyer_phone, '[^0-9]', ''), 8) = '${tel_sufijo}' AND status IN ('active', 'sent')`\n  }\n};"
+      },
+      "id": "25840136-6678-4ff0-a741-1ed3028ee937",
+      "name": "⚙️ Preparar query",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        192,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "{{ $json.query }}",
+        "options": {}
+      },
+      "id": "3627be5a-3517-467f-9a65-0bf377dbf2c0",
+      "name": "💾 Update MySQL",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        400,
+        0
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "JdOFtQdAyHp9MpKF",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"success\": true }",
+        "options": {}
+      },
+      "id": "fea13f42-2446-4f81-bf37-7ba69b44428b",
+      "name": "✅ Respuesta OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        656,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $('🔀 Resolver Asesor/Marca').item.json;\n\nconst CONTACT_TYPE_ID = 1;\n\nconst appkeyByMarca = {\n  'BAIC': 'A4016CE4-585B-4204-8043-86CA125EF352',\n  'FIAT': '0B709CC7-83F0-43C1-A541-9D78B829CDB1',\n  'PEUGEOT': '0B709CC7-83F0-43C1-A541-9D78B829CDB1',\n  'CITROEN': '0B709CC7-83F0-43C1-A541-9D78B829CDB1',\n  'DS': '0B709CC7-83F0-43C1-A541-9D78B829CDB1',\n  'USADOS': '0B709CC7-83F0-43C1-A541-9D78B829CDB1',\n};\n\nconst baiccentral_id = 2910875794;\nconst baiclong_ids = [310104776, 3328612086];\nconst autofrance_ids = [255619706, 192973256, 2432747166, 2569671813, 1997834029, 255619619, 188299312, 296583736, 296583094, 3396636159, 296585502, 2036674383, 3318954106, 3468075382, 3317595043];\n\nconst appkey = (lead.marca_detectada === 'BAIC') ? 'A4016CE4-585B-4204-8043-86CA125EF352' :\n               autofrance_ids.includes(lead.user_id) ? '0B709CC7-83F0-43C1-A541-9D78B829CDB1' :\n               baiclong_ids.includes(lead.user_id) ? 'A4016CE4-585B-4204-8043-86CA125EF352' :\n               lead.user_id === baiccentral_id ? 'A4016CE4-585B-4204-8043-86CA125EF352' : null;\nif (!appkey) {\n  console.warn(`No hay appkey para la marca: ${lead.marca_detectada}`);\n  return [];\n}\n\nconst canonicalModels = [\n  // BAIC\n  { keys: ['x55 ii hybrid', 'x55ii hybrid'], name: 'X55 II Hybrid' },\n  { keys: ['x55 ii', 'x55ii'], name: 'X55 II' },\n  { keys: ['x35'], name: 'X35' },\n  { keys: ['bj30e', 'bj 30e'], name: 'BJ30E' },\n  { keys: ['bj40', 'bj 40'], name: 'BJ40' },\n  { keys: ['bj60', 'bj 60'], name: 'BJ60' },\n  { keys: ['eu5'], name: 'EU5' },\n  { keys: ['u5'], name: 'U5' },\n  // FIAT\n  { keys: ['ducato'], name: 'Ducato' },\n  { keys: ['cronos'], name: 'Cronos' },\n  { keys: ['pulse'], name: 'Pulse' },\n  { keys: ['fastback'], name: 'Fastback' },\n  { keys: ['toro'], name: 'Toro' },\n  { keys: ['scudo'], name: 'Scudo' },\n  { keys: ['mobi'], name: 'Mobi' },\n  { keys: ['argo'], name: 'Argo' },\n  { keys: ['fiorino'], name: 'Fiorino' },\n  // PEUGEOT\n  { keys: ['e-208'], name: 'e-208' },\n  { keys: ['e-2008'], name: 'e-2008' },\n  { keys: ['2008'], name: '2008' },\n  { keys: ['3008'], name: '3008' },\n  { keys: ['5008'], name: '5008' },\n  { keys: ['208'], name: '208' },\n  { keys: ['308'], name: '308' },\n  { keys: ['408'], name: '408' },\n  { keys: ['partner'], name: 'Partner' },\n  { keys: ['expert'], name: 'Expert' },\n  { keys: ['landtrek'], name: 'Landtrek' },\n  // CITROEN\n  { keys: ['berlingo'], name: 'Berlingo' },\n  { keys: ['basalt'], name: 'Basalt' },\n  { keys: ['c-elysee', 'c elysee'], name: 'C-Elysee' },\n  { keys: ['c3 aircross', 'c3aircross'], name: 'C3 Aircross' },\n  { keys: ['c3'], name: 'C3' },\n  { keys: ['c4 cactus', 'c4cactus'], name: 'C4 Cactus' },\n  { keys: ['c4'], name: 'C4' },\n  { keys: ['c5'], name: 'C5' },\n  { keys: ['jumpy'], name: 'Jumpy' },\n  { keys: ['jumper'], name: 'Jumper' },\n  { keys: ['dispatch'], name: 'Dispatch' },\n  { keys: ['spacetourer'], name: 'Spacetourer' },\n  // DS\n  { keys: ['ds3'], name: 'DS3' },\n  { keys: ['ds4'], name: 'DS4' },\n  { keys: ['ds7'], name: 'DS7' },\n  { keys: ['ds9'], name: 'DS9' },\n];\n\nconst resolveModelo = (tituloOriginal) => {\n  const tituloLower = (tituloOriginal || '').toLowerCase();\n  for (const model of canonicalModels) {\n    if (model.keys.some(key => tituloLower.includes(key))) {\n      return model.name;\n    }\n  }\n  return (tituloOriginal || '').replace(/\\s*asesor\\s+.+$/i, '').trim();\n};\n\nconst name = (lead.buyer_nombre || '').trim();\nconst cellphone = (lead.buyer_phone || '').replace(/\\D/g, '');\nconst email = lead.buyer_email || '';\nconst modelo = resolveModelo(lead.item_titulo);\nconst notes = `Publicación: ${lead.item_id} | Precio: ${lead.item_precio} | Link: ${lead.item_permalink || ''} | Asesor: ${lead.asesor_nombre_match || ''} | Teléfono asesor: ${lead.asesor_phone || ''}`;\n\nconst contactParams = cellphone\n  ? `&pilot_cellphone=${encodeURIComponent(cellphone)}`\n  : `&pilot_email=${encodeURIComponent(email)}`;\n\n// Sin asesor (Baic Central): no se manda pilot_assigned_user y el lead queda sin asignar en el grupo de captura\nconst assignParams = (lead.pilot_assigned_user ? `&pilot_assigned_user=${encodeURIComponent(lead.pilot_assigned_user)}` : '') +\n  (lead.pilot_capture_group ? `&pilot_provider_service=${encodeURIComponent(lead.pilot_capture_group)}` : '');\n\nconst url = `https://api.pilotsolution.net/webhooks/welcome.php?action=create&appkey=${appkey}&pilot_firstname=${encodeURIComponent(name)}&pilot_contact_type_id=${CONTACT_TYPE_ID}&pilot_business_type_id=${lead.pilot_business_type_id}${contactParams}&pilot_notes=${encodeURIComponent(notes)}&pilot_suborigin_id=${lead.pilot_origin}&pilot_product_of_interest=${encodeURIComponent(modelo)}${assignParams}`;\n\nreturn {\n  json: {\n    lead_id: lead.id,\n    user_id: lead.user_id,\n    destino: lead.destino,\n    url,\n    modelo_resuelto: modelo,\n    pilot_origin: lead.pilot_origin,\n    pilot_business_type_id: lead.pilot_business_type_id,\n    pilot_assigned_user: lead.pilot_assigned_user,\n    pilot_capture_group: lead.pilot_capture_group || null,\n    asesor_fuente: lead.asesor_fuente || null,\n    marca_detectada: lead.marca_detectada,\n    appkey\n  }\n};\n"
+      },
+      "id": "3c4871f1-82f9-4c80-b95f-2ddbdbd0246e",
+      "name": "PayloadPilot",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1328,
+        192
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "url": "={{ $('PayloadPilot').item.json.url }}",
+        "options": {}
+      },
+      "id": "a0d5cf17-8e46-4fcc-ae3e-0dd50ca7fc8e",
+      "name": "🚀 POST Pilot",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1776,
+        176
+      ],
+      "alwaysOutputData": false,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $input.item.json;\nconst normalizarTel = (tel) => {\n  if (!tel) return null;\n  const digits = tel.toString().replace(/\\D/g, '');\n  return digits.slice(-8);\n};\nconst normalizarBuyerPhone = (tel) => {\n  if (!tel) return null;\n  let digits = tel.toString().replace(/\\D/g, '');\n  if (digits.startsWith('549')) return '+' + digits;\n  if (digits.startsWith('54')) return '+549' + digits.slice(2);\n  if (digits.startsWith('9') && digits.length >= 10) return '+54' + digits;\n  return '+549' + digits;\n};\nconst sufijo1 = normalizarTel(lead.asesor_phone);\nconst sufijo2 = normalizarTel(lead.asesor_phone2);\nreturn {\n  json: {\n    ...lead,\n    buyer_phone: normalizarBuyerPhone(lead.buyer_phone),\n    asesor_sufijo1: sufijo1 || '',\n    asesor_sufijo2: sufijo2 || ''\n  }\n};"
+      },
+      "id": "11f58c78-ff15-4d4d-a81f-760e2ed23a77",
+      "name": "Normalizar teléfonos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        848,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $('Normalizar teléfonos').item.json;\nconst asesores = $('🗄️ Buscar asesor').all().filter(a => a.json && a.json.email);\n\nconst getLast8 = (phone) => (phone || '').toString().replace(/\\D/g, '').slice(-8);\n\nconst BAIC_CENTRAL = 2910875794;\n// Baic Central: asesores del grupo \"Ventas ML\" (834) de la suite; el cliente lo mantiene ahí.\n// Sin asesor -> va sin asignar al grupo de captura de MercadoLibre, para no perder el lead.\nconst BAIC_CENTRAL_GRUPO_CAPTURA = 'GC - VN BAIC MERCADOLIBRE 3';\nconst usuariosSuite = (() => {\n  try { return $('obtenerAsesoresBaicCentral').first().json?.data?.users || []; }\n  catch (e) { return []; }\n})();\nconst sufijos = [lead.asesor_sufijo1, lead.asesor_sufijo2].filter(s => s && s.length === 8);\nconst asesorSuite = usuariosSuite.find(u => u.status === 'active' && u.email && sufijos.includes(getLast8(u.phone)));\n\nconst determineMarca = (lead) => {\n  const texto = (lead.item_titulo || '').toLowerCase();\n  if (texto.includes('baic') || texto.includes('arcfox')) return 'BAIC';\n  if (texto.includes('fiat') || texto.includes('ducato') || texto.includes('cronos') || texto.includes('pulse') || texto.includes('fastback') || texto.includes('toro') || texto.includes('scudo') || texto.includes('mobi') || texto.includes('argo') || texto.includes('fiorino')) return 'FIAT';\n  if (texto.includes('peugeot') || texto.includes('3008') || texto.includes('2008') || texto.includes('5008') || texto.includes('308') || texto.includes('408') || texto.includes('208') || texto.includes('partner') || texto.includes('expert') || texto.includes('landtrek')) return 'PEUGEOT';\nif (texto.includes('citroen') || texto.includes('citroën') || texto.includes('berlingo') || texto.includes('basalt') || texto.includes('aircross') || texto.includes('c3') || texto.includes('c4') || texto.includes('c5') || texto.includes('jumpy') || texto.includes('jumper') || texto.includes('dispatch') || texto.includes('c-elysee') || texto.includes('spacetourer')) return 'CITROEN';\n  if (texto.includes(' ds ') || texto.startsWith('ds ') || texto.includes('ds3') || texto.includes('ds4') || texto.includes('ds7') || texto.includes('ds9')) return 'DS';\n  return null;\n};\n\nconst getOrigin = (marca, tipo) => {\n  const origins = {\n    'FIAT':    { VN: 'G7UGU65Z3IEOEYC6C', PDA: 'G7UGVHHWLC99QB0Q9' },\n    'PEUGEOT': { VN: 'G7WFK23Z7I4SNYZNK', PDA: 'G7WFI1LGYY05VI40C' },\n    'CITROEN': { VN: 'G7WFQCUKP5F4OTKAO', PDA: 'G7WFRBR5KDCEC8PC1' },\n    'DS':      { VN: 'G7WFS8JIR2OSJSLQ9', PDA: 'G7WFS8JIR2OSJSLQ9' },\n    'BAIC':    { VN: 'G7UFEG023OJO3QXVK', PDA: 'G7UFEG023OJO3QXVK' },\n  };\n  return origins[marca]?.[tipo] || origins[marca]?.VN || null;\n};\n\nconst determineBusinessTypeId = (marca, tipo) => {\n  if (marca === 'BAIC') return tipo === 'PDA' ? 3 : 1;\n  if (marca === 'FIAT') return tipo === 'PDA' ? 8 : 7;\n  if (marca === 'PEUGEOT') return 3;\n  if (marca === 'CITROEN') return tipo === 'PDA' ? 17 : 16;\n  if (marca === 'DS') return 18;\n  return null;\n};\n\n// Si es usado, no importa la marca\nif (lead.item_condition === 'used') {\n  const asesor = asesores.find(a => a.json.user_id === lead.user_id) || asesores[0];\n  if (!asesor?.json?.email) {\n    console.warn(`No se encontró asesor para sufijos: ${lead.asesor_phone} / ${lead.asesor_phone2}`);\n    return [];\n  }\n  return {\n    json: {\n      ...lead,\n      pilot_assigned_user: asesor.json.email,\n      asesor_nombre_match: asesor.json.nombre,\n      asesor_tipo: asesor.json.tipo || 'VN',\n      marca_detectada: 'USADOS',\n      pilot_origin: 'G84OGKG4B30WJZSW1',\n      pilot_business_type_id: 2\n    }\n  };\n}\n\n// Si es nuevo, detecta la marca\nconst marca = determineMarca(lead);\n\nif (!marca) {\n  console.warn(`No se pudo determinar la marca. Título: ${lead.item_titulo}`);\n  return [];\n}\n\nconst esBaicCentral = marca === 'BAIC' && lead.user_id === BAIC_CENTRAL;\n\nif (esBaicCentral && asesorSuite) {\n  return {\n    json: {\n      ...lead,\n      pilot_assigned_user: asesorSuite.email.trim().toLowerCase(),\n      asesor_nombre_match: `${asesorSuite.first_name || ''} ${asesorSuite.last_name || ''}`.trim(),\n      asesor_tipo: 'VN',\n      asesor_fuente: 'suite',\n      marca_detectada: marca,\n      pilot_origin: getOrigin(marca, 'VN'),\n      pilot_business_type_id: determineBusinessTypeId(marca, 'VN')\n    }\n  };\n}\n\n// Para BAIC prioriza el asesor de Baic Central, para el resto el del user_id del lead\nconst asesor = marca === 'BAIC'\n  ? (asesores.find(a => a.json.user_id === 2910875794) || asesores.find(a => a.json.user_id === lead.user_id) || asesores[0])\n  : (asesores.find(a => a.json.user_id === lead.user_id) || asesores[0]);\n\nif (!asesor?.json?.email) {\n  if (esBaicCentral) {\n    return {\n      json: {\n        ...lead,\n        pilot_assigned_user: '',\n        asesor_nombre_match: '',\n        asesor_tipo: 'VN',\n        asesor_fuente: 'sin_asignar',\n        marca_detectada: marca,\n        pilot_origin: getOrigin(marca, 'VN'),\n        pilot_business_type_id: determineBusinessTypeId(marca, 'VN'),\n        pilot_capture_group: BAIC_CENTRAL_GRUPO_CAPTURA\n      }\n    };\n  }\n  console.warn(`No se encontró asesor con email para sufijos: ${lead.asesor_phone} / ${lead.asesor_phone2}`);\n  return [];\n}\n\nconst tipo = asesor.json.tipo || 'VN';\nconst pilot_origin = getOrigin(marca, tipo);\nconst pilot_assigned_user = asesor.json.email;\nconst asesor_nombre = asesor.json.nombre;\nconst business_type_id = determineBusinessTypeId(marca, tipo);\n\nreturn {\n  json: {\n    ...lead,\n    pilot_assigned_user,\n    asesor_nombre_match: asesor_nombre,\n    asesor_tipo: tipo,\n    asesor_fuente: 'meli_asesores',\n    marca_detectada: marca,\n    pilot_origin,\n    pilot_business_type_id: business_type_id\n  }\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1168,
+        192
+      ],
+      "id": "1841d7f5-295d-4781-9410-501ab0dcfbf5",
+      "name": "🔀 Resolver Asesor/Marca",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const pilotResponse = $input.item.json;\nconst prev = $('PayloadPilot').item.json;\nconst pilotLeadId = pilotResponse?.data?.welcome_id || null;\nconst success = pilotResponse.success && !pilotResponse.error && !pilotResponse.message?.toLowerCase().includes('error');\n\nconst fullResponse = JSON.stringify(pilotResponse);\n\nreturn {\n  json: {\n    lead_id: prev.lead_id,\n    pilot_lead_id: pilotLeadId,\n    new_status: success ? 'sent' : 'error',\n    pilot_response: fullResponse.substring(0, 60000)\n  }\n};"
+      },
+      "id": "abb94a06-996f-45ff-87d3-2fca7284ccc6",
+      "name": "Procesar respuesta Pilot",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1968,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "2671f590-90a5-433c-bffb-2cd44b334e06",
+              "leftValue": "={{ $json.url }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1536,
+        192
+      ],
+      "id": "1aaf40f7-243f-48f8-8061-8bb37f78c043",
+      "name": "If"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        2176,
+        384
+      ],
+      "id": "72c2b847-29b3-40b1-a606-66337e469602",
+      "name": "Wait",
+      "webhookId": "88daa413-3165-4bd2-a7ef-30e3e78e88db"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        368
+      ],
+      "id": "68e38f8c-4789-4986-874d-21965d7adee0",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "47435204-0659-455a-9020-3b748d9199de",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "2988e7f9-1e0f-4f35-a26b-d7ca3e8ece08",
+      "name": "Webhook1",
+      "webhookId": "47435204-0659-455a-9020-3b748d9199de"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.twilio.com/2010-04-01/Accounts/TWILIO_SID_OCULTO/Messages.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "From",
+              "value": "whatsapp:+5491161012770"
+            },
+            {
+              "name": "To",
+              "value": "={{ 'whatsapp:+' + $('Code1').first().json.telefono }}"
+            },
+            {
+              "name": "ContentSid",
+              "value": "HX8d3b1c47b5bc8a81a9e7f94e9589d4e5"
+            },
+            {
+              "name": "ContentVariables",
+              "value": "={{ $('Code1').first().json.contentVariables }}"
+            },
+            {
+              "name": "MessagingServiceSid",
+              "value": "MG2f017dd3c25d710216538e8064169bb7"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "37460ba2-c1a1-4441-a663-ca37766484b7",
+      "name": "Enviar WhatsApp asesor FIAT",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3328,
+        272
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "HGznV7LXQ6vIhur8",
+          "name": "Twillio Autofrance"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.twilio.com/2010-04-01/Accounts/TWILIO_SID_OCULTO/Messages.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "From",
+              "value": "whatsapp:+5491180243654"
+            },
+            {
+              "name": "To",
+              "value": "={{ 'whatsapp:+' + $json.telefono }}"
+            },
+            {
+              "name": "ContentSid",
+              "value": "HXe685098ee6f7f961271f1fb3f547c115"
+            },
+            {
+              "name": "ContentVariables",
+              "value": "={{ $json.contentVariables }}"
+            },
+            {
+              "name": "MessagingServiceSid",
+              "value": "MG085b57d6e13cc5af223ab80477b9e12e"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "db10e2d5-ddf5-4ff2-9c58-da7cffce2c74",
+      "name": "Enviar WhatsApp asesor BAIC",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2992,
+        80
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "ZXziim4uLKKq8L8m",
+          "name": "BAIC CENTRAL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a9683f77-7135-4756-b98d-ab357d8c6ca3",
+              "leftValue": "={{ $('If').item.json.marca_detectada }}",
+              "rightValue": "BAIC",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2528,
+        176
+      ],
+      "id": "76fd4b24-fb38-41d0-851b-3fbf014655a0",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $('Loop leads').first().json;\n\nconst toWA = (raw) => {\n  let d = String(raw || '').replace(/\\D/g, '').replace(/^00/, '');\n  if (!d) return null;\n  if (d.startsWith('54')) d = d.slice(2);\n  d = d.replace(/^9/, '').replace(/^0/, '');\n  return '549' + d;\n};\n\nconst telefono = toWA(lead.asesor_phone);\nconst telefonoCliente = toWA(lead.buyer_phone);\n\nreturn {\n  json: {\n    telefono,\n    contentVariables: JSON.stringify({\n      \"1\": lead.buyer_nombre || \"No definido\",\n      \"2\": telefonoCliente || \"No definido\",\n      \"3\": lead.item_titulo || \"No definido\",\n      \"4\": lead.dealership || \"No definida\",\n      \"5\": \"ML: \" + (lead.item_permalink || \"\")\n    })\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2768,
+        80
+      ],
+      "id": "da560e0f-45b1-4fe6-9b3d-9c14cf3ae150",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $('Loop leads').first().json;\n\nconst toWA = (raw) => {\n  let d = String(raw || '').replace(/\\D/g, '').replace(/^00/, '');\n  if (!d) return null;\n  if (d.startsWith('54')) d = d.slice(2);\n  d = d.replace(/^9/, '').replace(/^0/, '');\n  return '549' + d;\n};\n\nconst telefono = toWA(lead.asesor_phone);\nconst telefonoCliente = toWA(lead.buyer_phone);\n\nreturn {\n  json: {\n    telefono,\n    contentVariables: JSON.stringify({\n      \"1\": lead.buyer_nombre || \"No definido\",\n      \"2\": telefonoCliente || \"No definido\",\n      \"3\": lead.item_titulo || \"No definido\",\n      \"4\": lead.dealership || \"No definida\",\n      \"5\": \"ML: \" + (lead.item_permalink || \"\")\n    })\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2784,
+        288
+      ],
+      "id": "4a81bfc3-9194-47dc-a958-b7625c1d41a2",
+      "name": "Code1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api-redoo.up.railway.app/api/v1/companies/me/messages-balance/consume",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "6955995d-7c77-4c76-a029-f2bc3acbc579"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "b65b768c-78da-48cb-82e4-557bd3c42212",
+      "name": "Consume −1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2928,
+        288
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.statusCode }}",
+              "operation": "equal",
+              "value2": 200
+            }
+          ]
+        }
+      },
+      "id": "3a431111-26ae-42c6-b26f-0555a102ffa8",
+      "name": "¿Hay saldo?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        3104,
+        288
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api-redoo.up.railway.app/api/v1/companies/me/outbound-jobs",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "TU_API_KEY_EMPRESA"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ status: 'blocked_no_credit', channel: 'whatsapp', to_phone: $('Code1').item.json.telefono, from_phone: 'whatsapp:+5491161012770', messaging_service_sid: 'MG2f017dd3c25d710216538e8064169bb7', content_sid: 'HX8d3b1c47b5bc8a81a9e7f94e9589d4e5', content_variables: $('Code1').item.json.contentVariables, twilio_credential_ref: 'Twillio Autofrance', account_sid: 'TWILIO_SID_OCULTO', source: 'n8n:fiat-asesor', payload_json: $('Code1').item.json }) }}",
+        "options": {}
+      },
+      "id": "18f26573-965d-46e4-b6c6-d3d6cf66c0a8",
+      "name": "Guardar job pendiente",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3328,
+        464
+      ],
+      "disabled": true
+    },
+    {
+      "id": "dbaed0a0-9526-40e6-9bf2-fced23e6de45",
+      "name": "obtenerAsesoresBaicCentral",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        88,
+        320
+      ],
+      "parameters": {
+        "url": "https://admin-api-suite.up.railway.app/api/v1/groups/834",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "notes": "Grupo 834 'Ventas ML' de la suite (Baic Central). El cliente lo mantiene ahí.",
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "id": "792eb219-8e73-439a-9d8c-06f54971fa59",
+      "name": "¿Tiene asesor?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2448,
+        336
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "7d0c5a51-2a1e-4a55-9a0e-2f5b1c3e9b10",
+              "leftValue": "={{ $('PayloadPilot').item.json.pilot_assigned_user }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "notes": "Sin asesor asignado (Baic Central sin asignar): no se manda WhatsApp."
+    }
+  ],
+  "pinData": {
+    "Webhook1": [
+      {
+        "json": {
+          "headers": {
+            "host": "autofrance.redooconect.com.ar",
+            "content-type": "application/json",
+            "accept": "*/*",
+            "accept-language": "*",
+            "sec-fetch-mode": "cors",
+            "user-agent": "node",
+            "accept-encoding": "br, gzip, deflate",
+            "x-forwarded-for": "191.234.201.61",
+            "x-forwarded-host": "autofrance.redooconect.com.ar",
+            "x-forwarded-server": "autofrance.redooconect.com.ar",
+            "content-length": "88",
+            "connection": "Keep-Alive"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "tel_sufijo": "31438902",
+            "updates": {
+              "bot_uploaded": 1,
+              "publicacion_id": "MLA-3911727042"
+            }
+          },
+          "webhookUrl": "https://autofrance.redooconect.com.ar/webhook/47435204-0659-455a-9020-3b748d9199de",
+          "executionMode": "production"
+        }
+      }
+    ]
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "a4lVfU4vCXQOAn8F",
+      "projectId": "XDNGkKAM4jxvPjG8",
+      "createdAt": "2026-09-01T19:41:58.051Z",
+      "updatedAt": "2026-09-01T19:41:58.051Z"
+    }
+  ],
+  "staticData": {
+    "node:⏰ Schedule Trigger": {
+      "recurrenceRules": [
+        null
+      ],
+      "recurrenceRuleSignatures": [
+        null
+      ]
+    }
+  },
+  "tags": [],
+  "triggerCount": 2,
+  "updatedAt": "2026-11-03T13:33:38.959Z",
+  "versionId": "95a695bf-802b-4b2b-9739-0c0808d13721"
+}
