@@ -1,0 +1,394 @@
+{
+  "active": false,
+  "activeVersion": null,
+  "activeVersionId": null,
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Pilot authentication",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pilot authentication": {
+      "main": [
+        [
+          {
+            "node": "Pilot authorization",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pilot authorization": {
+      "main": [
+        [
+          {
+            "node": "Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leads": {
+      "main": [
+        [
+          {
+            "node": "Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer lead": {
+      "main": [
+        [
+          {
+            "node": "¿Pilot nos frenó?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Pilot nos frenó?": {
+      "main": [
+        [
+          {
+            "node": "Esperar 65 s",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fila",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Esperar 65 s": {
+      "main": [
+        [
+          {
+            "node": "Leer lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fila": {
+      "main": [
+        [
+          {
+            "node": "Pausa 2 s",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pausa 2 s": {
+      "main": [
+        [
+          {
+            "node": "Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop": {
+      "main": [
+        [
+          {
+            "node": "Resumen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Leer lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-11-19T22:58:03.645Z",
+  "id": "z7QMjktrGYMjhmTE",
+  "isArchived": true,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "name": "TEMP Ford - recuento bad leads noviembre (con espera ante 429)",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "id": "f3fe09c2-198f-4599-a8eb-4837f9f2d439",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        176
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "d2c2a535-acec-4255-a867-236db6256b72",
+      "name": "Pilot authentication",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        224,
+        176
+      ],
+      "parameters": {
+        "url": "https://api.pilotsolution.net/v1/users/authentication.php",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "options": {}
+      },
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "NHXyrkv9ca6Njn8R",
+          "name": "PILOT FORD COLOMBIA"
+        }
+      }
+    },
+    {
+      "id": "d5381c41-988b-4c5a-bfe0-388c8427aba5",
+      "name": "Pilot authorization",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        448,
+        176
+      ],
+      "parameters": {
+        "url": "https://api.pilotsolution.net/v1/users/authorization.php",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "identity_token",
+              "value": "={{ $json.result.entitydata.accounts[0].token }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "90dc97e7-7c1b-4a75-b6a7-e62971aff96f",
+      "name": "Leads",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        672,
+        176
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id AS dbid, TRIM(pilot_tracking_id) AS id FROM ford_colombia WHERE `lead`='bad_lead' AND pilot_tracking_id<>'' AND created_at >= '2026-11-01' ORDER BY id",
+        "options": {}
+      },
+      "credentials": {
+        "mySql": {
+          "id": "Vl0rIdPXBmN5yKfQ",
+          "name": "MSQL-FORD-COLOMBIA"
+        }
+      }
+    },
+    {
+      "id": "ea367e3f-c584-4eb7-94c2-3b2a663d6345",
+      "name": "Resumen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const rows = $input.all().map(it => [it.json.dbid, it.json.estado, it.json.desist, it.json.por, it.json.bad].join('|'));\nreturn [{ json: { n: rows.length, rows: rows.join('\\n') } }];"
+      }
+    },
+    {
+      "id": "31b14f7c-7b24-48a0-98ff-ab978d6682a1",
+      "name": "Leer lead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        192
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.pilotsolution.net/v1/welcomes/read.php",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ data: { id: $(\"Loop\").first().json.id }, header: { FlowName: \"lead_read\", SequenceId: 1, TimeStamp: 1248377, TrackingId: \"FD1C4A1A-CAFB-467E-825B-7FFB86CC21E3\", access_token: $(\"Pilot authorization\").first().json.result.entitydata.session.identityToken } }) }}",
+        "options": {}
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "e1a68a83-d916-40cd-9de5-be5f1581aa65",
+      "name": "¿Pilot nos frenó?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1344,
+        192
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ /429|433|spacing|Request blocked|too many/i.test(JSON.stringify($json.error || \"\")) }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "02f80293-8608-41c5-a3f1-c7473272c876",
+      "name": "Esperar 65 s",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1568,
+        176
+      ],
+      "parameters": {
+        "amount": 65,
+        "unit": "seconds"
+      },
+      "webhookId": "3796c0a9-a4f4-4b5e-ade9-e745972d6bcf"
+    },
+    {
+      "id": "df686a46-faa2-43f1-a2cf-bde092ae3030",
+      "name": "Fila",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1568,
+        368
+      ],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f1",
+              "name": "dbid",
+              "value": "={{ $(\"Loop\").first().json.dbid }}",
+              "type": "string"
+            },
+            {
+              "id": "f2",
+              "name": "estado",
+              "value": "={{ $json.result?.entitydata?.status?.name || (\"ERR \" + JSON.stringify($json.error || $json).slice(0,100)) }}",
+              "type": "string"
+            },
+            {
+              "id": "f3",
+              "name": "desist",
+              "value": "={{ $json.result?.entitydata?.desist?.status?.code || \"\" }}",
+              "type": "string"
+            },
+            {
+              "id": "f4",
+              "name": "por",
+              "value": "={{ $json.result?.entitydata?.desist?.user?.fullname || \"\" }}",
+              "type": "string"
+            },
+            {
+              "id": "f5",
+              "name": "bad",
+              "value": "={{ String($json.result?.entitydata?.bad_flag ?? \"\") }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c413f87e-41ad-42c5-8f5b-9346cbea6c41",
+      "name": "Pausa 2 s",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1792,
+        432
+      ],
+      "parameters": {
+        "amount": 2,
+        "unit": "seconds"
+      },
+      "webhookId": "d3d0e96c-86e7-4138-8ce0-581511fbe695"
+    },
+    {
+      "id": "7da41706-2d46-441c-976f-30d4124cfd30",
+      "name": "Loop",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        896,
+        176
+      ],
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      }
+    }
+  ],
+  "pinData": null,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "z7QMjktrGYMjhmTE",
+      "projectId": "K8p6XEqA0L6D2uVt",
+      "createdAt": "2026-11-19T22:58:03.647Z",
+      "updatedAt": "2026-11-19T22:58:03.647Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2026-11-19T23:41:32.000Z",
+  "versionId": "8a65fb5e-9b5d-40dd-8146-33dbe55f7d63"
+}
