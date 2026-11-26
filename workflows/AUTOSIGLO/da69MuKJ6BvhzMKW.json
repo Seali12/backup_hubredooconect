@@ -1,0 +1,347 @@
+{
+  "active": false,
+  "activeVersion": null,
+  "activeVersionId": null,
+  "connections": {
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "turnosDisponibles1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "feriados": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many events2": {
+      "main": [
+        [
+          {
+            "node": "feriados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "Get many events1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many events1": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "tiempo_modelo": {
+      "main": [
+        [
+          {
+            "node": "Get many events2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "tiempo_modelo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2025-12-24T18:44:48.959Z",
+  "id": "da69MuKJ6BvhzMKW",
+  "isArchived": false,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "name": "GET-TURNOS-EXPRESS",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst diasBloqueados = [];\n\nif (!items || items.length === 0) return [];\n\nfunction extraerHoraLocal(dateTimeStr) {\n  const timePart = dateTimeStr.split('T')[1];\n  // Maneja tanto formatos con offset (-03:00) como UTC (Z)\n  return timePart.replace(/([+-]\\d{2}:\\d{2}|Z)$/, '').substring(0, 5);\n}\n\nfunction extraerFecha(dateTimeStr) {\n  return dateTimeStr.split('T')[0];\n}\n\nfor (const item of items) {\n  // 1. Validar que existan las fechas\n  if (!item?.json?.start?.dateTime || !item?.json?.end?.dateTime) continue;\n\n  const data = item.json;\n  const inicio = extraerHoraLocal(data.start.dateTime);\n  const final  = extraerHoraLocal(data.end.dateTime);\n  const dia    = extraerFecha(data.start.dateTime);\n\n  // 2. Agregamos TODOS los eventos sin filtrar por horario exacto\n  // Esto incluirá los de 30 min del 9 de abril y los días completos\n  diasBloqueados.push({\n    json: {\n      dia,\n      inicio,\n      final,\n      titulo: data.summary || \"Sin título\",\n      bloqueado: true,\n    }\n  });\n}\n\nreturn diasBloqueados;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1840,
+        400
+      ],
+      "id": "c0ef8b63-f27e-4f05-a88b-845d9feb7cdb",
+      "name": "Code",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "function calcularTurnosDisponibles() {\n\n  // ================= CONFIG =================\n  const TOTAL_TURNOS = 20;\n  const MAX_DIAS = 6;\n  const LIMITE_TARDE = 915; // 15:15\n  const HORA_MINIMA = 495;  // 08:15\n\n  const MAX_MANANA = TOTAL_TURNOS / 2;\n  const MAX_TARDE = TOTAL_TURNOS / 2;\n  const MAX_TURNOS_POR_DIA = Math.ceil(TOTAL_TURNOS / MAX_DIAS);\n\n  // ================= INPUT WORKFLOW =================\n  const wfData = $('When Executed by Another Workflow').first().json;\n  const modelo = (wfData.modelo || '').trim();\n  const km = parseInt(wfData.KM) || 0;\n\n  // ================= TIEMPO SERVICIO =================\n  const tiemposPorModeloRaw = $('tiempo_modelo').first().json;\n\n  let TIEMPO_SERVICIO = 30;\n\n  try {\n    const mapa = {};\n    Object.keys(tiemposPorModeloRaw).forEach(k => {\n      mapa[k.toLowerCase()] = tiemposPorModeloRaw[k];\n    });\n\n    const modeloKey = modelo.toLowerCase();\n    let tiempoStr = mapa[modeloKey];\n\n    if (tiempoStr && tiempoStr.includes(':')) {\n      const partes = tiempoStr.split(':').map(Number);\n      if (partes.length === 3) {\n        const [h, m, s] = partes;\n        TIEMPO_SERVICIO = h * 60 + m + (s > 0 ? Math.round(s / 60) : 0);\n      } else if (partes.length === 2) {\n        const [h, m] = partes;\n        TIEMPO_SERVICIO = h * 60 + m;\n      }\n    }\n  } catch (e) {\n    TIEMPO_SERVICIO = 30;\n  }\n\n  const TIEMPO_LAVADO = 45;\n  const TIEMPO_RECEPCION = 15;\n  const TIEMPO_PREPARACION = 15;\n\n  // ================= DATOS =================\n  const feriados = new Set($('feriados').first().json.feriadosEncontrados || []);\n  const tallerData = $('Get row(s) in sheet').first().json;\n\n  const turnosOcupadosRaw = $('Code').all();\n  const turnosOcupados = [];\n  turnosOcupadosRaw.forEach(i => {\n    if (Array.isArray(i.json)) turnosOcupados.push(...i.json);\n    else if (i.json?.dia) turnosOcupados.push(i.json);\n  });\n\n  // ================= HELPERS =================\n  const timeToMinutes = t => {\n    const [h, m] = t.split(':').map(Number);\n    return h * 60 + m;\n  };\n\n  const minutesToTime = m =>\n    `${Math.floor(m / 60).toString().padStart(2, '0')}:${(m % 60).toString().padStart(2, '0')}`;\n\n  const formatoFecha = (f) => {\n    const d = new Date(f + \"T00:00:00\");\n    const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];\n    return `${dias[d.getDay()]} ${f.split('-')[2]}/${f.split('-')[1]}`;\n  };\n\n  // ================= HORARIOS =================\n  const apertura       = Math.max(timeToMinutes(tallerData.Apertura), HORA_MINIMA);\n  const cierre         = timeToMinutes(tallerData.Cierre);\n  const inicioAlmuerzo = timeToMinutes(tallerData['Inicio Almuerzo']);\n  const finAlmuerzo    = timeToMinutes(tallerData['Fin Almuerzo']);\n  const inicioDesayuno = timeToMinutes(tallerData['Inicio Desayuno']);\n  const finDesayuno    = timeToMinutes(tallerData['Fin Desayuno']);\n\n  // ================= OCUPADOS =================\n  const ocupados = new Set();\n  turnosOcupados.forEach(t => {\n    if (!t.dia || !t.inicio || !t.final) return;\n    const ini = timeToMinutes(t.inicio);\n    const fin = timeToMinutes(t.final);\n    for (let m = ini; m < fin; m++) {\n      ocupados.add(`${t.dia}_${minutesToTime(m)}`);\n    }\n  });\n\n  // ================= VALIDAR TURNO =================\n  const estaLibre = (fechaStr, ini) => {\n    const fin = ini + TIEMPO_SERVICIO;\n\n    // No puede terminar después del cierre\n    if (fin > cierre) return false;\n\n    // No puede solaparse con el almuerzo (ni parcialmente)\n    if (ini < finAlmuerzo && fin > inicioAlmuerzo) return false;\n\n    // No puede solaparse con el desayuno (ni parcialmente)\n    if (ini < finDesayuno && fin > inicioDesayuno) return false;\n\n    // Verificar slots ocupados minuto a minuto\n    for (let m = ini; m < fin; m++) {\n      if (ocupados.has(`${fechaStr}_${minutesToTime(m)}`)) return false;\n    }\n\n    return true;\n  };\n\n  // ================= CALCULAR ENTREGA =================\n  const calcularEntrega = (finMecanico) => {\n    let entrega = finMecanico + TIEMPO_LAVADO + TIEMPO_PREPARACION;\n\n    // Si el lavado arranca antes del almuerzo y termina dentro o después,\n    // se suma el tiempo de almuerzo perdido\n    if (finMecanico < inicioAlmuerzo && entrega > inicioAlmuerzo) {\n      entrega += (finAlmuerzo - inicioAlmuerzo);\n    }\n\n    // Si el lavado arranca dentro del almuerzo, empujar al fin del almuerzo\n    if (finMecanico >= inicioAlmuerzo && finMecanico < finAlmuerzo) {\n      entrega = finAlmuerzo + TIEMPO_LAVADO + TIEMPO_PREPARACION;\n    }\n\n    return entrega;\n  };\n\n  // ================= FECHA INICIO (2 DIAS HABILES) =================\n  let fecha = new Date();\n  fecha.setHours(0, 0, 0, 0);\n\n  let diasHabiles = 0;\n  while (diasHabiles < 2) {\n    fecha.setDate(fecha.getDate() + 1);\n    const d = fecha.getDay();\n    const fs = fecha.toISOString().split('T')[0];\n    if (d >= 1 && d <= 5 && !feriados.has(fs)) diasHabiles++;\n  }\n\n  // ================= BUSQUEDA =================\n  const turnos = [];\n  let diasBuscados = 0;\n\n  while (turnos.length < 4 && diasBuscados < 60) {\n\n    const fechaStr = fecha.toISOString().split('T')[0];\n    const diaSemana = fecha.getDay();\n\n    if (diaSemana >= 1 && diaSemana <= 5 && !feriados.has(fechaStr)) {\n\n      for (let hora = apertura; hora <= LIMITE_TARDE && hora + TIEMPO_SERVICIO <= cierre; hora += 15) {\n\n        if (!estaLibre(fechaStr, hora)) continue;\n\n        const inicio  = hora;\n        const fin     = inicio + TIEMPO_SERVICIO;\n        const llegada = inicio - TIEMPO_RECEPCION;\n        const entrega = calcularEntrega(fin);\n\n        turnos.push({\n          dia:            fechaStr,\n          inicio:         minutesToTime(inicio),\n          final:          minutesToTime(fin),\n          horarioLlegada: minutesToTime(llegada),\n          horarioEntrega: minutesToTime(entrega),\n          fechaFormato:   formatoFecha(fechaStr),\n          Id_Calendario:  \"248b4f84e12edd9925600aa730446896766a0844543c0199677db45f6fa4a879@group.calendar.google.com\"\n        });\n\n        break;\n      }\n    }\n\n    fecha.setDate(fecha.getDate() + 1);\n    diasBuscados++;\n  }\n\n  return {\n    turnosDisponibles: turnos,\n    cantidad: turnos.length,\n    tiempoServicio: TIEMPO_SERVICIO\n  };\n}\n\nconst resultado = calcularTurnosDisponibles();\nreturn [{ json: resultado }];"
+      },
+      "id": "dcd6e374-bb02-4677-8724-816c53b27f4e",
+      "name": "turnosDisponibles1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2000,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "function obtenerFeriados() {\n  // Obtener los feriados del nodo anterior\n  const feriadosData = $input.all(); // Obtiene todos los items del nodo anterior\n  const feriados = [];\n  \n  // Extraer las fechas de los feriados del formato que recibes\n  feriadosData.forEach(item => {\n    if (item.json && item.json.start && item.json.start.date) {\n      feriados.push(item.json.start.date);\n    }\n    // Si el feriado dura más de un día, también agregar las fechas intermedias\n    if (item.json && item.json.end && item.json.end.date && item.json.start.date !== item.json.end.date) {\n      const fechaInicio = new Date(item.json.start.date);\n      const fechaFin = new Date(item.json.end.date);\n      \n      // Agregar todas las fechas entre inicio y fin\n      const fechaActual = new Date(fechaInicio);\n      while (fechaActual < fechaFin) {\n        feriados.push(fechaActual.toISOString().split('T')[0]);\n        fechaActual.setDate(fechaActual.getDate() + 1);\n      }\n    }\n  });\n  \n  // Eliminar duplicados de la lista de feriados\n  const feriadosUnicos = [...new Set(feriados)];\n  \n  return feriadosUnicos;\n}\n\nconst feriadosEncontrados = obtenerFeriados();\n\nreturn [{\n  json: {\n    feriadosEncontrados: feriadosEncontrados\n  }\n}];"
+      },
+      "id": "5d1a4518-ef0c-4f65-9574-04160f9f4372",
+      "name": "feriados",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1392,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "es.ar#holiday@group.v.calendar.google.com",
+          "mode": "list",
+          "cachedResultName": "Festivos en Argentina"
+        },
+        "options": {}
+      },
+      "id": "434b8a81-41d6-4892-adb5-6264cc985b24",
+      "name": "Get many events2",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.2,
+      "position": [
+        1232,
+        400
+      ],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "6nUV5YB0a8QXQr9G",
+          "name": "Google Calendar REDOO"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1Jdbnq9sin8gcZspRteOGOjhZUgCUAXXUq-SUmDmaDFY",
+          "mode": "list",
+          "cachedResultName": "Post-Ventas-AutoSiglo-IA",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Jdbnq9sin8gcZspRteOGOjhZUgCUAXXUq-SUmDmaDFY/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1907753866,
+          "mode": "list",
+          "cachedResultName": "Tabla Horarios Taller",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Jdbnq9sin8gcZspRteOGOjhZUgCUAXXUq-SUmDmaDFY/edit#gid=1907753866"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Taller",
+              "lookupValue": "=Express"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "246a9531-b04a-488b-a083-8b5e0a6122fe",
+      "name": "Get row(s) in sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1520,
+        400
+      ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "XB4JnC6DbrhM2g5k",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "=248b4f84e12edd9925600aa730446896766a0844543c0199677db45f6fa4a879@group.calendar.google.com",
+          "mode": "id"
+        },
+        "returnAll": true,
+        "options": {
+          "timeMin": "={{ $now }}",
+          "timeMax": "={{ $now.plus({ month: 4}) }}"
+        }
+      },
+      "id": "93e0f410-42e9-42da-b2d1-e482b51e9261",
+      "name": "Get many events1",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.2,
+      "position": [
+        1680,
+        400
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "6nUV5YB0a8QXQr9G",
+          "name": "Google Calendar REDOO"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1Jdbnq9sin8gcZspRteOGOjhZUgCUAXXUq-SUmDmaDFY",
+          "mode": "list",
+          "cachedResultName": "Post-Ventas-AutoSiglo-IA",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Jdbnq9sin8gcZspRteOGOjhZUgCUAXXUq-SUmDmaDFY/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1734264317,
+          "mode": "list",
+          "cachedResultName": "Tabla Tiempo Mantenimiento-Express",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Jdbnq9sin8gcZspRteOGOjhZUgCUAXXUq-SUmDmaDFY/edit#gid=1734264317"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "KM",
+              "lookupValue": "={{ Math.round(Number($json.KM.toString().replace(/[.,]/g, '')) / 10000) * 10000 || 1000 }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e115f8e6-ca34-48ab-ad8c-0b02848af821",
+      "name": "tiempo_modelo",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1072,
+        400
+      ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "XB4JnC6DbrhM2g5k",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "KM"
+            },
+            {
+              "name": "modelo"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        832,
+        400
+      ],
+      "id": "cf7cab45-33c2-4636-947d-e454ba580495",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "content": "# Codigo original por si acaso\n\n// ==========================================\n// CALCULAR TURNOS DISPONIBLES (AUTOSIGLO)\n// ==========================================\n\nfunction calcularTurnosDisponibles() {\n\n  // ================= CONFIG =================\n  const TOTAL_TURNOS = 20;\n  const MAX_DIAS = 6;\n  const LIMITE_TARDE = 915; // 15:15 (cliente entra a las 15:00)\n  const HORA_MINIMA = 495;  // 08:15 (cliente entra a las 08:00)\n  const MINUTOS_ANTES_ALMUERZO = 30;\n\n  const MAX_MANANA = TOTAL_TURNOS / 2;\n  const MAX_TARDE = TOTAL_TURNOS / 2;\n  const MAX_TURNOS_POR_DIA = Math.ceil(TOTAL_TURNOS / MAX_DIAS);\n\n  // ================= INPUT WORKFLOW =================\n  const wfData = $('When Executed by Another Workflow').first().json;\n  const modelo = (wfData.modelo || '').trim();\n  const km = parseInt(wfData.KM) || 0;\n\n  // ================= TIEMPO SERVICIO =================\n  const tiemposPorModeloRaw = $('tiempo_modelo').first().json;\n\n  let TIEMPO_SERVICIO = 30;\n\n  try {\n    const mapa = {};\n    Object.keys(tiemposPorModeloRaw).forEach(k => {\n      mapa[k.toLowerCase()] = tiemposPorModeloRaw[k];\n    });\n\n    const modeloKey = modelo.toLowerCase();\n    let tiempoStr = mapa[modeloKey];\n\n    if (tiempoStr && tiempoStr.includes(':')) {\n      const partes = tiempoStr.split(':').map(Number);\n\n      if (partes.length === 3) {\n        const [h, m, s] = partes;\n        TIEMPO_SERVICIO = h * 60 + m + (s > 0 ? Math.round(s / 60) : 0);\n      } else if (partes.length === 2) {\n        const [h, m] = partes;\n        TIEMPO_SERVICIO = h * 60 + m;\n      }\n    }\n\n  } catch (e) {\n    TIEMPO_SERVICIO = 30;\n  }\n\n  const TIEMPO_LAVADO = 45;\n  const TIEMPO_RECEPCION = 15;\n  const TIEMPO_PREPARACION = 15;\n\n  // ================= DATOS =================\n  const feriados = new Set($('feriados').first().json.feriadosEncontrados || []);\n  const tallerData = $('Get row(s) in sheet').first().json;\n\n  const turnosOcupadosRaw = $('Code').all();\n  const turnosOcupados = [];\n\n  turnosOcupadosRaw.forEach(i => {\n    if (Array.isArray(i.json)) turnosOcupados.push(...i.json);\n    else if (i.json?.dia) turnosOcupados.push(i.json);\n  });\n\n  // ================= HELPERS =================\n  const timeToMinutes = t => {\n    const [h, m] = t.split(':').map(Number);\n    return h * 60 + m;\n  };\n\n  const minutesToTime = m =>\n    `${Math.floor(m / 60).toString().padStart(2, '0')}:${(m % 60).toString().padStart(2, '0')}`;\n\n  const cruza = (a, b, c, d) => a < d && b > c;\n\n  const formatoFecha = (f) => {\n    const d = new Date(f + \"T00:00:00\");\n    const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];\n    return `${dias[d.getDay()]} ${f.split('-')[2]}/${f.split('-')[1]}`;\n  };\n\n  // ================= HORARIOS =================\n  const apertura = Math.max(timeToMinutes(tallerData.Apertura), HORA_MINIMA);\n  const cierre = timeToMinutes(tallerData.Cierre);\n\n  // Almuerzo fijo 13:00–14:00\n  const inicioAlmuerzo = 13 * 60; // 780\n  const finAlmuerzo    = 14 * 60; // 840\n\n  const inicioDesayuno = timeToMinutes(tallerData['Inicio Desayuno']);\n  const finDesayuno    = timeToMinutes(tallerData['Fin Desayuno']);\n\n  // ================= OCUPADOS =================\n  const ocupados = new Set();\n\n  turnosOcupados.forEach(t => {\n    for (let m = timeToMinutes(t.inicio); m < timeToMinutes(t.final); m += 15) {\n      ocupados.add(`${t.dia}_${minutesToTime(m)}`);\n    }\n  });\n\n  const estaLibre = (fechaStr, ini, dur) => {\n    let duracion = dur;\n    const fin = ini + dur;\n\n    if (cruza(ini, fin, inicioAlmuerzo, finAlmuerzo)) {\n      duracion += finAlmuerzo - inicioAlmuerzo;\n    }\n\n    if (cruza(ini, fin, inicioDesayuno, finDesayuno)) {\n      duracion += finDesayuno - inicioDesayuno;\n    }\n\n    const finReal = ini + duracion;\n\n    if (finReal > cierre) return false;\n\n    for (let m = ini; m < finReal; m += 15) {\n      if (ocupados.has(`${fechaStr}_${minutesToTime(m)}`)) return false;\n    }\n\n    return true;\n  };\n\n  // ================= FECHA INICIO (2 DIAS HABILES) =================\n  let fecha = new Date();\n  fecha.setHours(0, 0, 0, 0);\n\n  let diasHabiles = 0;\n  while (diasHabiles < 2) {\n    fecha.setDate(fecha.getDate() + 1);\n    const d = fecha.getDay();\n    const fs = fecha.toISOString().split('T')[0];\n    if (d >= 1 && d <= 5 && !feriados.has(fs)) diasHabiles++;\n  }\n\n  // ================= BUSQUEDA =================\n  const turnos = [];\n  let diasBuscados = 0;\n\n  while (turnos.length < 4 && diasBuscados < 60) {\n\n    const fechaStr = fecha.toISOString().split('T')[0];\n    const diaSemana = fecha.getDay();\n\n    if (diaSemana >= 1 && diaSemana <= 5 && !feriados.has(fechaStr)) {\n\n      // No iniciar turnos después de las 15:15\n      for (let hora = apertura; hora <= LIMITE_TARDE && hora + TIEMPO_SERVICIO <= cierre; hora += 15) {\n\n        if (!estaLibre(fechaStr, hora, TIEMPO_SERVICIO)) continue;\n\n        const inicio = hora;\n        const fin = inicio + TIEMPO_SERVICIO;\n        const llegada = inicio - TIEMPO_RECEPCION;\n\n        let entrega = fin + TIEMPO_LAVADO + TIEMPO_PREPARACION;\n\n        // Si el lavado cruza o cae dentro del almuerzo → sumar 60 min\n        if (entrega > inicioAlmuerzo && fin <= inicioAlmuerzo) {\n          entrega += finAlmuerzo - inicioAlmuerzo;\n        } else if (entrega > inicioAlmuerzo && entrega <= finAlmuerzo) {\n          entrega = finAlmuerzo;\n        }\n\n        turnos.push({\n          dia: fechaStr,\n          inicio: minutesToTime(inicio),\n          final: minutesToTime(fin),\n          horarioLlegada: minutesToTime(llegada),\n          horarioEntrega: minutesToTime(entrega),\n          fechaFormato: formatoFecha(fechaStr),\n          Id_Calendario: \"248b4f84e12edd9925600aa730446896766a0844543c0199677db45f6fa4a879@group.calendar.google.com\"\n        });\n\n        break;\n      }\n    }\n\n    fecha.setDate(fecha.getDate() + 1);\n    diasBuscados++;\n  }\n\n  return {\n    turnosDisponibles: turnos,\n    cantidad: turnos.length,\n    tiempoServicio: TIEMPO_SERVICIO\n  };\n}\n\n// ================= OUTPUT =================\nconst resultado = calcularTurnosDisponibles();\n\nreturn [{\n  json: resultado\n}];",
+        "height": 352
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1984,
+        32
+      ],
+      "typeVersion": 1,
+      "id": "2f7e786f-2ddf-4345-a5ac-f9b524266a51",
+      "name": "Sticky Note"
+    }
+  ],
+  "pinData": {
+    "When Executed by Another Workflow": [
+      {
+        "json": {
+          "KM": "20000",
+          "modelo": "HILUX"
+        }
+      }
+    ]
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "shared": [
+    {
+      "updatedAt": "2025-12-24T18:44:48.963Z",
+      "createdAt": "2025-12-24T18:44:48.963Z",
+      "role": "workflow:owner",
+      "workflowId": "da69MuKJ6BvhzMKW",
+      "projectId": "u1tRAQnrD2pB0Q1A"
+    }
+  ],
+  "staticData": null,
+  "tags": [
+    {
+      "updatedAt": "2025-08-11T14:06:21.711Z",
+      "createdAt": "2025-08-11T14:06:21.711Z",
+      "id": "VdVyZu2vQPydLfDQ",
+      "name": "AUTOSIGLO"
+    }
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2026-04-21T00:49:36.509Z",
+  "versionId": "6a4819ea-a822-4196-81b1-7cbf277de573"
+}
