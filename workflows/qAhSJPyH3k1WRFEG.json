@@ -1,0 +1,502 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "920fd8ad-a684-4dcc-8edb-de2eba25e3a3",
+    "workflowId": "qAhSJPyH3k1WRFEG",
+    "nodes": [
+      {
+        "parameters": {
+          "content": "## Información completa de sucursales (Pilot)\n1. `branches` (maestro): código y nombre de cada sucursal\n2. `workshop_brand` (maestro): código de la marca (por defecto \"ford\"; se puede pasar `marca` al workflow)\n3. `workshop/list.php`: talleres con dirección, teléfono y coordenadas\n4. Se cruzan por nombre. Los talleres que no coinciden con ninguna sucursal quedan en `talleres_sin_sucursal`.\n\nHorarios de atención: Pilot no los expone; quedan en sa_branches.",
+          "height": 208,
+          "width": 640
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          -832,
+          0
+        ],
+        "id": "9e597f5a-759a-4c77-b73d-40e9ee60882c",
+        "name": "Sticky Note"
+      },
+      {
+        "parameters": {
+          "workflowInputs": {
+            "values": [
+              {
+                "name": "sucursal",
+                "type": "any"
+              }
+            ]
+          }
+        },
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "typeVersion": 1.1,
+        "position": [
+          -1856,
+          928
+        ],
+        "id": "6feef424-a38c-4c13-a545-51650f79c163",
+        "name": "When Executed by Another Workflow",
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {},
+        "type": "n8n-nodes-base.manualTrigger",
+        "typeVersion": 1,
+        "position": [
+          -1856,
+          768
+        ],
+        "id": "3e1da580-f769-4bcd-ac99-1dc5b509e355",
+        "name": "When clicking ‘Execute workflow’",
+        "disabled": true
+      },
+      {
+        "parameters": {
+          "url": "=https://api.pilotsolution.net/v1/users/authentication.php",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpCustomAuth",
+          "options": {}
+        },
+        "id": "2c8cb1e5-e239-4c47-97c8-27d629b70fe3",
+        "name": "Login",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -1616,
+          848
+        ],
+        "credentials": {
+          "httpCustomAuth": {
+            "id": "NHXyrkv9ca6Njn8R",
+            "name": "PILOT FORD COLOMBIA"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "d4000004-0000-4000-8000-0000000000aa",
+                "name": "token",
+                "value": "={{ $json.result.entitydata.accounts[0].token }}",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "ce418a5d-8ae9-4123-bf77-c4e465d6ff77",
+        "name": "Edit Fields2",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [
+          -1392,
+          848
+        ]
+      },
+      {
+        "parameters": {
+          "url": "=https://api.pilotsolution.net/v1/users/authorization.php",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "identity_token",
+                "value": "={{ $json.token }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "170b7bf5-265a-48e0-8487-0b8176e99767",
+        "name": "Login1",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -1168,
+          848
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// Trae todas las páginas del maestro \"branches\" de Pilot\nconst token = $('Login1').first().json.result.entitydata.session.identityToken;\nconst url = 'https://api.pilotsolution.net/v1/masters/read.php';\n\nconst pedir = (page) =>\n  this.helpers.httpRequest({\n    method: 'POST',\n    url,\n    json: true,\n    body: {\n      data: { master: 'branches', limit: 100, page },\n      header: {\n        FlowName: 'masterdata_read',\n        SequenceId: 1,\n        TimeStamp: 1248377,\n        TrackingId: '55A6BCD4-0857-4A86-85FB-09A228B641B4',\n        access_token: token,\n      },\n    },\n  });\n\nconst primera = await pedir(1);\nif (primera?.result?.status !== 'success') {\n  return [{ json: { ok: false, error: primera?.result?.message || 'Error al consultar las sucursales', respuesta: primera } }];\n}\n\nconst info = primera.result.aditional_data || {};\nconst paginas = Number(info.page_count) || 1;\nconst filas = [...(primera.result.entitydata || [])];\n\nfor (let p = 2; p <= paginas; p++) {\n  const r = await pedir(p);\n  if (r?.result?.status !== 'success') break;\n  filas.push(...(r.result.entitydata || []));\n}\n\n// Sin repetidos (por si la API ignora el número de página)\nconst vistos = new Set();\nconst unicas = filas.filter((s) => {\n  const k = s.id ?? s.code;\n  if (vistos.has(k)) return false;\n  vistos.add(k);\n  return true;\n});\n\nreturn [{ json: { ok: true, rows_count: Number(info.rows_count) || unicas.length, paginas, sucursales_raw: unicas } }];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -944,
+          848
+        ],
+        "id": "4ca43769-0987-4258-a887-5a7726f441b4",
+        "name": "getSucursales"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Deja la información relevante de cada sucursal\nconst norm = (s) => String(s ?? '').toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').replace(/[^a-z0-9]+/g, '');\n\nlet buscado = '';\ntry { buscado = String($('When Executed by Another Workflow').first().json.sucursal ?? ''); } catch (e) { buscado = ''; }\nconst q = norm(buscado);\n\nconst r = $input.first().json;\nif (!r.ok) return [{ json: r }];\n\nconst txt = (v) => (v === null || v === undefined ? '' : String(v).trim());\n\nconst todas = r.sucursales_raw\n  .filter((s) => String(s.deleted) !== '1' && String(s.visible) !== '0')\n  .map((s) => ({\n    id: s.id,\n    codigo: txt(s.code),\n    nombre: txt(s.name),\n    empresa: txt(s.company?.name),\n    tipo: txt(s.branch_type?.branch_type_name),\n    marca: txt(s.commercial_brand?.name),\n    direccion: txt(s.address),\n    telefono: txt(s.phone),\n    latitud: s.address_latitude ?? null,\n    longitud: s.address_longitude ?? null,\n  }));\n\nconst sucursales = q\n  ? todas.filter((s) => norm(s.nombre).includes(q) || norm(s.codigo).includes(q) || norm(s.empresa).includes(q))\n  : todas;\n\nreturn [{\n  json: {\n    ok: true,\n    buscado,\n    total_en_pilot: r.rows_count,\n    total_traidas: todas.length,\n    completo: todas.length >= r.rows_count,\n    total: sucursales.length,\n    sucursales,\n  },\n}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -736,
+          864
+        ],
+        "id": "ca2c301f-ce0f-4753-ba02-6b40d3a875ff",
+        "name": "limpieza_sucursales"
+      },
+      {
+        "parameters": {
+          "content": "## Sucursales de Pilot\nMaestro `branches` de `/v1/masters/read.php`. La API devuelve 25 por página: `getSucursales` pide todas las páginas.\n\nTrae: id, código, nombre, empresa, tipo (Salón/Grupo), marca, dirección, teléfono y coordenadas.\nEn Ford Colombia la dirección y el teléfono casi no están cargados en Pilot.\n\nSi el workflow recibe `sucursal`, filtra por nombre, código o empresa.",
+          "height": 208,
+          "width": 560
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          -1296,
+          592
+        ],
+        "id": "fbbfdd53-056c-473f-9bce-a97d5b3d07b0",
+        "name": "Sticky Note1"
+      }
+    ],
+    "connections": {
+      "When Executed by Another Workflow": {
+        "main": [
+          [
+            {
+              "node": "Login",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "When clicking ‘Execute workflow’": {
+        "main": [
+          [
+            {
+              "node": "Login",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Login": {
+        "main": [
+          [
+            {
+              "node": "Edit Fields2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Edit Fields2": {
+        "main": [
+          [
+            {
+              "node": "Login1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Login1": {
+        "main": [
+          [
+            {
+              "node": "getSucursales",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "getSucursales": {
+        "main": [
+          [
+            {
+              "node": "limpieza_sucursales",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "system migration",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-10-26T17:05:10.328Z",
+    "updatedAt": "2026-10-26T17:05:10.328Z"
+  },
+  "activeVersionId": "920fd8ad-a684-4dcc-8edb-de2eba25e3a3",
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Login",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Login",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Login": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields2": {
+      "main": [
+        [
+          {
+            "node": "Login1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Login1": {
+      "main": [
+        [
+          {
+            "node": "getSucursales",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "getSucursales": {
+      "main": [
+        [
+          {
+            "node": "limpieza_sucursales",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-10-07T15:10:29.099Z",
+  "id": "qAhSJPyH3k1WRFEG",
+  "isArchived": false,
+  "meta": null,
+  "name": "get-sucursales-ford-colombia",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Información completa de sucursales (Pilot)\n1. `branches` (maestro): código y nombre de cada sucursal\n2. `workshop_brand` (maestro): código de la marca (por defecto \"ford\"; se puede pasar `marca` al workflow)\n3. `workshop/list.php`: talleres con dirección, teléfono y coordenadas\n4. Se cruzan por nombre. Los talleres que no coinciden con ninguna sucursal quedan en `talleres_sin_sucursal`.\n\nHorarios de atención: Pilot no los expone; quedan en sa_branches.",
+        "height": 208,
+        "width": 640
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -832,
+        0
+      ],
+      "id": "9e597f5a-759a-4c77-b73d-40e9ee60882c",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "sucursal",
+              "type": "any"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1856,
+        928
+      ],
+      "id": "6feef424-a38c-4c13-a545-51650f79c163",
+      "name": "When Executed by Another Workflow",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1856,
+        768
+      ],
+      "id": "3e1da580-f769-4bcd-ac99-1dc5b509e355",
+      "name": "When clicking ‘Execute workflow’",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "url": "=https://api.pilotsolution.net/v1/users/authentication.php",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "options": {}
+      },
+      "id": "2c8cb1e5-e239-4c47-97c8-27d629b70fe3",
+      "name": "Login",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1616,
+        848
+      ],
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "NHXyrkv9ca6Njn8R",
+          "name": "PILOT FORD COLOMBIA"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "d4000004-0000-4000-8000-0000000000aa",
+              "name": "token",
+              "value": "={{ $json.result.entitydata.accounts[0].token }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ce418a5d-8ae9-4123-bf77-c4e465d6ff77",
+      "name": "Edit Fields2",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -1392,
+        848
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.pilotsolution.net/v1/users/authorization.php",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "identity_token",
+              "value": "={{ $json.token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "170b7bf5-265a-48e0-8487-0b8176e99767",
+      "name": "Login1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1168,
+        848
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Trae todas las páginas del maestro \"branches\" de Pilot\nconst token = $('Login1').first().json.result.entitydata.session.identityToken;\nconst url = 'https://api.pilotsolution.net/v1/masters/read.php';\n\nconst pedir = (page) =>\n  this.helpers.httpRequest({\n    method: 'POST',\n    url,\n    json: true,\n    body: {\n      data: { master: 'branches', limit: 100, page },\n      header: {\n        FlowName: 'masterdata_read',\n        SequenceId: 1,\n        TimeStamp: 1248377,\n        TrackingId: '55A6BCD4-0857-4A86-85FB-09A228B641B4',\n        access_token: token,\n      },\n    },\n  });\n\nconst primera = await pedir(1);\nif (primera?.result?.status !== 'success') {\n  return [{ json: { ok: false, error: primera?.result?.message || 'Error al consultar las sucursales', respuesta: primera } }];\n}\n\nconst info = primera.result.aditional_data || {};\nconst paginas = Number(info.page_count) || 1;\nconst filas = [...(primera.result.entitydata || [])];\n\nfor (let p = 2; p <= paginas; p++) {\n  const r = await pedir(p);\n  if (r?.result?.status !== 'success') break;\n  filas.push(...(r.result.entitydata || []));\n}\n\n// Sin repetidos (por si la API ignora el número de página)\nconst vistos = new Set();\nconst unicas = filas.filter((s) => {\n  const k = s.id ?? s.code;\n  if (vistos.has(k)) return false;\n  vistos.add(k);\n  return true;\n});\n\nreturn [{ json: { ok: true, rows_count: Number(info.rows_count) || unicas.length, paginas, sucursales_raw: unicas } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -944,
+        848
+      ],
+      "id": "4ca43769-0987-4258-a887-5a7726f441b4",
+      "name": "getSucursales"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Deja la información relevante de cada sucursal\nconst norm = (s) => String(s ?? '').toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').replace(/[^a-z0-9]+/g, '');\n\nlet buscado = '';\ntry { buscado = String($('When Executed by Another Workflow').first().json.sucursal ?? ''); } catch (e) { buscado = ''; }\nconst q = norm(buscado);\n\nconst r = $input.first().json;\nif (!r.ok) return [{ json: r }];\n\nconst txt = (v) => (v === null || v === undefined ? '' : String(v).trim());\n\nconst todas = r.sucursales_raw\n  .filter((s) => String(s.deleted) !== '1' && String(s.visible) !== '0')\n  .map((s) => ({\n    id: s.id,\n    codigo: txt(s.code),\n    nombre: txt(s.name),\n    empresa: txt(s.company?.name),\n    tipo: txt(s.branch_type?.branch_type_name),\n    marca: txt(s.commercial_brand?.name),\n    direccion: txt(s.address),\n    telefono: txt(s.phone),\n    latitud: s.address_latitude ?? null,\n    longitud: s.address_longitude ?? null,\n  }));\n\nconst sucursales = q\n  ? todas.filter((s) => norm(s.nombre).includes(q) || norm(s.codigo).includes(q) || norm(s.empresa).includes(q))\n  : todas;\n\nreturn [{\n  json: {\n    ok: true,\n    buscado,\n    total_en_pilot: r.rows_count,\n    total_traidas: todas.length,\n    completo: todas.length >= r.rows_count,\n    total: sucursales.length,\n    sucursales,\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -736,
+        864
+      ],
+      "id": "ca2c301f-ce0f-4753-ba02-6b40d3a875ff",
+      "name": "limpieza_sucursales"
+    },
+    {
+      "parameters": {
+        "content": "## Sucursales de Pilot\nMaestro `branches` de `/v1/masters/read.php`. La API devuelve 25 por página: `getSucursales` pide todas las páginas.\n\nTrae: id, código, nombre, empresa, tipo (Salón/Grupo), marca, dirección, teléfono y coordenadas.\nEn Ford Colombia la dirección y el teléfono casi no están cargados en Pilot.\n\nSi el workflow recibe `sucursal`, filtra por nombre, código o empresa.",
+        "height": 208,
+        "width": 560
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1296,
+        592
+      ],
+      "id": "fbbfdd53-056c-473f-9bce-a97d5b3d07b0",
+      "name": "Sticky Note1"
+    }
+  ],
+  "pinData": {
+    "When Executed by Another Workflow": [
+      {
+        "json": {
+          "sucursal": ""
+        }
+      }
+    ]
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "qAhSJPyH3k1WRFEG",
+      "projectId": "K8p6XEqA0L6D2uVt",
+      "createdAt": "2026-10-07T15:10:29.109Z",
+      "updatedAt": "2026-10-07T15:10:29.109Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2026-10-26T17:06:13.535Z",
+  "versionId": "920fd8ad-a684-4dcc-8edb-de2eba25e3a3"
+}
