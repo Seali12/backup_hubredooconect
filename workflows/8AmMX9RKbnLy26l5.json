@@ -1,0 +1,200 @@
+{
+  "active": false,
+  "activeVersion": null,
+  "activeVersionId": null,
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Pilot authentication",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pilot authentication": {
+      "main": [
+        [
+          {
+            "node": "Pilot authorization",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pilot authorization": {
+      "main": [
+        [
+          {
+            "node": "Telefonos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telefonos": {
+      "main": [
+        [
+          {
+            "node": "Buscar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar": {
+      "main": [
+        [
+          {
+            "node": "Resumen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-11-20T16:11:34.509Z",
+  "id": "8AmMX9RKbnLy26l5",
+  "isArchived": true,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "name": "TEMP Ford - buscar 12 por celular",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "id": "6b712b78-5d39-41df-83a5-92b44381505a",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "57510193-f7fc-4def-9ab0-78abbed98008",
+      "name": "Pilot authentication",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        224,
+        0
+      ],
+      "parameters": {
+        "url": "https://api.pilotsolution.net/v1/users/authentication.php",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "options": {}
+      },
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "NHXyrkv9ca6Njn8R",
+          "name": "PILOT FORD COLOMBIA"
+        }
+      }
+    },
+    {
+      "id": "7866da20-d38a-4739-bfb2-4abb5830c287",
+      "name": "Pilot authorization",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        448,
+        0
+      ],
+      "parameters": {
+        "url": "https://api.pilotsolution.net/v1/users/authorization.php",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "identity_token",
+              "value": "={{ $json.result.entitydata.accounts[0].token }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "6acc42d6-e1b2-4add-97a1-2b1b7984582f",
+      "name": "Telefonos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        0
+      ],
+      "parameters": {
+        "jsCode": "return ['3155118918','3249639604','3208525963','3234964675','3153112104','3025278901','3108138844','3170743217','3114618985','3135582582','3234207181','3203598484'].map(t => ({ json: { tel: t } }));"
+      }
+    },
+    {
+      "id": "42abf4dc-e7a0-465a-9f88-241b1ea1b1c9",
+      "name": "Buscar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        896,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.pilotsolution.net/v1/welcomes/list.php",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ \"data\": { \"limit\": 20, \"page\": 1, \"filters\": [ { \"field\": \"welcome_cellphone\", \"operation\": \"LIKE\", \"value\": $json.tel.slice(-8) } ], \"wildCard\": \"*\", \"sorts\": [ { \"field\": \"created\", \"order\": \"DESC\" } ] }, \"header\": { \"FlowName\": \"List_Leads\", \"SequenceId\": 1, \"TimeStamp\": 1248377, \"TrackingId\": \"FD1C4A1A-CAFB-467E-825B-7FFB86CC21E3\", \"access_token\": $(\"Pilot authorization\").first().json.result.entitydata.session.identityToken } }) }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 3000
+            }
+          }
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "6e0548f8-d7ce-4c62-9ebe-b10c716803f6",
+      "name": "Resumen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const src = $('Telefonos').all();\nconst rows = [];\n$input.all().forEach((it, i) => {\n  const r = it.json.result || {}; let L = r.entitydata; if (!L) { rows.push({ json: { tel: src[i].json.tel, encontrados: 0, status: r.status || JSON.stringify(it.json).slice(0,200) } }); return; }\n  if (!Array.isArray(L)) L = L.welcomes || L.list || L.items || [L];\n  if (!L.length) rows.push({ json: { tel: src[i].json.tel, encontrados: 0 } });\n  L.forEach(e => rows.push({ json: { tel: src[i].json.tel, cel: (e.prospect||{}).cellphone, guid: e.id, num: e.number || e.welcome_number || e.code, nombre: ((e.prospect||{}).firstname||'') + ' ' + ((e.prospect||{}).lastname||''), creado: (e.created||{}).dt, creado_por: ((e.created||{}).user||{}).fullname, origen: (e.origin||{}).code, suborigen: (e.suborigin||{}).code, negocio: (e.business_type||{}).code, fuente: (e.source_type||{}).code, estado: (e.status||{}).name, interes: (e.interest_level||{}).name, asignado: ((e.asigned||{}).user||{}).fullname, desist: ((e.desist||{}).status||{}).name, keys: Object.keys(e).slice(0,40).join(',') } }));\n});\nreturn rows;"
+      }
+    }
+  ],
+  "pinData": null,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "8AmMX9RKbnLy26l5",
+      "projectId": "K8p6XEqA0L6D2uVt",
+      "createdAt": "2026-11-20T16:11:34.511Z",
+      "updatedAt": "2026-11-20T16:11:34.511Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2026-11-20T16:12:41.000Z",
+  "versionId": "c53e06a9-db63-4195-8364-acf7e68b9969"
+}
