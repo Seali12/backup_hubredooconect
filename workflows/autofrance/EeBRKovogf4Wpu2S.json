@@ -1,0 +1,430 @@
+{
+  "active": false,
+  "activeVersion": null,
+  "activeVersionId": null,
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar telefono": {
+      "main": [
+        [
+          {
+            "node": "mensaje_accesorios",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Datos OK?": {
+      "main": [
+        [
+          {
+            "node": "Consume −",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "¿Datos OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consume −": {
+      "main": [
+        [
+          {
+            "node": "¿Hay saldo?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Hay saldo?1": {
+      "main": [
+        [
+          {
+            "node": "Enviar WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Guardar job pendiente1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar job pendiente1": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-03-09T13:41:47.683Z",
+  "id": "EeBRKovogf4Wpu2S",
+  "isArchived": false,
+  "meta": null,
+  "name": "API PILOT - ACCESORIOS",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "9ecf1cca-3c5f-48f6-9dcd-66b826dbe507",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -704,
+        320
+      ],
+      "id": "7d217983-5ed2-44ef-916f-224d739f54a8",
+      "name": "Webhook",
+      "webhookId": "9ecf1cca-3c5f-48f6-9dcd-66b826dbe507"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ======================================================\n// OBTENER DATOS DESDE EL WEBHOOK\n// ======================================================\nconst input = $input.first().json;\nconst body = input.body ?? {};\n\n// Convertimos ambos campos a texto y quitamos espacios\nconst celular = String(body.Celular ?? '').trim();\nconst telefonoFijo = String(body.Telefono ?? '').trim();\n\n// Prioridad: celular -> teléfono fijo -> null\nconst telefono = celular || telefonoFijo || null;\n\nconst notas = String(body.pilot_notes ?? '');\nconst productoInteres = String(body.pilot_product_of_interest ?? '').trim();\n\n// ======================================================\n// NORMALIZADOR ARGENTINA\n// FORMATO DE SALIDA: 549XXXXXXXXXX\n// ======================================================\nfunction normalizarTelefonoArgentina(numero) {\n  if (!numero) {\n    return null;\n  }\n\n  // Eliminar espacios, guiones, paréntesis, +, etc.\n  let limpio = String(numero).replace(/\\D/g, '');\n\n  if (!limpio) {\n    return null;\n  }\n\n  // ==================================================\n  // CASO 1: Ya viene como 549...\n  // Ejemplo: 5491172270714\n  // ==================================================\n  if (limpio.startsWith('549') && limpio.length >= 13) {\n    return limpio;\n  }\n\n  // ==================================================\n  // CASO 2: Viene como 54...\n  // Ejemplo: 541172270714\n  // Se agrega el 9 después del 54\n  // ==================================================\n  if (limpio.startsWith('54') && limpio.length >= 12) {\n    return `549${limpio.slice(2)}`;\n  }\n\n  // ==================================================\n  // CASO 3: Viene como 0 + código de área + número\n  // Ejemplo: 01172270714\n  // ==================================================\n  if (limpio.startsWith('0')) {\n    limpio = limpio.slice(1);\n  }\n\n  // ==================================================\n  // CASO 4: Viene con 15 después del código de área\n  // Ejemplo CABA: 0111572270714\n  // Después de sacar el 0 queda: 111572270714\n  //\n  // Esta corrección está pensada para números de CABA.\n  // ==================================================\n  if (limpio.startsWith('1115') && limpio.length === 12) {\n    limpio = `11${limpio.slice(4)}`;\n  }\n\n  // ==================================================\n  // CASO 5: Área + número\n  // Argentina normalmente tiene 10 dígitos nacionales\n  // Ejemplos:\n  // 1172270714\n  // 3815765949\n  // ==================================================\n  if (limpio.length === 10) {\n    return `549${limpio}`;\n  }\n\n  // ==================================================\n  // NO VÁLIDO\n  // ==================================================\n  return null;\n}\n\n// ======================================================\n// EXTRAER MODELO DE INTERÉS\n// ======================================================\nfunction extraerModelo(notasLead, producto) {\n  // Prioridad 1: campo específico del producto\n  if (producto) {\n    return producto;\n  }\n\n  // Prioridad 2: buscar dentro de las notas\n  const match = notasLead.match(\n    /Modelo de inter[eé]s:\\s*([^\\n.]+)/i\n  );\n\n  if (match?.[1]) {\n    const modeloEncontrado = match[1].trim();\n    return modeloEncontrado || null;\n  }\n\n  return null;\n}\n\n// ======================================================\n// NORMALIZAR Y EXTRAER DATOS\n// ======================================================\nconst whatsapp = normalizarTelefonoArgentina(telefono);\nconst modelo = extraerModelo(notas, productoInteres);\n\n// ======================================================\n// DETERMINAR MOTIVO DE ERROR\n// ======================================================\nlet motivoInvalido = null;\n\nif (!telefono) {\n  motivoInvalido =\n    'El webhook no recibió pilot_cellphone ni pilot_phone';\n} else if (!whatsapp) {\n  motivoInvalido =\n    'El teléfono recibido no tiene un formato o cantidad de dígitos válida';\n}\n\n// ======================================================\n// SALIDA\n// ======================================================\nreturn [\n  {\n    json: {\n      whatsapp,\n      valido: whatsapp !== null,\n      original: telefono,\n\n      telefono_celular_recibido: celular,\n      telefono_fijo_recibido: telefonoFijo,\n\n      motivo_invalido: motivoInvalido,\n      modelo\n    }\n  }\n];"
+      },
+      "id": "5a63bf15-31d1-4fdc-a44b-fe653a576467",
+      "name": "Normalizar telefono",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -176,
+        -48
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.twilio.com/2010-04-01/Accounts/TWILIO_SID_OCULTO/Messages.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "MessagingServiceSid",
+              "value": "=MG2f017dd3c25d710216538e8064169bb7"
+            },
+            {
+              "name": "To",
+              "value": "=whatsapp:{{ $json.whatsapp }}"
+            },
+            {
+              "name": "ContentSid",
+              "value": "HX12c903cf080041eed4d5c7232f09c4e3"
+            },
+            {
+              "name": "ContentVariables",
+              "value": "={\"1\":\"{{ $('Webhook').first().json.body.Nombre_Cliente }}\", \"2\":\"{{ $json.modelo }}\", \"3\":\"PERFIL-2_20260316_132600.jpg\", \"4\":\"123\"}"
+            },
+            {
+              "name": "From",
+              "value": "whatsapp:+5491125599175"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6145048c-9dd6-4d35-a2d0-1e8550625893",
+      "name": "mensaje_accesorios",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        32,
+        -48
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "HGznV7LXQ6vIhur8",
+          "name": "Twillio Autofrance"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.valido }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "1b406538-2aa5-4468-b77c-795a0a8cb4c1",
+      "name": "¿Datos OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -320,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.twilio.com/2010-04-01/Accounts/{{ $('Code').item.json.account_sid }}/Messages.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "MessagingServiceSid",
+              "value": "={{ $('Code').item.json.messaging_service_sid }}"
+            },
+            {
+              "name": "To",
+              "value": "=whatsapp:{{ $('Code').item.json.whatsapp.startsWith('+') ? $('Code').item.json.whatsapp : '+' + $('Code').item.json.whatsapp }}"
+            },
+            {
+              "name": "ContentSid",
+              "value": "={{ $('Code').item.json.content_sid }}"
+            },
+            {
+              "name": "ContentVariables",
+              "value": "={{ $('Code').item.json.content_variables }}"
+            },
+            {
+              "name": "From",
+              "value": "={{ $('Code').item.json.from_phone }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "7863db44-889b-47f7-8ab9-6328261e729c",
+      "name": "Enviar WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        352,
+        192
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "HGznV7LXQ6vIhur8",
+          "name": "Twillio Autofrance"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ======================================================\n// Webhook → preparar disparo restringido Accesorios\n// ======================================================\nconst root = $input.first()?.json || {};\nconst body = root.body || root;\n\n// ======================================================\n// DATOS DEL CLIENTE\n// ======================================================\nconst firstname =\n  String(body.Nombre_Cliente || '').trim() ||\n  'Cliente';\n\nconst marca =\n  String(body.Marca || '').trim();\n\nconst modelo =\n  String(body.Modelo || '').trim();\n\nconst version =\n  String(body.Version || '').trim();\n\n// ======================================================\n// TELÉFONO\n// ======================================================\nlet telefono =\n  body.Celular ||\n  body.Telefono ||\n  null;\n\n// ======================================================\n// NORMALIZADOR ARGENTINA\n// ======================================================\nfunction normalizarTelefonoArgentina(numero) {\n  if (!numero) return null;\n\n  let limpio = String(numero).replace(/\\D/g, '');\n\n  if (limpio.startsWith('549') && limpio.length === 13) {\n    return limpio;\n  }\n\n  if (limpio.startsWith('54') && limpio.length === 12) {\n    return '549' + limpio.slice(2);\n  }\n\n  if (limpio.startsWith('0')) {\n    limpio = limpio.slice(1);\n  }\n\n  if (limpio.length === 10) {\n    return '549' + limpio;\n  }\n\n  return null;\n}\n\nconst whatsapp = normalizarTelefonoArgentina(telefono);\n\n// ======================================================\n// NORMALIZAR DATOS\n// ======================================================\nconst marcaNorm = marca\n  .normalize('NFD')\n  .replace(/[\\u0300-\\u036f]/g, '')\n  .toUpperCase()\n  .replace(/\\s+/g, ' ')\n  .trim();\n\nconst modeloNorm = modelo\n  .normalize('NFD')\n  .replace(/[\\u0300-\\u036f]/g, '')\n  .toUpperCase()\n  .replace(/\\s+/g, ' ')\n  .trim();\n\n// ======================================================\n// CONSTANTES TWILIO AUTOFANCE\n// ======================================================\nconst ACCOUNT_SID = 'TWILIO_SID_OCULTO';\n\nconst MESSAGING_SERVICE_SID =\n  'MG2f017dd3c25d710216538e8064169bb7';\n\nconst FROM_PHONE = 'whatsapp:+5491125599175';\n\nconst TWILIO_CREDENTIAL_REF = 'Twillio Autofrance';\n\n// ======================================================\n// TEMPLATE ACCESORIOS\n// ======================================================\n\nconst CONTENT_SID = 'HX12c903cf080041eed4d5c7232f09c4e3';\n\n// ======================================================\n// CONTENT VARIABLES\n// ======================================================\n\nconst contentVariablesObj = {\n  '1': firstname\n};\n\nconst contentVariables =\n  JSON.stringify(contentVariablesObj);\n\n// ======================================================\n// VALIDACIONES\n// ======================================================\nconst telefonoValido = whatsapp !== null;\n\nconst datosClienteValidos =\n  firstname !== '' &&\n  firstname !== 'Cliente';\n\nconst templateValido =\n  CONTENT_SID !== '' &&\n  CONTENT_SID !== 'PEGAR_CONTENT_SID_ACA';\n\nconst valido =\n  telefonoValido &&\n  datosClienteValidos &&\n  templateValido;\n\n// ======================================================\n// SALIDA\n// ======================================================\nreturn [\n  {\n    json: {\n      valido,\n\n      telefonoValido,\n      datosClienteValidos,\n      templateValido,\n\n      whatsapp,\n      to_phone: whatsapp,\n\n      firstname,\n\n      marca,\n      marcaNorm,\n\n      modelo,\n      modeloNorm,\n\n      version,\n\n      account_sid: ACCOUNT_SID,\n      messaging_service_sid: MESSAGING_SERVICE_SID,\n      from_phone: FROM_PHONE,\n\n      content_sid: CONTENT_SID,\n      content_variables: contentVariables,\n\n      original: telefono,\n\n      twilio_credential_ref: TWILIO_CREDENTIAL_REF,\n\n      source: 'n8n:autofrance-accesorios-restricciones',\n\n      payload_json: {\n        firstname,\n        marca,\n        modelo,\n        version,\n        whatsapp,\n        contentVariables\n      }\n    }\n  }\n];"
+      },
+      "id": "00543bcc-6707-485a-937d-8b629b529ea0",
+      "name": "Code",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -480,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api-redoo.up.railway.app/api/v1/companies/me/messages-balance/consume",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "6955995d-7c77-4c76-a029-f2bc3acbc579"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({}) }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "3b246683-8ff8-439f-86d9-a20441c7965e",
+      "name": "Consume −",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -96,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.statusCode }}",
+              "operation": "equal",
+              "value2": 200
+            }
+          ]
+        }
+      },
+      "id": "bcf37369-0d14-4e2a-a9c0-8f60ec0ed564",
+      "name": "¿Hay saldo?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        112,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api-redoo.up.railway.app/api/v1/companies/me/outbound-jobs",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "6955995d-7c77-4c76-a029-f2bc3acbc579"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ channel: 'whatsapp', to_phone: $('Code').item.json.to_phone, from_phone: $('Code').item.json.from_phone, account_sid: $('Code').item.json.account_sid, messaging_service_sid: $('Code').item.json.messaging_service_sid, content_sid: $('Code').item.json.content_sid, content_variables: $('Code').item.json.content_variables, twilio_credential_ref: $('Code').item.json.twilio_credential_ref, payload_json: $('Code').item.json.payload_json, source: $('Code').item.json.source }) }}",
+        "options": {}
+      },
+      "id": "efbb584b-378d-4443-8c31-0bb20a181ede",
+      "name": "Guardar job pendiente1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        352,
+        416
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "virginia.piotti@redoo.com.ar, camila.villareal@redoo.com.ar, ignacio.cabaleiro@redoo.com.ar",
+        "subject": "AUTOFRANCE - LIMITE MENSAJES",
+        "emailType": "text",
+        "message": "Buenas, AutoFrance supero el limite de sus mensajes mensuales. Por favor revisar.",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        560,
+        416
+      ],
+      "id": "a0f59a07-cbbb-4de7-99f7-1b61f966c936",
+      "name": "Send a message",
+      "webhookId": "e1cd879f-c682-4c81-85ce-3ac2c229d482",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "t0AwJxleHeUdiqQM",
+          "name": "Gmail account"
+        }
+      },
+      "disabled": true
+    }
+  ],
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "headers": {
+            "host": "autofrance.redooconect.com.ar",
+            "user-agent": "BAAS-WEBHOOKS-GATEWAY/WEBHOOK_EVENTS",
+            "accept": "*/*",
+            "content-type": "application/json",
+            "x-forwarded-for": "3.233.11.3",
+            "x-forwarded-host": "autofrance.redooconect.com.ar",
+            "x-forwarded-server": "autofrance.redooconect.com.ar",
+            "content-length": "182",
+            "connection": "Keep-Alive"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "Nombre_Cliente": "CAMILA",
+            "Telefono": "2616809213",
+            "Celular": "2616809213",
+            "Marca": "FIAT",
+            "Modelo": "CRONOS",
+            "Version": "Drive 1.3 GSE Pack Plus"
+          },
+          "webhookUrl": "https://autofrance.redooconect.com.ar/webhook/9ecf1cca-3c5f-48f6-9dcd-66b826dbe507",
+          "executionMode": "production"
+        }
+      }
+    ]
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "EeBRKovogf4Wpu2S",
+      "projectId": "XDNGkKAM4jxvPjG8",
+      "createdAt": "2026-03-09T13:41:47.687Z",
+      "updatedAt": "2026-03-09T13:41:47.687Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [
+    {
+      "id": "zM2R6E3L22xAOyRM",
+      "name": "autofrance",
+      "createdAt": "2026-02-13T20:29:42.193Z",
+      "updatedAt": "2026-02-13T20:29:42.193Z"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-10-29T20:50:57.097Z",
+  "versionId": "0dc2e6dd-083b-4c6e-99d3-81fa2b2c088b"
+}
