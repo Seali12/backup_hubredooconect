@@ -1,0 +1,3037 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "183827fc-d7ca-4323-9fb3-9527ae0a9f5d",
+    "workflowId": "nvDht1oiTdhfQOaD",
+    "nodes": [
+      {
+        "parameters": {
+          "model": "gpt-4.1",
+          "options": {
+            "temperature": 0.4,
+            "maxRetries": 2
+          }
+        },
+        "id": "e1616e91-387c-48ec-ad5b-711ffa45ff77",
+        "name": "OpenAI Chat Model",
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "position": [
+          -336,
+          336
+        ],
+        "typeVersion": 1,
+        "credentials": {
+          "openAiApi": {
+            "id": "6LyxFNJPqZkaD3hN",
+            "name": "OpenAi account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "upsert",
+          "table": {
+            "__rl": true,
+            "value": "grupo_avant",
+            "mode": "list",
+            "cachedResultName": "grupo_avant"
+          },
+          "dataMode": "defineBelow",
+          "columnToMatchOn": "id_conversation",
+          "valueToMatchOn": "={{ $json.idConversation || $json.sessionId }}",
+          "valuesToSend": {
+            "values": [
+              {
+                "column": "={{ $fromAI('key', ``, 'string') }}",
+                "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('values0_Value', ``, 'string') }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.mySqlTool",
+        "typeVersion": 2.5,
+        "position": [
+          48,
+          336
+        ],
+        "id": "568b5177-4b05-4084-b79f-9899a6e5ae79",
+        "name": "saveData",
+        "credentials": {
+          "mySql": {
+            "id": "aBK9rpgMXOBh74ix",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "select",
+          "table": {
+            "__rl": true,
+            "value": "grupo_avant",
+            "mode": "list",
+            "cachedResultName": "grupo_avant"
+          },
+          "where": {
+            "values": [
+              {
+                "column": "patente",
+                "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('values0_Value', `patente proporcionada por el usuario`, 'string') }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.mySqlTool",
+        "typeVersion": 2.5,
+        "position": [
+          176,
+          336
+        ],
+        "id": "a02e007a-9a25-4da8-8279-47b77d7b3b5d",
+        "name": "getData",
+        "credentials": {
+          "mySql": {
+            "id": "aBK9rpgMXOBh74ix",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "needsFallback": true,
+          "options": {
+            "systemMessage": "=Sos un agente de turnos para GRUPO AVANT. Tono cordial y profesional. UNA pregunta por mensaje. UNA sola tool call por turno, esperá el resultado antes de continuar.\nREGLA — IMÁGENES\nSi el mensaje recibido comienza con _event_media_ (por ejemplo: _event_media_174d5414-1f33-4d7b-85dc-d855499d9848), respondé únicamente:\n\"Lo siento, no puedo interpretar imágenes. Por favor escribí tu consulta en texto.\"\nNo ejecutes ninguna tool call ni avances en ningún flujo. Esperá el siguiente mensaje del usuario.\nREGLA CRÍTICA — PRECIOS\nNUNCA, bajo ninguna circunstancia, informes precios ni cotizaciones de ningún tipo. Si el cliente pregunta por precios, respondé amablemente que no contás con esa información y sugerile que se comunique directamente con el local.\nREGLA CRÍTICA — saveData inmediato\nCada vez que el cliente responda con un dato, PRIMERO ejecutá saveData con ese dato y LUEGO hacé la siguiente pregunta. Nunca avances al siguiente paso sin haber ejecutado el saveData del dato recibido. Esto aplica a: name, patente, chasis, email, km.\nINICIO\n\"Bienvenido al sistema de turnos de taller de GRUPO AVANT\n¿Querés crear un turno nuevo, cancelar un turno o confirmar tu asistencia?\"\n\nFLUJO: CREAR TURNO\nPASO 1 — Pedí la patente o últimos 4 dígitos del chasis.\nPASO 2 — Con la respuesta:\n\nget_user(VALOR_EN_MAYÚSCULAS)\nsaveData(\"patente\", VALOR_EN_MAYÚSCULAS)\n\nPASO 3 — Cliente encontrado (get_user devolvió datos)\nMostrá los datos → \"¿Estos datos son correctos?\"\n\nSí → ir a PASO 6\nCorrige algo → saveData del campo corregido → ir a PASO 6\n\nPASO 4 — Cliente nuevo (get_user no encontró el usuario), pedí de a uno en este orden exacto:\n\nPreguntá el nombre → cuando el cliente responda → saveData(\"name\", valor) → LUEGO preguntá la marca\nPreguntá la marca → set_marca(marca_ingresada_por_cliente)\n\nSi devuelve status \"found\" → ir a PASO 5\nSi devuelve status \"not_found\" → mostrá opciones → cliente elige → set_marca(marca_elegida) → ir a PASO 5\n\n\n\nPASO 5 — Modelo:\n\nPreguntá el modelo → cuando el cliente responda → INMEDIATAMENTE ejecutá set_modelo(valor_respondido_por_el_cliente) sin excepciones\n\nSi devuelve status \"found\" → continuá al punto 2\nSi devuelve status \"not_found\" → mostrá las opciones recibidas → esperá que el cliente elija → INMEDIATAMENTE ejecutá set_modelo(opcion_elegida) → continuá al punto 2\n\n\nPreguntá el chasis → cuando el cliente responda → saveData(\"chasis\", valor) → LUEGO preguntá el email\nPreguntá el email → cuando el cliente responda → saveData(\"email\", valor) → LUEGO ir a PASO 6\n→ Una vez completados los 3 puntos, ir a PASO 6\n\nPASO 6 — Cerrar turno:\n\nPedí kilometraje → No le des como opción de dar los Km con \"k\", es confuso → cuando el cliente responda, convertí el valor: si contiene \"k\", \"K\", \"mil\" o \"MIL\" multiplicá el número por 1000 (ej: \"15k\" → 15000, \"15 mil\" → 15000) → Si el cliente dice por ejemplo 490k, muy probablemente se refiera a k como km y no como en \"mil\". Si es un valor grande, validalo con el cliente → saveData(\"km\", valor_convertido_como_string) → LUEGO continuar\nSelección de sucursal — PASO OBLIGATORIO antes de buscar turnos:\nPreguntá: \"¿A qué sucursal querés dirigirte: Santiago o Santo Domingo?\"\n\nSi elige Santiago:\nUsar get_turnosSantiago para buscar turnos y set_turnosSantiago para reservar. Ir al punto 3.\nSi elige Santo Domingo:\nPreguntá: \"¿Qué sucursal de Santo Domingo te queda más cerca: Av. Charles Sumner o Av. 27 de Febrero?\"\n\nSi elige Av. Charles Sumner: usar get_turnosCharlesDo para buscar turnos y set_turnosCharlesDo para reservar. Ir al punto 3.\nSi elige Av. 27 de Febrero: usar get_turnosFebreroDo para buscar turnos y set_turnosFebreroDo para reservar. Ir al punto 3.\n\n\n\n\nEjecutá el get correspondiente a la sucursal elegida → mostrá los turnos recibidos enumerados → el cliente elige.\nPedí confirmación al cliente.\nSi confirma → ejecutá el set correspondiente a la sucursal elegida con (\"fecha\", \"hora\")\n\nSi el set falla o devuelve error: Informale al cliente que no se pudo confirmar el turno seleccionado. Luego volvé al punto 3 del PASO 6: ejecutá nuevamente el get correspondiente para obtener turnos actualizados, mostráselos enumerados al cliente y pedile que elija uno nuevo. Repetí este ciclo hasta que el set sea exitoso o el cliente decida no continuar.\n\n\nEnviá mensaje de despedida + 【alert: \"close_conversation\"】\n\n\nFLUJO: CANCELAR / MODIFICAR TURNO\nSi el usuario quiere cancelar o modificar un turno:\n\nPedir patente → saveData(\"patente\", VALOR_EN_MAYÚSCULAS)\nNo ejecutes get_turnos, solo ejecutá cancelar_turno(accion = cancelar_turno)\nEjecutar SI O SI cancelar_turno(accion = cancelar_turno)\nConfirmarle la cancelación al usuario\n\n\nREGLAS\n\nUna tool call por turno, esperá el resultado antes de la siguiente\nNunca repitas una tool call ya ejecutada\nNunca preguntes datos ya guardados\nPatente siempre en MAYÚSCULAS\nEl orquestador NUNCA ejecuta saveData para marca ni modelo, eso lo hacen los subagentes\nKilometraje: Siempre guardá el número entero como string\nset_modelo SIEMPRE debe ejecutarse con la respuesta del cliente, nunca omitirlo ni saltarlo\nLa selección de sucursal SIEMPRE debe realizarse antes de ejecutar cualquier get o set de turnos\nNunca uses get_turnos ni set_turno genéricos; siempre usá la función específica de la sucursal elegida"
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.agent",
+        "typeVersion": 2.2,
+        "position": [
+          48,
+          48
+        ],
+        "id": "194baa7a-27d3-4ed8-ab1d-d1de81ea59fa",
+        "name": "AI Agent"
+      },
+      {
+        "parameters": {
+          "sessionIdType": "customKey",
+          "sessionKey": "={{ $('When chat message received').item.json.sessionId || $('When chat message received').item.json.idConversation }}",
+          "contextWindowLength": 25
+        },
+        "id": "e15bd571-0bd9-45be-9e69-d234af90f1e2",
+        "name": "Window Buffer Memory",
+        "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+        "position": [
+          -80,
+          336
+        ],
+        "typeVersion": 1.2
+      },
+      {
+        "parameters": {
+          "model": {
+            "__rl": true,
+            "mode": "list",
+            "value": "gpt-4.1-mini"
+          },
+          "options": {}
+        },
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1.2,
+        "position": [
+          -208,
+          336
+        ],
+        "id": "9771b605-29fb-43a9-83dd-fda7311ec1f6",
+        "name": "OpenAI Chat Model1",
+        "credentials": {
+          "openAiApi": {
+            "id": "6LyxFNJPqZkaD3hN",
+            "name": "OpenAi account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "value": "CKxo5Zqubojy5loG",
+            "mode": "list",
+            "cachedResultName": "TOOLS"
+          },
+          "workflowInputs": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "accion": "=get_user",
+              "idConversation": "={{ $json.idConversation || $json.sessionId }}",
+              "tel": "={{$json.from || \"549111111111\"}}",
+              "patente": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('patente', `patente proporcionada por el usuario`, 'string') }}",
+              "name": "={{ $json.name }}"
+            },
+            "matchingColumns": [
+              "dominio"
+            ],
+            "schema": [
+              {
+                "id": "accion",
+                "displayName": "accion",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "idConversation",
+                "displayName": "idConversation",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "tel",
+                "displayName": "tel",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "name",
+                "displayName": "name",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "patente",
+                "displayName": "patente",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "idTurno",
+                "displayName": "idTurno",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": false
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+        "typeVersion": 2.2,
+        "position": [
+          304,
+          336
+        ],
+        "id": "437de34e-c134-4c13-86a2-16f4b32454d7",
+        "name": "get_user"
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "value": "FfLfg1639UAR05mH",
+            "mode": "list",
+            "cachedResultName": "set-marca"
+          },
+          "workflowInputs": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "idConversation": "={{ $json.idConversation || $json.sessionId }}",
+              "marca": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('marca', ``, 'string') }}"
+            },
+            "matchingColumns": [
+              "dominio"
+            ],
+            "schema": [
+              {
+                "id": "marca",
+                "displayName": "marca",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "idConversation",
+                "displayName": "idConversation",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": false
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+        "typeVersion": 2.2,
+        "position": [
+          432,
+          336
+        ],
+        "id": "9bc13ff6-8884-4755-acbc-5c46aa711599",
+        "name": "set_marca"
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "value": "0GT4Q6UcKcosYMrW",
+            "mode": "list",
+            "cachedResultName": "set_modelo"
+          },
+          "workflowInputs": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "modelo": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('modelo', ``, 'string') }}",
+              "idConversation": "={{ $json.idConversation || $json.sessionId }}"
+            },
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "modelo",
+                "displayName": "modelo",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "idConversation",
+                "displayName": "idConversation",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string"
+              }
+            ],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": false
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+        "typeVersion": 2.2,
+        "position": [
+          560,
+          336
+        ],
+        "id": "492227b8-ca7d-4072-935b-edc762f40c13",
+        "name": "set_modelo"
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "value": "CKxo5Zqubojy5loG",
+            "mode": "list",
+            "cachedResultName": "TOOLS"
+          },
+          "workflowInputs": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "idConversation": "={{ $json.idConversation || $json.sessionId }}",
+              "accion": "cancelar_turno",
+              "tel": "={{ $json.from }}",
+              "name": "={{ $json.name }}",
+              "patente": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('patente', `patente del del usuario`, 'string') }}",
+              "idTurno": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('idTurno', `id turno obtenido del obtener_Turnos ejecutado anterior a este nodo`, 'string') }}"
+            },
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "accion",
+                "displayName": "accion",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "idConversation",
+                "displayName": "idConversation",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "tel",
+                "displayName": "tel",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "name",
+                "displayName": "name",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "patente",
+                "displayName": "patente",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "idTurno",
+                "displayName": "idTurno",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": false
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+        "typeVersion": 2.2,
+        "position": [
+          1248,
+          320
+        ],
+        "id": "321d0884-fc28-4b7b-89e1-c1eeb0563a8a",
+        "name": "cancelar_turno"
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "value": "CKxo5Zqubojy5loG",
+            "mode": "list",
+            "cachedResultName": "TOOLS"
+          },
+          "workflowInputs": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "idConversation": "={{ $json.idConversation || $json.sessionId }}",
+              "accion": "confirmar_turno",
+              "tel": "={{ $json.from }}",
+              "name": "={{ $json.name }}",
+              "patente": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('patente', `patente del del usuario`, 'string') }}"
+            },
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "accion",
+                "displayName": "accion",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "idConversation",
+                "displayName": "idConversation",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "tel",
+                "displayName": "tel",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "name",
+                "displayName": "name",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "patente",
+                "displayName": "patente",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "idTurno",
+                "displayName": "idTurno",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": true
+              }
+            ],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": false
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+        "typeVersion": 2.2,
+        "position": [
+          1536,
+          320
+        ],
+        "id": "e6b08588-101d-4af9-b81d-de7e90825a75",
+        "name": "confirmar_turno"
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "value": "Mv4YVHdavrs8hv9B",
+            "mode": "list",
+            "cachedResultName": "TOOLS"
+          },
+          "workflowInputs": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "idConversation": "={{ $json.idConversation || $json.sessionId }}",
+              "accion": "obtener_turno",
+              "tel": "={{ $json.from }}",
+              "name": "={{ $json.name }}",
+              "patente": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('patente', `patente del del usuario`, 'string') }}"
+            },
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "accion",
+                "displayName": "accion",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "idConversation",
+                "displayName": "idConversation",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "tel",
+                "displayName": "tel",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "name",
+                "displayName": "name",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "patente",
+                "displayName": "patente",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "idTurno",
+                "displayName": "idTurno",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": true
+              }
+            ],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": false
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+        "typeVersion": 2.2,
+        "position": [
+          1392,
+          320
+        ],
+        "id": "858252e5-e9a7-4d1a-9bfb-92942a075b53",
+        "name": "obtener_turno"
+      },
+      {
+        "parameters": {
+          "public": true,
+          "options": {}
+        },
+        "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+        "typeVersion": 1.3,
+        "position": [
+          -192,
+          48
+        ],
+        "id": "f4382021-1754-46f7-810a-4d8b2c79d4ba",
+        "name": "When chat message received",
+        "webhookId": "a42e9dac-9bf6-4d1e-bf5c-9da91256eff3"
+      },
+      {
+        "parameters": {
+          "content": "Preguntar las 2 sucursales cual quiere:\nSanto domingo o Santiago\nSi dice Santiago ejecutar get_turnos_santisago, si dice Santo DOmingo preguntar cual de las dos queire (separar por direccion) y ejecutar uyna u otra, lo mismo para set\nPrompt ajustado -> FAlta CREAR TOOLS y hacer los subflujos cambiendo el taller y probarlo, patente NNN1234 susuki ax1000",
+          "height": 336,
+          "width": 656
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          560,
+          -160
+        ],
+        "typeVersion": 1,
+        "id": "7da9923b-f6d9-4b3b-8ed4-ec227b330ca9",
+        "name": "Sticky Note"
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "value": "CKxo5Zqubojy5loG",
+            "mode": "list",
+            "cachedResultName": "TOOLS"
+          },
+          "workflowInputs": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "accion": "=get_turnos",
+              "idConversation": "={{ $json.idConversation || $json.sessionId }}",
+              "tel": "={{$json.from || \"549111111111\"}}",
+              "patente": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('patente', `patente proporcionada por el usuario`, 'string') }}",
+              "name": "tallers"
+            },
+            "matchingColumns": [
+              "dominio"
+            ],
+            "schema": [
+              {
+                "id": "accion",
+                "displayName": "accion",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "idConversation",
+                "displayName": "idConversation",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "tel",
+                "displayName": "tel",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "name",
+                "displayName": "name",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "patente",
+                "displayName": "patente",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": false
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+        "typeVersion": 2.2,
+        "position": [
+          768,
+          336
+        ],
+        "id": "674c3eed-d114-4833-a043-66d6f93013b7",
+        "name": "get_turnosSantiago"
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "value": "IiMCXpTYJ6AycxIV",
+            "mode": "list",
+            "cachedResultName": "Set_turno"
+          },
+          "workflowInputs": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "idConversation": "={{ $json.idConversation || $json.sessionId }}",
+              "tel": "={{$json.from || \"549111111111\"}}",
+              "patente": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('patente', `patente proporcionada por el usuario`, 'string') }}",
+              "fecha": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('fecha', `fecha del turno con este formato: 2026-03-16`, 'string') }}",
+              "hora": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('hora', `hora del turno con este formato 08:00`, 'string') }}",
+              "modelo": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('modelo', `modelo del usuario `, 'string') }}",
+              "km": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('km', `kilmetraje del usuario`, 'string') }}",
+              "resumen": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('resumen', `resuemn de la covnersacion`, 'string') }}",
+              "name": "={{$json.name || \"No aclarado\"}}",
+              "movilidad": "tallers"
+            },
+            "matchingColumns": [
+              "dominio"
+            ],
+            "schema": [
+              {
+                "id": "fecha",
+                "displayName": "fecha",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "hora",
+                "displayName": "hora",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "modelo",
+                "displayName": "modelo",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "km",
+                "displayName": "km",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "tel",
+                "displayName": "tel",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "resumen",
+                "displayName": "resumen",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "patente",
+                "displayName": "patente",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "movilidad",
+                "displayName": "movilidad",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "idConversation",
+                "displayName": "idConversation",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "name",
+                "displayName": "name",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": false
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+        "typeVersion": 2.2,
+        "position": [
+          1008,
+          336
+        ],
+        "id": "6871909e-5504-4100-8b6b-1661bf7f231d",
+        "name": "set_turnosSantiago"
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "value": "CKxo5Zqubojy5loG",
+            "mode": "list",
+            "cachedResultName": "TOOLS"
+          },
+          "workflowInputs": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "accion": "=get_turnos",
+              "idConversation": "={{ $json.idConversation || $json.sessionId }}",
+              "tel": "={{$json.from || \"549111111111\"}}",
+              "patente": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('patente', `patente proporcionada por el usuario`, 'string') }}",
+              "name": "tallercs"
+            },
+            "matchingColumns": [
+              "dominio"
+            ],
+            "schema": [
+              {
+                "id": "accion",
+                "displayName": "accion",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "idConversation",
+                "displayName": "idConversation",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "tel",
+                "displayName": "tel",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "name",
+                "displayName": "name",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "patente",
+                "displayName": "patente",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": false
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+        "typeVersion": 2.2,
+        "position": [
+          768,
+          464
+        ],
+        "id": "1a172ef5-53a8-4146-bab9-e7cb1c1ece88",
+        "name": "get_turnosCharlesDo"
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "value": "CKxo5Zqubojy5loG",
+            "mode": "list",
+            "cachedResultName": "TOOLS"
+          },
+          "workflowInputs": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "accion": "=get_turnos",
+              "idConversation": "={{ $json.idConversation || $json.sessionId }}",
+              "tel": "={{$json.from || \"549111111111\"}}",
+              "patente": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('patente', `patente proporcionada por el usuario`, 'string') }}",
+              "name": "tallermve"
+            },
+            "matchingColumns": [
+              "dominio"
+            ],
+            "schema": [
+              {
+                "id": "accion",
+                "displayName": "accion",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "idConversation",
+                "displayName": "idConversation",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "tel",
+                "displayName": "tel",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "name",
+                "displayName": "name",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "patente",
+                "displayName": "patente",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": false
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+        "typeVersion": 2.2,
+        "position": [
+          768,
+          624
+        ],
+        "id": "5e5f3c75-e631-4063-8b19-da5c353ac4df",
+        "name": "get_turnosFebreroDo"
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "value": "IiMCXpTYJ6AycxIV",
+            "mode": "list",
+            "cachedResultName": "Set_turno"
+          },
+          "workflowInputs": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "idConversation": "={{ $json.idConversation || $json.sessionId }}",
+              "tel": "={{$json.from || \"549111111111\"}}",
+              "patente": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('patente', `patente proporcionada por el usuario`, 'string') }}",
+              "fecha": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('fecha', `fecha del turno con este formato: 2026-03-16`, 'string') }}",
+              "hora": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('hora', `hora del turno con este formato 08:00`, 'string') }}",
+              "modelo": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('modelo', `modelo del usuario `, 'string') }}",
+              "km": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('km', `kilmetraje del usuario`, 'string') }}",
+              "resumen": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('resumen', `resuemn de la covnersacion`, 'string') }}",
+              "name": "={{$json.name || \"No aclarado\"}}",
+              "movilidad": "tallercs"
+            },
+            "matchingColumns": [
+              "dominio"
+            ],
+            "schema": [
+              {
+                "id": "fecha",
+                "displayName": "fecha",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "hora",
+                "displayName": "hora",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "modelo",
+                "displayName": "modelo",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "km",
+                "displayName": "km",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "tel",
+                "displayName": "tel",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "resumen",
+                "displayName": "resumen",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "patente",
+                "displayName": "patente",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "movilidad",
+                "displayName": "movilidad",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "idConversation",
+                "displayName": "idConversation",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "name",
+                "displayName": "name",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": false
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+        "typeVersion": 2.2,
+        "position": [
+          1008,
+          496
+        ],
+        "id": "70bb301e-1a14-421a-b04a-7ea58c7727b4",
+        "name": "set_turnosCharlesDo"
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "value": "IiMCXpTYJ6AycxIV",
+            "mode": "list",
+            "cachedResultName": "Set_turno"
+          },
+          "workflowInputs": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "idConversation": "={{ $json.idConversation || $json.sessionId }}",
+              "tel": "={{$json.from || \"549111111111\"}}",
+              "patente": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('patente', `patente proporcionada por el usuario`, 'string') }}",
+              "fecha": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('fecha', `fecha del turno con este formato: 2026-03-16`, 'string') }}",
+              "hora": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('hora', `hora del turno con este formato 08:00`, 'string') }}",
+              "modelo": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('modelo', `modelo del usuario `, 'string') }}",
+              "km": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('km', `kilmetraje del usuario`, 'string') }}",
+              "resumen": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('resumen', `resuemn de la covnersacion`, 'string') }}",
+              "name": "={{$json.name || \"No aclarado\"}}",
+              "movilidad": "tallermve"
+            },
+            "matchingColumns": [
+              "dominio"
+            ],
+            "schema": [
+              {
+                "id": "fecha",
+                "displayName": "fecha",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "hora",
+                "displayName": "hora",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "modelo",
+                "displayName": "modelo",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "km",
+                "displayName": "km",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "tel",
+                "displayName": "tel",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "resumen",
+                "displayName": "resumen",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "patente",
+                "displayName": "patente",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "movilidad",
+                "displayName": "movilidad",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "idConversation",
+                "displayName": "idConversation",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "name",
+                "displayName": "name",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": false
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+        "typeVersion": 2.2,
+        "position": [
+          1008,
+          608
+        ],
+        "id": "cf2794a9-ee09-4a5c-8994-772fd32efc6d",
+        "name": "set_turnosFebreroDo1"
+      }
+    ],
+    "connections": {
+      "OpenAI Chat Model": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "saveData": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "getData": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Window Buffer Memory": {
+        "ai_memory": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_memory",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "OpenAI Chat Model1": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_languageModel",
+              "index": 1
+            }
+          ]
+        ]
+      },
+      "get_user": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "set_marca": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "set_modelo": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "cancelar_turno": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "confirmar_turno": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "When chat message received": {
+        "main": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "get_turnosSantiago": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "set_turnosSantiago": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "get_turnosCharlesDo": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "get_turnosFebreroDo": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "set_turnosCharlesDo": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "set_turnosFebreroDo1": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "system migration",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-11-05T14:15:45.800Z",
+    "updatedAt": "2026-11-05T14:15:45.800Z"
+  },
+  "activeVersionId": "183827fc-d7ca-4323-9fb3-9527ae0a9f5d",
+  "connections": {
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "saveData": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "getData": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Window Buffer Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "get_user": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "set_marca": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "set_modelo": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "cancelar_turno": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "confirmar_turno": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_turnosSantiago": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "set_turnosSantiago": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_turnosCharlesDo": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_turnosFebreroDo": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "set_turnosCharlesDo": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "set_turnosFebreroDo1": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-04-09T14:27:05.509Z",
+  "id": "nvDht1oiTdhfQOaD",
+  "isArchived": false,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "name": "IA-PV-PLOTS",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "model": "gpt-4.1",
+        "options": {
+          "temperature": 0.4,
+          "maxRetries": 2
+        }
+      },
+      "id": "e1616e91-387c-48ec-ad5b-711ffa45ff77",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "position": [
+        -336,
+        336
+      ],
+      "typeVersion": 1,
+      "credentials": {
+        "openAiApi": {
+          "id": "6LyxFNJPqZkaD3hN",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "table": {
+          "__rl": true,
+          "value": "grupo_avant",
+          "mode": "list",
+          "cachedResultName": "grupo_avant"
+        },
+        "dataMode": "defineBelow",
+        "columnToMatchOn": "id_conversation",
+        "valueToMatchOn": "={{ $json.idConversation || $json.sessionId }}",
+        "valuesToSend": {
+          "values": [
+            {
+              "column": "={{ $fromAI('key', ``, 'string') }}",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('values0_Value', ``, 'string') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySqlTool",
+      "typeVersion": 2.5,
+      "position": [
+        48,
+        336
+      ],
+      "id": "568b5177-4b05-4084-b79f-9899a6e5ae79",
+      "name": "saveData",
+      "credentials": {
+        "mySql": {
+          "id": "aBK9rpgMXOBh74ix",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "select",
+        "table": {
+          "__rl": true,
+          "value": "grupo_avant",
+          "mode": "list",
+          "cachedResultName": "grupo_avant"
+        },
+        "where": {
+          "values": [
+            {
+              "column": "patente",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('values0_Value', `patente proporcionada por el usuario`, 'string') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySqlTool",
+      "typeVersion": 2.5,
+      "position": [
+        176,
+        336
+      ],
+      "id": "a02e007a-9a25-4da8-8279-47b77d7b3b5d",
+      "name": "getData",
+      "credentials": {
+        "mySql": {
+          "id": "aBK9rpgMXOBh74ix",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "needsFallback": true,
+        "options": {
+          "systemMessage": "=Sos un agente de turnos para GRUPO AVANT. Tono cordial y profesional. UNA pregunta por mensaje. UNA sola tool call por turno, esperá el resultado antes de continuar.\nREGLA — IMÁGENES\nSi el mensaje recibido comienza con _event_media_ (por ejemplo: _event_media_174d5414-1f33-4d7b-85dc-d855499d9848), respondé únicamente:\n\"Lo siento, no puedo interpretar imágenes. Por favor escribí tu consulta en texto.\"\nNo ejecutes ninguna tool call ni avances en ningún flujo. Esperá el siguiente mensaje del usuario.\nREGLA CRÍTICA — PRECIOS\nNUNCA, bajo ninguna circunstancia, informes precios ni cotizaciones de ningún tipo. Si el cliente pregunta por precios, respondé amablemente que no contás con esa información y sugerile que se comunique directamente con el local.\nREGLA CRÍTICA — saveData inmediato\nCada vez que el cliente responda con un dato, PRIMERO ejecutá saveData con ese dato y LUEGO hacé la siguiente pregunta. Nunca avances al siguiente paso sin haber ejecutado el saveData del dato recibido. Esto aplica a: name, patente, chasis, email, km.\nINICIO\n\"Bienvenido al sistema de turnos de taller de GRUPO AVANT\n¿Querés crear un turno nuevo, cancelar un turno o confirmar tu asistencia?\"\n\nFLUJO: CREAR TURNO\nPASO 1 — Pedí la patente o últimos 4 dígitos del chasis.\nPASO 2 — Con la respuesta:\n\nget_user(VALOR_EN_MAYÚSCULAS)\nsaveData(\"patente\", VALOR_EN_MAYÚSCULAS)\n\nPASO 3 — Cliente encontrado (get_user devolvió datos)\nMostrá los datos → \"¿Estos datos son correctos?\"\n\nSí → ir a PASO 6\nCorrige algo → saveData del campo corregido → ir a PASO 6\n\nPASO 4 — Cliente nuevo (get_user no encontró el usuario), pedí de a uno en este orden exacto:\n\nPreguntá el nombre → cuando el cliente responda → saveData(\"name\", valor) → LUEGO preguntá la marca\nPreguntá la marca → set_marca(marca_ingresada_por_cliente)\n\nSi devuelve status \"found\" → ir a PASO 5\nSi devuelve status \"not_found\" → mostrá opciones → cliente elige → set_marca(marca_elegida) → ir a PASO 5\n\n\n\nPASO 5 — Modelo:\n\nPreguntá el modelo → cuando el cliente responda → INMEDIATAMENTE ejecutá set_modelo(valor_respondido_por_el_cliente) sin excepciones\n\nSi devuelve status \"found\" → continuá al punto 2\nSi devuelve status \"not_found\" → mostrá las opciones recibidas → esperá que el cliente elija → INMEDIATAMENTE ejecutá set_modelo(opcion_elegida) → continuá al punto 2\n\n\nPreguntá el chasis → cuando el cliente responda → saveData(\"chasis\", valor) → LUEGO preguntá el email\nPreguntá el email → cuando el cliente responda → saveData(\"email\", valor) → LUEGO ir a PASO 6\n→ Una vez completados los 3 puntos, ir a PASO 6\n\nPASO 6 — Cerrar turno:\n\nPedí kilometraje → No le des como opción de dar los Km con \"k\", es confuso → cuando el cliente responda, convertí el valor: si contiene \"k\", \"K\", \"mil\" o \"MIL\" multiplicá el número por 1000 (ej: \"15k\" → 15000, \"15 mil\" → 15000) → Si el cliente dice por ejemplo 490k, muy probablemente se refiera a k como km y no como en \"mil\". Si es un valor grande, validalo con el cliente → saveData(\"km\", valor_convertido_como_string) → LUEGO continuar\nSelección de sucursal — PASO OBLIGATORIO antes de buscar turnos:\nPreguntá: \"¿A qué sucursal querés dirigirte: Santiago o Santo Domingo?\"\n\nSi elige Santiago:\nUsar get_turnosSantiago para buscar turnos y set_turnosSantiago para reservar. Ir al punto 3.\nSi elige Santo Domingo:\nPreguntá: \"¿Qué sucursal de Santo Domingo te queda más cerca: Av. Charles Sumner o Av. 27 de Febrero?\"\n\nSi elige Av. Charles Sumner: usar get_turnosCharlesDo para buscar turnos y set_turnosCharlesDo para reservar. Ir al punto 3.\nSi elige Av. 27 de Febrero: usar get_turnosFebreroDo para buscar turnos y set_turnosFebreroDo para reservar. Ir al punto 3.\n\n\n\n\nEjecutá el get correspondiente a la sucursal elegida → mostrá los turnos recibidos enumerados → el cliente elige.\nPedí confirmación al cliente.\nSi confirma → ejecutá el set correspondiente a la sucursal elegida con (\"fecha\", \"hora\")\n\nSi el set falla o devuelve error: Informale al cliente que no se pudo confirmar el turno seleccionado. Luego volvé al punto 3 del PASO 6: ejecutá nuevamente el get correspondiente para obtener turnos actualizados, mostráselos enumerados al cliente y pedile que elija uno nuevo. Repetí este ciclo hasta que el set sea exitoso o el cliente decida no continuar.\n\n\nEnviá mensaje de despedida + 【alert: \"close_conversation\"】\n\n\nFLUJO: CANCELAR / MODIFICAR TURNO\nSi el usuario quiere cancelar o modificar un turno:\n\nPedir patente → saveData(\"patente\", VALOR_EN_MAYÚSCULAS)\nNo ejecutes get_turnos, solo ejecutá cancelar_turno(accion = cancelar_turno)\nEjecutar SI O SI cancelar_turno(accion = cancelar_turno)\nConfirmarle la cancelación al usuario\n\n\nREGLAS\n\nUna tool call por turno, esperá el resultado antes de la siguiente\nNunca repitas una tool call ya ejecutada\nNunca preguntes datos ya guardados\nPatente siempre en MAYÚSCULAS\nEl orquestador NUNCA ejecuta saveData para marca ni modelo, eso lo hacen los subagentes\nKilometraje: Siempre guardá el número entero como string\nset_modelo SIEMPRE debe ejecutarse con la respuesta del cliente, nunca omitirlo ni saltarlo\nLa selección de sucursal SIEMPRE debe realizarse antes de ejecutar cualquier get o set de turnos\nNunca uses get_turnos ni set_turno genéricos; siempre usá la función específica de la sucursal elegida"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        48,
+        48
+      ],
+      "id": "194baa7a-27d3-4ed8-ab1d-d1de81ea59fa",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('When chat message received').item.json.sessionId || $('When chat message received').item.json.idConversation }}",
+        "contextWindowLength": 25
+      },
+      "id": "e15bd571-0bd9-45be-9e69-d234af90f1e2",
+      "name": "Window Buffer Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "position": [
+        -80,
+        336
+      ],
+      "typeVersion": 1.2
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4.1-mini"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -208,
+        336
+      ],
+      "id": "9771b605-29fb-43a9-83dd-fda7311ec1f6",
+      "name": "OpenAI Chat Model1",
+      "credentials": {
+        "openAiApi": {
+          "id": "6LyxFNJPqZkaD3hN",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "CKxo5Zqubojy5loG",
+          "mode": "list",
+          "cachedResultName": "TOOLS"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "accion": "=get_user",
+            "idConversation": "={{ $json.idConversation || $json.sessionId }}",
+            "tel": "={{$json.from || \"549111111111\"}}",
+            "patente": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('patente', `patente proporcionada por el usuario`, 'string') }}",
+            "name": "={{ $json.name }}"
+          },
+          "matchingColumns": [
+            "dominio"
+          ],
+          "schema": [
+            {
+              "id": "accion",
+              "displayName": "accion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "idConversation",
+              "displayName": "idConversation",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "tel",
+              "displayName": "tel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "patente",
+              "displayName": "patente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "idTurno",
+              "displayName": "idTurno",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        304,
+        336
+      ],
+      "id": "437de34e-c134-4c13-86a2-16f4b32454d7",
+      "name": "get_user"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "FfLfg1639UAR05mH",
+          "mode": "list",
+          "cachedResultName": "set-marca"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "idConversation": "={{ $json.idConversation || $json.sessionId }}",
+            "marca": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('marca', ``, 'string') }}"
+          },
+          "matchingColumns": [
+            "dominio"
+          ],
+          "schema": [
+            {
+              "id": "marca",
+              "displayName": "marca",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "idConversation",
+              "displayName": "idConversation",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        432,
+        336
+      ],
+      "id": "9bc13ff6-8884-4755-acbc-5c46aa711599",
+      "name": "set_marca"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "0GT4Q6UcKcosYMrW",
+          "mode": "list",
+          "cachedResultName": "set_modelo"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "modelo": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('modelo', ``, 'string') }}",
+            "idConversation": "={{ $json.idConversation || $json.sessionId }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "modelo",
+              "displayName": "modelo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "idConversation",
+              "displayName": "idConversation",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        560,
+        336
+      ],
+      "id": "492227b8-ca7d-4072-935b-edc762f40c13",
+      "name": "set_modelo"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "CKxo5Zqubojy5loG",
+          "mode": "list",
+          "cachedResultName": "TOOLS"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "idConversation": "={{ $json.idConversation || $json.sessionId }}",
+            "accion": "cancelar_turno",
+            "tel": "={{ $json.from }}",
+            "name": "={{ $json.name }}",
+            "patente": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('patente', `patente del del usuario`, 'string') }}",
+            "idTurno": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('idTurno', `id turno obtenido del obtener_Turnos ejecutado anterior a este nodo`, 'string') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "accion",
+              "displayName": "accion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "idConversation",
+              "displayName": "idConversation",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "tel",
+              "displayName": "tel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "patente",
+              "displayName": "patente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "idTurno",
+              "displayName": "idTurno",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        1248,
+        320
+      ],
+      "id": "321d0884-fc28-4b7b-89e1-c1eeb0563a8a",
+      "name": "cancelar_turno"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "CKxo5Zqubojy5loG",
+          "mode": "list",
+          "cachedResultName": "TOOLS"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "idConversation": "={{ $json.idConversation || $json.sessionId }}",
+            "accion": "confirmar_turno",
+            "tel": "={{ $json.from }}",
+            "name": "={{ $json.name }}",
+            "patente": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('patente', `patente del del usuario`, 'string') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "accion",
+              "displayName": "accion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "idConversation",
+              "displayName": "idConversation",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "tel",
+              "displayName": "tel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "patente",
+              "displayName": "patente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "idTurno",
+              "displayName": "idTurno",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        1536,
+        320
+      ],
+      "id": "e6b08588-101d-4af9-b81d-de7e90825a75",
+      "name": "confirmar_turno"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "Mv4YVHdavrs8hv9B",
+          "mode": "list",
+          "cachedResultName": "TOOLS"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "idConversation": "={{ $json.idConversation || $json.sessionId }}",
+            "accion": "obtener_turno",
+            "tel": "={{ $json.from }}",
+            "name": "={{ $json.name }}",
+            "patente": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('patente', `patente del del usuario`, 'string') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "accion",
+              "displayName": "accion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "idConversation",
+              "displayName": "idConversation",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "tel",
+              "displayName": "tel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "patente",
+              "displayName": "patente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "idTurno",
+              "displayName": "idTurno",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        1392,
+        320
+      ],
+      "id": "858252e5-e9a7-4d1a-9bfb-92942a075b53",
+      "name": "obtener_turno"
+    },
+    {
+      "parameters": {
+        "public": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -192,
+        48
+      ],
+      "id": "f4382021-1754-46f7-810a-4d8b2c79d4ba",
+      "name": "When chat message received",
+      "webhookId": "a42e9dac-9bf6-4d1e-bf5c-9da91256eff3"
+    },
+    {
+      "parameters": {
+        "content": "Preguntar las 2 sucursales cual quiere:\nSanto domingo o Santiago\nSi dice Santiago ejecutar get_turnos_santisago, si dice Santo DOmingo preguntar cual de las dos queire (separar por direccion) y ejecutar uyna u otra, lo mismo para set\nPrompt ajustado -> FAlta CREAR TOOLS y hacer los subflujos cambiendo el taller y probarlo, patente NNN1234 susuki ax1000",
+        "height": 336,
+        "width": 656
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        560,
+        -160
+      ],
+      "typeVersion": 1,
+      "id": "7da9923b-f6d9-4b3b-8ed4-ec227b330ca9",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "CKxo5Zqubojy5loG",
+          "mode": "list",
+          "cachedResultName": "TOOLS"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "accion": "=get_turnos",
+            "idConversation": "={{ $json.idConversation || $json.sessionId }}",
+            "tel": "={{$json.from || \"549111111111\"}}",
+            "patente": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('patente', `patente proporcionada por el usuario`, 'string') }}",
+            "name": "tallers"
+          },
+          "matchingColumns": [
+            "dominio"
+          ],
+          "schema": [
+            {
+              "id": "accion",
+              "displayName": "accion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "idConversation",
+              "displayName": "idConversation",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "tel",
+              "displayName": "tel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "patente",
+              "displayName": "patente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        768,
+        336
+      ],
+      "id": "674c3eed-d114-4833-a043-66d6f93013b7",
+      "name": "get_turnosSantiago"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "IiMCXpTYJ6AycxIV",
+          "mode": "list",
+          "cachedResultName": "Set_turno"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "idConversation": "={{ $json.idConversation || $json.sessionId }}",
+            "tel": "={{$json.from || \"549111111111\"}}",
+            "patente": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('patente', `patente proporcionada por el usuario`, 'string') }}",
+            "fecha": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('fecha', `fecha del turno con este formato: 2026-03-16`, 'string') }}",
+            "hora": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('hora', `hora del turno con este formato 08:00`, 'string') }}",
+            "modelo": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('modelo', `modelo del usuario `, 'string') }}",
+            "km": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('km', `kilmetraje del usuario`, 'string') }}",
+            "resumen": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('resumen', `resuemn de la covnersacion`, 'string') }}",
+            "name": "={{$json.name || \"No aclarado\"}}",
+            "movilidad": "tallers"
+          },
+          "matchingColumns": [
+            "dominio"
+          ],
+          "schema": [
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "hora",
+              "displayName": "hora",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "modelo",
+              "displayName": "modelo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "km",
+              "displayName": "km",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "tel",
+              "displayName": "tel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "resumen",
+              "displayName": "resumen",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "patente",
+              "displayName": "patente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "movilidad",
+              "displayName": "movilidad",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "idConversation",
+              "displayName": "idConversation",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        1008,
+        336
+      ],
+      "id": "6871909e-5504-4100-8b6b-1661bf7f231d",
+      "name": "set_turnosSantiago"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "CKxo5Zqubojy5loG",
+          "mode": "list",
+          "cachedResultName": "TOOLS"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "accion": "=get_turnos",
+            "idConversation": "={{ $json.idConversation || $json.sessionId }}",
+            "tel": "={{$json.from || \"549111111111\"}}",
+            "patente": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('patente', `patente proporcionada por el usuario`, 'string') }}",
+            "name": "tallercs"
+          },
+          "matchingColumns": [
+            "dominio"
+          ],
+          "schema": [
+            {
+              "id": "accion",
+              "displayName": "accion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "idConversation",
+              "displayName": "idConversation",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "tel",
+              "displayName": "tel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "patente",
+              "displayName": "patente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        768,
+        464
+      ],
+      "id": "1a172ef5-53a8-4146-bab9-e7cb1c1ece88",
+      "name": "get_turnosCharlesDo"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "CKxo5Zqubojy5loG",
+          "mode": "list",
+          "cachedResultName": "TOOLS"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "accion": "=get_turnos",
+            "idConversation": "={{ $json.idConversation || $json.sessionId }}",
+            "tel": "={{$json.from || \"549111111111\"}}",
+            "patente": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('patente', `patente proporcionada por el usuario`, 'string') }}",
+            "name": "tallermve"
+          },
+          "matchingColumns": [
+            "dominio"
+          ],
+          "schema": [
+            {
+              "id": "accion",
+              "displayName": "accion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "idConversation",
+              "displayName": "idConversation",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "tel",
+              "displayName": "tel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "patente",
+              "displayName": "patente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        768,
+        624
+      ],
+      "id": "5e5f3c75-e631-4063-8b19-da5c353ac4df",
+      "name": "get_turnosFebreroDo"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "IiMCXpTYJ6AycxIV",
+          "mode": "list",
+          "cachedResultName": "Set_turno"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "idConversation": "={{ $json.idConversation || $json.sessionId }}",
+            "tel": "={{$json.from || \"549111111111\"}}",
+            "patente": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('patente', `patente proporcionada por el usuario`, 'string') }}",
+            "fecha": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('fecha', `fecha del turno con este formato: 2026-03-16`, 'string') }}",
+            "hora": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('hora', `hora del turno con este formato 08:00`, 'string') }}",
+            "modelo": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('modelo', `modelo del usuario `, 'string') }}",
+            "km": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('km', `kilmetraje del usuario`, 'string') }}",
+            "resumen": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('resumen', `resuemn de la covnersacion`, 'string') }}",
+            "name": "={{$json.name || \"No aclarado\"}}",
+            "movilidad": "tallercs"
+          },
+          "matchingColumns": [
+            "dominio"
+          ],
+          "schema": [
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "hora",
+              "displayName": "hora",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "modelo",
+              "displayName": "modelo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "km",
+              "displayName": "km",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "tel",
+              "displayName": "tel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "resumen",
+              "displayName": "resumen",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "patente",
+              "displayName": "patente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "movilidad",
+              "displayName": "movilidad",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "idConversation",
+              "displayName": "idConversation",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        1008,
+        496
+      ],
+      "id": "70bb301e-1a14-421a-b04a-7ea58c7727b4",
+      "name": "set_turnosCharlesDo"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "IiMCXpTYJ6AycxIV",
+          "mode": "list",
+          "cachedResultName": "Set_turno"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "idConversation": "={{ $json.idConversation || $json.sessionId }}",
+            "tel": "={{$json.from || \"549111111111\"}}",
+            "patente": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('patente', `patente proporcionada por el usuario`, 'string') }}",
+            "fecha": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('fecha', `fecha del turno con este formato: 2026-03-16`, 'string') }}",
+            "hora": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('hora', `hora del turno con este formato 08:00`, 'string') }}",
+            "modelo": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('modelo', `modelo del usuario `, 'string') }}",
+            "km": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('km', `kilmetraje del usuario`, 'string') }}",
+            "resumen": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('resumen', `resuemn de la covnersacion`, 'string') }}",
+            "name": "={{$json.name || \"No aclarado\"}}",
+            "movilidad": "tallermve"
+          },
+          "matchingColumns": [
+            "dominio"
+          ],
+          "schema": [
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "hora",
+              "displayName": "hora",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "modelo",
+              "displayName": "modelo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "km",
+              "displayName": "km",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "tel",
+              "displayName": "tel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "resumen",
+              "displayName": "resumen",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "patente",
+              "displayName": "patente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "movilidad",
+              "displayName": "movilidad",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "idConversation",
+              "displayName": "idConversation",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        1008,
+        608
+      ],
+      "id": "cf2794a9-ee09-4a5c-8994-772fd32efc6d",
+      "name": "set_turnosFebreroDo1"
+    }
+  ],
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "nvDht1oiTdhfQOaD",
+      "projectId": "WBIUi3RDOUZaTNMV",
+      "createdAt": "2026-04-09T14:27:05.512Z",
+      "updatedAt": "2026-04-09T14:27:05.512Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [
+    {
+      "id": "DdUVecLscnc1rf3x",
+      "name": "rhmotos",
+      "createdAt": "2026-04-09T14:25:45.166Z",
+      "updatedAt": "2026-04-09T14:25:45.166Z"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-11-05T14:22:34.778Z",
+  "versionId": "183827fc-d7ca-4323-9fb3-9527ae0a9f5d"
+}
