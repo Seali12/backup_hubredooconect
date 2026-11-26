@@ -1,0 +1,967 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "00352fda-2721-418a-9f35-b8d75424d9ff",
+    "workflowId": "szVkOAiKBdASuLS9",
+    "nodes": [
+      {
+        "parameters": {
+          "inputSource": "passthrough"
+        },
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "typeVersion": 1.1,
+        "position": [
+          -144,
+          0
+        ],
+        "id": "15e067d9-c420-4865-917d-a4d1a88ebf5a",
+        "name": "When Executed by Another Workflow"
+      },
+      {
+        "parameters": {
+          "jsCode": "return (() => {\n  // -----------------------------\n  // 1. OBTENER TURNOS DE LOS TRES PILARES\n  // -----------------------------\n  const p1 = $('PILAR_1').first().json.turnosDisponibles || [];\n  const p2 = $('PILAR_2').first().json.turnosDisponibles || [];\n  const p3 = $('PILAR_3').first().json.turnosDisponibles || [];\n\n  const allTurnos = [...p1, ...p2, ...p3];\n\n  // -----------------------------\n  // 2. ORDEN FIJO DE CALENDARIOS\n  // -----------------------------\n  const ordenCalendarios = [\n    \"c_8ab99563c0dfff9f0439fa1e6f821c1643ad7d4ab79365c9c5df92d6375b68cc@group.calendar.google.com\",\n    \"c_f0be89237de4c8602d7128f31fa4e7fdf3d0c4a234af529bf1a2b92ebe9136db@group.calendar.google.com\",\n    \"c_05d2d8a02f7e9fe578ac3682550deac4dbc5dd6f0749ee0c8abc8e06257ce99d@group.calendar.google.com\"\n  ];\n\n  // -----------------------------\n  // 3. GENERAR ID ÚNICO\n  // -----------------------------\n  function generarId() {\n    return (\n      Date.now().toString(36) +\n      Math.random().toString(36).substring(2, 8)\n    ).toUpperCase();\n  }\n\n  // -----------------------------\n  // 4. TOMAR EXACTAMENTE 1 TURNO POR CALENDARIO\n  // -----------------------------\n  function pickExactamenteUnoPorCalendario(turnos) {\n    const resultado = [];\n\n    for (const calendarId of ordenCalendarios) {\n      const turno = turnos.find(\n        t => t.Id_Calendario === calendarId\n      );\n\n      if (!turno) continue;\n\n      resultado.push({\n        idTurno: generarId(),\n        dia: turno.dia,\n        inicio: turno.horarioLlegada,\n        final: turno.horarioEntrega,\n        Id_Calendario: turno.Id_Calendario,\n        fechaFormato: turno.fechaFormato\n      });\n    }\n\n    // 🔒 blindaje final: nunca más de 3\n    return resultado.slice(0, 3);\n  }\n\n  // -----------------------------\n  // 5. RESPUESTA FINAL\n  // -----------------------------\n  return [\n    {\n      json: {\n        turnos: pickExactamenteUnoPorCalendario(allTurnos)\n      }\n    }\n  ];\n})();\n"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1168,
+          0
+        ],
+        "id": "6d654ac2-f94d-4c95-acbf-d0145124d13a",
+        "name": "Code"
+      },
+      {
+        "parameters": {
+          "documentId": {
+            "__rl": true,
+            "value": "1Tw2liB1YvQ9drkigPwUbHtF-YBRmyWH9ljMKKsQvQFg",
+            "mode": "list",
+            "cachedResultName": "IA PV TOYOTA UZCUDUN",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Tw2liB1YvQ9drkigPwUbHtF-YBRmyWH9ljMKKsQvQFg/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": 1560890887,
+            "mode": "list",
+            "cachedResultName": "Tabla Tiempo Mantenimiento",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Tw2liB1YvQ9drkigPwUbHtF-YBRmyWH9ljMKKsQvQFg/edit#gid=1560890887"
+          },
+          "filtersUI": {
+            "values": [
+              {
+                "lookupColumn": "KM",
+                "lookupValue": "={{ Array.isArray(JSON.parse($json.query)) ? JSON.parse($json.query)[0].KM : JSON.parse($json.query).KM }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.7,
+        "position": [
+          16,
+          0
+        ],
+        "id": "dc6fed15-5baa-4a64-8a9c-4e69d7c928b0",
+        "name": "Get row(s) in sheet",
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "zuvEAGM4xGwG9xvA",
+            "name": "Google Sheets account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "return (() => {\n  const data = $input.first().json\n  const queryData = $('When Executed by Another Workflow').first().json.query ? \n    JSON.parse($('When Executed by Another Workflow').first().json.query) : \n    $('When Executed by Another Workflow').first().json\n  \n  const sourceData = Array.isArray(queryData) ? queryData[0] : queryData\n  const modelo = sourceData.Modelo || sourceData.modelo || sourceData.MODELO\n  return [{json:{query:data[modelo]||\"00:30:00\"}}]\n})()"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          160,
+          0
+        ],
+        "id": "297d0cf0-4ce2-4b49-9ea2-69ee69d54c36",
+        "name": "Code3"
+      },
+      {
+        "parameters": {
+          "jsCode": "return (() => {\n  const data = $('Get row(s) in sheet').first().json\n  const queryData = $('When Executed by Another Workflow').first().json.query ? \n    JSON.parse($('When Executed by Another Workflow').first().json.query) : \n    $('When Executed by Another Workflow').first().json\n  \n  const sourceData = Array.isArray(queryData) ? queryData[0] : queryData\n  const modelo = sourceData.modelo || sourceData.Modelo || sourceData.MODELO\n  return [{json:{query:data[modelo]||\"00:30:00\"}}]\n})()"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          432,
+          0
+        ],
+        "id": "f3e34ed6-b05f-46f7-8d9c-dc52d9084688",
+        "name": "Code4"
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "value": "3lm4gnVW1rZ7Ii6t",
+            "mode": "list",
+            "cachedResultName": "GET_TURNOS_1_TRES-ARROYOS"
+          },
+          "workflowInputs": {
+            "mappingMode": "defineBelow",
+            "value": {},
+            "matchingColumns": [],
+            "schema": [],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": true
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1.2,
+        "position": [
+          304,
+          0
+        ],
+        "id": "5310e44a-3ef7-483f-8f36-0d7492f3a386",
+        "name": "PILAR_1",
+        "retryOnFail": true,
+        "maxTries": 5,
+        "waitBetweenTries": 5000
+      },
+      {
+        "parameters": {
+          "jsCode": "return (() => {\n  const data = $('Get row(s) in sheet').first().json\n  const queryData = $('When Executed by Another Workflow').first().json.query ? \n    JSON.parse($('When Executed by Another Workflow').first().json.query) : \n    $('When Executed by Another Workflow').first().json\n  \n  const sourceData = Array.isArray(queryData) ? queryData[0] : queryData\n  const modelo = sourceData.modelo || sourceData.Modelo || sourceData.MODELO\n  return [{json:{query:data[modelo]||\"00:30:00\"}}]\n})()"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          752,
+          0
+        ],
+        "id": "70e7b462-7045-46ee-9c1d-08788f3ed0a9",
+        "name": "Code5"
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "value": "WXOaUal2mY1Ubrqx",
+            "mode": "list",
+            "cachedResultName": "GET_TURNOS_3_TRES-ARROYOS"
+          },
+          "workflowInputs": {
+            "mappingMode": "defineBelow",
+            "value": {},
+            "matchingColumns": [],
+            "schema": [],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": true
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1.2,
+        "position": [
+          928,
+          0
+        ],
+        "id": "2e736036-802c-4cc5-b63d-e78ba73ae784",
+        "name": "PILAR_3",
+        "retryOnFail": true,
+        "maxTries": 5,
+        "waitBetweenTries": 5000
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "value": "e4q2eMmu3T9ukwuJ",
+            "mode": "list",
+            "cachedResultName": "GET_TURNOS_2_TRES-ARROYOS"
+          },
+          "workflowInputs": {
+            "mappingMode": "defineBelow",
+            "value": {},
+            "matchingColumns": [],
+            "schema": [],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": true
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1.2,
+        "position": [
+          624,
+          0
+        ],
+        "id": "f22ee4b1-ea3d-4395-9f4e-e84a56ef83ab",
+        "name": "PILAR_2",
+        "retryOnFail": true,
+        "maxTries": 5,
+        "waitBetweenTries": 5000
+      },
+      {
+        "parameters": {
+          "operation": "append",
+          "documentId": {
+            "__rl": true,
+            "value": "1Tw2liB1YvQ9drkigPwUbHtF-YBRmyWH9ljMKKsQvQFg",
+            "mode": "list",
+            "cachedResultName": "IA PV TOYOTA UZCUDUN",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Tw2liB1YvQ9drkigPwUbHtF-YBRmyWH9ljMKKsQvQFg/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": 631242417,
+            "mode": "list",
+            "cachedResultName": "turnos_dados",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Tw2liB1YvQ9drkigPwUbHtF-YBRmyWH9ljMKKsQvQFg/edit#gid=631242417"
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "Día": "={{ $json.dia }}",
+              "Inicio": "={{ $json.inicio }}",
+              "Final": "={{ $json.final }}",
+              "Id_Calendario": "={{ $json.Id_Calendario }}",
+              "Fecha Formato": "={{$json.fechaFormato}}",
+              "idTurnoBusqueda": "={{$json.patente}}"
+            },
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "Día",
+                "displayName": "Día",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "Inicio",
+                "displayName": "Inicio",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "Final",
+                "displayName": "Final",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "Id_Calendario",
+                "displayName": "Id_Calendario",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "Fecha Formato",
+                "displayName": "Fecha Formato",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "idTurnoBusqueda",
+                "displayName": "idTurnoBusqueda",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.7,
+        "position": [
+          1568,
+          160
+        ],
+        "id": "4025f533-342d-4f05-b47a-c9c58c0a89c7",
+        "name": "Append row in sheet",
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "zuvEAGM4xGwG9xvA",
+            "name": "Google Sheets account"
+          }
+        },
+        "disabled": true
+      },
+      {
+        "parameters": {
+          "jsCode": "// Este código toma el array \"turnos\" y crea un item por cada turno individual\nconst allTurnos = [];\n\nfor (const item of items) {\n  const turnos = item.json.turnos || [];\n  for (const turno of turnos) {\n    allTurnos.push({ json: turno });\n  }\n}\n\nreturn allTurnos;\n"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1344,
+          176
+        ],
+        "id": "4b829eda-3e27-4baf-b2f1-f59f82dc6e74",
+        "name": "Code1",
+        "disabled": true
+      },
+      {
+        "parameters": {
+          "jsCode": "return (() => {\n  // -----------------------------\n  // 0. OBTENER PATENTE DESDE EL NODO “When Executed by Another Workflow”\n  // -----------------------------\n  const input = $('When Executed by Another Workflow').first().json;\n  const data = JSON.parse(input.query); // Convierte el texto JSON en objeto\n  const patente = data[0]?.patente || 'SIN_PATENTE';\n\n  // -----------------------------\n  // 1. OBTENER TURNOS DE LOS TRES PILARES\n  // -----------------------------\n  const p1 = $('PILAR_1').first().json.turnosDisponibles || [];\n  const p2 = $('PILAR_2').first().json.turnosDisponibles || [];\n  const p3 = $('PILAR_3').first().json.turnosDisponibles || [];\n\n  const allTurnos = [...p1, ...p2, ...p3];\n\n  // -----------------------------\n  // 2. FUNCIÓN PARA GENERAR ID ÚNICO ALEATORIO\n  // -----------------------------\n  function generarId() {\n    return (\n      Date.now().toString(36) +\n      Math.random().toString(36).substring(2, 8)\n    ).toUpperCase();\n  }\n\n  // -----------------------------\n  // 3. FUNCIÓN PARA SELECCIONAR HASTA 16 TURNOS\n  // -----------------------------\n  function pick(arr) {\n    const result = [];\n    const days = [...new Set(arr.map(t => t.dia))];\n\n    while (result.length < 16 && days.length > 0) {\n      const d = days.splice(Math.floor(Math.random() * days.length), 1)[0];\n      const options = arr.filter(t => t.dia === d);\n      if (options.length > 0) {\n        const chosen = options[Math.floor(Math.random() * options.length)];\n        result.push(chosen);\n      }\n    }\n\n    while (result.length < 16) {\n      const remaining = arr.filter(\n        t => !result.some(r => r.dia === t.dia && r.horarioLlegada === t.horarioLlegada)\n      );\n      if (remaining.length === 0) break;\n      const chosen = remaining[Math.floor(Math.random() * remaining.length)];\n      result.push(chosen);\n    }\n\n    // -----------------------------\n    // 4. FORMATO FINAL PARA EL AGENTE (con idTurno y patente)\n    // -----------------------------\n    return result.map(t => ({\n      idTurno: generarId(),\n      dia: t.dia,\n      inicio: t.horarioLlegada,\n      final: t.horarioEntrega,\n      Id_Calendario: t.Id_Calendario,\n      fechaFormato: t.fechaFormato,\n      patente // 👈 se agrega aquí\n    }));\n  }\n\n  // -----------------------------\n  // 5. RESPUESTA FINAL\n  // -----------------------------\n  return [\n    {\n      json: {\n        turnos: pick(allTurnos)\n      }\n    }\n  ];\n})();\n"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1104,
+          176
+        ],
+        "id": "c5b3fdd5-9d6e-4ea5-90c0-6a76045ee6ed",
+        "name": "Code2",
+        "disabled": true
+      }
+    ],
+    "connections": {
+      "When Executed by Another Workflow": {
+        "main": [
+          [
+            {
+              "node": "Get row(s) in sheet",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get row(s) in sheet": {
+        "main": [
+          [
+            {
+              "node": "Code3",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code3": {
+        "main": [
+          [
+            {
+              "node": "PILAR_1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code4": {
+        "main": [
+          [
+            {
+              "node": "PILAR_2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "PILAR_1": {
+        "main": [
+          [
+            {
+              "node": "Code4",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code5": {
+        "main": [
+          [
+            {
+              "node": "PILAR_3",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "PILAR_3": {
+        "main": [
+          [
+            {
+              "node": "Code",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "PILAR_2": {
+        "main": [
+          [
+            {
+              "node": "Code5",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code": {
+        "main": [
+          []
+        ]
+      },
+      "Code1": {
+        "main": [
+          [
+            {
+              "node": "Append row in sheet",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code2": {
+        "main": [
+          [
+            {
+              "node": "Code1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Append row in sheet": {
+        "main": [
+          []
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "system migration",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-10-29T13:26:57.860Z",
+    "updatedAt": "2026-10-29T13:26:57.860Z"
+  },
+  "activeVersionId": "00352fda-2721-418a-9f35-b8d75424d9ff",
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "Code3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code3": {
+      "main": [
+        [
+          {
+            "node": "PILAR_1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code4": {
+      "main": [
+        [
+          {
+            "node": "PILAR_2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PILAR_1": {
+      "main": [
+        [
+          {
+            "node": "Code4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code5": {
+      "main": [
+        [
+          {
+            "node": "PILAR_3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PILAR_3": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PILAR_2": {
+      "main": [
+        [
+          {
+            "node": "Code5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        []
+      ]
+    },
+    "Code1": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code2": {
+      "main": [
+        [
+          {
+            "node": "Code1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "createdAt": "2025-12-30T17:46:43.094Z",
+  "id": "szVkOAiKBdASuLS9",
+  "isArchived": false,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "name": "GET-TURNOS-TRES ARROYOS",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -144,
+        0
+      ],
+      "id": "15e067d9-c420-4865-917d-a4d1a88ebf5a",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "jsCode": "return (() => {\n  // -----------------------------\n  // 1. OBTENER TURNOS DE LOS TRES PILARES\n  // -----------------------------\n  const p1 = $('PILAR_1').first().json.turnosDisponibles || [];\n  const p2 = $('PILAR_2').first().json.turnosDisponibles || [];\n  const p3 = $('PILAR_3').first().json.turnosDisponibles || [];\n\n  const allTurnos = [...p1, ...p2, ...p3];\n\n  // -----------------------------\n  // 2. ORDEN FIJO DE CALENDARIOS\n  // -----------------------------\n  const ordenCalendarios = [\n    \"c_8ab99563c0dfff9f0439fa1e6f821c1643ad7d4ab79365c9c5df92d6375b68cc@group.calendar.google.com\",\n    \"c_f0be89237de4c8602d7128f31fa4e7fdf3d0c4a234af529bf1a2b92ebe9136db@group.calendar.google.com\",\n    \"c_05d2d8a02f7e9fe578ac3682550deac4dbc5dd6f0749ee0c8abc8e06257ce99d@group.calendar.google.com\"\n  ];\n\n  // -----------------------------\n  // 3. GENERAR ID ÚNICO\n  // -----------------------------\n  function generarId() {\n    return (\n      Date.now().toString(36) +\n      Math.random().toString(36).substring(2, 8)\n    ).toUpperCase();\n  }\n\n  // -----------------------------\n  // 4. TOMAR EXACTAMENTE 1 TURNO POR CALENDARIO\n  // -----------------------------\n  function pickExactamenteUnoPorCalendario(turnos) {\n    const resultado = [];\n\n    for (const calendarId of ordenCalendarios) {\n      const turno = turnos.find(\n        t => t.Id_Calendario === calendarId\n      );\n\n      if (!turno) continue;\n\n      resultado.push({\n        idTurno: generarId(),\n        dia: turno.dia,\n        inicio: turno.horarioLlegada,\n        final: turno.horarioEntrega,\n        Id_Calendario: turno.Id_Calendario,\n        fechaFormato: turno.fechaFormato\n      });\n    }\n\n    // 🔒 blindaje final: nunca más de 3\n    return resultado.slice(0, 3);\n  }\n\n  // -----------------------------\n  // 5. RESPUESTA FINAL\n  // -----------------------------\n  return [\n    {\n      json: {\n        turnos: pickExactamenteUnoPorCalendario(allTurnos)\n      }\n    }\n  ];\n})();\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1168,
+        0
+      ],
+      "id": "6d654ac2-f94d-4c95-acbf-d0145124d13a",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1Tw2liB1YvQ9drkigPwUbHtF-YBRmyWH9ljMKKsQvQFg",
+          "mode": "list",
+          "cachedResultName": "IA PV TOYOTA UZCUDUN",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Tw2liB1YvQ9drkigPwUbHtF-YBRmyWH9ljMKKsQvQFg/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1560890887,
+          "mode": "list",
+          "cachedResultName": "Tabla Tiempo Mantenimiento",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Tw2liB1YvQ9drkigPwUbHtF-YBRmyWH9ljMKKsQvQFg/edit#gid=1560890887"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "KM",
+              "lookupValue": "={{ Array.isArray(JSON.parse($json.query)) ? JSON.parse($json.query)[0].KM : JSON.parse($json.query).KM }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        16,
+        0
+      ],
+      "id": "dc6fed15-5baa-4a64-8a9c-4e69d7c928b0",
+      "name": "Get row(s) in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "zuvEAGM4xGwG9xvA",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return (() => {\n  const data = $input.first().json\n  const queryData = $('When Executed by Another Workflow').first().json.query ? \n    JSON.parse($('When Executed by Another Workflow').first().json.query) : \n    $('When Executed by Another Workflow').first().json\n  \n  const sourceData = Array.isArray(queryData) ? queryData[0] : queryData\n  const modelo = sourceData.Modelo || sourceData.modelo || sourceData.MODELO\n  return [{json:{query:data[modelo]||\"00:30:00\"}}]\n})()"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        160,
+        0
+      ],
+      "id": "297d0cf0-4ce2-4b49-9ea2-69ee69d54c36",
+      "name": "Code3"
+    },
+    {
+      "parameters": {
+        "jsCode": "return (() => {\n  const data = $('Get row(s) in sheet').first().json\n  const queryData = $('When Executed by Another Workflow').first().json.query ? \n    JSON.parse($('When Executed by Another Workflow').first().json.query) : \n    $('When Executed by Another Workflow').first().json\n  \n  const sourceData = Array.isArray(queryData) ? queryData[0] : queryData\n  const modelo = sourceData.modelo || sourceData.Modelo || sourceData.MODELO\n  return [{json:{query:data[modelo]||\"00:30:00\"}}]\n})()"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        432,
+        0
+      ],
+      "id": "f3e34ed6-b05f-46f7-8d9c-dc52d9084688",
+      "name": "Code4"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "3lm4gnVW1rZ7Ii6t",
+          "mode": "list",
+          "cachedResultName": "GET_TURNOS_1_TRES-ARROYOS"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        304,
+        0
+      ],
+      "id": "5310e44a-3ef7-483f-8f36-0d7492f3a386",
+      "name": "PILAR_1",
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "jsCode": "return (() => {\n  const data = $('Get row(s) in sheet').first().json\n  const queryData = $('When Executed by Another Workflow').first().json.query ? \n    JSON.parse($('When Executed by Another Workflow').first().json.query) : \n    $('When Executed by Another Workflow').first().json\n  \n  const sourceData = Array.isArray(queryData) ? queryData[0] : queryData\n  const modelo = sourceData.modelo || sourceData.Modelo || sourceData.MODELO\n  return [{json:{query:data[modelo]||\"00:30:00\"}}]\n})()"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        752,
+        0
+      ],
+      "id": "70e7b462-7045-46ee-9c1d-08788f3ed0a9",
+      "name": "Code5"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "WXOaUal2mY1Ubrqx",
+          "mode": "list",
+          "cachedResultName": "GET_TURNOS_3_TRES-ARROYOS"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        928,
+        0
+      ],
+      "id": "2e736036-802c-4cc5-b63d-e78ba73ae784",
+      "name": "PILAR_3",
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "e4q2eMmu3T9ukwuJ",
+          "mode": "list",
+          "cachedResultName": "GET_TURNOS_2_TRES-ARROYOS"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        624,
+        0
+      ],
+      "id": "f22ee4b1-ea3d-4395-9f4e-e84a56ef83ab",
+      "name": "PILAR_2",
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1Tw2liB1YvQ9drkigPwUbHtF-YBRmyWH9ljMKKsQvQFg",
+          "mode": "list",
+          "cachedResultName": "IA PV TOYOTA UZCUDUN",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Tw2liB1YvQ9drkigPwUbHtF-YBRmyWH9ljMKKsQvQFg/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 631242417,
+          "mode": "list",
+          "cachedResultName": "turnos_dados",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Tw2liB1YvQ9drkigPwUbHtF-YBRmyWH9ljMKKsQvQFg/edit#gid=631242417"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Día": "={{ $json.dia }}",
+            "Inicio": "={{ $json.inicio }}",
+            "Final": "={{ $json.final }}",
+            "Id_Calendario": "={{ $json.Id_Calendario }}",
+            "Fecha Formato": "={{$json.fechaFormato}}",
+            "idTurnoBusqueda": "={{$json.patente}}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Día",
+              "displayName": "Día",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Inicio",
+              "displayName": "Inicio",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Final",
+              "displayName": "Final",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Id_Calendario",
+              "displayName": "Id_Calendario",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Fecha Formato",
+              "displayName": "Fecha Formato",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "idTurnoBusqueda",
+              "displayName": "idTurnoBusqueda",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1568,
+        160
+      ],
+      "id": "4025f533-342d-4f05-b47a-c9c58c0a89c7",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "zuvEAGM4xGwG9xvA",
+          "name": "Google Sheets account"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Este código toma el array \"turnos\" y crea un item por cada turno individual\nconst allTurnos = [];\n\nfor (const item of items) {\n  const turnos = item.json.turnos || [];\n  for (const turno of turnos) {\n    allTurnos.push({ json: turno });\n  }\n}\n\nreturn allTurnos;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        176
+      ],
+      "id": "4b829eda-3e27-4baf-b2f1-f59f82dc6e74",
+      "name": "Code1",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "jsCode": "return (() => {\n  // -----------------------------\n  // 0. OBTENER PATENTE DESDE EL NODO “When Executed by Another Workflow”\n  // -----------------------------\n  const input = $('When Executed by Another Workflow').first().json;\n  const data = JSON.parse(input.query); // Convierte el texto JSON en objeto\n  const patente = data[0]?.patente || 'SIN_PATENTE';\n\n  // -----------------------------\n  // 1. OBTENER TURNOS DE LOS TRES PILARES\n  // -----------------------------\n  const p1 = $('PILAR_1').first().json.turnosDisponibles || [];\n  const p2 = $('PILAR_2').first().json.turnosDisponibles || [];\n  const p3 = $('PILAR_3').first().json.turnosDisponibles || [];\n\n  const allTurnos = [...p1, ...p2, ...p3];\n\n  // -----------------------------\n  // 2. FUNCIÓN PARA GENERAR ID ÚNICO ALEATORIO\n  // -----------------------------\n  function generarId() {\n    return (\n      Date.now().toString(36) +\n      Math.random().toString(36).substring(2, 8)\n    ).toUpperCase();\n  }\n\n  // -----------------------------\n  // 3. FUNCIÓN PARA SELECCIONAR HASTA 16 TURNOS\n  // -----------------------------\n  function pick(arr) {\n    const result = [];\n    const days = [...new Set(arr.map(t => t.dia))];\n\n    while (result.length < 16 && days.length > 0) {\n      const d = days.splice(Math.floor(Math.random() * days.length), 1)[0];\n      const options = arr.filter(t => t.dia === d);\n      if (options.length > 0) {\n        const chosen = options[Math.floor(Math.random() * options.length)];\n        result.push(chosen);\n      }\n    }\n\n    while (result.length < 16) {\n      const remaining = arr.filter(\n        t => !result.some(r => r.dia === t.dia && r.horarioLlegada === t.horarioLlegada)\n      );\n      if (remaining.length === 0) break;\n      const chosen = remaining[Math.floor(Math.random() * remaining.length)];\n      result.push(chosen);\n    }\n\n    // -----------------------------\n    // 4. FORMATO FINAL PARA EL AGENTE (con idTurno y patente)\n    // -----------------------------\n    return result.map(t => ({\n      idTurno: generarId(),\n      dia: t.dia,\n      inicio: t.horarioLlegada,\n      final: t.horarioEntrega,\n      Id_Calendario: t.Id_Calendario,\n      fechaFormato: t.fechaFormato,\n      patente // 👈 se agrega aquí\n    }));\n  }\n\n  // -----------------------------\n  // 5. RESPUESTA FINAL\n  // -----------------------------\n  return [\n    {\n      json: {\n        turnos: pick(allTurnos)\n      }\n    }\n  ];\n})();\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        176
+      ],
+      "id": "c5b3fdd5-9d6e-4ea5-90c0-6a76045ee6ed",
+      "name": "Code2",
+      "disabled": true
+    }
+  ],
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "szVkOAiKBdASuLS9",
+      "projectId": "yu5q7ywoIxw2LYTz",
+      "createdAt": "2025-12-30T17:46:43.098Z",
+      "updatedAt": "2025-12-30T17:46:43.098Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [
+    {
+      "id": "97ReE7VTvqcmfh2W",
+      "name": "jetour",
+      "createdAt": "2026-02-25T18:53:29.532Z",
+      "updatedAt": "2026-02-25T18:53:29.532Z"
+    }
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2026-10-29T13:33:21.136Z",
+  "versionId": "00352fda-2721-418a-9f35-b8d75424d9ff"
+}
