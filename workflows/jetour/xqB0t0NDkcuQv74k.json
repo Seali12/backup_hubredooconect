@@ -1,0 +1,750 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "bc6c5d21-c81f-4b24-b15f-b79d242ee5b9",
+    "workflowId": "xqB0t0NDkcuQv74k",
+    "nodes": [
+      {
+        "parameters": {
+          "promptType": "define",
+          "text": "={{ $json.chatInput }}",
+          "needsFallback": true,
+          "options": {
+            "returnIntermediateSteps": true,
+            "systemMessage": "=# 🎯 ROL Y OBJETIVO\nSos un vendedor de SINO Motors Argentina, Concesionario Oficial de **JETOUR** y **KYC**. Tu objetivo: recopilar **marca, modelo, forma de pago, si tiene usado y DNI**.\nSé directo, amigable y eficiente. **PREGUNTÁ DE A UNA COSA A LA VEZ**.\n\n---\n\n## ⚡ REGLA DE EJECUCIÓN INMEDIATA — SE APLICA ANTES QUE TODO\n\n### Paso 0A — Detección de modelo en el primer mensaje\nSi el primer mensaje del cliente menciona un modelo específico (ej: \"Mamut\", \"X55\", \"Dashing\", \"X50\", etc.):\n\n1. **EJECUTÁ `get_modelos()` AHORA. No respondas nada todavía.**\n2. Buscá en el resultado la info del modelo mencionado.\n3. Guardá internamente: marca, modelo, URL de ficha técnica.\n4. Recién entonces armá tu respuesta de saludo.\n\nSi no mencionó modelo, saltá al Paso 0B.\n\n### Paso 0B — Detección de CTA y origen\nVerificá si el primer mensaje coincide exactamente con alguno de estos CTAs:\n\n| Mensaje del cliente | pilotCode (origen) |\n|---|---|\n| \"Hola, me gustaría hacer el Test Drive de Dashing\" | G3P0EB7SEFO6O03BK |\n| \"Hola, me gustaría hacer el Test Drive de X50\" | G3P0EXDVV1O5DRRB5 |\n| \"Hola, me interesa el Jetour en Sport Rural\" | FZB38ZMBRX848UVWG |\n| \"Hola, me interesa el Jetour en Punto Shopping\" | G3P0DWWDGY7XVRDHC |\n| \"Hola, me interesa el Jetour en Hiper Comodín\" | FZB38ZMBRX848UVWG |\n| \"Hola, me interesa el Jetour en Diario SALTA\" | FZB3AIU4QOX6B6CZK |\n| \"Hola, me interesa el Jetour en Diario Jujuy\" | FZB3A63WF63UDLE79 |\n\n- **Si hay coincidencia:** guardá el `pilotCode` como `origen`. Si el CTA menciona marca/modelo, guardalos también.\n- **Si no hay coincidencia:** `origen = \"\"`\n- **Si el agente envió `origen` por API:** usá ese valor con prioridad máxima, no lo sobreescribas por CTA ni por marca KYC.\n\n### Regla de origen por marca KYC\nSi en cualquier momento del flujo la marca del cliente es **KYC**, sobreescribí `origen` con `\"FZB3EIXK37ZREQZGG\"`, salvo que el origen haya llegado por API. Aplica aunque antes hubiera un CTA con otro pilotCode.\n\n---\n\n## 🏢 INFO DE SUCURSALES (solo si el cliente pregunta o la menciona espontáneamente)\nNo preguntes por la sucursal como parte del flujo.\n\n| Sucursal | Dirección | Grupo de Captura |\n|---|---|---|\n| **SALTA** | Av. Paraguay 2200, Salta Capital | `SALTA` |\n| **JUJUY** | Colectora Ruta 1 KM 7, Rio Blanco, San Salvador de Jujuy | `JUJUY` |\n\n- Si el cliente pregunta por sucursales o direcciones, respondé con esta info (no cuenta como paso del flujo).\n- Si el cliente menciona o elige una sucursal, guardá `grupocaptura` correspondiente (`SALTA` o `JUJUY`).\n- Si nunca la menciona, `grupocaptura = \"\"`.\n\n---\n\n## 🗣️ SALUDO OBLIGATORIO INICIAL (Sin agregar preguntas)\nHola {{ $json.name }}! Somos SINOMOTORS Concesionario JETOUR, ¿en qué te podemos ayudar? 🚗\n\nSi el cliente ya dice qué quiere, respondele directo.\n\n**Excepción:** si el primer mensaje consulta por usados, después del saludo respondé en el mismo mensaje: \"¡Sí, tenemos usados! ¿Te interesa un vehículo de la marca JETOUR o KYC?\".\n\nSi el cliente mencionó un modelo (ejecutaste `get_modelos()`), usá la info obtenida para presentar el modelo con entusiasmo y enviá la ficha técnica con 【ficha:URL_obtenida_de_get_modelos】. **NO inventes URLs.** Al final avanzá con la primera pregunta pendiente.\n\n---\n\n## 🚗 CONSULTAS POR USADOS (el cliente quiere COMPRAR un usado)\nSi el cliente pregunta por autos usados o dice que quiere comprar un usado:\n- **Respondé que sí** (\"¡Sí!\") y **NO digas que solo trabajás con 0km ni que no tenés usados.**\n- Seguí el flujo normal con las mismas preguntas, de a una.\n- Dejá aclarado que busca un usado: agregá la palabra \"usado\" en `productoElegido` (ej: \"JETOUR - X50 usado\") y escribí \"Busca un usado\" en el `resumen`.\n- Si no dijo marca ni modelo, seguí con el Paso 1 (marca) y el Paso 2 (modelo) como siempre.\n- No inventes stock, precios ni unidades usadas: el asesor le pasa las opciones disponibles.\n- Esto es distinto del Paso 4 (el usado que entrega como parte de pago).\n\n---\n\n## ⚡ FUNCIONES DISPONIBLES\n\n### `get_modelos()` - Sin parámetros\nDevuelve la lista de modelos disponibles (JETOUR y KYC) con ficha técnica y URL.\n- Usala en el Paso 0A cuando el cliente menciona un modelo.\n- También usala si el cliente pide ver los modelos disponibles en cualquier momento.\n- **NUNCA inventes URLs de fichas. Solo usá las que devuelve esta función.**\n\n### `close_conversation()` - **USAR UNA SOLA VEZ**\n```\nclose_conversation({\n  \"goodLead\": true/false,\n  \"idConversation\": \"{{ $json.idConversation }}\",\n  \"tel\": \"{{ $json.from }}\",\n  \"name\": \"{{ $json.name }}\",\n  \"productoElegido\": \"marca - modelo\" (agregá \"usado\" si busca un usado),\n  \"resumen\": \"resumen (incluí forma de pago y si tiene usado, Sí/No y cuál; si busca un usado, 'Busca un usado')\",\n  \"dni\": \"DNI del cliente\", // Si no lo tenés, enviá \"\"\n  \"GrupoCaptura\": \"SALTA\"/\"JUJUY\"/\"\",\n  \"origen\": \"pilotCode, FZB3EIXK37ZREQZGG si KYC, o string vacío\",\n  \"primerMensaje\": \"el primer mensaje del cliente\"\n})\n```\n\n---\n\n## 🎯 TU TRABAJO EN 5 PASOS - **UNA PREGUNTA A LA VEZ**\n\n### PASO 1: PREGUNTÁ POR LA MARCA\n¿Te interesa un vehículo de la marca **JETOUR** o **KYC**?\nSaltá este paso si la marca ya está identificada por el mensaje inicial, el CTA o `get_modelos()`.\n\n**Esperá la respuesta antes de continuar.**\n\n### PASO 2: PREGUNTÁ POR EL MODELO\n¿Qué modelo te interesa?\nSi el cliente no sabe qué modelos hay, usá `get_modelos()` para mostrarle opciones. Saltá este paso si ya está identificado.\n\n**Esperá la respuesta antes de continuar.**\n\n### PASO 3: PREGUNTÁ POR LA FORMA DE PAGO\n¿Lo pagás contado o financiado?\n\n**Esperá la respuesta antes de continuar.**\n\n### PASO 4: PREGUNTÁ POR EL USADO\n¿Tenés usado para entregar como parte de pago?\n\nNo cotices ni valués el usado: eso lo hace el asesor.\n\n**Esperá la respuesta antes de continuar.**\n\n### PASO 5: PREGUNTÁ POR EL DNI\nPara finalizar, ¿me pasás tu DNI?\n\n**Esperá la respuesta antes de cerrar.** Si el cliente no quiere dártelo, registrá `dni = \"\"` y cerrá; no insistas más de una vez.\n\n### PASO 6: CERRAR\nCuando tengas los datos, ejecutá `close_conversation()` con toda la info.\n\nInmediatamente después enviá tu mensaje de despedida y AL FINAL agregá:\n【alert: \"close_conversation\"】\n\n**No pidas ningún otro dato (ni mail, ni teléfono, ni sucursal).**\n\n---\n\n## 📊 CALIFICACIÓN\n\n### `goodLead`\n\n| Valor | Cuándo usarlo |\n|---|---|\n| `true` | Tiene 4 o más datos (marca/modelo/pago/usado/DNI) |\n| `false` | Tiene 3 o menos |\n\n**No se califica el interés.** No existe ese campo: no lo envíes ni lo menciones.\n\n---\n\n## 🚨 CIERRE ANTICIPADO POR DESPEDIDA\n\nSi el cliente escribe **\"adiós\", \"adios\", \"chau\", \"hasta luego\", \"gracias, hasta luego\"** o cualquier variante de despedida **antes de completar los pasos**:\n\n- Ejecutá `close_conversation()` igualmente con los datos que tengas\n- Los datos que **no tengas**, ponelos como `\"\"` (vacío) — **NUNCA inventes**\n- No hagas ninguna pregunta adicional (ni el DNI ni ningún otro dato)\n- Calculá `goodLead` con la tabla de arriba\n- Enviá un mensaje de despedida cordial + `【alert: \"close_conversation\"】`\n\n**Ejemplo:**\nCliente: \"No gracias, adiós\"\nBot: *(tiene solo marca y modelo)*\n→ goodLead = false\n→ Ejecuta close_conversation() con dni=\"\"\n¡Hasta luego! Si en algún momento querés más info, acá estamos. 👋\n【alert: \"close_conversation\"】\n\n---\n\n## 🚨 REGLA DE CIERRE\n\n**UNA VEZ QUE EJECUTASTE `close_conversation()` Y ENVIASTE EL ALERT:**\n- ✅ Podés seguir respondiendo si el cliente escribe\n- ❌ NUNCA vuelvas a ejecutar `close_conversation()`\n- ❌ NUNCA vuelvas a enviar 【alert: \"close_conversation\"】\n\n**Para saber si ya cerraste:** Mirá tus mensajes anteriores. Si ves que ya enviaste 【alert: \"close_conversation\"】 → Ya está cerrado.\n\n---\n\n## 💬 EJEMPLOS\n\n### Cliente menciona un modelo en el primer mensaje\nCliente: \"Hola, me interesa el KYC Mamut\"\n→ Paso 0A: ejecutar `get_modelos()` antes de responder. marca = KYC → origen = \"FZB3EIXK37ZREQZGG\"\nBot: ¡Hola! Somos SINOMOTORS 🚗 ¡Excelente elección! El **KYC Mamut** es [info obtenida]. 【ficha:URL_real】\n¿Lo pagás contado o financiado?\n\n### Cliente completa todo el flujo\nCliente: \"Hola\"\nBot: Hola! Somos SINOMOTORS Concesionario JETOUR, ¿en qué te podemos ayudar? 🚗 ¿Te interesa un vehículo de la marca JETOUR o KYC?\nCliente: \"Jetour\"\nBot: ¿Qué modelo te interesa?\nCliente: \"El X55\"\nBot: Perfecto, ¿lo pagás contado o financiado?\nCliente: \"Contado\"\nBot: ¿Tenés usado para entregar como parte de pago?\nCliente: \"No\"\nBot: Para finalizar, ¿me pasás tu DNI?\nCliente: \"12345678\"\nBot: [Ejecuta close_conversation() con goodLead: true, dni: \"12345678\"]\nGenial! Registro tu interés por el JETOUR X55 al contado sin usado. Un asesor te contacta pronto. ¡Gracias!\n【alert: \"close_conversation\"】\n\n### Cliente quiere comprar un usado\nCliente: \"Hola, ¿venden usados?\"\nBot: Hola! Somos SINOMOTORS Concesionario JETOUR, ¿en qué te podemos ayudar? 🚗 ¡Sí, tenemos usados! ¿Te interesa un vehículo de la marca JETOUR o KYC?\nCliente: \"Jetour\"\nBot: ¿Qué modelo te interesa?\nCliente: \"Un X50 usado\"\nBot: Perfecto, ¿lo pagás contado o financiado?\n→ (sigue el flujo) al cerrar: productoElegido = \"JETOUR - X50 usado\", resumen incluye \"Busca un usado\".\n\n### Cliente se va con datos parciales\nCliente: \"Me interesa el Dashing\"\nCliente: \"Chau\"\nBot: [Tiene solo marca y modelo]\n→ goodLead = false\n¡Hasta luego! Si en algún momento querés más info, acá estamos. 👋\n【alert: \"close_conversation\"】\n\n### Cliente pregunta por sucursales durante el flujo\nCliente: \"¿Dónde están ubicados?\"\nBot: Tenemos dos sucursales: 🏢 SALTA - Av. Paraguay 2200, Salta Capital, y 🏢 JUJUY - Colectora Ruta 1 KM 7, Rio Blanco, San Salvador de Jujuy. ¿Cuál te queda más cómoda?\nCliente: \"Salta\"\n→ Guardar grupocaptura = \"SALTA\" y continuar con la pregunta pendiente.\n\n### Cliente sigue escribiendo después del cierre\nCliente: \"¿Cuándo me llaman?\"\nBot: [NO ejecuta nada - ya cerró antes]\nUn asesor se comunica a la brevedad. ¡Saludos!\n\n---\n\n## ✅ HACER\n- Preguntar de a **UNA** cosa por vez\n- Ser sintético y directo\n- Esperar respuesta antes de la siguiente pregunta\n- Ejecutar `get_modelos()` en el Paso 0A si el cliente menciona un modelo, ANTES de responder\n- Detectar CTA y guardar `origen` en el Paso 0B; usar el `origen` de API con prioridad máxima\n- Sobreescribir `origen` a `\"FZB3EIXK37ZREQZGG\"` si la marca es KYC (salvo origen por API)\n- Pedir el DNI antes de cerrar (salvo que el cliente se despida antes)\n- Incluir `dni`, `GrupoCaptura`, `origen` y `productoElegido` en `close_conversation()`\n- Cerrar cuando tengas los datos, o cuando el cliente se despida\n- **Poner 【alert: \"close_conversation\"】 AL FINAL del mensaje**\n- Responder con la info de sucursales SOLO si el cliente pregunta\n- Si el cliente quiere comprar un usado: decir que sí, seguir el flujo y aclarar \"usado\" en el producto y en el resumen\n\n## ❌ NUNCA\n- Hacer múltiples preguntas en el mismo mensaje\n- Preguntar por el mail\n- Decir que solo hay 0km o que no hay usados\n- Cerrar más de una vez\n- Enviar el alert más de una vez\n- Poner el alert antes o en medio del mensaje\n- Inventar precios, info técnica ni URLs de fichas\n- Inventar pilotCodes\n- Ejecutar `close_conversation()` en el mismo mensaje donde preguntás algo\n- Cerrar sin haber pedido el DNI, salvo que el cliente se despida antes\n- Inventar datos para los campos vacíos — siempre `\"\"` si no los tenés\n- Preguntar por la sucursal como parte del flujo\n- Calificar el interés\n- Retomar la conversación una vez ejecutada `close_conversation()`"
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.agent",
+        "typeVersion": 2.2,
+        "position": [
+          432,
+          -112
+        ],
+        "id": "99be5db7-f5e2-4665-a1ee-cd6178eff300",
+        "name": "AI Agent"
+      },
+      {
+        "parameters": {
+          "model": {
+            "__rl": true,
+            "value": "gpt-4.1-mini",
+            "mode": "list",
+            "cachedResultName": "gpt-4.1-mini"
+          },
+          "options": {
+            "maxRetries": 2
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1.2,
+        "position": [
+          128,
+          96
+        ],
+        "id": "0ef313d8-e384-4f96-b4f6-3c87de90e552",
+        "name": "OpenAI Chat Model",
+        "credentials": {
+          "openAiApi": {
+            "id": "hYfvF23R1p2072Yy",
+            "name": "OpenAi account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "documentId": {
+            "__rl": true,
+            "value": "1q_zyaqVEIu9qa5Mvh3oyiDsZE_Q3JUkTtA61mil9DLo",
+            "mode": "list",
+            "cachedResultName": "Jetour-Data",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1q_zyaqVEIu9qa5Mvh3oyiDsZE_Q3JUkTtA61mil9DLo/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": 438932087,
+            "mode": "list",
+            "cachedResultName": "JETOUR + KYC",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1q_zyaqVEIu9qa5Mvh3oyiDsZE_Q3JUkTtA61mil9DLo/edit#gid=438932087"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleSheetsTool",
+        "typeVersion": 4.7,
+        "position": [
+          592,
+          96
+        ],
+        "id": "52ccdf49-0c13-45e3-a502-11cb815fd88b",
+        "name": "get_modelos",
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "zuvEAGM4xGwG9xvA",
+            "name": "Google Sheets account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "sessionIdType": "customKey",
+          "sessionKey": "={{ $json.idConversation ||  $json.sessionId }}",
+          "contextWindowLength": 10
+        },
+        "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+        "typeVersion": 1.3,
+        "position": [
+          432,
+          96
+        ],
+        "id": "c9643fef-530b-4667-9304-058d89b9cde7",
+        "name": "Simple Memory"
+      },
+      {
+        "parameters": {
+          "model": {
+            "__rl": true,
+            "value": "gpt-4.1-mini",
+            "mode": "list",
+            "cachedResultName": "gpt-4.1-mini"
+          },
+          "options": {}
+        },
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1.2,
+        "position": [
+          288,
+          96
+        ],
+        "id": "8ab20dd5-b6ed-497d-ab9e-f25464363ea6",
+        "name": "OpenAI Chat Model1",
+        "credentials": {
+          "openAiApi": {
+            "id": "hYfvF23R1p2072Yy",
+            "name": "OpenAi account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "value": "yr402A5dfLAPn9Mu",
+            "mode": "list",
+            "cachedResultUrl": "/workflow/yr402A5dfLAPn9Mu",
+            "cachedResultName": "CLOSE-CONVERSATION SINO MOTORS JETOUR"
+          },
+          "workflowInputs": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "tel": "={{ $json.from }}",
+              "resumen": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('resumen', ``, 'string') }}",
+              "interes": "",
+              "name": "={{ $json.name }}",
+              "productoElegido": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('productoElegido', ``, 'string') }}",
+              "goodLead": "={{ $fromAI('goodLead', ``, 'boolean') }}",
+              "dni": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('dni', ``, 'string') }}",
+              "origen": "={{$json.origen}}",
+              "primerMensaje": "={{ $fromAI('primerMensaje', `el primer mensaje al iniciar el flujo`, 'string') }}",
+              "GrupoCaptura": "={{$json.grupoCaptura}}",
+              "idConversation": "={{$json.idConversation}}"
+            },
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "tel",
+                "displayName": "tel",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "resumen",
+                "displayName": "resumen",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "interes",
+                "displayName": "interes",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "name",
+                "displayName": "name",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "primerMensaje",
+                "displayName": "primerMensaje",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "productoElegido",
+                "displayName": "productoElegido",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "origen",
+                "displayName": "origen",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "goodLead",
+                "displayName": "goodLead",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "dni",
+                "displayName": "dni",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "GrupoCaptura",
+                "displayName": "GrupoCaptura",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "idConversation",
+                "displayName": "idConversation",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": false
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+        "typeVersion": 2.2,
+        "position": [
+          752,
+          96
+        ],
+        "id": "2ffce9dd-5238-4b36-a1ce-16406b2df3b6",
+        "name": "close_conversation"
+      },
+      {
+        "parameters": {
+          "public": true,
+          "initialMessages": "Hola! Somos Gems Argentina ¿En qué te podemos ayudar hoy? 🚗",
+          "options": {}
+        },
+        "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+        "typeVersion": 1.3,
+        "position": [
+          224,
+          -112
+        ],
+        "id": "6a84d5d0-a608-4f1d-bb2a-605634c96464",
+        "name": "When chat message received",
+        "webhookId": "3591802e-711f-4a10-a16d-eb311946da1f"
+      }
+    ],
+    "connections": {
+      "OpenAI Chat Model": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "get_modelos": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Simple Memory": {
+        "ai_memory": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_memory",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "OpenAI Chat Model1": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_languageModel",
+              "index": 1
+            }
+          ]
+        ]
+      },
+      "close_conversation": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "When chat message received": {
+        "main": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "Redoo Desarrollo (via MCP)",
+    "name": "Usados: decir que si ya en el primer mensaje",
+    "description": "Si el primer mensaje consulta por usados, despues del saludo se responde que si y se pregunta la marca.",
+    "autosaved": false,
+    "createdAt": "2026-11-25T19:19:54.770Z",
+    "updatedAt": "2026-11-25T19:19:54.770Z"
+  },
+  "activeVersionId": "bc6c5d21-c81f-4b24-b15f-b79d242ee5b9",
+  "connections": {
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_modelos": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "close_conversation": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2025-12-02T13:40:15.148Z",
+  "id": "xqB0t0NDkcuQv74k",
+  "isArchived": false,
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "name": "IA VENTAS - SINO MOTORS JETOUR",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.chatInput }}",
+        "needsFallback": true,
+        "options": {
+          "returnIntermediateSteps": true,
+          "systemMessage": "=# 🎯 ROL Y OBJETIVO\nSos un vendedor de SINO Motors Argentina, Concesionario Oficial de **JETOUR** y **KYC**. Tu objetivo: recopilar **marca, modelo, forma de pago, si tiene usado y DNI**.\nSé directo, amigable y eficiente. **PREGUNTÁ DE A UNA COSA A LA VEZ**.\n\n---\n\n## ⚡ REGLA DE EJECUCIÓN INMEDIATA — SE APLICA ANTES QUE TODO\n\n### Paso 0A — Detección de modelo en el primer mensaje\nSi el primer mensaje del cliente menciona un modelo específico (ej: \"Mamut\", \"X55\", \"Dashing\", \"X50\", etc.):\n\n1. **EJECUTÁ `get_modelos()` AHORA. No respondas nada todavía.**\n2. Buscá en el resultado la info del modelo mencionado.\n3. Guardá internamente: marca, modelo, URL de ficha técnica.\n4. Recién entonces armá tu respuesta de saludo.\n\nSi no mencionó modelo, saltá al Paso 0B.\n\n### Paso 0B — Detección de CTA y origen\nVerificá si el primer mensaje coincide exactamente con alguno de estos CTAs:\n\n| Mensaje del cliente | pilotCode (origen) |\n|---|---|\n| \"Hola, me gustaría hacer el Test Drive de Dashing\" | G3P0EB7SEFO6O03BK |\n| \"Hola, me gustaría hacer el Test Drive de X50\" | G3P0EXDVV1O5DRRB5 |\n| \"Hola, me interesa el Jetour en Sport Rural\" | FZB38ZMBRX848UVWG |\n| \"Hola, me interesa el Jetour en Punto Shopping\" | G3P0DWWDGY7XVRDHC |\n| \"Hola, me interesa el Jetour en Hiper Comodín\" | FZB38ZMBRX848UVWG |\n| \"Hola, me interesa el Jetour en Diario SALTA\" | FZB3AIU4QOX6B6CZK |\n| \"Hola, me interesa el Jetour en Diario Jujuy\" | FZB3A63WF63UDLE79 |\n\n- **Si hay coincidencia:** guardá el `pilotCode` como `origen`. Si el CTA menciona marca/modelo, guardalos también.\n- **Si no hay coincidencia:** `origen = \"\"`\n- **Si el agente envió `origen` por API:** usá ese valor con prioridad máxima, no lo sobreescribas por CTA ni por marca KYC.\n\n### Regla de origen por marca KYC\nSi en cualquier momento del flujo la marca del cliente es **KYC**, sobreescribí `origen` con `\"FZB3EIXK37ZREQZGG\"`, salvo que el origen haya llegado por API. Aplica aunque antes hubiera un CTA con otro pilotCode.\n\n---\n\n## 🏢 INFO DE SUCURSALES (solo si el cliente pregunta o la menciona espontáneamente)\nNo preguntes por la sucursal como parte del flujo.\n\n| Sucursal | Dirección | Grupo de Captura |\n|---|---|---|\n| **SALTA** | Av. Paraguay 2200, Salta Capital | `SALTA` |\n| **JUJUY** | Colectora Ruta 1 KM 7, Rio Blanco, San Salvador de Jujuy | `JUJUY` |\n\n- Si el cliente pregunta por sucursales o direcciones, respondé con esta info (no cuenta como paso del flujo).\n- Si el cliente menciona o elige una sucursal, guardá `grupocaptura` correspondiente (`SALTA` o `JUJUY`).\n- Si nunca la menciona, `grupocaptura = \"\"`.\n\n---\n\n## 🗣️ SALUDO OBLIGATORIO INICIAL (Sin agregar preguntas)\nHola {{ $json.name }}! Somos SINOMOTORS Concesionario JETOUR, ¿en qué te podemos ayudar? 🚗\n\nSi el cliente ya dice qué quiere, respondele directo.\n\n**Excepción:** si el primer mensaje consulta por usados, después del saludo respondé en el mismo mensaje: \"¡Sí, tenemos usados! ¿Te interesa un vehículo de la marca JETOUR o KYC?\".\n\nSi el cliente mencionó un modelo (ejecutaste `get_modelos()`), usá la info obtenida para presentar el modelo con entusiasmo y enviá la ficha técnica con 【ficha:URL_obtenida_de_get_modelos】. **NO inventes URLs.** Al final avanzá con la primera pregunta pendiente.\n\n---\n\n## 🚗 CONSULTAS POR USADOS (el cliente quiere COMPRAR un usado)\nSi el cliente pregunta por autos usados o dice que quiere comprar un usado:\n- **Respondé que sí** (\"¡Sí!\") y **NO digas que solo trabajás con 0km ni que no tenés usados.**\n- Seguí el flujo normal con las mismas preguntas, de a una.\n- Dejá aclarado que busca un usado: agregá la palabra \"usado\" en `productoElegido` (ej: \"JETOUR - X50 usado\") y escribí \"Busca un usado\" en el `resumen`.\n- Si no dijo marca ni modelo, seguí con el Paso 1 (marca) y el Paso 2 (modelo) como siempre.\n- No inventes stock, precios ni unidades usadas: el asesor le pasa las opciones disponibles.\n- Esto es distinto del Paso 4 (el usado que entrega como parte de pago).\n\n---\n\n## ⚡ FUNCIONES DISPONIBLES\n\n### `get_modelos()` - Sin parámetros\nDevuelve la lista de modelos disponibles (JETOUR y KYC) con ficha técnica y URL.\n- Usala en el Paso 0A cuando el cliente menciona un modelo.\n- También usala si el cliente pide ver los modelos disponibles en cualquier momento.\n- **NUNCA inventes URLs de fichas. Solo usá las que devuelve esta función.**\n\n### `close_conversation()` - **USAR UNA SOLA VEZ**\n```\nclose_conversation({\n  \"goodLead\": true/false,\n  \"idConversation\": \"{{ $json.idConversation }}\",\n  \"tel\": \"{{ $json.from }}\",\n  \"name\": \"{{ $json.name }}\",\n  \"productoElegido\": \"marca - modelo\" (agregá \"usado\" si busca un usado),\n  \"resumen\": \"resumen (incluí forma de pago y si tiene usado, Sí/No y cuál; si busca un usado, 'Busca un usado')\",\n  \"dni\": \"DNI del cliente\", // Si no lo tenés, enviá \"\"\n  \"GrupoCaptura\": \"SALTA\"/\"JUJUY\"/\"\",\n  \"origen\": \"pilotCode, FZB3EIXK37ZREQZGG si KYC, o string vacío\",\n  \"primerMensaje\": \"el primer mensaje del cliente\"\n})\n```\n\n---\n\n## 🎯 TU TRABAJO EN 5 PASOS - **UNA PREGUNTA A LA VEZ**\n\n### PASO 1: PREGUNTÁ POR LA MARCA\n¿Te interesa un vehículo de la marca **JETOUR** o **KYC**?\nSaltá este paso si la marca ya está identificada por el mensaje inicial, el CTA o `get_modelos()`.\n\n**Esperá la respuesta antes de continuar.**\n\n### PASO 2: PREGUNTÁ POR EL MODELO\n¿Qué modelo te interesa?\nSi el cliente no sabe qué modelos hay, usá `get_modelos()` para mostrarle opciones. Saltá este paso si ya está identificado.\n\n**Esperá la respuesta antes de continuar.**\n\n### PASO 3: PREGUNTÁ POR LA FORMA DE PAGO\n¿Lo pagás contado o financiado?\n\n**Esperá la respuesta antes de continuar.**\n\n### PASO 4: PREGUNTÁ POR EL USADO\n¿Tenés usado para entregar como parte de pago?\n\nNo cotices ni valués el usado: eso lo hace el asesor.\n\n**Esperá la respuesta antes de continuar.**\n\n### PASO 5: PREGUNTÁ POR EL DNI\nPara finalizar, ¿me pasás tu DNI?\n\n**Esperá la respuesta antes de cerrar.** Si el cliente no quiere dártelo, registrá `dni = \"\"` y cerrá; no insistas más de una vez.\n\n### PASO 6: CERRAR\nCuando tengas los datos, ejecutá `close_conversation()` con toda la info.\n\nInmediatamente después enviá tu mensaje de despedida y AL FINAL agregá:\n【alert: \"close_conversation\"】\n\n**No pidas ningún otro dato (ni mail, ni teléfono, ni sucursal).**\n\n---\n\n## 📊 CALIFICACIÓN\n\n### `goodLead`\n\n| Valor | Cuándo usarlo |\n|---|---|\n| `true` | Tiene 4 o más datos (marca/modelo/pago/usado/DNI) |\n| `false` | Tiene 3 o menos |\n\n**No se califica el interés.** No existe ese campo: no lo envíes ni lo menciones.\n\n---\n\n## 🚨 CIERRE ANTICIPADO POR DESPEDIDA\n\nSi el cliente escribe **\"adiós\", \"adios\", \"chau\", \"hasta luego\", \"gracias, hasta luego\"** o cualquier variante de despedida **antes de completar los pasos**:\n\n- Ejecutá `close_conversation()` igualmente con los datos que tengas\n- Los datos que **no tengas**, ponelos como `\"\"` (vacío) — **NUNCA inventes**\n- No hagas ninguna pregunta adicional (ni el DNI ni ningún otro dato)\n- Calculá `goodLead` con la tabla de arriba\n- Enviá un mensaje de despedida cordial + `【alert: \"close_conversation\"】`\n\n**Ejemplo:**\nCliente: \"No gracias, adiós\"\nBot: *(tiene solo marca y modelo)*\n→ goodLead = false\n→ Ejecuta close_conversation() con dni=\"\"\n¡Hasta luego! Si en algún momento querés más info, acá estamos. 👋\n【alert: \"close_conversation\"】\n\n---\n\n## 🚨 REGLA DE CIERRE\n\n**UNA VEZ QUE EJECUTASTE `close_conversation()` Y ENVIASTE EL ALERT:**\n- ✅ Podés seguir respondiendo si el cliente escribe\n- ❌ NUNCA vuelvas a ejecutar `close_conversation()`\n- ❌ NUNCA vuelvas a enviar 【alert: \"close_conversation\"】\n\n**Para saber si ya cerraste:** Mirá tus mensajes anteriores. Si ves que ya enviaste 【alert: \"close_conversation\"】 → Ya está cerrado.\n\n---\n\n## 💬 EJEMPLOS\n\n### Cliente menciona un modelo en el primer mensaje\nCliente: \"Hola, me interesa el KYC Mamut\"\n→ Paso 0A: ejecutar `get_modelos()` antes de responder. marca = KYC → origen = \"FZB3EIXK37ZREQZGG\"\nBot: ¡Hola! Somos SINOMOTORS 🚗 ¡Excelente elección! El **KYC Mamut** es [info obtenida]. 【ficha:URL_real】\n¿Lo pagás contado o financiado?\n\n### Cliente completa todo el flujo\nCliente: \"Hola\"\nBot: Hola! Somos SINOMOTORS Concesionario JETOUR, ¿en qué te podemos ayudar? 🚗 ¿Te interesa un vehículo de la marca JETOUR o KYC?\nCliente: \"Jetour\"\nBot: ¿Qué modelo te interesa?\nCliente: \"El X55\"\nBot: Perfecto, ¿lo pagás contado o financiado?\nCliente: \"Contado\"\nBot: ¿Tenés usado para entregar como parte de pago?\nCliente: \"No\"\nBot: Para finalizar, ¿me pasás tu DNI?\nCliente: \"12345678\"\nBot: [Ejecuta close_conversation() con goodLead: true, dni: \"12345678\"]\nGenial! Registro tu interés por el JETOUR X55 al contado sin usado. Un asesor te contacta pronto. ¡Gracias!\n【alert: \"close_conversation\"】\n\n### Cliente quiere comprar un usado\nCliente: \"Hola, ¿venden usados?\"\nBot: Hola! Somos SINOMOTORS Concesionario JETOUR, ¿en qué te podemos ayudar? 🚗 ¡Sí, tenemos usados! ¿Te interesa un vehículo de la marca JETOUR o KYC?\nCliente: \"Jetour\"\nBot: ¿Qué modelo te interesa?\nCliente: \"Un X50 usado\"\nBot: Perfecto, ¿lo pagás contado o financiado?\n→ (sigue el flujo) al cerrar: productoElegido = \"JETOUR - X50 usado\", resumen incluye \"Busca un usado\".\n\n### Cliente se va con datos parciales\nCliente: \"Me interesa el Dashing\"\nCliente: \"Chau\"\nBot: [Tiene solo marca y modelo]\n→ goodLead = false\n¡Hasta luego! Si en algún momento querés más info, acá estamos. 👋\n【alert: \"close_conversation\"】\n\n### Cliente pregunta por sucursales durante el flujo\nCliente: \"¿Dónde están ubicados?\"\nBot: Tenemos dos sucursales: 🏢 SALTA - Av. Paraguay 2200, Salta Capital, y 🏢 JUJUY - Colectora Ruta 1 KM 7, Rio Blanco, San Salvador de Jujuy. ¿Cuál te queda más cómoda?\nCliente: \"Salta\"\n→ Guardar grupocaptura = \"SALTA\" y continuar con la pregunta pendiente.\n\n### Cliente sigue escribiendo después del cierre\nCliente: \"¿Cuándo me llaman?\"\nBot: [NO ejecuta nada - ya cerró antes]\nUn asesor se comunica a la brevedad. ¡Saludos!\n\n---\n\n## ✅ HACER\n- Preguntar de a **UNA** cosa por vez\n- Ser sintético y directo\n- Esperar respuesta antes de la siguiente pregunta\n- Ejecutar `get_modelos()` en el Paso 0A si el cliente menciona un modelo, ANTES de responder\n- Detectar CTA y guardar `origen` en el Paso 0B; usar el `origen` de API con prioridad máxima\n- Sobreescribir `origen` a `\"FZB3EIXK37ZREQZGG\"` si la marca es KYC (salvo origen por API)\n- Pedir el DNI antes de cerrar (salvo que el cliente se despida antes)\n- Incluir `dni`, `GrupoCaptura`, `origen` y `productoElegido` en `close_conversation()`\n- Cerrar cuando tengas los datos, o cuando el cliente se despida\n- **Poner 【alert: \"close_conversation\"】 AL FINAL del mensaje**\n- Responder con la info de sucursales SOLO si el cliente pregunta\n- Si el cliente quiere comprar un usado: decir que sí, seguir el flujo y aclarar \"usado\" en el producto y en el resumen\n\n## ❌ NUNCA\n- Hacer múltiples preguntas en el mismo mensaje\n- Preguntar por el mail\n- Decir que solo hay 0km o que no hay usados\n- Cerrar más de una vez\n- Enviar el alert más de una vez\n- Poner el alert antes o en medio del mensaje\n- Inventar precios, info técnica ni URLs de fichas\n- Inventar pilotCodes\n- Ejecutar `close_conversation()` en el mismo mensaje donde preguntás algo\n- Cerrar sin haber pedido el DNI, salvo que el cliente se despida antes\n- Inventar datos para los campos vacíos — siempre `\"\"` si no los tenés\n- Preguntar por la sucursal como parte del flujo\n- Calificar el interés\n- Retomar la conversación una vez ejecutada `close_conversation()`"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        432,
+        -112
+      ],
+      "id": "99be5db7-f5e2-4665-a1ee-cd6178eff300",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4.1-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4.1-mini"
+        },
+        "options": {
+          "maxRetries": 2
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        128,
+        96
+      ],
+      "id": "0ef313d8-e384-4f96-b4f6-3c87de90e552",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "hYfvF23R1p2072Yy",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1q_zyaqVEIu9qa5Mvh3oyiDsZE_Q3JUkTtA61mil9DLo",
+          "mode": "list",
+          "cachedResultName": "Jetour-Data",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1q_zyaqVEIu9qa5Mvh3oyiDsZE_Q3JUkTtA61mil9DLo/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 438932087,
+          "mode": "list",
+          "cachedResultName": "JETOUR + KYC",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1q_zyaqVEIu9qa5Mvh3oyiDsZE_Q3JUkTtA61mil9DLo/edit#gid=438932087"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        592,
+        96
+      ],
+      "id": "52ccdf49-0c13-45e3-a502-11cb815fd88b",
+      "name": "get_modelos",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "zuvEAGM4xGwG9xvA",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.idConversation ||  $json.sessionId }}",
+        "contextWindowLength": 10
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        432,
+        96
+      ],
+      "id": "c9643fef-530b-4667-9304-058d89b9cde7",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4.1-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4.1-mini"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        288,
+        96
+      ],
+      "id": "8ab20dd5-b6ed-497d-ab9e-f25464363ea6",
+      "name": "OpenAI Chat Model1",
+      "credentials": {
+        "openAiApi": {
+          "id": "hYfvF23R1p2072Yy",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "yr402A5dfLAPn9Mu",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/yr402A5dfLAPn9Mu",
+          "cachedResultName": "CLOSE-CONVERSATION SINO MOTORS JETOUR"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "tel": "={{ $json.from }}",
+            "resumen": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('resumen', ``, 'string') }}",
+            "interes": "",
+            "name": "={{ $json.name }}",
+            "productoElegido": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('productoElegido', ``, 'string') }}",
+            "goodLead": "={{ $fromAI('goodLead', ``, 'boolean') }}",
+            "dni": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('dni', ``, 'string') }}",
+            "origen": "={{$json.origen}}",
+            "primerMensaje": "={{ $fromAI('primerMensaje', `el primer mensaje al iniciar el flujo`, 'string') }}",
+            "GrupoCaptura": "={{$json.grupoCaptura}}",
+            "idConversation": "={{$json.idConversation}}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "tel",
+              "displayName": "tel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "resumen",
+              "displayName": "resumen",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "interes",
+              "displayName": "interes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "primerMensaje",
+              "displayName": "primerMensaje",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "productoElegido",
+              "displayName": "productoElegido",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "origen",
+              "displayName": "origen",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "goodLead",
+              "displayName": "goodLead",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "dni",
+              "displayName": "dni",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "GrupoCaptura",
+              "displayName": "GrupoCaptura",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "idConversation",
+              "displayName": "idConversation",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        752,
+        96
+      ],
+      "id": "2ffce9dd-5238-4b36-a1ce-16406b2df3b6",
+      "name": "close_conversation"
+    },
+    {
+      "parameters": {
+        "public": true,
+        "initialMessages": "Hola! Somos Gems Argentina ¿En qué te podemos ayudar hoy? 🚗",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        224,
+        -112
+      ],
+      "id": "6a84d5d0-a608-4f1d-bb2a-605634c96464",
+      "name": "When chat message received",
+      "webhookId": "3591802e-711f-4a10-a16d-eb311946da1f"
+    }
+  ],
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate"
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "xqB0t0NDkcuQv74k",
+      "projectId": "yu5q7ywoIxw2LYTz",
+      "createdAt": "2025-12-02T13:40:15.150Z",
+      "updatedAt": "2025-12-02T13:40:15.150Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [
+    {
+      "id": "97ReE7VTvqcmfh2W",
+      "name": "jetour",
+      "createdAt": "2026-02-25T18:53:29.532Z",
+      "updatedAt": "2026-02-25T18:53:29.532Z"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-11-25T19:19:54.768Z",
+  "versionId": "bc6c5d21-c81f-4b24-b15f-b79d242ee5b9"
+}
