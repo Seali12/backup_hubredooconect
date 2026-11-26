@@ -1,0 +1,179 @@
+{
+  "active": false,
+  "activeVersion": null,
+  "activeVersionId": null,
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "getToken",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "getToken": {
+      "main": [
+        [
+          {
+            "node": "Variantes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Variantes": {
+      "main": [
+        [
+          {
+            "node": "Presupuesto Ford",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Presupuesto Ford": {
+      "main": [
+        [
+          {
+            "node": "Resultado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-11-20T18:46:46.306Z",
+  "id": "KtATlwmWN19mIfgF",
+  "isArchived": true,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "name": "TEMP presupuesto AH240UU (borrar)",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "id": "a2d72b3b-5d10-4159-98c6-8244b1229db3",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "65822ca3-8e68-4910-b5b6-86fe60223eca",
+      "name": "getToken",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        224,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * \nFROM mydatabase.token_agenda_ford\nWHERE company = 2\nORDER BY id DESC\nLIMIT 1;",
+        "options": {}
+      },
+      "credentials": {
+        "mySql": {
+          "id": "MYmGGfM8lz7xrUC9",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "id": "72841597-f881-4afc-9e8e-3a653cd68f71",
+      "name": "Variantes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const base = { vin: 'LJXCU3BB0SHF50311', dealer: '60834', division: 1, country: 'ARG', scheduleDate: '2026-12-02', scheduleHour: '0900', fordProtectPlanType: null, group: 14, hasFordProtectCoverage: false, iolmParts: [], isIOLM: false, model: 'TERRITORY', offeredServices: [1405], recallVOs: [], scheduleOrigin: 'D', vehicleModelYear: null };\nconst v = [\n  ['Turno 02/12 (como el real)', {}],\n  ['Turno 27/11', { scheduleDate: '2026-11-27', scheduleHour: '1100' }],\n  ['Turno 30/11', { scheduleDate: '2026-11-30', scheduleHour: '0830' }],\n  ['Turno 01/12', { scheduleDate: '2026-12-01', scheduleHour: '0830' }],\n];\nreturn v.map(([nombre, cambio]) => ({ json: { nombre, body: { ...base, ...cambio } } }));"
+      }
+    },
+    {
+      "id": "8d8859cc-52ed-4a57-81c7-5b93eb9b15ef",
+      "name": "Presupuesto Ford",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        672,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.service.ford.com/agenda/manage-reservation-bff/workshop/budget-recalculate",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "countrycode",
+              "value": "ARG"
+            },
+            {
+              "name": "dealercode",
+              "value": "60834"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "jXzonHTBszDvh6kA",
+          "name": "Bearer Auth account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "d5b45444-3ebc-444e-8d62-a26a40e4b3a7",
+      "name": "Resultado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        0
+      ],
+      "parameters": {
+        "jsCode": "return $input.all().map((it, i) => { const q = it.json.result || {}; const v = (q.quotationScheduleVO?.quotationVOs || [])[0] || {}; return { json: { variante: $('Variantes').all()[i].json.nombre, precio: v.price ?? null, total: q.totalAmount ?? null, partes: (v.quotationPartVOs || []).length, error: it.json.error ? JSON.stringify(it.json.error).slice(0, 200) : null } }; });"
+      }
+    }
+  ],
+  "pinData": null,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "KtATlwmWN19mIfgF",
+      "projectId": "uctBMgzvi5ZzGu3j",
+      "createdAt": "2026-11-20T18:46:46.312Z",
+      "updatedAt": "2026-11-20T18:46:46.312Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2026-11-20T18:46:56.000Z",
+  "versionId": "969f5661-c59f-48f6-bdfd-6428ab0baa3a"
+}
