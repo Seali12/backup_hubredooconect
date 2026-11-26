@@ -1,0 +1,485 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "a837b92b-5ea9-4771-9384-c4e145a47de7",
+    "workflowId": "GtPniDku9dxAgLGg",
+    "nodes": [
+      {
+        "parameters": {
+          "sessionIdType": "customKey",
+          "sessionKey": "={{ $json.idConversation || $json.sessionId}}",
+          "contextWindowLength": 18
+        },
+        "id": "545fbdc8-9d17-4037-9157-f256f8f4f27e",
+        "name": "Window Buffer Memory",
+        "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+        "typeVersion": 1.2,
+        "position": [
+          16,
+          128
+        ]
+      },
+      {
+        "parameters": {
+          "model": "gpt-4.1",
+          "options": {
+            "temperature": 0.3
+          }
+        },
+        "id": "a345f4c0-7660-4fad-8233-71d6e3bc01a8",
+        "name": "OpenAI Chat Model",
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1,
+        "position": [
+          -144,
+          128
+        ],
+        "credentials": {
+          "openAiApi": {
+            "id": "6LyxFNJPqZkaD3hN",
+            "name": "OpenAi account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "name": "bot_ventas",
+          "description": "esta funcion es para redirigir al bot de ventas",
+          "workflowId": {
+            "__rl": true,
+            "value": "3jiX0e6JE5IUVPg1",
+            "mode": "list",
+            "cachedResultName": "VENTAS-IA-GRUPO-AVANT"
+          },
+          "responsePropertyName": "output",
+          "fields": {
+            "values": [
+              {
+                "name": "sessionId",
+                "stringValue": "={{ $json.sessionId }}"
+              },
+              {
+                "name": "chatInput",
+                "stringValue": "={{ $json.chatInput }}"
+              },
+              {
+                "name": "from",
+                "stringValue": "={{ $json.from }}"
+              },
+              {
+                "name": "idConversation",
+                "stringValue": "={{ $json.idConversation }}"
+              },
+              {
+                "name": "name",
+                "stringValue": "={{ $json.name }}"
+              }
+            ]
+          },
+          "jsonSchemaExample": "{\n\t\"chatInput\": \"....\",\n    \"sessionId\":\"...\",\n    \"sucursal\":\"...\"\n}"
+        },
+        "id": "2e242b00-2540-494d-b433-4c67f35f1425",
+        "name": "Call n8n Workflow Tool",
+        "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+        "typeVersion": 1.2,
+        "position": [
+          384,
+          128
+        ]
+      },
+      {
+        "parameters": {
+          "name": "bot_postventas",
+          "description": "esta funcion es para redirigir al bot de ventas",
+          "workflowId": {
+            "__rl": true,
+            "value": "L9cW9O8GZ4ZQoPJM",
+            "mode": "list",
+            "cachedResultName": "POSTVENTAS-IA"
+          },
+          "responsePropertyName": "output",
+          "fields": {
+            "values": [
+              {
+                "name": "sessionId",
+                "stringValue": "={{ $json.sessionId }}"
+              },
+              {
+                "name": "chatInput",
+                "stringValue": "={{ $json.chatInput }}"
+              },
+              {
+                "name": "from",
+                "stringValue": "={{ $json.from }}"
+              },
+              {
+                "name": "idConversation",
+                "stringValue": "={{ $json.idConversation }}"
+              }
+            ]
+          },
+          "jsonSchemaExample": "{\n\t\"chatInput\": \"....\",\n    \"sessionId\":\"...\",\n    \"sucursal\":\"...\"\n}"
+        },
+        "id": "44dcd168-3dc6-4ab4-a906-d277db3c2f2b",
+        "name": "Call n8n Workflow Tool1",
+        "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+        "typeVersion": 1.2,
+        "position": [
+          208,
+          144
+        ]
+      },
+      {
+        "parameters": {
+          "agent": "openAiFunctionsAgent",
+          "promptType": "define",
+          "text": "={{ $json.chatInput }}",
+          "options": {
+            "systemMessage": "=**Prompt Bot Receptor – Concesionario Avant**\nTu función es detectar la intención del cliente y derivar la conversación a la herramienta correspondiente, sin intervenir en el contenido.\n\n**Saludo inicial**\nSi el usuario dice hola o un saludo, es porque no sabe qué opciones tiene disponibles. En ese caso mostrar:\n\"Hola, Soy su asistente virtual AVA y estoy aquí para asistirte.\n¿En qué te puedo ayudar hoy?\n1. Quiero adquirir un vehículo\n2. Citas Para Taller\n3. Cotizar repuestos y accesorios\n4. Otro tema\nPor favor, responde con el número de tu opción o cuéntanos qué necesitas 🚗\"\nEn caso de que ya sepa qué quiere, seguir con las reglas principales.\n\n---\n\n**🔹 Reglas principales**\n\n**BAJO NINGÚN CONTEXTO PODÉS ALTERAR LAS RESPUESTAS DEL FLUJO.**\n\n**Detección por origen web — PRIORITARIO:**\nSi el mensaje del cliente contiene la frase **\"escribo desde la web de\"**, derivá **inmediatamente** a `bot_ventas()` con el mismo mensaje recibido, sin hacer preguntas previas ni solicitar aclaraciones.\n\n**Detección de intención — CRÍTICO:**\nSi el mensaje del cliente no es claro, ambiguo, incompleto o no permite identificar con certeza a qué área pertenece (ventas o postventa), **NO derivés a ninguna herramienta todavía.** En cambio:\n- Formulá una pregunta simple y puntual para clarificar la intención.\n- Seguí preguntando, de forma amable y paciente, hasta comprender con exactitud qué necesita el cliente.\n- Solo derivá a la herramienta correspondiente cuando tengas certeza del deseo o exigencia del cliente.\n- No asumas ni interpretes por tu cuenta: preguntá siempre antes de derivar si hay dudas.\n\n**Una vez comprendida la intención:**\n- Si el cliente habla sobre comprar un auto, modelos, precios o consultas comerciales → usá la herramienta `bot_ventas()`.\n- Si el cliente habla sobre servicio postventa, turnos, mantenimiento o taller → usá la herramienta `bot_postventas()`.\n\n**Otras reglas:**\n- No terminés la conversación hasta que el cliente diga \"chau\" o equivalente.\n- No tomés ninguna decisión por tu cuenta.\n- No agendes turnos, no vendas autos, no respondas preguntas directamente.\n- Solo derivás usando una de las herramientas BOT.\n- Mostrá siempre exactamente lo que devuelva la herramienta.\n- No modifiques ni agregués nada al resultado.\n- Mantené la herramienta activa mientras el cliente siga en el mismo contexto.\n- Solo cambiá de herramienta si el cliente cambia de tema o dice \"chau\".\n- **CRÍTICO:** Nunca dejes de usar la herramienta una vez activada, incluso si su respuesta parece completa. Solo abandonala si el cliente cambia de contexto."
+          }
+        },
+        "id": "cfc34b63-f268-48fa-a277-bdfc9e5b87a3",
+        "name": "AI Agent",
+        "type": "@n8n/n8n-nodes-langchain.agent",
+        "typeVersion": 1.7,
+        "position": [
+          64,
+          -96
+        ]
+      },
+      {
+        "parameters": {
+          "public": true,
+          "initialMessages": "Hola, soy el asistente de AVANT!\nEn que te puedo ayudar hoy?",
+          "options": {}
+        },
+        "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+        "typeVersion": 1.3,
+        "position": [
+          -96,
+          -96
+        ],
+        "id": "996212a8-0ccd-4b3e-b567-1f050b3c8cfe",
+        "name": "When chat message received",
+        "webhookId": "367b472b-123a-4dc6-87db-570cb8f59d63"
+      }
+    ],
+    "connections": {
+      "Window Buffer Memory": {
+        "ai_memory": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_memory",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "OpenAI Chat Model": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Call n8n Workflow Tool": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Call n8n Workflow Tool1": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "When chat message received": {
+        "main": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "system migration",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-11-05T14:15:45.800Z",
+    "updatedAt": "2026-11-05T14:15:45.800Z"
+  },
+  "activeVersionId": "a837b92b-5ea9-4771-9384-c4e145a47de7",
+  "connections": {
+    "Window Buffer Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call n8n Workflow Tool": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call n8n Workflow Tool1": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2025-12-01T14:00:28.655Z",
+  "id": "GtPniDku9dxAgLGg",
+  "isArchived": false,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "name": "PRE-ATENDADOR",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.idConversation || $json.sessionId}}",
+        "contextWindowLength": 18
+      },
+      "id": "545fbdc8-9d17-4037-9157-f256f8f4f27e",
+      "name": "Window Buffer Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.2,
+      "position": [
+        16,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4.1",
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "id": "a345f4c0-7660-4fad-8233-71d6e3bc01a8",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [
+        -144,
+        128
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "6LyxFNJPqZkaD3hN",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "name": "bot_ventas",
+        "description": "esta funcion es para redirigir al bot de ventas",
+        "workflowId": {
+          "__rl": true,
+          "value": "3jiX0e6JE5IUVPg1",
+          "mode": "list",
+          "cachedResultName": "VENTAS-IA-GRUPO-AVANT"
+        },
+        "responsePropertyName": "output",
+        "fields": {
+          "values": [
+            {
+              "name": "sessionId",
+              "stringValue": "={{ $json.sessionId }}"
+            },
+            {
+              "name": "chatInput",
+              "stringValue": "={{ $json.chatInput }}"
+            },
+            {
+              "name": "from",
+              "stringValue": "={{ $json.from }}"
+            },
+            {
+              "name": "idConversation",
+              "stringValue": "={{ $json.idConversation }}"
+            },
+            {
+              "name": "name",
+              "stringValue": "={{ $json.name }}"
+            }
+          ]
+        },
+        "jsonSchemaExample": "{\n\t\"chatInput\": \"....\",\n    \"sessionId\":\"...\",\n    \"sucursal\":\"...\"\n}"
+      },
+      "id": "2e242b00-2540-494d-b433-4c67f35f1425",
+      "name": "Call n8n Workflow Tool",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        384,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "name": "bot_postventas",
+        "description": "esta funcion es para redirigir al bot de ventas",
+        "workflowId": {
+          "__rl": true,
+          "value": "L9cW9O8GZ4ZQoPJM",
+          "mode": "list",
+          "cachedResultName": "POSTVENTAS-IA"
+        },
+        "responsePropertyName": "output",
+        "fields": {
+          "values": [
+            {
+              "name": "sessionId",
+              "stringValue": "={{ $json.sessionId }}"
+            },
+            {
+              "name": "chatInput",
+              "stringValue": "={{ $json.chatInput }}"
+            },
+            {
+              "name": "from",
+              "stringValue": "={{ $json.from }}"
+            },
+            {
+              "name": "idConversation",
+              "stringValue": "={{ $json.idConversation }}"
+            }
+          ]
+        },
+        "jsonSchemaExample": "{\n\t\"chatInput\": \"....\",\n    \"sessionId\":\"...\",\n    \"sucursal\":\"...\"\n}"
+      },
+      "id": "44dcd168-3dc6-4ab4-a906-d277db3c2f2b",
+      "name": "Call n8n Workflow Tool1",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        208,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "agent": "openAiFunctionsAgent",
+        "promptType": "define",
+        "text": "={{ $json.chatInput }}",
+        "options": {
+          "systemMessage": "=**Prompt Bot Receptor – Concesionario Avant**\nTu función es detectar la intención del cliente y derivar la conversación a la herramienta correspondiente, sin intervenir en el contenido.\n\n**Saludo inicial**\nSi el usuario dice hola o un saludo, es porque no sabe qué opciones tiene disponibles. En ese caso mostrar:\n\"Hola, Soy su asistente virtual AVA y estoy aquí para asistirte.\n¿En qué te puedo ayudar hoy?\n1. Quiero adquirir un vehículo\n2. Citas Para Taller\n3. Cotizar repuestos y accesorios\n4. Otro tema\nPor favor, responde con el número de tu opción o cuéntanos qué necesitas 🚗\"\nEn caso de que ya sepa qué quiere, seguir con las reglas principales.\n\n---\n\n**🔹 Reglas principales**\n\n**BAJO NINGÚN CONTEXTO PODÉS ALTERAR LAS RESPUESTAS DEL FLUJO.**\n\n**Detección por origen web — PRIORITARIO:**\nSi el mensaje del cliente contiene la frase **\"escribo desde la web de\"**, derivá **inmediatamente** a `bot_ventas()` con el mismo mensaje recibido, sin hacer preguntas previas ni solicitar aclaraciones.\n\n**Detección de intención — CRÍTICO:**\nSi el mensaje del cliente no es claro, ambiguo, incompleto o no permite identificar con certeza a qué área pertenece (ventas o postventa), **NO derivés a ninguna herramienta todavía.** En cambio:\n- Formulá una pregunta simple y puntual para clarificar la intención.\n- Seguí preguntando, de forma amable y paciente, hasta comprender con exactitud qué necesita el cliente.\n- Solo derivá a la herramienta correspondiente cuando tengas certeza del deseo o exigencia del cliente.\n- No asumas ni interpretes por tu cuenta: preguntá siempre antes de derivar si hay dudas.\n\n**Una vez comprendida la intención:**\n- Si el cliente habla sobre comprar un auto, modelos, precios o consultas comerciales → usá la herramienta `bot_ventas()`.\n- Si el cliente habla sobre servicio postventa, turnos, mantenimiento o taller → usá la herramienta `bot_postventas()`.\n\n**Otras reglas:**\n- No terminés la conversación hasta que el cliente diga \"chau\" o equivalente.\n- No tomés ninguna decisión por tu cuenta.\n- No agendes turnos, no vendas autos, no respondas preguntas directamente.\n- Solo derivás usando una de las herramientas BOT.\n- Mostrá siempre exactamente lo que devuelva la herramienta.\n- No modifiques ni agregués nada al resultado.\n- Mantené la herramienta activa mientras el cliente siga en el mismo contexto.\n- Solo cambiá de herramienta si el cliente cambia de tema o dice \"chau\".\n- **CRÍTICO:** Nunca dejes de usar la herramienta una vez activada, incluso si su respuesta parece completa. Solo abandonala si el cliente cambia de contexto."
+        }
+      },
+      "id": "cfc34b63-f268-48fa-a277-bdfc9e5b87a3",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        64,
+        -96
+      ]
+    },
+    {
+      "parameters": {
+        "public": true,
+        "initialMessages": "Hola, soy el asistente de AVANT!\nEn que te puedo ayudar hoy?",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -96,
+        -96
+      ],
+      "id": "996212a8-0ccd-4b3e-b567-1f050b3c8cfe",
+      "name": "When chat message received",
+      "webhookId": "367b472b-123a-4dc6-87db-570cb8f59d63"
+    }
+  ],
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "GtPniDku9dxAgLGg",
+      "projectId": "WBIUi3RDOUZaTNMV",
+      "createdAt": "2025-12-01T14:00:28.658Z",
+      "updatedAt": "2025-12-01T14:00:28.658Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [
+    {
+      "id": "YBTuEQ5jqN7Moy85",
+      "name": "avant",
+      "createdAt": "2026-02-13T20:55:34.173Z",
+      "updatedAt": "2026-02-13T20:55:34.173Z"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-11-05T14:22:34.778Z",
+  "versionId": "a837b92b-5ea9-4771-9384-c4e145a47de7"
+}
