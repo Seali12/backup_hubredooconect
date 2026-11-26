@@ -1,0 +1,555 @@
+{
+  "active": false,
+  "activeVersion": null,
+  "activeVersionId": null,
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "0KM",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "PDA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code4": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Datos OK?": {
+      "main": [
+        [
+          {
+            "node": "Consume −",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "¿Datos OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consume −": {
+      "main": [
+        [
+          {
+            "node": "¿Hay saldo?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Hay saldo?1": {
+      "main": [
+        [
+          {
+            "node": "Enviar WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Guardar job pendiente1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar job pendiente1": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-06-12T16:58:55.295Z",
+  "id": "6PXTnBEPl22lENPT",
+  "isArchived": false,
+  "meta": null,
+  "name": "API PILOT - Citroen",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "96437f21-626c-4b43-b0a2-6ebf9475e1e4",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1296,
+        784
+      ],
+      "id": "efd2d9ac-3d10-4b59-8a2a-64a46500af0a",
+      "name": "Webhook",
+      "webhookId": "5d1bb461-159d-405d-9556-f382343bcb78"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('Webhook').item.json.body.pilot_negocio.toUpperCase() }}",
+                    "rightValue": "CITROEN 0KM",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "cc8b86e1-75e5-4239-808c-bc6be6a5b0e4"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "f88cf1af-f85f-4316-8d81-f2ac48928258",
+                    "leftValue": "={{ $('Webhook').item.json.body.pilot_negocio.toUpperCase() }}",
+                    "rightValue": "CITROEN PLAN DE AHORRO",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -672,
+        240
+      ],
+      "id": "03d0e67c-6726-4769-95c2-ed0fded9f3e2",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ======================================================\n// OBTENER TELÉFONO DESDE EL WEBHOOK\n// ======================================================\nconst telefono = $input.first()?.json?.body?.pilot_cellphone || null;\n\n// ======================================================\n// NORMALIZADOR ARGENTINA (WHATSAPP / TWILIO SAFE)\n// ======================================================\nfunction normalizarTelefonoArgentina(numero) {\n  if (!numero || typeof numero !== 'string') return null;\n\n  // Eliminar todo lo que no sea número\n  let limpio = numero.replace(/\\D/g, '');\n\n  // ==================================================\n  // CASO 1: Ya viene en formato internacional válido\n  // Ej: 541169749551 | 543815765949\n  // ==================================================\n  if (limpio.startsWith('54') && limpio.length >= 12) {\n    return limpio;\n  }\n\n  // ==================================================\n  // CASO 2: Empieza con 0 (formato nacional)\n  // Ej: 011XXXXXXX | 0381XXXXXXX\n  // ==================================================\n  if (limpio.startsWith('0')) {\n    limpio = limpio.slice(1);\n  }\n\n  // ==================================================\n  // CASO 3: Área + número (10 o más dígitos)\n  // Ej: 11XXXXXXX | 381XXXXXXX\n  // ==================================================\n  if (limpio.length >= 10) {\n    return '549' + limpio;\n  }\n\n  // ==================================================\n  // No válido\n  // ==================================================\n  return null;\n}\n\n// ======================================================\n// NORMALIZAR\n// ======================================================\nconst whatsapp = normalizarTelefonoArgentina(telefono);\n\n// ======================================================\n// SALIDA\n// ======================================================\nreturn [\n  {\n    json: {\n      whatsapp: whatsapp,\n      valido: whatsapp !== null,\n      original: telefono\n    }\n  }\n];\n"
+      },
+      "id": "a3204971-62ba-4dbc-8158-51d09dfa8d5a",
+      "name": "Code4",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -864,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.twilio.com/2010-04-01/Accounts/TWILIO_SID_OCULTO/Messages.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "MessagingServiceSid",
+              "value": "=MG2f017dd3c25d710216538e8064169bb7"
+            },
+            {
+              "name": "To",
+              "value": "=whatsapp:{{ $json.whatsapp.startsWith('+') ? $json.whatsapp : '+' + $json.whatsapp }}"
+            },
+            {
+              "name": "ContentSid",
+              "value": "=HX02a1a8e02d56a919fb9e39612b412f16"
+            },
+            {
+              "name": "ContentVariables",
+              "value": "={\"1\":\"{{ $('Webhook').item.json.body.pilot_firstname }}\", \"2\":\"01_perfil_20260408_171557.jpg\", \"3\":\"1231312312312\"}"
+            },
+            {
+              "name": "From",
+              "value": "whatsapp:+5491125599175"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "4b59d159-6e35-48e8-a8ce-98a1c4fe576b",
+      "name": "0KM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -256,
+        48
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "HGznV7LXQ6vIhur8",
+          "name": "Twillio Autofrance"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.twilio.com/2010-04-01/Accounts/TWILIO_SID_OCULTO/Messages.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "MessagingServiceSid",
+              "value": "=MG2f017dd3c25d710216538e8064169bb7"
+            },
+            {
+              "name": "To",
+              "value": "=whatsapp:{{ $json.whatsapp.startsWith('+') ? $json.whatsapp : '+' + $json.whatsapp }}"
+            },
+            {
+              "name": "ContentSid",
+              "value": "=HX8ae4c2c498c9360772e9f5303a642d70"
+            },
+            {
+              "name": "ContentVariables",
+              "value": "={\"1\":\"{{ $('Webhook').item.json.body.pilot_firstname }}\", \"2\":\"WhatsApp-Image-2025-07-14-at-12.32.12-PM_20251110_100927.jpeg\", \"3\":\"1231312312312\"}"
+            },
+            {
+              "name": "From",
+              "value": "whatsapp:+5491125599175"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "46faa4cb-a2dd-4eed-8344-c2f84346027b",
+      "name": "PDA",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -256,
+        352
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "HGznV7LXQ6vIhur8",
+          "name": "Twillio Autofrance"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.valido }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "1e8aeb02-055c-4ae8-991c-27225ea9f970",
+      "name": "¿Datos OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -928,
+        784
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.twilio.com/2010-04-01/Accounts/{{ $('Code').item.json.account_sid }}/Messages.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "MessagingServiceSid",
+              "value": "={{ $('Code').item.json.messaging_service_sid }}"
+            },
+            {
+              "name": "To",
+              "value": "=whatsapp:{{ $('Code').item.json.whatsapp.startsWith('+') ? $('Code').item.json.whatsapp : '+' + $('Code').item.json.whatsapp }}"
+            },
+            {
+              "name": "ContentSid",
+              "value": "={{ $('Code').item.json.content_sid }}"
+            },
+            {
+              "name": "ContentVariables",
+              "value": "={{ $('Code').item.json.content_variables }}"
+            },
+            {
+              "name": "From",
+              "value": "={{ $('Code').item.json.from_phone }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "350b5dc3-ddfc-467e-b794-7bf5e02e60dc",
+      "name": "Enviar WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -256,
+        656
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "HGznV7LXQ6vIhur8",
+          "name": "Twillio Autofrance"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ======================================================\n// Webhook → preparar disparo restringido Citroen\n// ======================================================\nconst root = $input.first()?.json || {};\nconst body = root.body || root;\n\n// ======================================================\n// DATOS DEL CLIENTE\n// ======================================================\nconst negocio = String(\n  body.pilot_negocio ||\n  body.negocio ||\n  ''\n).trim();\n\nconst firstname =\n  String(body.pilot_firstname || '').trim() ||\n  [body.pilot_firstname, body.pilot_lastname]\n    .filter((v) => v != null && String(v).trim() !== '')\n    .map((v) => String(v).trim())\n    .join(' ') ||\n  'Cliente';\n\n// ======================================================\n// TELÉFONO\n// ======================================================\nlet telefono =\n  body.pilot_cellphone ||\n  body.pilot_phone ||\n  null;\n\nif (!telefono && body.pilot_notes) {\n  const matchWhatsapp = String(body.pilot_notes).match(\n    /n[uú]mero_de_whatsapp:\\s*([+\\d\\s()-]+)/i\n  );\n\n  if (matchWhatsapp) {\n    telefono = matchWhatsapp[1].trim();\n  }\n}\n\n// ======================================================\n// NORMALIZADOR ARGENTINA\n// ======================================================\nfunction normalizarTelefonoArgentina(numero) {\n  if (!numero || typeof numero !== 'string') return null;\n\n  let limpio = numero.replace(/\\D/g, '');\n\n  if (limpio.startsWith('549') && limpio.length === 13) {\n    return limpio;\n  }\n\n  if (limpio.startsWith('54') && limpio.length === 12) {\n    return '549' + limpio.slice(2);\n  }\n\n  if (limpio.startsWith('0')) {\n    limpio = limpio.slice(1);\n  }\n\n  if (limpio.length === 10) {\n    return '549' + limpio;\n  }\n\n  return null;\n}\n\nconst whatsapp = normalizarTelefonoArgentina(\n  telefono == null ? null : String(telefono)\n);\n\n// ======================================================\n// NORMALIZAR NEGOCIO\n// ======================================================\nconst negocioNorm = negocio\n  .normalize('NFD')\n  .replace(/[\\u0300-\\u036f]/g, '')\n  .toUpperCase()\n  .replace(/\\s+/g, ' ')\n  .trim();\n\n// ======================================================\n// DETECTAR NEGOCIO\n// ======================================================\nconst hasCitroen = negocioNorm.includes('CITROEN');\n\nconst has0km =\n  negocioNorm.includes('0KM') ||\n  negocioNorm.includes('0 KM') ||\n  /(?:^|\\s)0\\s*KM(?:\\s|$)/.test(negocioNorm);\n\nconst hasPlan =\n  negocioNorm.includes('AHORRO') ||\n  negocioNorm.includes('PLAN');\n\n// ======================================================\n// DATOS TWILIO\n// ======================================================\nconst ACCOUNT_SID = 'TWILIO_SID_OCULTO';\n\nconst MESSAGING_SERVICE_SID =\n  'MG2f017dd3c25d710216538e8064169bb7';\n\nconst FROM_PHONE = 'whatsapp:+5491125599175';\n\n// ======================================================\n// TEMPLATES\n// ======================================================\nconst MEDIA_OKM =\n  '01_perfil_20260408_171557.jpg';\n\nconst MEDIA_PDA =\n  'WhatsApp-Image-2025-07-14-at-12.32.12-PM_20251110_100927.jpeg';\n\nconst templates = [\n  {\n    ok: () => hasCitroen && hasPlan,\n    tipo: 'PDA',\n    label: 'CITROEN PLAN DE AHORRO',\n    contentSid: 'HX8ae4c2c498c9360772e9f5303a642d70',\n    media: MEDIA_PDA\n  },\n  {\n    ok: () => hasCitroen && has0km,\n    tipo: 'OKM',\n    label: 'CITROEN 0KM',\n    contentSid: 'HX02a1a8e02d56a919fb9e39612b412f16',\n    media: MEDIA_OKM\n  }\n];\n\n// ======================================================\n// BUSCAR TEMPLATE\n// ======================================================\nconst tpl = templates.find((t) => t.ok()) || null;\n\n// ======================================================\n// VARIABLES DEL TEMPLATE\n// ======================================================\nconst contentVariablesObj = tpl\n  ? {\n      '1': firstname,\n      '2': tpl.media,\n      '3': '1231312312312'\n    }\n  : null;\n\nconst contentVariables = contentVariablesObj\n  ? JSON.stringify(contentVariablesObj)\n  : null;\n\n// ======================================================\n// VALIDACIONES\n// ======================================================\nconst telefonoValido = whatsapp !== null;\nconst negocioValido = tpl !== null;\n\nconst valido =\n  telefonoValido &&\n  negocioValido;\n\n// ======================================================\n// SALIDA\n// ======================================================\nreturn [\n  {\n    json: {\n      valido,\n\n      telefonoValido,\n      negocioValido,\n\n      whatsapp,\n      to_phone: whatsapp,\n\n      negocio,\n      negocioNorm,\n\n      tipo: tpl?.tipo || null,\n      templateLabel: tpl?.label || null,\n\n      firstname,\n\n      account_sid: ACCOUNT_SID,\n      messaging_service_sid: MESSAGING_SERVICE_SID,\n      from_phone: FROM_PHONE,\n\n      content_sid: tpl?.contentSid || null,\n      content_variables: contentVariables,\n\n      original: telefono,\n\n      source: 'n8n:autofrance-citroen-restricciones'\n    }\n  }\n];"
+      },
+      "id": "f680d663-9bfe-4f3b-94c4-276f82e7cd6c",
+      "name": "Code",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1088,
+        784
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api-redoo.up.railway.app/api/v1/companies/me/messages-balance/consume",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "6955995d-7c77-4c76-a029-f2bc3acbc579"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({}) }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "4887fc5d-32af-4bc7-863d-aa2e4d752b5d",
+      "name": "Consume −",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -704,
+        768
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.statusCode }}",
+              "operation": "equal",
+              "value2": 200
+            }
+          ]
+        }
+      },
+      "id": "460a1632-e874-4458-bd83-cc5a5a7a198d",
+      "name": "¿Hay saldo?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -496,
+        768
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api-redoo.up.railway.app/api/v1/companies/me/outbound-jobs",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "6955995d-7c77-4c76-a029-f2bc3acbc579"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ channel: 'whatsapp', to_phone: $('Code').item.json.to_phone, from_phone: $('Code').item.json.from_phone, account_sid: $('Code').item.json.account_sid, messaging_service_sid: $('Code').item.json.messaging_service_sid, content_sid: $('Code').item.json.content_sid, content_variables: $('Code').item.json.content_variables, twilio_credential_ref: $('Code').item.json.twilio_credential_ref, payload_json: $('Code').item.json.payload_json, source: $('Code').item.json.source }) }}",
+        "options": {}
+      },
+      "id": "e9fcd3e0-f93d-4967-854c-e4ee4adcba1c",
+      "name": "Guardar job pendiente1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -256,
+        880
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "virginia.piotti@redoo.com.ar, camila.villareal@redoo.com.ar, ignacio.cabaleiro@redoo.com.ar",
+        "subject": "AUTOFRANCE - LIMITE MENSAJES",
+        "emailType": "text",
+        "message": "Buenas, AutoFrance supero el limite de sus mensajes mensuales. Por favor revisar.",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        -48,
+        880
+      ],
+      "id": "64cf8f2f-1c7f-45c2-8c30-7534f6963c38",
+      "name": "Send a message",
+      "webhookId": "e1cd879f-c682-4c81-85ce-3ac2c229d482",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "t0AwJxleHeUdiqQM",
+          "name": "Gmail account"
+        }
+      },
+      "disabled": true
+    }
+  ],
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "headers": {
+            "host": "autofrance.redooconect.com.ar",
+            "user-agent": "BAAS-WEBHOOKS-GATEWAY/WEBHOOK_EVENTS",
+            "accept": "*/*",
+            "content-type": "application/json",
+            "x-forwarded-for": "52.5.77.151",
+            "x-forwarded-host": "autofrance.redooconect.com.ar",
+            "x-forwarded-server": "autofrance.redooconect.com.ar",
+            "content-length": "538",
+            "connection": "Keep-Alive"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "action": "create",
+            "pilot_firstname": "Camila",
+            "pilot_lastname": "",
+            "pilot_phone": "",
+            "pilot_cellphone": "2616809213",
+            "pilot_email": "cami55@gmail.com",
+            "pilot_negocio": "CITROEN 0KM",
+            "pilot_product_of_interest": "PEUGEOT 2008 ACTIVE  (ADJUDICADO NEW 2008)",
+            "pilot_notes": "Comentario: Tenés un auto usado en parte de pago?: si | \nEn el caso que poseas un usado indicanos marca, modelo, version, km y año: Peugeot 208 feline pack cuir modelo 130.000km año 2017 // Fecha desistido:18/03/2026 10:14"
+          },
+          "webhookUrl": "https://autofrance.redooconect.com.ar/webhook/5d1bb461-159d-405d-9556-f382343bcb78",
+          "executionMode": "production"
+        }
+      }
+    ]
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "6PXTnBEPl22lENPT",
+      "projectId": "XDNGkKAM4jxvPjG8",
+      "createdAt": "2026-06-12T16:58:55.300Z",
+      "updatedAt": "2026-06-12T16:58:55.300Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2026-10-29T20:50:57.097Z",
+  "versionId": "3f2a26dc-5c4d-4670-beae-8af72667567f"
+}
