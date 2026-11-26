@@ -1,0 +1,230 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "8c76002b-780e-4798-907c-156c792894cd",
+    "workflowId": "px4K0iJdUO9op8QC",
+    "nodes": [
+      {
+        "id": "776a8daa-95c2-4c73-a4fd-0df476118e9b",
+        "name": "Cada 10 minutos",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          0,
+          0
+        ],
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "minutes",
+                "minutesInterval": 10
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "bf796359-f9ea-4de4-af07-0aab0a98303e",
+        "name": "Completar seguimiento",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          224,
+          0
+        ],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "UPDATE integracion_leads i\nLEFT JOIN campaign_contacts cc ON cc.id = i.campaign_contact_id\nLEFT JOIN (\n  SELECT s.client_id, s.pilot_solution_guid AS guid, s.conversation_id, s.interest_level, s.status, s.pilot_lead_id, s.error_message, s.created_at\n  FROM sa_leads s\n  JOIN (SELECT MAX(id) AS id FROM sa_leads WHERE pilot_solution_guid <> '' AND created_at >= NOW() - INTERVAL 8 DAY GROUP BY client_id, pilot_solution_guid) m ON m.id = s.id\n) s ON s.client_id = i.company_id AND s.guid COLLATE utf8mb4_unicode_ci = i.external_id\nSET i.entregado_at = COALESCE(cc.delivered_at, i.entregado_at),\n    i.leido_at = COALESCE(cc.read_at, i.leido_at),\n    i.envio_status = IF(cc.delivery_status IN ('failed','undelivered'), 'failed', i.envio_status),\n    i.envio_reason = IF(cc.delivery_status IN ('failed','undelivered'), NULLIF(cc.error_message, ''), i.envio_reason),\n    i.contesto = IF(cc.button_clicked IS NOT NULL OR s.conversation_id IS NOT NULL, 1, i.contesto),\n    i.contesto_at = IF(i.contesto_at IS NULL AND (cc.button_clicked IS NOT NULL OR s.conversation_id IS NOT NULL), COALESCE(s.created_at, NOW()), i.contesto_at),\n    i.boton_respuesta = IF(cc.button_clicked IS NOT NULL AND cc.button_clicked <> '', LEFT(IF(JSON_VALID(cc.button_clicked), JSON_UNQUOTE(JSON_EXTRACT(cc.button_clicked, '$.button_title')), cc.button_clicked), 100), i.boton_respuesta),\n    i.conversation_id = COALESCE(s.conversation_id, i.conversation_id),\n    i.grado_interes = CASE\n      WHEN JSON_EXTRACT(i.extra, '$.grado_interes_fuente') IS NOT NULL THEN i.grado_interes\n      WHEN NULLIF(s.interest_level, 'unknown') IS NOT NULL THEN s.interest_level\n      WHEN cc.button_clicked IS NOT NULL AND cc.button_clicked <> '' AND IF(JSON_VALID(cc.button_clicked), JSON_UNQUOTE(JSON_EXTRACT(cc.button_clicked, '$.button_title')), cc.button_clicked) LIKE 'No%' THEN 'cold'\n      WHEN i.contesto = 0 AND (cc.button_clicked IS NULL OR cc.button_clicked = '') AND s.conversation_id IS NULL AND i.enviado_at < NOW() - INTERVAL 24 HOUR THEN 'cold'\n      ELSE i.grado_interes END,\n    i.crm_lead_id = COALESCE(NULLIF(s.pilot_lead_id, ''), i.crm_lead_id),\n    i.crm_status = COALESCE(s.status, i.crm_status),\n    i.crm_reason = COALESCE(NULLIF(s.error_message, ''), i.crm_reason)\nWHERE i.status = 'enviado' AND i.created_at >= NOW() - INTERVAL 7 DAY",
+          "options": {}
+        },
+        "credentials": {
+          "mySql": {
+            "id": "HZXcTU4GLNSSF2EL",
+            "name": "MySQL account SUITE"
+          }
+        }
+      },
+      {
+        "id": "1625133b-4d6e-49d0-8cf0-04ff4935d080",
+        "name": "Errores de envío = Frío",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          448,
+          0
+        ],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "UPDATE integracion_leads\nSET grado_interes = 'cold'\nWHERE company_id IN (133, 199)\n  AND integracion IN ('vento_webhook', 'megamoto_webhook')\n  AND id NOT IN (8, 9, 10, 11, 134, 135, 136, 137)\n  AND grado_interes IS NULL\n  AND contesto = 0\n  AND (status = 'failed' OR (status = 'enviado' AND envio_status = 'failed'))",
+          "options": {}
+        },
+        "credentials": {
+          "mySql": {
+            "id": "HZXcTU4GLNSSF2EL",
+            "name": "MySQL account SUITE"
+          }
+        },
+        "notes": "Solo Vento (133) y MEGAMOTO (199): si el mensaje no salió o no se entregó, el lead queda Frío (regla de Víctor)."
+      }
+    ],
+    "connections": {
+      "Cada 10 minutos": {
+        "main": [
+          [
+            {
+              "node": "Completar seguimiento",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Completar seguimiento": {
+        "main": [
+          [
+            {
+              "node": "Errores de envío = Frío",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "MARCELO AGUSTIN DRI (via MCP)",
+    "name": "Errores de envío = Frío (Vento y MEGAMOTO)",
+    "description": "Nuevo paso después del sync: en Vento y MEGAMOTO, los leads cuyo mensaje no salió o no se entregó (y no respondieron) quedan como Frío. No toca otros clientes.",
+    "autosaved": false,
+    "createdAt": "2026-11-11T22:58:17.981Z",
+    "updatedAt": "2026-11-11T22:58:17.981Z"
+  },
+  "activeVersionId": "8c76002b-780e-4798-907c-156c792894cd",
+  "connections": {
+    "Cada 10 minutos": {
+      "main": [
+        [
+          {
+            "node": "Completar seguimiento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Completar seguimiento": {
+      "main": [
+        [
+          {
+            "node": "Errores de envío = Frío",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-11-03T18:14:10.269Z",
+  "id": "px4K0iJdUO9op8QC",
+  "isArchived": false,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "name": "integracion_leads - completar seguimiento y temperatura",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "id": "776a8daa-95c2-4c73-a4fd-0df476118e9b",
+      "name": "Cada 10 minutos",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 10
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "bf796359-f9ea-4de4-af07-0aab0a98303e",
+      "name": "Completar seguimiento",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        224,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE integracion_leads i\nLEFT JOIN campaign_contacts cc ON cc.id = i.campaign_contact_id\nLEFT JOIN (\n  SELECT s.client_id, s.pilot_solution_guid AS guid, s.conversation_id, s.interest_level, s.status, s.pilot_lead_id, s.error_message, s.created_at\n  FROM sa_leads s\n  JOIN (SELECT MAX(id) AS id FROM sa_leads WHERE pilot_solution_guid <> '' AND created_at >= NOW() - INTERVAL 8 DAY GROUP BY client_id, pilot_solution_guid) m ON m.id = s.id\n) s ON s.client_id = i.company_id AND s.guid COLLATE utf8mb4_unicode_ci = i.external_id\nSET i.entregado_at = COALESCE(cc.delivered_at, i.entregado_at),\n    i.leido_at = COALESCE(cc.read_at, i.leido_at),\n    i.envio_status = IF(cc.delivery_status IN ('failed','undelivered'), 'failed', i.envio_status),\n    i.envio_reason = IF(cc.delivery_status IN ('failed','undelivered'), NULLIF(cc.error_message, ''), i.envio_reason),\n    i.contesto = IF(cc.button_clicked IS NOT NULL OR s.conversation_id IS NOT NULL, 1, i.contesto),\n    i.contesto_at = IF(i.contesto_at IS NULL AND (cc.button_clicked IS NOT NULL OR s.conversation_id IS NOT NULL), COALESCE(s.created_at, NOW()), i.contesto_at),\n    i.boton_respuesta = IF(cc.button_clicked IS NOT NULL AND cc.button_clicked <> '', LEFT(IF(JSON_VALID(cc.button_clicked), JSON_UNQUOTE(JSON_EXTRACT(cc.button_clicked, '$.button_title')), cc.button_clicked), 100), i.boton_respuesta),\n    i.conversation_id = COALESCE(s.conversation_id, i.conversation_id),\n    i.grado_interes = CASE\n      WHEN JSON_EXTRACT(i.extra, '$.grado_interes_fuente') IS NOT NULL THEN i.grado_interes\n      WHEN NULLIF(s.interest_level, 'unknown') IS NOT NULL THEN s.interest_level\n      WHEN cc.button_clicked IS NOT NULL AND cc.button_clicked <> '' AND IF(JSON_VALID(cc.button_clicked), JSON_UNQUOTE(JSON_EXTRACT(cc.button_clicked, '$.button_title')), cc.button_clicked) LIKE 'No%' THEN 'cold'\n      WHEN i.contesto = 0 AND (cc.button_clicked IS NULL OR cc.button_clicked = '') AND s.conversation_id IS NULL AND i.enviado_at < NOW() - INTERVAL 24 HOUR THEN 'cold'\n      ELSE i.grado_interes END,\n    i.crm_lead_id = COALESCE(NULLIF(s.pilot_lead_id, ''), i.crm_lead_id),\n    i.crm_status = COALESCE(s.status, i.crm_status),\n    i.crm_reason = COALESCE(NULLIF(s.error_message, ''), i.crm_reason)\nWHERE i.status = 'enviado' AND i.created_at >= NOW() - INTERVAL 7 DAY",
+        "options": {}
+      },
+      "credentials": {
+        "mySql": {
+          "id": "HZXcTU4GLNSSF2EL",
+          "name": "MySQL account SUITE"
+        }
+      }
+    },
+    {
+      "id": "1625133b-4d6e-49d0-8cf0-04ff4935d080",
+      "name": "Errores de envío = Frío",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        448,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE integracion_leads\nSET grado_interes = 'cold'\nWHERE company_id IN (133, 199)\n  AND integracion IN ('vento_webhook', 'megamoto_webhook')\n  AND id NOT IN (8, 9, 10, 11, 134, 135, 136, 137)\n  AND grado_interes IS NULL\n  AND contesto = 0\n  AND (status = 'failed' OR (status = 'enviado' AND envio_status = 'failed'))",
+        "options": {}
+      },
+      "credentials": {
+        "mySql": {
+          "id": "HZXcTU4GLNSSF2EL",
+          "name": "MySQL account SUITE"
+        }
+      },
+      "notes": "Solo Vento (133) y MEGAMOTO (199): si el mensaje no salió o no se entregó, el lead queda Frío (regla de Víctor)."
+    }
+  ],
+  "pinData": null,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "px4K0iJdUO9op8QC",
+      "projectId": "K8p6XEqA0L6D2uVt",
+      "createdAt": "2026-11-03T18:14:10.273Z",
+      "updatedAt": "2026-11-03T18:14:10.273Z"
+    }
+  ],
+  "staticData": {
+    "node:Cada 10 minutos": {
+      "recurrenceRules": [
+        null
+      ],
+      "recurrenceRuleSignatures": [
+        null
+      ]
+    }
+  },
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2026-11-11T22:58:17.979Z",
+  "versionId": "8c76002b-780e-4798-907c-156c792894cd"
+}
