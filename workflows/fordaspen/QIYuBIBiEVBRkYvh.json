@@ -1,0 +1,743 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "d23c5e25-85ea-42cf-8a0e-58c9e60e5224",
+    "workflowId": "QIYuBIBiEVBRkYvh",
+    "nodes": [
+      {
+        "parameters": {
+          "jsCode": "// 1. OBTENER DATOS\nconst inputData = $('Code4').first().json;\n\n// --- FUNCIÓN DE TRADUCCIÓN DE TEXTO (NUEVO) ---\nfunction parsearTextoHumano(texto) {\n    if (!texto || typeof texto !== 'string') return null;\n    \n    // Regex para capturar: \"21 de enero 8:00 - 9:45hs\"\n    // Captura: (Dia) de (Mes) (Inicio) - (Fin)\n    const regex = /(\\d{1,2})\\s+de\\s+([a-zA-ZñÑ]+)\\s+(\\d{1,2}:\\d{2})\\s*-\\s*(\\d{1,2}:\\d{2})/;\n    const match = texto.match(regex);\n\n    if (match) {\n        const dia = match[1].padStart(2, '0');\n        const mesNombre = match[2].toLowerCase();\n        const horaInicio = match[3].padStart(5, '0'); // Asegura 08:00\n        const horaFin = match[4].padStart(5, '0');\n\n        // Mapa de meses\n        const meses = {\n            \"enero\": \"01\", \"febrero\": \"02\", \"marzo\": \"03\", \"abril\": \"04\", \"mayo\": \"05\", \"junio\": \"06\",\n            \"julio\": \"07\", \"agosto\": \"08\", \"septiembre\": \"09\", \"octubre\": \"10\", \"noviembre\": \"11\", \"diciembre\": \"12\"\n        };\n        const mes = meses[mesNombre];\n\n        if (mes) {\n            // DETECTAR AÑO: Usamos el año actual por defecto.\n            // (Si estás simulando 2026, puedes cambiarlo aquí manualmente o dejar que tome el año del sistema)\n            let anio = new Date().getFullYear();\n            \n            // Si el mes detectado es menor al mes actual, asumimos que es para el año que viene (ej: estamos en Dic, piden Ene)\n            if (parseInt(mes) < new Date().getMonth() + 1) {\n                 // anio++; // Descomentar si quieres esta lógica automática\n            }\n            \n            // Si detectamos fechas de 2026 en el contexto, forzamos 2026 (opcional)\n            // anio = 2026; \n\n            return {\n                fecha: `${anio}-${mes}-${dia}`,\n                inicio: horaInicio,\n                fin: horaFin\n            };\n        }\n    }\n    return null;\n}\n\n// 2. INTENTAR EXTRAER DATOS\nlet fecha, horaInicio, horaFin;\n\n// A. INTENTO: Leer desde Texto Humano (\"21 de enero...\")\nconst queryTexto = inputData.query || inputData.datosOriginales?.query;\nconst datosTexto = parsearTextoHumano(queryTexto);\n\nif (datosTexto) {\n    fecha = datosTexto.fecha;\n    horaInicio = datosTexto.inicio;\n    horaFin = datosTexto.fin;\n} \n// B. INTENTO: Leer Datos Estructurados (Standard)\nelse {\n    fecha = inputData.Fecha || inputData.datosOriginales?.Fecha || inputData.dia;\n    horaInicio = inputData.Hora || inputData.datosOriginales?.Hora || inputData.datosOriginales?.HoraInicio || inputData.inicio;\n    horaFin = inputData.Fin || inputData.datosOriginales?.Fin || inputData.datosOriginales?.HoraFin || inputData.final;\n    \n    // C. INTENTO: Leer de objetos ISO (Google Calendar)\n    if (!horaInicio && inputData.datosOriginales?.start?.dateTime) {\n        fecha = inputData.datosOriginales.start.dateTime.split('T')[0];\n        horaInicio = inputData.datosOriginales.start.dateTime.split('T')[1].substring(0, 5);\n    }\n    if (!horaFin && inputData.datosOriginales?.end?.dateTime) {\n        horaFin = inputData.datosOriginales.end.dateTime.split('T')[1].substring(0, 5);\n    }\n}\n\n// --- ID CALENDARIO ---\nlet calendarId = inputData.Id_Calendario;\nif (!calendarId || calendarId === \"ID_POR_DEFECTO\") {\n    calendarId = inputData.datosOriginales?.Id_Calendario;\n}\n\n// --- GENERAR ID ÚNICO ---\nconst generarID = () => Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);\nconst idTurnoGenerado = generarID();\n\n// Recuperar datos extra\nconst modelo = inputData.modelo || inputData.datosOriginales?.Modelo || \"VW\";\nconst patente = inputData.datosOriginales?.Patente || \"S/P\";\nconst servicio = inputData.datosOriginales?.Servicio || \"Service\";\n\n// 3. VALIDACIÓN\nif (!fecha || !horaInicio || !horaFin || !calendarId) {\n  return {\n    json: {\n      error: \"Faltan datos críticos en Code3\",\n      debug: { \n          intentos: { texto: queryTexto, parseado: datosTexto },\n          final: { fecha, horaInicio, horaFin, calendarId }\n      }\n    }\n  };\n}\n\n// 4. CONSTRUCCIÓN ISO\nconst startDateTime = `${fecha}T${horaInicio}:00-03:00`;\nconst endDateTime = `${fecha}T${horaFin}:00-03:00`;\n\n// 5. SALIDA\nreturn {\n  json: {\n    calendarId: calendarId,\n    id: idTurnoGenerado,\n    start: startDateTime, \n    end: endDateTime,\n    summary: `${patente} - ${servicio}`,\n    description: `Vehículo: ${modelo}\\nServicio: ${servicio}\\nPatente: ${patente}\\nAgendado por IA\\nOriginal: ${queryTexto || 'Estructurado'}`,\n    datos_extra: { modelo, patente, servicio, id_turno: idTurnoGenerado },\n    // Compatibilidad\n    Fecha: startDateTime,\n    Fin: endDateTime,\n    Id_Calendario: calendarId\n  }\n};"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          752,
+          0
+        ],
+        "id": "0c63a641-d61b-4ff2-ba8e-dc87f7e7e656",
+        "name": "Code3"
+      },
+      {
+        "parameters": {
+          "documentId": {
+            "__rl": true,
+            "value": "19kbBeW2ciY9mhnWCUDC2k_Yvp4ddPXK56mcQCK_xWcs",
+            "mode": "list",
+            "cachedResultName": "IA_PV_FORD_ASPEN",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/19kbBeW2ciY9mhnWCUDC2k_Yvp4ddPXK56mcQCK_xWcs/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": 444773369,
+            "mode": "list",
+            "cachedResultName": "Tabla Horarios Taller",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/19kbBeW2ciY9mhnWCUDC2k_Yvp4ddPXK56mcQCK_xWcs/edit#gid=444773369"
+          },
+          "filtersUI": {
+            "values": [
+              {
+                "lookupColumn": "Talleres",
+                "lookupValue": "=Campana"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.7,
+        "position": [
+          320,
+          0
+        ],
+        "id": "7bff568c-d3d5-4391-b805-2052ddf3600d",
+        "name": "Get_Reglas1",
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "JcV1ATRYlnSnYPae",
+            "name": "Google Sheets account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "documentId": {
+            "__rl": true,
+            "value": "19kbBeW2ciY9mhnWCUDC2k_Yvp4ddPXK56mcQCK_xWcs",
+            "mode": "list",
+            "cachedResultName": "IA_PV_FORD_ASPEN",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/19kbBeW2ciY9mhnWCUDC2k_Yvp4ddPXK56mcQCK_xWcs/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": 1610754328,
+            "mode": "list",
+            "cachedResultName": "Tabla Tiempo Mantenimiento",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/19kbBeW2ciY9mhnWCUDC2k_Yvp4ddPXK56mcQCK_xWcs/edit#gid=1610754328"
+          },
+          "filtersUI": {
+            "values": [
+              {
+                "lookupColumn": "km",
+                "lookupValue": "={{ $json.kilometraje || 100000}}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.7,
+        "position": [
+          608,
+          0
+        ],
+        "id": "8c5bb8b5-8edf-4a0e-a896-7673236d1f85",
+        "name": "Get_Tiempo",
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "JcV1ATRYlnSnYPae",
+            "name": "Google Sheets account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "// 🚗 Lista de modelos posibles\nconst MODELOS = [\n  \"Etios\", \"Yaris\", \"Yaris GR\", \"Corolla\", \"Prius\", \"Rav4\", \n  \"Innova\", \"Hilux\", \"SW4\", \"Hiace\", \"CH-R\", \"Camry\", \"Land Cruiser\"\n];\n\n// 🧩 Función para extraer datos (Simplificada para evitar el error de parsing)\nfunction obtenerDatosEntrada() {\n  const input = $(\"When Executed by Another Workflow\").first().json;\n  \n  // Si query ya es un objeto (lo que envía el AI Agent), lo usamos directo\n  if (input.query && typeof input.query === 'object') {\n    return input.query;\n  }\n  \n  // Si por alguna razón viene como string, intentamos parsear de forma segura\n  if (input.query && typeof input.query === 'string') {\n    try {\n      return JSON.parse(input.query);\n    } catch (e) {\n      // Si falla el parseo (como el error del Yaris), devolvemos el objeto original\n      return input;\n    }\n  }\n  \n  return input;\n}\n\n// 🧮 Función para buscar modelo\nfunction detectarModelo(modeloInput, textoBusqueda) {\n  // Primero revisamos si ya viene el modelo explícito en el input\n  if (modeloInput) return modeloInput;\n\n  // Si no, buscamos en el texto\n  for (const modelo of MODELOS) {\n    const regex = new RegExp(`\\\\b${modelo}\\\\b`, \"i\");\n    if (regex.test(textoBusqueda)) return modelo;\n  }\n  return \"No Detectado\";\n}\n\n// 🧩 PROCESAMIENTO\nconst solicitud = obtenerDatosEntrada();\nconst reglasTaller = $(\"Get_Reglas1\").first().json;\n\n// Unimos el texto de descripción y título para la búsqueda\nconst textoBusqueda = `${solicitud.Descripcion || \"\"} ${solicitud.Titulo || \"\"}`;\n\n// 🧾 RESULTADO FINAL\nreturn [\n  {\n    json: {\n      modelo: detectarModelo(solicitud.Modelo, textoBusqueda),\n      kilometraje: solicitud.KM || solicitud.kilometraje || null,\n      Id_Calendario: reglasTaller.Id_Calendario, // Aseguramos que pase al siguiente nodo\n      Fecha: solicitud.Fecha, // Necesario para Google Calendar\n      Fin: solicitud.Fin,     // Necesario para Google Calendar\n      datosOriginales: solicitud // Para debug\n    }\n  }\n];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          480,
+          0
+        ],
+        "id": "ce2e0d16-a1d0-4b98-be0a-565ad2faf0fe",
+        "name": "Code4"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Leemos la entrada\nconst input = items[0].json;\nlet datos = {};\n\n// CASO 1: Viene como Texto (String) -> Hay que convertirlo (JSON.parse)\nif (typeof input.query === 'string') {\n    try {\n        // Intentamos limpiar comillas extras si las hubiera y parsear\n        const cleanQuery = input.query.trim();\n        // Si está vacío, evitamos error de parseo\n        if (cleanQuery === \"\") {\n             datos = { error: \"La query llegó vacía\" };\n        } else {\n             datos = JSON.parse(cleanQuery);\n        }\n    } catch (e) {\n        datos = { error: \"Error al leer JSON: \" + e.message };\n    }\n} \n// CASO 2: Ya viene como Objeto -> Lo usamos directo\nelse if (typeof input.query === 'object' && input.query !== null) {\n    datos = input.query;\n} \n// CASO 3: Viene en la raíz\nelse {\n    datos = input;\n}\n\n// Asignar ID por defecto si no vino en los datos\ndatos.Id_Calendario = datos.Id_Calendario || \"ID_POR_DEFECTO\";\n\n// Devolvemos los datos limpios y listos para usar\nreturn [{ json: datos }];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          176,
+          0
+        ],
+        "id": "5547a2d3-6517-4622-ade2-3e78fe5f3911",
+        "name": "Code1"
+      },
+      {
+        "parameters": {
+          "calendar": {
+            "__rl": true,
+            "value": "={{ $json.Id_Calendario}}",
+            "mode": "id"
+          },
+          "start": "={{ $json.Fecha }}",
+          "end": "={{ $json.Fin }}",
+          "additionalFields": {
+            "description": "={{ $json.datos_extra.servicio }}\n{{ $json.patente_limpia }}\n{{ $json.modelo_limpio }}\n{{ $json.servicio_limpio }} \n{{ $json.cliente_limpio}}",
+            "summary": "={{ $json.patente_limpia }} - {{ $json.modelo_limpio }} - {{ $json.servicio_limpio }} - {{ $json.cliente_limpio}}"
+          }
+        },
+        "type": "n8n-nodes-base.googleCalendar",
+        "typeVersion": 1.3,
+        "position": [
+          1408,
+          0
+        ],
+        "id": "ff33d0ab-2cc0-4d3a-8906-1dc6bb2e57c8",
+        "name": "Create an event",
+        "credentials": {
+          "googleCalendarOAuth2Api": {
+            "id": "ACaDHQ8BDShn9Eqg",
+            "name": "Google Calendar account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "// 🕐 Utilidades\nfunction timeToMinutes(timeStr) {\n  // Manejo robusto de timeStr por si viene undefined o formato largo\n  if (!timeStr) return 0;\n  if (timeStr.includes('T')) timeStr = timeStr.split('T')[1];\n  const [h, m] = timeStr.split(':').map(Number);\n  return h * 60 + m;\n}\n\n// ✅ Obtener datos del origen (Code3)\nconst solicitudRaw = $('Code3').first();\nconst solicitud = solicitudRaw.json || solicitudRaw;\n\n// --- LÓGICA DE FECHAS (HÍBRIDA) ---\nlet fechaInicioISO, fechaFinISO;\n\n// CASO 1: Vienen listos desde Code3 (start/end)\nif (solicitud.start && solicitud.end) {\n    fechaInicioISO = solicitud.start; \n    fechaFinISO = solicitud.end;      \n} \n// CASO 2: Vienen separados (Lógica antigua de respaldo)\nelse if (solicitud.Fecha && solicitud.Hora) {\n    fechaInicioISO = `${solicitud.Fecha}T${solicitud.Hora}:00`;\n    \n    // Calculamos fin manual si no existe\n    const duracion = solicitud.duracion_servicio || 105; // 1:45hs default\n    const d = new Date(fechaInicioISO);\n    d.setMinutes(d.getMinutes() + duracion);\n    \n    // Función simple para formatear a ISO local\n    const pad = n => n < 10 ? '0' + n : n;\n    fechaFinISO = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;\n} else {\n    // Error si no hay datos\n    return [{\n        json: {\n            error: 'Faltan campos Fecha/Hora o start/end',\n            recibido: solicitud\n        }\n    }];\n}\n\n// ✅ Extraer strings para lógica de conflicto\nconst solicitudFecha = fechaInicioISO.split('T')[0];\n// Aseguramos formato HH:MM\nconst solicitudInicio = fechaInicioISO.split('T')[1].substring(0, 5); \nconst solicitudFin = fechaFinISO.split('T')[1].substring(0, 5);\n\n// ⚠️ CAMBIO CRÍTICO: Usamos 'SanMartin' como en tu primer código\nconst pilarOcupados = $('Campana').all().map(i => i.json).flat();\n\n// ✅ Función de Conflictos\nfunction tieneConflicto(fecha, inicio, fin, ocupados) {\n  if (!Array.isArray(ocupados) || ocupados.length === 0) return false;\n  \n  const inicioMin = timeToMinutes(inicio);\n  const finMin = timeToMinutes(fin);\n  \n  return ocupados.some(o => {\n    if (!o.dia || !o.inicio || !o.final) return false; \n    \n    if (o.dia !== fecha) return false;\n    const oIni = timeToMinutes(o.inicio);\n    const oFin = timeToMinutes(o.final);\n    // Verificar superposición\n    return inicioMin < oFin && finMin > oIni;\n  });\n}\n\n// ✅ Disponibilidad\nconst p1Disp = !tieneConflicto(solicitudFecha, solicitudInicio, solicitudFin, pilarOcupados);\n\n// ✅ Recuperar ID de Calendario (Prioridad: Code3 > Get_Reglas1)\nlet calendarId = solicitud.calendarId || solicitud.Id_Calendario;\n\nif (!calendarId) {\n    const reglasRaw = $('Get_Reglas1').first();\n    const reglas = reglasRaw.json || reglasRaw;\n    calendarId = reglas.Id_Calendario;\n}\n\nif (!p1Disp) {\n  return [{\n    json: {\n      error: `Conflicto de disponibilidad detectado para ${solicitudFecha} ${solicitudInicio}`,\n      ocupados: pilarOcupados\n    }\n  }];\n}\n\n// =========================================================\n// 🧹 SECCIÓN DE LIMPIEZA DE DATOS (REGEX)\n// =========================================================\n\n// Unimos description y resumen para analizar todo el texto disponible\nconst textoFull = (solicitud.description || \"\") + \" \" + (solicitud.resumen || \"\");\n\n// 1. Extraer CLIENTE (Busca texto después de \"| Cliente:\")\nconst matchCliente = textoFull.match(/[|]+\\s*Cliente:\\s*([^|]+)/i);\nconst clienteLimpio = matchCliente ? matchCliente[1].trim() : \"Cliente\";\n\n// 2. Extraer PATENTE (Forzamos mayúsculas)\nconst matchPatente = textoFull.match(/[|]+\\s*Patente:\\s*([^|]+)/i);\nconst patenteLimpia = matchPatente ? matchPatente[1].trim().toUpperCase() : (solicitud.patente || \"S/P\");\n\n// 3. Extraer MODELO (Forzamos mayúsculas)\nconst matchModelo = textoFull.match(/[|]+\\s*Modelo:\\s*([^|]+)/i);\nconst modeloLimpio = matchModelo ? matchModelo[1].trim().toUpperCase() : \"NO DETECTADO\";\n\n// 4. Extraer SERVICIO\nconst matchServicio = textoFull.match(/[|]+\\s*Servicio:\\s*([^|]+)/i);\nconst servicioLimpio = matchServicio ? matchServicio[1].trim() : \"Service Taller\";\n\n// Armamos textos finales para Google Calendar\nconst tituloEvento = `${servicioLimpio} - ${modeloLimpio} (${patenteLimpia})`;\nconst descripcionFinal = `Cliente: ${clienteLimpio}\\nVehículo: ${modeloLimpio}\\nPatente: ${patenteLimpia}\\nServicio: ${servicioLimpio}\\n\\nNota Original:\\n${textoFull}`;\n\n\n// ✅ RESULTADO FINAL PARA EL NODO \"CREATE AN EVENT\"\nreturn [{\n  json: {\n    // --- 1. Datos estandarizados para Google Calendar Node ---\n    calendarId: calendarId,\n    start: fechaInicioISO, \n    end: fechaFinISO,\n    summary: tituloEvento, \n    description: descripcionFinal, // Ahora usa la descripción limpia y formateada\n\n    // --- 2. Datos legacy (por si tu nodo final usa estas variables) ---\n    Calendar: calendarId,\n    Fecha: fechaInicioISO, \n    Fin: fechaFinISO,\n    \n    // --- 3. 🟢 DATOS LIMPIOS INDIVIDUALES (NIVEL RAÍZ) ---\n    // Agregamos esto para que puedas usar {{ $json.cliente_limpio }} en otros nodos\n    cliente_limpio: clienteLimpio,\n    patente_limpia: patenteLimpia,\n    modelo_limpio: modeloLimpio,\n    servicio_limpio: servicioLimpio,\n\n    // --- 4. Agrupados en objeto (opcional) ---\n    datos_extra: {\n        cliente: clienteLimpio,\n        patente: patenteLimpia,\n        modelo: modeloLimpio,\n        servicio: servicioLimpio,\n        id_turno: solicitud.id\n    },\n\n    // --- 5. Mantener datos originales por las dudas ---\n    ...solicitud\n  }\n}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1216,
+          0
+        ],
+        "id": "04f70392-99fc-4b0a-96c9-3b8cc54987c8",
+        "name": "Code2"
+      },
+      {
+        "parameters": {
+          "jsCode": "return [{\n  json: {\n    id_turno: $input.first().json.id,\n    id_calendario: $input.first().json.organizer.email,\n  }\n}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1584,
+          0
+        ],
+        "id": "71971abd-9d58-4063-b97b-993b5c45d909",
+        "name": "Code6"
+      },
+      {
+        "parameters": {
+          "inputSource": "passthrough"
+        },
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "typeVersion": 1.1,
+        "position": [
+          0,
+          0
+        ],
+        "id": "1625be26-5c51-4318-8a04-5b73e7352f18",
+        "name": "When Executed by Another Workflow"
+      },
+      {
+        "parameters": {
+          "operation": "getAll",
+          "calendar": {
+            "__rl": true,
+            "value": "=c_1f377aa848dbf6519a4493ae55a2d38675fff19cb5535b70863b252394c0cd43@group.calendar.google.com",
+            "mode": "id"
+          },
+          "returnAll": true,
+          "timeMax": "={{ $now.plus({ month: 2}) }}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleCalendar",
+        "typeVersion": 1.3,
+        "position": [
+          896,
+          0
+        ],
+        "id": "2d6763c3-8b58-4cab-a1d8-aa9a5206cb22",
+        "name": "Campana_CALENDARIO",
+        "alwaysOutputData": true,
+        "retryOnFail": true,
+        "waitBetweenTries": 3000,
+        "executeOnce": true,
+        "credentials": {
+          "googleCalendarOAuth2Api": {
+            "id": "ACaDHQ8BDShn9Eqg",
+            "name": "Google Calendar account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\nconst returnItems = [];\n\n// Verificar si hay items\nif (!items || items.length === 0) {\n  return [];\n}\n\nfor (const item of items) {\n  // Verificar que el item tenga la estructura correcta\n  if (!item || !item.json || !item.json.start || !item.json.start.dateTime) {\n    continue; // Saltar este item si no tiene la estructura correcta\n  }\n  \n  let data = item.json;\n  \n  const dia = data.start.dateTime.split('T')[0];\n  const inicio = data.start.dateTime.split('T')[1].substring(0, 5);\n  const final = data.end.dateTime.split('T')[1].substring(0, 5);\n  \n  returnItems.push({\n    json: {\n      dia: dia,\n      inicio: inicio, \n      final: final\n    }\n  });\n}\n\nreturn returnItems;"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1056,
+          0
+        ],
+        "id": "69341f25-c295-4d97-8d75-feb6cf62c562",
+        "name": "Campana",
+        "alwaysOutputData": true
+      }
+    ],
+    "connections": {
+      "Code3": {
+        "main": [
+          [
+            {
+              "node": "Campana_CALENDARIO",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get_Reglas1": {
+        "main": [
+          [
+            {
+              "node": "Code4",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get_Tiempo": {
+        "main": [
+          [
+            {
+              "node": "Code3",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code4": {
+        "main": [
+          [
+            {
+              "node": "Get_Tiempo",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code1": {
+        "main": [
+          [
+            {
+              "node": "Get_Reglas1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Create an event": {
+        "main": [
+          [
+            {
+              "node": "Code6",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code2": {
+        "main": [
+          [
+            {
+              "node": "Create an event",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "When Executed by Another Workflow": {
+        "main": [
+          [
+            {
+              "node": "Code1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Campana_CALENDARIO": {
+        "main": [
+          [
+            {
+              "node": "Campana",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Campana": {
+        "main": [
+          [
+            {
+              "node": "Code2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "system migration",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-11-02T14:01:28.584Z",
+    "updatedAt": "2026-11-02T14:01:28.584Z"
+  },
+  "activeVersionId": "d23c5e25-85ea-42cf-8a0e-58c9e60e5224",
+  "connections": {
+    "Code3": {
+      "main": [
+        [
+          {
+            "node": "Campana_CALENDARIO",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get_Reglas1": {
+      "main": [
+        [
+          {
+            "node": "Code4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get_Tiempo": {
+      "main": [
+        [
+          {
+            "node": "Code3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code4": {
+      "main": [
+        [
+          {
+            "node": "Get_Tiempo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code1": {
+      "main": [
+        [
+          {
+            "node": "Get_Reglas1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create an event": {
+      "main": [
+        [
+          {
+            "node": "Code6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code2": {
+      "main": [
+        [
+          {
+            "node": "Create an event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Code1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Campana_CALENDARIO": {
+      "main": [
+        [
+          {
+            "node": "Campana",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Campana": {
+      "main": [
+        [
+          {
+            "node": "Code2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-01-19T17:31:29.939Z",
+  "id": "QIYuBIBiEVBRkYvh",
+  "isArchived": false,
+  "meta": null,
+  "name": "set_CalendarCampana",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "// 1. OBTENER DATOS\nconst inputData = $('Code4').first().json;\n\n// --- FUNCIÓN DE TRADUCCIÓN DE TEXTO (NUEVO) ---\nfunction parsearTextoHumano(texto) {\n    if (!texto || typeof texto !== 'string') return null;\n    \n    // Regex para capturar: \"21 de enero 8:00 - 9:45hs\"\n    // Captura: (Dia) de (Mes) (Inicio) - (Fin)\n    const regex = /(\\d{1,2})\\s+de\\s+([a-zA-ZñÑ]+)\\s+(\\d{1,2}:\\d{2})\\s*-\\s*(\\d{1,2}:\\d{2})/;\n    const match = texto.match(regex);\n\n    if (match) {\n        const dia = match[1].padStart(2, '0');\n        const mesNombre = match[2].toLowerCase();\n        const horaInicio = match[3].padStart(5, '0'); // Asegura 08:00\n        const horaFin = match[4].padStart(5, '0');\n\n        // Mapa de meses\n        const meses = {\n            \"enero\": \"01\", \"febrero\": \"02\", \"marzo\": \"03\", \"abril\": \"04\", \"mayo\": \"05\", \"junio\": \"06\",\n            \"julio\": \"07\", \"agosto\": \"08\", \"septiembre\": \"09\", \"octubre\": \"10\", \"noviembre\": \"11\", \"diciembre\": \"12\"\n        };\n        const mes = meses[mesNombre];\n\n        if (mes) {\n            // DETECTAR AÑO: Usamos el año actual por defecto.\n            // (Si estás simulando 2026, puedes cambiarlo aquí manualmente o dejar que tome el año del sistema)\n            let anio = new Date().getFullYear();\n            \n            // Si el mes detectado es menor al mes actual, asumimos que es para el año que viene (ej: estamos en Dic, piden Ene)\n            if (parseInt(mes) < new Date().getMonth() + 1) {\n                 // anio++; // Descomentar si quieres esta lógica automática\n            }\n            \n            // Si detectamos fechas de 2026 en el contexto, forzamos 2026 (opcional)\n            // anio = 2026; \n\n            return {\n                fecha: `${anio}-${mes}-${dia}`,\n                inicio: horaInicio,\n                fin: horaFin\n            };\n        }\n    }\n    return null;\n}\n\n// 2. INTENTAR EXTRAER DATOS\nlet fecha, horaInicio, horaFin;\n\n// A. INTENTO: Leer desde Texto Humano (\"21 de enero...\")\nconst queryTexto = inputData.query || inputData.datosOriginales?.query;\nconst datosTexto = parsearTextoHumano(queryTexto);\n\nif (datosTexto) {\n    fecha = datosTexto.fecha;\n    horaInicio = datosTexto.inicio;\n    horaFin = datosTexto.fin;\n} \n// B. INTENTO: Leer Datos Estructurados (Standard)\nelse {\n    fecha = inputData.Fecha || inputData.datosOriginales?.Fecha || inputData.dia;\n    horaInicio = inputData.Hora || inputData.datosOriginales?.Hora || inputData.datosOriginales?.HoraInicio || inputData.inicio;\n    horaFin = inputData.Fin || inputData.datosOriginales?.Fin || inputData.datosOriginales?.HoraFin || inputData.final;\n    \n    // C. INTENTO: Leer de objetos ISO (Google Calendar)\n    if (!horaInicio && inputData.datosOriginales?.start?.dateTime) {\n        fecha = inputData.datosOriginales.start.dateTime.split('T')[0];\n        horaInicio = inputData.datosOriginales.start.dateTime.split('T')[1].substring(0, 5);\n    }\n    if (!horaFin && inputData.datosOriginales?.end?.dateTime) {\n        horaFin = inputData.datosOriginales.end.dateTime.split('T')[1].substring(0, 5);\n    }\n}\n\n// --- ID CALENDARIO ---\nlet calendarId = inputData.Id_Calendario;\nif (!calendarId || calendarId === \"ID_POR_DEFECTO\") {\n    calendarId = inputData.datosOriginales?.Id_Calendario;\n}\n\n// --- GENERAR ID ÚNICO ---\nconst generarID = () => Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);\nconst idTurnoGenerado = generarID();\n\n// Recuperar datos extra\nconst modelo = inputData.modelo || inputData.datosOriginales?.Modelo || \"VW\";\nconst patente = inputData.datosOriginales?.Patente || \"S/P\";\nconst servicio = inputData.datosOriginales?.Servicio || \"Service\";\n\n// 3. VALIDACIÓN\nif (!fecha || !horaInicio || !horaFin || !calendarId) {\n  return {\n    json: {\n      error: \"Faltan datos críticos en Code3\",\n      debug: { \n          intentos: { texto: queryTexto, parseado: datosTexto },\n          final: { fecha, horaInicio, horaFin, calendarId }\n      }\n    }\n  };\n}\n\n// 4. CONSTRUCCIÓN ISO\nconst startDateTime = `${fecha}T${horaInicio}:00-03:00`;\nconst endDateTime = `${fecha}T${horaFin}:00-03:00`;\n\n// 5. SALIDA\nreturn {\n  json: {\n    calendarId: calendarId,\n    id: idTurnoGenerado,\n    start: startDateTime, \n    end: endDateTime,\n    summary: `${patente} - ${servicio}`,\n    description: `Vehículo: ${modelo}\\nServicio: ${servicio}\\nPatente: ${patente}\\nAgendado por IA\\nOriginal: ${queryTexto || 'Estructurado'}`,\n    datos_extra: { modelo, patente, servicio, id_turno: idTurnoGenerado },\n    // Compatibilidad\n    Fecha: startDateTime,\n    Fin: endDateTime,\n    Id_Calendario: calendarId\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        752,
+        0
+      ],
+      "id": "0c63a641-d61b-4ff2-ba8e-dc87f7e7e656",
+      "name": "Code3"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "19kbBeW2ciY9mhnWCUDC2k_Yvp4ddPXK56mcQCK_xWcs",
+          "mode": "list",
+          "cachedResultName": "IA_PV_FORD_ASPEN",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/19kbBeW2ciY9mhnWCUDC2k_Yvp4ddPXK56mcQCK_xWcs/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 444773369,
+          "mode": "list",
+          "cachedResultName": "Tabla Horarios Taller",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/19kbBeW2ciY9mhnWCUDC2k_Yvp4ddPXK56mcQCK_xWcs/edit#gid=444773369"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Talleres",
+              "lookupValue": "=Campana"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        320,
+        0
+      ],
+      "id": "7bff568c-d3d5-4391-b805-2052ddf3600d",
+      "name": "Get_Reglas1",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JcV1ATRYlnSnYPae",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "19kbBeW2ciY9mhnWCUDC2k_Yvp4ddPXK56mcQCK_xWcs",
+          "mode": "list",
+          "cachedResultName": "IA_PV_FORD_ASPEN",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/19kbBeW2ciY9mhnWCUDC2k_Yvp4ddPXK56mcQCK_xWcs/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1610754328,
+          "mode": "list",
+          "cachedResultName": "Tabla Tiempo Mantenimiento",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/19kbBeW2ciY9mhnWCUDC2k_Yvp4ddPXK56mcQCK_xWcs/edit#gid=1610754328"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "km",
+              "lookupValue": "={{ $json.kilometraje || 100000}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        608,
+        0
+      ],
+      "id": "8c5bb8b5-8edf-4a0e-a896-7673236d1f85",
+      "name": "Get_Tiempo",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JcV1ATRYlnSnYPae",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 🚗 Lista de modelos posibles\nconst MODELOS = [\n  \"Etios\", \"Yaris\", \"Yaris GR\", \"Corolla\", \"Prius\", \"Rav4\", \n  \"Innova\", \"Hilux\", \"SW4\", \"Hiace\", \"CH-R\", \"Camry\", \"Land Cruiser\"\n];\n\n// 🧩 Función para extraer datos (Simplificada para evitar el error de parsing)\nfunction obtenerDatosEntrada() {\n  const input = $(\"When Executed by Another Workflow\").first().json;\n  \n  // Si query ya es un objeto (lo que envía el AI Agent), lo usamos directo\n  if (input.query && typeof input.query === 'object') {\n    return input.query;\n  }\n  \n  // Si por alguna razón viene como string, intentamos parsear de forma segura\n  if (input.query && typeof input.query === 'string') {\n    try {\n      return JSON.parse(input.query);\n    } catch (e) {\n      // Si falla el parseo (como el error del Yaris), devolvemos el objeto original\n      return input;\n    }\n  }\n  \n  return input;\n}\n\n// 🧮 Función para buscar modelo\nfunction detectarModelo(modeloInput, textoBusqueda) {\n  // Primero revisamos si ya viene el modelo explícito en el input\n  if (modeloInput) return modeloInput;\n\n  // Si no, buscamos en el texto\n  for (const modelo of MODELOS) {\n    const regex = new RegExp(`\\\\b${modelo}\\\\b`, \"i\");\n    if (regex.test(textoBusqueda)) return modelo;\n  }\n  return \"No Detectado\";\n}\n\n// 🧩 PROCESAMIENTO\nconst solicitud = obtenerDatosEntrada();\nconst reglasTaller = $(\"Get_Reglas1\").first().json;\n\n// Unimos el texto de descripción y título para la búsqueda\nconst textoBusqueda = `${solicitud.Descripcion || \"\"} ${solicitud.Titulo || \"\"}`;\n\n// 🧾 RESULTADO FINAL\nreturn [\n  {\n    json: {\n      modelo: detectarModelo(solicitud.Modelo, textoBusqueda),\n      kilometraje: solicitud.KM || solicitud.kilometraje || null,\n      Id_Calendario: reglasTaller.Id_Calendario, // Aseguramos que pase al siguiente nodo\n      Fecha: solicitud.Fecha, // Necesario para Google Calendar\n      Fin: solicitud.Fin,     // Necesario para Google Calendar\n      datosOriginales: solicitud // Para debug\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        0
+      ],
+      "id": "ce2e0d16-a1d0-4b98-be0a-565ad2faf0fe",
+      "name": "Code4"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Leemos la entrada\nconst input = items[0].json;\nlet datos = {};\n\n// CASO 1: Viene como Texto (String) -> Hay que convertirlo (JSON.parse)\nif (typeof input.query === 'string') {\n    try {\n        // Intentamos limpiar comillas extras si las hubiera y parsear\n        const cleanQuery = input.query.trim();\n        // Si está vacío, evitamos error de parseo\n        if (cleanQuery === \"\") {\n             datos = { error: \"La query llegó vacía\" };\n        } else {\n             datos = JSON.parse(cleanQuery);\n        }\n    } catch (e) {\n        datos = { error: \"Error al leer JSON: \" + e.message };\n    }\n} \n// CASO 2: Ya viene como Objeto -> Lo usamos directo\nelse if (typeof input.query === 'object' && input.query !== null) {\n    datos = input.query;\n} \n// CASO 3: Viene en la raíz\nelse {\n    datos = input;\n}\n\n// Asignar ID por defecto si no vino en los datos\ndatos.Id_Calendario = datos.Id_Calendario || \"ID_POR_DEFECTO\";\n\n// Devolvemos los datos limpios y listos para usar\nreturn [{ json: datos }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        176,
+        0
+      ],
+      "id": "5547a2d3-6517-4622-ade2-3e78fe5f3911",
+      "name": "Code1"
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "value": "={{ $json.Id_Calendario}}",
+          "mode": "id"
+        },
+        "start": "={{ $json.Fecha }}",
+        "end": "={{ $json.Fin }}",
+        "additionalFields": {
+          "description": "={{ $json.datos_extra.servicio }}\n{{ $json.patente_limpia }}\n{{ $json.modelo_limpio }}\n{{ $json.servicio_limpio }} \n{{ $json.cliente_limpio}}",
+          "summary": "={{ $json.patente_limpia }} - {{ $json.modelo_limpio }} - {{ $json.servicio_limpio }} - {{ $json.cliente_limpio}}"
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        1408,
+        0
+      ],
+      "id": "ff33d0ab-2cc0-4d3a-8906-1dc6bb2e57c8",
+      "name": "Create an event",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "ACaDHQ8BDShn9Eqg",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 🕐 Utilidades\nfunction timeToMinutes(timeStr) {\n  // Manejo robusto de timeStr por si viene undefined o formato largo\n  if (!timeStr) return 0;\n  if (timeStr.includes('T')) timeStr = timeStr.split('T')[1];\n  const [h, m] = timeStr.split(':').map(Number);\n  return h * 60 + m;\n}\n\n// ✅ Obtener datos del origen (Code3)\nconst solicitudRaw = $('Code3').first();\nconst solicitud = solicitudRaw.json || solicitudRaw;\n\n// --- LÓGICA DE FECHAS (HÍBRIDA) ---\nlet fechaInicioISO, fechaFinISO;\n\n// CASO 1: Vienen listos desde Code3 (start/end)\nif (solicitud.start && solicitud.end) {\n    fechaInicioISO = solicitud.start; \n    fechaFinISO = solicitud.end;      \n} \n// CASO 2: Vienen separados (Lógica antigua de respaldo)\nelse if (solicitud.Fecha && solicitud.Hora) {\n    fechaInicioISO = `${solicitud.Fecha}T${solicitud.Hora}:00`;\n    \n    // Calculamos fin manual si no existe\n    const duracion = solicitud.duracion_servicio || 105; // 1:45hs default\n    const d = new Date(fechaInicioISO);\n    d.setMinutes(d.getMinutes() + duracion);\n    \n    // Función simple para formatear a ISO local\n    const pad = n => n < 10 ? '0' + n : n;\n    fechaFinISO = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;\n} else {\n    // Error si no hay datos\n    return [{\n        json: {\n            error: 'Faltan campos Fecha/Hora o start/end',\n            recibido: solicitud\n        }\n    }];\n}\n\n// ✅ Extraer strings para lógica de conflicto\nconst solicitudFecha = fechaInicioISO.split('T')[0];\n// Aseguramos formato HH:MM\nconst solicitudInicio = fechaInicioISO.split('T')[1].substring(0, 5); \nconst solicitudFin = fechaFinISO.split('T')[1].substring(0, 5);\n\n// ⚠️ CAMBIO CRÍTICO: Usamos 'SanMartin' como en tu primer código\nconst pilarOcupados = $('Campana').all().map(i => i.json).flat();\n\n// ✅ Función de Conflictos\nfunction tieneConflicto(fecha, inicio, fin, ocupados) {\n  if (!Array.isArray(ocupados) || ocupados.length === 0) return false;\n  \n  const inicioMin = timeToMinutes(inicio);\n  const finMin = timeToMinutes(fin);\n  \n  return ocupados.some(o => {\n    if (!o.dia || !o.inicio || !o.final) return false; \n    \n    if (o.dia !== fecha) return false;\n    const oIni = timeToMinutes(o.inicio);\n    const oFin = timeToMinutes(o.final);\n    // Verificar superposición\n    return inicioMin < oFin && finMin > oIni;\n  });\n}\n\n// ✅ Disponibilidad\nconst p1Disp = !tieneConflicto(solicitudFecha, solicitudInicio, solicitudFin, pilarOcupados);\n\n// ✅ Recuperar ID de Calendario (Prioridad: Code3 > Get_Reglas1)\nlet calendarId = solicitud.calendarId || solicitud.Id_Calendario;\n\nif (!calendarId) {\n    const reglasRaw = $('Get_Reglas1').first();\n    const reglas = reglasRaw.json || reglasRaw;\n    calendarId = reglas.Id_Calendario;\n}\n\nif (!p1Disp) {\n  return [{\n    json: {\n      error: `Conflicto de disponibilidad detectado para ${solicitudFecha} ${solicitudInicio}`,\n      ocupados: pilarOcupados\n    }\n  }];\n}\n\n// =========================================================\n// 🧹 SECCIÓN DE LIMPIEZA DE DATOS (REGEX)\n// =========================================================\n\n// Unimos description y resumen para analizar todo el texto disponible\nconst textoFull = (solicitud.description || \"\") + \" \" + (solicitud.resumen || \"\");\n\n// 1. Extraer CLIENTE (Busca texto después de \"| Cliente:\")\nconst matchCliente = textoFull.match(/[|]+\\s*Cliente:\\s*([^|]+)/i);\nconst clienteLimpio = matchCliente ? matchCliente[1].trim() : \"Cliente\";\n\n// 2. Extraer PATENTE (Forzamos mayúsculas)\nconst matchPatente = textoFull.match(/[|]+\\s*Patente:\\s*([^|]+)/i);\nconst patenteLimpia = matchPatente ? matchPatente[1].trim().toUpperCase() : (solicitud.patente || \"S/P\");\n\n// 3. Extraer MODELO (Forzamos mayúsculas)\nconst matchModelo = textoFull.match(/[|]+\\s*Modelo:\\s*([^|]+)/i);\nconst modeloLimpio = matchModelo ? matchModelo[1].trim().toUpperCase() : \"NO DETECTADO\";\n\n// 4. Extraer SERVICIO\nconst matchServicio = textoFull.match(/[|]+\\s*Servicio:\\s*([^|]+)/i);\nconst servicioLimpio = matchServicio ? matchServicio[1].trim() : \"Service Taller\";\n\n// Armamos textos finales para Google Calendar\nconst tituloEvento = `${servicioLimpio} - ${modeloLimpio} (${patenteLimpia})`;\nconst descripcionFinal = `Cliente: ${clienteLimpio}\\nVehículo: ${modeloLimpio}\\nPatente: ${patenteLimpia}\\nServicio: ${servicioLimpio}\\n\\nNota Original:\\n${textoFull}`;\n\n\n// ✅ RESULTADO FINAL PARA EL NODO \"CREATE AN EVENT\"\nreturn [{\n  json: {\n    // --- 1. Datos estandarizados para Google Calendar Node ---\n    calendarId: calendarId,\n    start: fechaInicioISO, \n    end: fechaFinISO,\n    summary: tituloEvento, \n    description: descripcionFinal, // Ahora usa la descripción limpia y formateada\n\n    // --- 2. Datos legacy (por si tu nodo final usa estas variables) ---\n    Calendar: calendarId,\n    Fecha: fechaInicioISO, \n    Fin: fechaFinISO,\n    \n    // --- 3. 🟢 DATOS LIMPIOS INDIVIDUALES (NIVEL RAÍZ) ---\n    // Agregamos esto para que puedas usar {{ $json.cliente_limpio }} en otros nodos\n    cliente_limpio: clienteLimpio,\n    patente_limpia: patenteLimpia,\n    modelo_limpio: modeloLimpio,\n    servicio_limpio: servicioLimpio,\n\n    // --- 4. Agrupados en objeto (opcional) ---\n    datos_extra: {\n        cliente: clienteLimpio,\n        patente: patenteLimpia,\n        modelo: modeloLimpio,\n        servicio: servicioLimpio,\n        id_turno: solicitud.id\n    },\n\n    // --- 5. Mantener datos originales por las dudas ---\n    ...solicitud\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1216,
+        0
+      ],
+      "id": "04f70392-99fc-4b0a-96c9-3b8cc54987c8",
+      "name": "Code2"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    id_turno: $input.first().json.id,\n    id_calendario: $input.first().json.organizer.email,\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1584,
+        0
+      ],
+      "id": "71971abd-9d58-4063-b97b-993b5c45d909",
+      "name": "Code6"
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "1625be26-5c51-4318-8a04-5b73e7352f18",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "=c_1f377aa848dbf6519a4493ae55a2d38675fff19cb5535b70863b252394c0cd43@group.calendar.google.com",
+          "mode": "id"
+        },
+        "returnAll": true,
+        "timeMax": "={{ $now.plus({ month: 2}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        896,
+        0
+      ],
+      "id": "2d6763c3-8b58-4cab-a1d8-aa9a5206cb22",
+      "name": "Campana_CALENDARIO",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "waitBetweenTries": 3000,
+      "executeOnce": true,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "ACaDHQ8BDShn9Eqg",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst returnItems = [];\n\n// Verificar si hay items\nif (!items || items.length === 0) {\n  return [];\n}\n\nfor (const item of items) {\n  // Verificar que el item tenga la estructura correcta\n  if (!item || !item.json || !item.json.start || !item.json.start.dateTime) {\n    continue; // Saltar este item si no tiene la estructura correcta\n  }\n  \n  let data = item.json;\n  \n  const dia = data.start.dateTime.split('T')[0];\n  const inicio = data.start.dateTime.split('T')[1].substring(0, 5);\n  const final = data.end.dateTime.split('T')[1].substring(0, 5);\n  \n  returnItems.push({\n    json: {\n      dia: dia,\n      inicio: inicio, \n      final: final\n    }\n  });\n}\n\nreturn returnItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1056,
+        0
+      ],
+      "id": "69341f25-c295-4d97-8d75-feb6cf62c562",
+      "name": "Campana",
+      "alwaysOutputData": true
+    }
+  ],
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "QIYuBIBiEVBRkYvh",
+      "projectId": "uctBMgzvi5ZzGu3j",
+      "createdAt": "2026-01-19T17:31:29.941Z",
+      "updatedAt": "2026-01-19T17:31:29.941Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [
+    {
+      "id": "BWW3f7zkwmPypxHE",
+      "name": "fordaspen",
+      "createdAt": "2026-11-26T20:25:56.677Z",
+      "updatedAt": "2026-11-26T20:25:56.677Z"
+    }
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2026-11-26T20:26:00.834Z",
+  "versionId": "d23c5e25-85ea-42cf-8a0e-58c9e60e5224"
+}
