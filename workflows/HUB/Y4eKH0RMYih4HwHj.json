@@ -1,0 +1,629 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "47b41675-bed1-4c0a-92ab-2418b9530421",
+    "workflowId": "Y4eKH0RMYih4HwHj",
+    "nodes": [
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\nconst returnItems = [];\n\n// Verificar si hay items\nif (!items || items.length === 0) {\n  return [];\n}\n\nfor (const item of items) {\n  // Verificar que el item tenga la estructura correcta\n  if (!item || !item.json || !item.json.start || !item.json.start.dateTime) {\n    continue; // Saltar este item si no tiene la estructura correcta\n  }\n  \n  let data = item.json;\n  \n  const dia = data.start.dateTime.split('T')[0];\n  const inicio = data.start.dateTime.split('T')[1].substring(0, 5);\n  const final = data.end.dateTime.split('T')[1].substring(0, 5);\n  \n  returnItems.push({\n    json: {\n      dia: dia,\n      inicio: inicio, \n      final: final\n    }\n  });\n}\n\nreturn returnItems;"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          688,
+          144
+        ],
+        "id": "52d883e5-e638-4f29-bfdf-039e0cdb5dc6",
+        "name": "Code",
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "operation": "getAll",
+          "calendar": {
+            "__rl": true,
+            "value": "9528b07b85cf62a23b5c5e93749bd94b4d543b6924836f571cf0e0cfaa654065@group.calendar.google.com",
+            "mode": "list",
+            "cachedResultName": "AvecCitroen"
+          },
+          "returnAll": true,
+          "timeMax": "={{ $now.plus({ month: 2}) }}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleCalendar",
+        "typeVersion": 1.3,
+        "position": [
+          544,
+          144
+        ],
+        "id": "c3752e04-67f1-4f2e-9b23-a00ce6c44e63",
+        "name": "Get many events1",
+        "alwaysOutputData": true,
+        "credentials": {
+          "googleCalendarOAuth2Api": {
+            "id": "3TZmWObtS2tNVGWm",
+            "name": "Google Calendar account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "getAll",
+          "calendar": {
+            "__rl": true,
+            "value": "es-419.ar#holiday@group.v.calendar.google.com",
+            "mode": "list",
+            "cachedResultName": "Días feriados en Argentina"
+          },
+          "returnAll": true,
+          "timeMax": "={{ $now.plus({ month: 2 }) }}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleCalendar",
+        "typeVersion": 1.3,
+        "position": [
+          240,
+          144
+        ],
+        "id": "58fe39cd-58a1-474d-86a7-3047b1bb4c23",
+        "name": "Get many events2",
+        "credentials": {
+          "googleCalendarOAuth2Api": {
+            "id": "3TZmWObtS2tNVGWm",
+            "name": "Google Calendar account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "function obtenerFeriados() {\n  // Obtener los feriados del nodo anterior\n  const feriadosData = $input.all(); // Obtiene todos los items del nodo anterior\n  const feriados = [];\n  \n  // Extraer las fechas de los feriados del formato que recibes\n  feriadosData.forEach(item => {\n    if (item.json && item.json.start && item.json.start.date) {\n      feriados.push(item.json.start.date);\n    }\n    // Si el feriado dura más de un día, también agregar las fechas intermedias\n    if (item.json && item.json.end && item.json.end.date && item.json.start.date !== item.json.end.date) {\n      const fechaInicio = new Date(item.json.start.date);\n      const fechaFin = new Date(item.json.end.date);\n      \n      // Agregar todas las fechas entre inicio y fin\n      const fechaActual = new Date(fechaInicio);\n      while (fechaActual < fechaFin) {\n        feriados.push(fechaActual.toISOString().split('T')[0]);\n        fechaActual.setDate(fechaActual.getDate() + 1);\n      }\n    }\n  });\n  \n  // Eliminar duplicados de la lista de feriados\n  const feriadosUnicos = [...new Set(feriados)];\n  \n  return feriadosUnicos;\n}\n\nconst feriadosEncontrados = obtenerFeriados();\n\nreturn [{\n  json: {\n    feriadosEncontrados: feriadosEncontrados\n  }\n}];"
+        },
+        "id": "ba0e1cb7-e4c9-409f-a9b3-7b43ecf38440",
+        "name": "feriados",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          384,
+          144
+        ]
+      },
+      {
+        "parameters": {
+          "path": "837d2f09-e873-429b-a273-15e09dbac6d8",
+          "responseMode": "lastNode",
+          "responseData": "allEntries",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.1,
+        "position": [
+          80,
+          144
+        ],
+        "id": "32995eb5-105b-4297-948c-412c16d00b79",
+        "name": "Webhook",
+        "webhookId": "837d2f09-e873-429b-a273-15e09dbac6d8"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Configuración fija\nconst HORARIOS_DISPONIBLES = ['08:30', '09:30', '14:00'];\nconst DURACION_TURNO = 30; // minutos (30min)\n\n// Obtener turnos ocupados del input\nconst turnosOcupados = $input.all().map(item => item.json);\n\n// Helper: sumar minutos a hora\nfunction sumarMinutos(hora, mins) {\n  const [h, m] = hora.split(':').map(Number);\n  const totalMins = h * 60 + m + mins;\n  return `${String(Math.floor(totalMins / 60)).padStart(2, '0')}:${String(totalMins % 60).padStart(2, '0')}`;\n}\n\n// Verificar si un turno está ocupado\nfunction estaOcupado(dia, hora) {\n  return turnosOcupados.some(t => \n    t.dia === dia && t.inicio === hora\n  );\n}\n\n// Generar próximos 12 turnos disponibles\nconst turnosDisponibles = [];\nconst hoy = new Date();\nlet fecha = new Date(hoy);\nfecha.setDate(fecha.getDate() + 1); // Empezar desde mañana\n\nwhile (turnosDisponibles.length < 12) {\n  const diaStr = fecha.toISOString().split('T')[0];\n  const diaSemana = fecha.getDay();\n  \n  // Solo lunes a viernes (1-5)\n  if (diaSemana >= 1 && diaSemana <= 5) {\n    for (const hora of HORARIOS_DISPONIBLES) {\n      if (!estaOcupado(diaStr, hora)) {\n        turnosDisponibles.push({\n          dia: diaStr,\n          inicio: hora,\n          final: sumarMinutos(hora, DURACION_TURNO)\n        });\n        \n        if (turnosDisponibles.length >= 12) break;\n      }\n    }\n  }\n  \n  fecha.setDate(fecha.getDate() + 1);\n}\n\nreturn turnosDisponibles.map(t => ({ json: t }));"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          832,
+          144
+        ],
+        "id": "350467cd-77bd-468f-aec4-99f012d34680",
+        "name": "Code1"
+      },
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "837d2f09-e873-429b-a273-15e09dbac6d8",
+          "responseMode": "responseNode",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.1,
+        "position": [
+          80,
+          352
+        ],
+        "id": "27125fb8-1bc7-4b8f-b7ae-9f7abeaf589e",
+        "name": "Webhook1",
+        "webhookId": "837d2f09-e873-429b-a273-15e09dbac6d8"
+      },
+      {
+        "parameters": {
+          "calendar": {
+            "__rl": true,
+            "value": "9528b07b85cf62a23b5c5e93749bd94b4d543b6924836f571cf0e0cfaa654065@group.calendar.google.com",
+            "mode": "list",
+            "cachedResultName": "AvecCitroen"
+          },
+          "start": "={{ $json.body.fecha_inicio }}",
+          "end": "={{ $json.body.fecha_final }}",
+          "additionalFields": {
+            "description": "=Turno confirmado para {{ $json.body.fecha }} - Patente {{ $json.body.Patente }} - {{ $json.body.Nombre }} -  Teléfono: {{ $json.body.Telefono }}",
+            "summary": "={{ $json.body.Patente }} - {{ $json.body.Nombre }} - {{ $json.body.Telefono }}"
+          }
+        },
+        "type": "n8n-nodes-base.googleCalendar",
+        "typeVersion": 1.3,
+        "position": [
+          240,
+          352
+        ],
+        "id": "3affc825-cfc7-4a84-ab37-ed64b39aa1d4",
+        "name": "Create an event",
+        "credentials": {
+          "googleCalendarOAuth2Api": {
+            "id": "3TZmWObtS2tNVGWm",
+            "name": "Google Calendar account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "sendTo": "asistente.avec.citroen@gmail.com",
+          "subject": "=Nuevo turno para el {{$('Webhook1').first().json.body.fecha}} - {{$('Webhook1').first().json.body.Patente}}",
+          "message": "=El cliente {{$('Webhook1').first().json.body.Nombre}} confirmo un turno para el día {{$('Webhook1').first().json.body.fecha}}. \nPatente: {{$('Webhook1').first().json.body.Patente}}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2.1,
+        "position": [
+          400,
+          352
+        ],
+        "id": "e3c0317c-d497-4a53-a24c-73d2c21141e1",
+        "name": "Send a message",
+        "webhookId": "f353083c-026d-480f-89fc-c4c875150c2c",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "WCbbuoVFnPtestsg",
+            "name": "Gmail account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "respondWith": "allIncomingItems",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.4,
+        "position": [
+          544,
+          352
+        ],
+        "id": "7c521a93-cefd-4629-9b87-46b0ba4d5663",
+        "name": "Respond to Webhook"
+      }
+    ],
+    "connections": {
+      "Get many events1": {
+        "main": [
+          [
+            {
+              "node": "Code",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get many events2": {
+        "main": [
+          [
+            {
+              "node": "feriados",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "feriados": {
+        "main": [
+          [
+            {
+              "node": "Get many events1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "Get many events2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code": {
+        "main": [
+          [
+            {
+              "node": "Code1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Webhook1": {
+        "main": [
+          [
+            {
+              "node": "Create an event",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Create an event": {
+        "main": [
+          [
+            {
+              "node": "Send a message",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Send a message": {
+        "main": [
+          [
+            {
+              "node": "Respond to Webhook",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "system migration",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-10-26T17:05:09.982Z",
+    "updatedAt": "2026-10-26T17:05:09.982Z"
+  },
+  "activeVersionId": "47b41675-bed1-4c0a-92ab-2418b9530421",
+  "connections": {
+    "Get many events1": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many events2": {
+      "main": [
+        [
+          {
+            "node": "feriados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "feriados": {
+      "main": [
+        [
+          {
+            "node": "Get many events1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Get many events2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "Code1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook1": {
+      "main": [
+        [
+          {
+            "node": "Create an event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create an event": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2025-11-14T14:35:53.803Z",
+  "id": "Y4eKH0RMYih4HwHj",
+  "isArchived": false,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "name": "AVEC-CITROEN",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst returnItems = [];\n\n// Verificar si hay items\nif (!items || items.length === 0) {\n  return [];\n}\n\nfor (const item of items) {\n  // Verificar que el item tenga la estructura correcta\n  if (!item || !item.json || !item.json.start || !item.json.start.dateTime) {\n    continue; // Saltar este item si no tiene la estructura correcta\n  }\n  \n  let data = item.json;\n  \n  const dia = data.start.dateTime.split('T')[0];\n  const inicio = data.start.dateTime.split('T')[1].substring(0, 5);\n  const final = data.end.dateTime.split('T')[1].substring(0, 5);\n  \n  returnItems.push({\n    json: {\n      dia: dia,\n      inicio: inicio, \n      final: final\n    }\n  });\n}\n\nreturn returnItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        688,
+        144
+      ],
+      "id": "52d883e5-e638-4f29-bfdf-039e0cdb5dc6",
+      "name": "Code",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "9528b07b85cf62a23b5c5e93749bd94b4d543b6924836f571cf0e0cfaa654065@group.calendar.google.com",
+          "mode": "list",
+          "cachedResultName": "AvecCitroen"
+        },
+        "returnAll": true,
+        "timeMax": "={{ $now.plus({ month: 2}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        544,
+        144
+      ],
+      "id": "c3752e04-67f1-4f2e-9b23-a00ce6c44e63",
+      "name": "Get many events1",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "3TZmWObtS2tNVGWm",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "es-419.ar#holiday@group.v.calendar.google.com",
+          "mode": "list",
+          "cachedResultName": "Días feriados en Argentina"
+        },
+        "returnAll": true,
+        "timeMax": "={{ $now.plus({ month: 2 }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        240,
+        144
+      ],
+      "id": "58fe39cd-58a1-474d-86a7-3047b1bb4c23",
+      "name": "Get many events2",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "3TZmWObtS2tNVGWm",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "function obtenerFeriados() {\n  // Obtener los feriados del nodo anterior\n  const feriadosData = $input.all(); // Obtiene todos los items del nodo anterior\n  const feriados = [];\n  \n  // Extraer las fechas de los feriados del formato que recibes\n  feriadosData.forEach(item => {\n    if (item.json && item.json.start && item.json.start.date) {\n      feriados.push(item.json.start.date);\n    }\n    // Si el feriado dura más de un día, también agregar las fechas intermedias\n    if (item.json && item.json.end && item.json.end.date && item.json.start.date !== item.json.end.date) {\n      const fechaInicio = new Date(item.json.start.date);\n      const fechaFin = new Date(item.json.end.date);\n      \n      // Agregar todas las fechas entre inicio y fin\n      const fechaActual = new Date(fechaInicio);\n      while (fechaActual < fechaFin) {\n        feriados.push(fechaActual.toISOString().split('T')[0]);\n        fechaActual.setDate(fechaActual.getDate() + 1);\n      }\n    }\n  });\n  \n  // Eliminar duplicados de la lista de feriados\n  const feriadosUnicos = [...new Set(feriados)];\n  \n  return feriadosUnicos;\n}\n\nconst feriadosEncontrados = obtenerFeriados();\n\nreturn [{\n  json: {\n    feriadosEncontrados: feriadosEncontrados\n  }\n}];"
+      },
+      "id": "ba0e1cb7-e4c9-409f-a9b3-7b43ecf38440",
+      "name": "feriados",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        384,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "path": "837d2f09-e873-429b-a273-15e09dbac6d8",
+        "responseMode": "lastNode",
+        "responseData": "allEntries",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        80,
+        144
+      ],
+      "id": "32995eb5-105b-4297-948c-412c16d00b79",
+      "name": "Webhook",
+      "webhookId": "837d2f09-e873-429b-a273-15e09dbac6d8"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Configuración fija\nconst HORARIOS_DISPONIBLES = ['08:30', '09:30', '14:00'];\nconst DURACION_TURNO = 30; // minutos (30min)\n\n// Obtener turnos ocupados del input\nconst turnosOcupados = $input.all().map(item => item.json);\n\n// Helper: sumar minutos a hora\nfunction sumarMinutos(hora, mins) {\n  const [h, m] = hora.split(':').map(Number);\n  const totalMins = h * 60 + m + mins;\n  return `${String(Math.floor(totalMins / 60)).padStart(2, '0')}:${String(totalMins % 60).padStart(2, '0')}`;\n}\n\n// Verificar si un turno está ocupado\nfunction estaOcupado(dia, hora) {\n  return turnosOcupados.some(t => \n    t.dia === dia && t.inicio === hora\n  );\n}\n\n// Generar próximos 12 turnos disponibles\nconst turnosDisponibles = [];\nconst hoy = new Date();\nlet fecha = new Date(hoy);\nfecha.setDate(fecha.getDate() + 1); // Empezar desde mañana\n\nwhile (turnosDisponibles.length < 12) {\n  const diaStr = fecha.toISOString().split('T')[0];\n  const diaSemana = fecha.getDay();\n  \n  // Solo lunes a viernes (1-5)\n  if (diaSemana >= 1 && diaSemana <= 5) {\n    for (const hora of HORARIOS_DISPONIBLES) {\n      if (!estaOcupado(diaStr, hora)) {\n        turnosDisponibles.push({\n          dia: diaStr,\n          inicio: hora,\n          final: sumarMinutos(hora, DURACION_TURNO)\n        });\n        \n        if (turnosDisponibles.length >= 12) break;\n      }\n    }\n  }\n  \n  fecha.setDate(fecha.getDate() + 1);\n}\n\nreturn turnosDisponibles.map(t => ({ json: t }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        832,
+        144
+      ],
+      "id": "350467cd-77bd-468f-aec4-99f012d34680",
+      "name": "Code1"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "837d2f09-e873-429b-a273-15e09dbac6d8",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        80,
+        352
+      ],
+      "id": "27125fb8-1bc7-4b8f-b7ae-9f7abeaf589e",
+      "name": "Webhook1",
+      "webhookId": "837d2f09-e873-429b-a273-15e09dbac6d8"
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "value": "9528b07b85cf62a23b5c5e93749bd94b4d543b6924836f571cf0e0cfaa654065@group.calendar.google.com",
+          "mode": "list",
+          "cachedResultName": "AvecCitroen"
+        },
+        "start": "={{ $json.body.fecha_inicio }}",
+        "end": "={{ $json.body.fecha_final }}",
+        "additionalFields": {
+          "description": "=Turno confirmado para {{ $json.body.fecha }} - Patente {{ $json.body.Patente }} - {{ $json.body.Nombre }} -  Teléfono: {{ $json.body.Telefono }}",
+          "summary": "={{ $json.body.Patente }} - {{ $json.body.Nombre }} - {{ $json.body.Telefono }}"
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        240,
+        352
+      ],
+      "id": "3affc825-cfc7-4a84-ab37-ed64b39aa1d4",
+      "name": "Create an event",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "3TZmWObtS2tNVGWm",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "asistente.avec.citroen@gmail.com",
+        "subject": "=Nuevo turno para el {{$('Webhook1').first().json.body.fecha}} - {{$('Webhook1').first().json.body.Patente}}",
+        "message": "=El cliente {{$('Webhook1').first().json.body.Nombre}} confirmo un turno para el día {{$('Webhook1').first().json.body.fecha}}. \nPatente: {{$('Webhook1').first().json.body.Patente}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        400,
+        352
+      ],
+      "id": "e3c0317c-d497-4a53-a24c-73d2c21141e1",
+      "name": "Send a message",
+      "webhookId": "f353083c-026d-480f-89fc-c4c875150c2c",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "WCbbuoVFnPtestsg",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        544,
+        352
+      ],
+      "id": "7c521a93-cefd-4629-9b87-46b0ba4d5663",
+      "name": "Respond to Webhook"
+    }
+  ],
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "Y4eKH0RMYih4HwHj",
+      "projectId": "K8p6XEqA0L6D2uVt",
+      "createdAt": "2025-11-14T14:35:53.807Z",
+      "updatedAt": "2025-11-14T14:35:53.807Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [
+    {
+      "id": "o06GHXtTLtAfQDke",
+      "name": "HUB",
+      "createdAt": "2026-02-03T14:47:40.022Z",
+      "updatedAt": "2026-02-03T14:47:40.022Z"
+    }
+  ],
+  "triggerCount": 2,
+  "updatedAt": "2026-10-26T17:06:13.535Z",
+  "versionId": "47b41675-bed1-4c0a-92ab-2418b9530421"
+}
