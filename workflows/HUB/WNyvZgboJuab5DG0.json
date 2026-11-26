@@ -1,0 +1,946 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "41106bab-6e1e-476f-9ca4-4cbfcdcacd49",
+    "workflowId": "WNyvZgboJuab5DG0",
+    "nodes": [
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "minutes",
+                "minutesInterval": 10
+              }
+            ]
+          }
+        },
+        "id": "a64f817a-afb0-4303-b8ff-74351758719a",
+        "name": "⏰ Schedule Trigger",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          -1408,
+          208
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT l.*, t.access_token, i.destino, i.destino_config, i.origen_sf \nFROM meli_leads l \nJOIN meli_tokens t ON l.user_id = t.user_id \nJOIN meli_integraciones i ON l.user_id = i.user_id \nWHERE l.status = 'active' \nAND l.buyer_id IS NOT NULL \nAND l.buyer_id != 0\nAND l.buyer_nombre IS NOT NULL\nAND l.user_id IN (151898097, 187617379, 222596309)\nLIMIT 100",
+          "options": {}
+        },
+        "id": "faaa0bb7-c526-4d23-b98d-370e273aa6d4",
+        "name": "🗄️ Buscar leads pending",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          -1216,
+          208
+        ],
+        "credentials": {
+          "mySql": {
+            "id": "FezTcDnLo3SqPHvd",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {},
+            "conditions": [
+              {
+                "leftValue": "={{ $input.all().length }}",
+                "rightValue": 0,
+                "operator": {
+                  "type": "number",
+                  "operation": "gt"
+                }
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "ef119083-d7f1-4c66-80b2-b29d4ef452af",
+        "name": "🔍 Hay leads?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          -992,
+          208
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const lead = $input.item.json;\n\nconst normalizarTel = (tel) => {\n  if (!tel) return null;\n  const digits = tel.toString().replace(/\\D/g, '');\n  return digits.slice(-8);\n};\n\nconst sufijo1 = normalizarTel(lead.asesor_phone);\nconst sufijo2 = normalizarTel(lead.asesor_phone2);\n\nreturn {\n  json: {\n    ...lead,\n    asesor_sufijo1: sufijo1 || '',\n    asesor_sufijo2: sufijo2 || ''\n  }\n};"
+        },
+        "id": "abc8a1d6-0c3b-4072-a092-b2ed8e26e2e1",
+        "name": "⚙️ Normalizar teléfonos",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -592,
+          208
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT * FROM meli_asesores \nWHERE user_id = {{ $json.user_id }} \nAND (\n  RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo1 }}'\n  OR RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo2 }}'\n  OR telefono IS NULL\n  OR telefono = ''\n)\nORDER BY \n  CASE \n    WHEN RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo1 }}' THEN 0\n    WHEN RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo2 }}' THEN 1\n    ELSE 2 \n  END\nLIMIT 1",
+          "options": {}
+        },
+        "id": "f65941f8-26da-4cc9-8972-716ea08c8890",
+        "name": "🗄️ Buscar asesor",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          -384,
+          208
+        ],
+        "alwaysOutputData": true,
+        "credentials": {
+          "mySql": {
+            "id": "FezTcDnLo3SqPHvd",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "leftValue": "={{ $json.destino }}",
+                "rightValue": "salesforce",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals"
+                },
+                "id": "bc74d2f0-c4d2-458c-9eba-f8482032f809"
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "8fba97a9-0db1-490a-9791-22b42286564e",
+        "name": "🔍 Destino?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          -32,
+          208
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const sfResponse = $input.item.json;\nconst prev = $('PayloadSF').item.json;\n\nconst sfLeadId = sfResponse?.LeadId || sfResponse?.id || sfResponse?.leadId || sfResponse?.prospect_id || null;\nconst success = sfResponse && !sfResponse.error && !sfResponse.message?.toLowerCase().includes('error');\n\nreturn {\n  json: {\n    lead_id: prev.lead_id,\n    sf_lead_id: sfLeadId,\n    new_status: success ? 'sent' : 'error',\n    sf_response: JSON.stringify(sfResponse)\n  }\n};"
+        },
+        "id": "0dd95eec-09e9-4904-9978-b59ffeefcabf",
+        "name": "⚙️ Procesar respuesta SF",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          464,
+          192
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "{{ $json.query }}",
+          "options": {}
+        },
+        "id": "6cce999e-bce4-4bbe-b59d-213a3cac7b32",
+        "name": "💾 Update status MySQL",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          864,
+          192
+        ],
+        "credentials": {
+          "mySql": {
+            "id": "FezTcDnLo3SqPHvd",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "UPDATE meli_leads SET status = 'skipped' WHERE id = '{{ $('Loop leads').item.json.id }}'",
+          "options": {}
+        },
+        "id": "aacdde7e-323f-473c-aec3-7ebbad84f63a",
+        "name": "💾 Marcar skipped",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          272,
+          352
+        ],
+        "credentials": {
+          "mySql": {
+            "id": "FezTcDnLo3SqPHvd",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "parameters": {},
+        "id": "a08468b4-f26c-4a8b-843f-6229796cfed2",
+        "name": "✅ Volver al loop",
+        "type": "n8n-nodes-base.noOp",
+        "typeVersion": 1,
+        "position": [
+          464,
+          352
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.toyota.com.ar:9201/dcx/api/leads",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "username",
+                "value": "wvYwvHBOP9QOVeKD"
+              },
+              {
+                "name": "password",
+                "value": "6jWzRvOnT0X57EUy"
+              },
+              {
+                "name": "dealer",
+                "value": "ZEN"
+              }
+            ]
+          },
+          "sendBody": true,
+          "contentType": "raw",
+          "rawContentType": "application/json",
+          "body": "={{ JSON.stringify($('PayloadSF').item.json.payload) }}",
+          "options": {}
+        },
+        "id": "c28afe2d-f071-4933-89e0-1c7f3a57db61",
+        "name": "🚀 POST Salesforce",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          272,
+          192
+        ],
+        "alwaysOutputData": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "const asesor = $input.item.json;\nconst lead = $('⚙️ Normalizar teléfonos').item.json;\n\nconst origen = asesor?.origen_sf || lead.origen_sf || 'Mercado Libre';\nconst bocaVenta = asesor?.boca_venta || 'ZENT';\nconst asesorEmail = asesor?.email || null;\nconst asesorNombre = asesor?.nombre || null;\n\nconst todayDate = new Date().toISOString().split('T')[0];\n\nconst nombreParts = (lead.buyer_nombre || '').trim().split(' ');\nconst firstName = nombreParts.slice(0, -1).join(' ') || nombreParts[0] || '';\nconst lastName = nombreParts.slice(-1)[0] || '';\nconst getModelCode = (titulo) => {\n  const modeloLower = (titulo || '').toLowerCase();\n  if (modeloLower.includes('hilux')) return '1';\n  else if (modeloLower.includes('corolla cross')) return '245';\n  else if (modeloLower.includes('corolla') && !modeloLower.includes('cross')) return '2';\n  else if (modeloLower.includes('yaris')) return '227';\n  else if (modeloLower.includes('etios')) return '225';\n  else if (modeloLower.includes('sw4')) return '226';\n  else if (modeloLower.includes('hiace')) return '224';\n  else if (modeloLower.includes('rav4') || modeloLower.includes('rav 4')) return '3';\n  else return '';\n};\nconst getModelName = (titulo) => {\n  const modeloLower = (titulo || '').toLowerCase();\n  if (modeloLower.includes('hilux')) return 'Hilux';\n  else if (modeloLower.includes('corolla cross')) return 'Corolla Cross';\n  else if (modeloLower.includes('corolla') && !modeloLower.includes('cross')) return 'Corolla';\n  else if (modeloLower.includes('yaris')) return 'Yaris';\n  else if (modeloLower.includes('etios')) return 'Etios';\n  else if (modeloLower.includes('sw4')) return 'SW4';\n  else if (modeloLower.includes('hiace')) return 'Hiace';\n  else if (modeloLower.includes('rav4') || modeloLower.includes('rav 4')) return 'RAV4';\n  else return titulo || '';\n};\nconst payload = {\n  prospect: {\n    requestdate: todayDate,\n    customer: {\n      interest: lead.item_condition === 'used' ? 'USADO' : 'CONVENCIONAL',\n      productInterest: lead.item_titulo || '',\n      contacts: [\n        {\n          names: [\n            { part: 'first', value: firstName },\n            { part: 'last', value: lastName }\n          ],\n          phones: [\n            { type: 'mobile', value: lead.buyer_phone || '' }\n          ],\n          ...(lead.buyer_email ? { emails: [{ value: lead.buyer_email }] } : {})\n        }\n      ],\n      comments: `Publicación: ${lead.item_id} | Precio: ${lead.item_precio} | Link: ${lead.item_permalink || ''} | Asesor: ${asesorNombre || ''} | Mail asesor: ${asesorEmail || ''} | Teléfono asesor: ${lead.asesor_phone || ''}`\n    },\n    vehicles: [\n      {\n        make: 'Toyota',\n        model: getModelName(lead.item_titulo),\n        code: getModelCode(lead.item_titulo)\n      }\n    ],\n    provider: {\n      name: {\n        value: 'Redoo',\n        origin: origen\n      }\n    },\n    advisor: asesorEmail ? { email: asesorEmail } : undefined,\n    'boca de venta': bocaVenta\n  }\n};\n\nreturn {\n  json: {\n    lead_id: lead.id,\n    user_id: lead.user_id,\n    destino: lead.destino,\n    payload,\n    asesor_email: asesorEmail,\n    asesor_nombre: asesorNombre\n  }\n};"
+        },
+        "id": "132b9175-9d1b-4fe7-94a3-d131e0beedfa",
+        "name": "PayloadSF",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -224,
+          208
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const data = $input.item.json;\n\nconst sfLeadId = data.sf_lead_id ? `'${data.sf_lead_id}'` : 'NULL';\nconst sfResponse = (data.sf_response || '').replace(/'/g, \"''\");\n\nreturn {\n  json: {\n    query: `UPDATE meli_leads SET status = '${data.new_status}', sf_lead_id = ${sfLeadId}, sf_response = '${sfResponse}' WHERE id = '${data.lead_id}'`\n  }\n};"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          672,
+          192
+        ],
+        "id": "21f77e61-d209-4942-b509-f3d7868fb9a6",
+        "name": "⚙️ Preparar query update"
+      },
+      {
+        "parameters": {
+          "options": {}
+        },
+        "id": "5f5f6a38-1321-4830-9ba7-92fd7007cfc7",
+        "name": "Loop leads",
+        "type": "n8n-nodes-base.splitInBatches",
+        "typeVersion": 3,
+        "position": [
+          -752,
+          192
+        ]
+      }
+    ],
+    "connections": {
+      "⏰ Schedule Trigger": {
+        "main": [
+          [
+            {
+              "node": "🗄️ Buscar leads pending",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🗄️ Buscar leads pending": {
+        "main": [
+          [
+            {
+              "node": "🔍 Hay leads?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🔍 Hay leads?": {
+        "main": [
+          [
+            {
+              "node": "Loop leads",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "⚙️ Normalizar teléfonos": {
+        "main": [
+          [
+            {
+              "node": "🗄️ Buscar asesor",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🗄️ Buscar asesor": {
+        "main": [
+          [
+            {
+              "node": "PayloadSF",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🔍 Destino?": {
+        "main": [
+          [
+            {
+              "node": "🚀 POST Salesforce",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "💾 Marcar skipped",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "⚙️ Procesar respuesta SF": {
+        "main": [
+          [
+            {
+              "node": "⚙️ Preparar query update",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "💾 Update status MySQL": {
+        "main": [
+          [
+            {
+              "node": "Loop leads",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "💾 Marcar skipped": {
+        "main": [
+          [
+            {
+              "node": "✅ Volver al loop",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "✅ Volver al loop": {
+        "main": [
+          [
+            {
+              "node": "Loop leads",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "PayloadSF": {
+        "main": [
+          [
+            {
+              "node": "🔍 Destino?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🚀 POST Salesforce": {
+        "main": [
+          [
+            {
+              "node": "⚙️ Procesar respuesta SF",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "⚙️ Preparar query update": {
+        "main": [
+          [
+            {
+              "node": "💾 Update status MySQL",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Loop leads": {
+        "main": [
+          [],
+          [
+            {
+              "node": "⚙️ Normalizar teléfonos",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "system migration",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-10-26T17:05:09.982Z",
+    "updatedAt": "2026-10-26T17:05:09.982Z"
+  },
+  "activeVersionId": "41106bab-6e1e-476f-9ca4-4cbfcdcacd49",
+  "connections": {
+    "⏰ Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "🗄️ Buscar leads pending",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🗄️ Buscar leads pending": {
+      "main": [
+        [
+          {
+            "node": "🔍 Hay leads?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔍 Hay leads?": {
+      "main": [
+        [
+          {
+            "node": "Loop leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⚙️ Normalizar teléfonos": {
+      "main": [
+        [
+          {
+            "node": "🗄️ Buscar asesor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🗄️ Buscar asesor": {
+      "main": [
+        [
+          {
+            "node": "PayloadSF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔍 Destino?": {
+      "main": [
+        [
+          {
+            "node": "🚀 POST Salesforce",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "💾 Marcar skipped",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⚙️ Procesar respuesta SF": {
+      "main": [
+        [
+          {
+            "node": "⚙️ Preparar query update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "💾 Update status MySQL": {
+      "main": [
+        [
+          {
+            "node": "Loop leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "💾 Marcar skipped": {
+      "main": [
+        [
+          {
+            "node": "✅ Volver al loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "✅ Volver al loop": {
+      "main": [
+        [
+          {
+            "node": "Loop leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PayloadSF": {
+      "main": [
+        [
+          {
+            "node": "🔍 Destino?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🚀 POST Salesforce": {
+      "main": [
+        [
+          {
+            "node": "⚙️ Procesar respuesta SF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⚙️ Preparar query update": {
+      "main": [
+        [
+          {
+            "node": "💾 Update status MySQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop leads": {
+      "main": [
+        [],
+        [
+          {
+            "node": "⚙️ Normalizar teléfonos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-05-28T15:20:09.651Z",
+  "id": "WNyvZgboJuab5DG0",
+  "isArchived": false,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "name": "SF - MELI - ZENTO",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 10
+            }
+          ]
+        }
+      },
+      "id": "a64f817a-afb0-4303-b8ff-74351758719a",
+      "name": "⏰ Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1408,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT l.*, t.access_token, i.destino, i.destino_config, i.origen_sf \nFROM meli_leads l \nJOIN meli_tokens t ON l.user_id = t.user_id \nJOIN meli_integraciones i ON l.user_id = i.user_id \nWHERE l.status = 'active' \nAND l.buyer_id IS NOT NULL \nAND l.buyer_id != 0\nAND l.buyer_nombre IS NOT NULL\nAND l.user_id IN (151898097, 187617379, 222596309)\nLIMIT 100",
+        "options": {}
+      },
+      "id": "faaa0bb7-c526-4d23-b98d-370e273aa6d4",
+      "name": "🗄️ Buscar leads pending",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        -1216,
+        208
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "FezTcDnLo3SqPHvd",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {},
+          "conditions": [
+            {
+              "leftValue": "={{ $input.all().length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ef119083-d7f1-4c66-80b2-b29d4ef452af",
+      "name": "🔍 Hay leads?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -992,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $input.item.json;\n\nconst normalizarTel = (tel) => {\n  if (!tel) return null;\n  const digits = tel.toString().replace(/\\D/g, '');\n  return digits.slice(-8);\n};\n\nconst sufijo1 = normalizarTel(lead.asesor_phone);\nconst sufijo2 = normalizarTel(lead.asesor_phone2);\n\nreturn {\n  json: {\n    ...lead,\n    asesor_sufijo1: sufijo1 || '',\n    asesor_sufijo2: sufijo2 || ''\n  }\n};"
+      },
+      "id": "abc8a1d6-0c3b-4072-a092-b2ed8e26e2e1",
+      "name": "⚙️ Normalizar teléfonos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -592,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM meli_asesores \nWHERE user_id = {{ $json.user_id }} \nAND (\n  RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo1 }}'\n  OR RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo2 }}'\n  OR telefono IS NULL\n  OR telefono = ''\n)\nORDER BY \n  CASE \n    WHEN RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo1 }}' THEN 0\n    WHEN RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo2 }}' THEN 1\n    ELSE 2 \n  END\nLIMIT 1",
+        "options": {}
+      },
+      "id": "f65941f8-26da-4cc9-8972-716ea08c8890",
+      "name": "🗄️ Buscar asesor",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        -384,
+        208
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "mySql": {
+          "id": "FezTcDnLo3SqPHvd",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.destino }}",
+              "rightValue": "salesforce",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "id": "bc74d2f0-c4d2-458c-9eba-f8482032f809"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "8fba97a9-0db1-490a-9791-22b42286564e",
+      "name": "🔍 Destino?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -32,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const sfResponse = $input.item.json;\nconst prev = $('PayloadSF').item.json;\n\nconst sfLeadId = sfResponse?.LeadId || sfResponse?.id || sfResponse?.leadId || sfResponse?.prospect_id || null;\nconst success = sfResponse && !sfResponse.error && !sfResponse.message?.toLowerCase().includes('error');\n\nreturn {\n  json: {\n    lead_id: prev.lead_id,\n    sf_lead_id: sfLeadId,\n    new_status: success ? 'sent' : 'error',\n    sf_response: JSON.stringify(sfResponse)\n  }\n};"
+      },
+      "id": "0dd95eec-09e9-4904-9978-b59ffeefcabf",
+      "name": "⚙️ Procesar respuesta SF",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        464,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "{{ $json.query }}",
+        "options": {}
+      },
+      "id": "6cce999e-bce4-4bbe-b59d-213a3cac7b32",
+      "name": "💾 Update status MySQL",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        864,
+        192
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "FezTcDnLo3SqPHvd",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE meli_leads SET status = 'skipped' WHERE id = '{{ $('Loop leads').item.json.id }}'",
+        "options": {}
+      },
+      "id": "aacdde7e-323f-473c-aec3-7ebbad84f63a",
+      "name": "💾 Marcar skipped",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        272,
+        352
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "FezTcDnLo3SqPHvd",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "a08468b4-f26c-4a8b-843f-6229796cfed2",
+      "name": "✅ Volver al loop",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        464,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.toyota.com.ar:9201/dcx/api/leads",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "username",
+              "value": "wvYwvHBOP9QOVeKD"
+            },
+            {
+              "name": "password",
+              "value": "6jWzRvOnT0X57EUy"
+            },
+            {
+              "name": "dealer",
+              "value": "ZEN"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify($('PayloadSF').item.json.payload) }}",
+        "options": {}
+      },
+      "id": "c28afe2d-f071-4933-89e0-1c7f3a57db61",
+      "name": "🚀 POST Salesforce",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        272,
+        192
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const asesor = $input.item.json;\nconst lead = $('⚙️ Normalizar teléfonos').item.json;\n\nconst origen = asesor?.origen_sf || lead.origen_sf || 'Mercado Libre';\nconst bocaVenta = asesor?.boca_venta || 'ZENT';\nconst asesorEmail = asesor?.email || null;\nconst asesorNombre = asesor?.nombre || null;\n\nconst todayDate = new Date().toISOString().split('T')[0];\n\nconst nombreParts = (lead.buyer_nombre || '').trim().split(' ');\nconst firstName = nombreParts.slice(0, -1).join(' ') || nombreParts[0] || '';\nconst lastName = nombreParts.slice(-1)[0] || '';\nconst getModelCode = (titulo) => {\n  const modeloLower = (titulo || '').toLowerCase();\n  if (modeloLower.includes('hilux')) return '1';\n  else if (modeloLower.includes('corolla cross')) return '245';\n  else if (modeloLower.includes('corolla') && !modeloLower.includes('cross')) return '2';\n  else if (modeloLower.includes('yaris')) return '227';\n  else if (modeloLower.includes('etios')) return '225';\n  else if (modeloLower.includes('sw4')) return '226';\n  else if (modeloLower.includes('hiace')) return '224';\n  else if (modeloLower.includes('rav4') || modeloLower.includes('rav 4')) return '3';\n  else return '';\n};\nconst getModelName = (titulo) => {\n  const modeloLower = (titulo || '').toLowerCase();\n  if (modeloLower.includes('hilux')) return 'Hilux';\n  else if (modeloLower.includes('corolla cross')) return 'Corolla Cross';\n  else if (modeloLower.includes('corolla') && !modeloLower.includes('cross')) return 'Corolla';\n  else if (modeloLower.includes('yaris')) return 'Yaris';\n  else if (modeloLower.includes('etios')) return 'Etios';\n  else if (modeloLower.includes('sw4')) return 'SW4';\n  else if (modeloLower.includes('hiace')) return 'Hiace';\n  else if (modeloLower.includes('rav4') || modeloLower.includes('rav 4')) return 'RAV4';\n  else return titulo || '';\n};\nconst payload = {\n  prospect: {\n    requestdate: todayDate,\n    customer: {\n      interest: lead.item_condition === 'used' ? 'USADO' : 'CONVENCIONAL',\n      productInterest: lead.item_titulo || '',\n      contacts: [\n        {\n          names: [\n            { part: 'first', value: firstName },\n            { part: 'last', value: lastName }\n          ],\n          phones: [\n            { type: 'mobile', value: lead.buyer_phone || '' }\n          ],\n          ...(lead.buyer_email ? { emails: [{ value: lead.buyer_email }] } : {})\n        }\n      ],\n      comments: `Publicación: ${lead.item_id} | Precio: ${lead.item_precio} | Link: ${lead.item_permalink || ''} | Asesor: ${asesorNombre || ''} | Mail asesor: ${asesorEmail || ''} | Teléfono asesor: ${lead.asesor_phone || ''}`\n    },\n    vehicles: [\n      {\n        make: 'Toyota',\n        model: getModelName(lead.item_titulo),\n        code: getModelCode(lead.item_titulo)\n      }\n    ],\n    provider: {\n      name: {\n        value: 'Redoo',\n        origin: origen\n      }\n    },\n    advisor: asesorEmail ? { email: asesorEmail } : undefined,\n    'boca de venta': bocaVenta\n  }\n};\n\nreturn {\n  json: {\n    lead_id: lead.id,\n    user_id: lead.user_id,\n    destino: lead.destino,\n    payload,\n    asesor_email: asesorEmail,\n    asesor_nombre: asesorNombre\n  }\n};"
+      },
+      "id": "132b9175-9d1b-4fe7-94a3-d131e0beedfa",
+      "name": "PayloadSF",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -224,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.item.json;\n\nconst sfLeadId = data.sf_lead_id ? `'${data.sf_lead_id}'` : 'NULL';\nconst sfResponse = (data.sf_response || '').replace(/'/g, \"''\");\n\nreturn {\n  json: {\n    query: `UPDATE meli_leads SET status = '${data.new_status}', sf_lead_id = ${sfLeadId}, sf_response = '${sfResponse}' WHERE id = '${data.lead_id}'`\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        192
+      ],
+      "id": "21f77e61-d209-4942-b509-f3d7868fb9a6",
+      "name": "⚙️ Preparar query update"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "5f5f6a38-1321-4830-9ba7-92fd7007cfc7",
+      "name": "Loop leads",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -752,
+        192
+      ]
+    }
+  ],
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "WNyvZgboJuab5DG0",
+      "projectId": "K8p6XEqA0L6D2uVt",
+      "createdAt": "2026-05-28T15:20:09.710Z",
+      "updatedAt": "2026-05-28T15:20:09.710Z"
+    }
+  ],
+  "staticData": {
+    "node:⏰ Schedule Trigger": {
+      "recurrenceRules": [
+        null
+      ],
+      "recurrenceRuleSignatures": [
+        null
+      ]
+    }
+  },
+  "tags": [
+    {
+      "id": "o06GHXtTLtAfQDke",
+      "name": "HUB",
+      "createdAt": "2026-02-03T14:47:40.022Z",
+      "updatedAt": "2026-02-03T14:47:40.022Z"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-10-26T17:06:13.535Z",
+  "versionId": "41106bab-6e1e-476f-9ca4-4cbfcdcacd49"
+}
