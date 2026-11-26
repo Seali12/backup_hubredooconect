@@ -1,0 +1,170 @@
+{
+  "active": false,
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Code4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create an event": {
+      "main": [
+        [
+          {
+            "node": "Code5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code3": {
+      "main": [
+        [
+          {
+            "node": "Create an event",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Code5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code4": {
+      "main": [
+        [
+          {
+            "node": "Code3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2025-12-18T18:08:35.403Z",
+  "id": "SkBhqUyoDmcHD0hT",
+  "isArchived": false,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "name": "SET-TURNOS-BAIC",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -576,
+        -64
+      ],
+      "id": "7f5b4608-792e-47f5-a411-2f0ede1840f0",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "value": "=c_cc838e13e729989ad0a9504d1f5059d82924f94926d05265fd17d28ec5f989e0@group.calendar.google.com",
+          "mode": "id"
+        },
+        "start": "={{ $json.Fecha }}",
+        "end": "={{ $json.Fin }}",
+        "additionalFields": {
+          "description": "={{ $json.Descripcion }}",
+          "summary": "={{ $json.Titulo }}"
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        -48,
+        -64
+      ],
+      "id": "8a76aaa8-14c9-46d0-8aad-202200b292e3",
+      "name": "Create an event",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "vk3gBJ8jGlE6TWyS",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 🔧 Utilidades\nfunction sumarMinutos(fechaStr, minutos) {\n  const fecha = new Date(fechaStr);\n  if (isNaN(fecha)) throw new Error(`Fecha inválida: ${fechaStr}`);\n  fecha.setMinutes(fecha.getMinutes() + minutos);\n  const [fechaPart, horaPart] = fecha.toISOString().split(\"T\");\n  const horaLocal = horaPart.substring(0, 5);\n  return `${fechaPart}T${horaLocal}:00`;\n}\n\nfunction tiempoAHorasMinutos(tiempoStr) {\n  const [h, m, s] = (tiempoStr || \"0:30:00\").split(\":\").map(Number);\n  return (h * 60) + (m || 0);\n}\n\n// 🧩 Obtener datos desde nodos\nconst raw = $(\"When Executed by Another Workflow\").all();\nconst modelo = $(\"Code4\").first()?.json?.modelo || null;\nconst tiempos = $(\"Get_Tiempo\").first()?.json || {};\nconst reglas = $(\"Get_Reglas\").first()?.json || {};\n\n// 🧹 Extraer correctamente los datos\nlet solicitud;\nif (Array.isArray(raw)) {\n  const first = raw[0];\n  solicitud = first.json?.query ? JSON.parse(first.json.query) : first.json;\n} else {\n  solicitud = raw.json?.query ? JSON.parse(raw.json.query) : raw;\n}\n\n// 🧩 Reconstruir Fecha y Fin si faltan\nif (!solicitud.Fin && solicitud.Fecha && solicitud.hora_fin) {\n  solicitud.Fin = `${solicitud.Fecha}T${solicitud.hora_fin}:00`;\n}\nif (!solicitud.hora_inicio && solicitud.Fecha && solicitud.hora_inicio) {\n  solicitud.Fecha = `${solicitud.Fecha}T${solicitud.hora_inicio}:00`;\n} else if (!solicitud.Fecha.includes(\"T\") && solicitud.hora_inicio) {\n  solicitud.Fecha = `${solicitud.Fecha}T${solicitud.hora_inicio}:00`;\n}\n\n// 🚨 Validar\nif (!solicitud.Fecha || !solicitud.Fin) {\n  return [{\n    json: {\n      error: \"Faltan campos requeridos\",\n      solicitud,\n      tieneFecha: !!solicitud.Fecha,\n      tieneFin: !!solicitud.Fin,\n    },\n  }];\n}\n\n// 🕐 Calcular tiempos\nconst tiempoModeloStr = modelo && tiempos[modelo] ? tiempos[modelo] : \"0:30:00\";\nconst minutosModelo = tiempoAHorasMinutos(tiempoModeloStr) || 30;\n\n// Nueva hora de inicio (+15 min de recepción)\nconst nuevaFechaInicio = sumarMinutos(solicitud.Fecha, 15);\n\n// Nuevo fin (+tiempo del modelo)\nlet nuevoFin = sumarMinutos(nuevaFechaInicio, minutosModelo);\n\n// ✅ Devolver resultado final\nreturn [{\n  json: {\n    ...solicitud,\n    Fecha: nuevaFechaInicio,\n    Fin: nuevoFin,\n    Modelo: modelo || \"Desconocido\",\n    Tiempo_Modelo: tiempoModeloStr,\n    Calendar: reglas.Id_Calendario || \"c_cc838e13e729989ad0a9504d1f5059d82924f94926d05265fd17d28ec5f989e0@group.calendar.google.com\",\n    Fallback_Aplicado: !modelo || !tiempos[modelo],\n  },\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -224,
+        -64
+      ],
+      "id": "ea525d90-c114-4bfd-88bb-e2593c0d7705",
+      "name": "Code3",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\n\nlet parsed = {};\n\ntry {\n  if (typeof input.query === 'string') {\n    parsed = JSON.parse(input.query);\n  } else {\n    parsed = input.query;\n  }\n} catch (e) {\n  parsed = {};\n}\n\n// Armar fecha inicio y fin en formato ISO\nconst Fecha = parsed.Fecha && parsed.hora_inicio\n  ? `${parsed.Fecha}T${parsed.hora_inicio}:00`\n  : null;\n\nconst Fin = parsed.Fecha && parsed.hora_fin\n  ? `${parsed.Fecha}T${parsed.hora_fin}:00`\n  : null;\n\nreturn [{\n  json: {\n    Fecha,          // 👉 Start (Google Calendar)\n    Fin,            // 👉 End (Google Calendar)\n    Descripcion: parsed.Descripcion || \"\",\n    Titulo: parsed.Titulo || \"\",\n    Id_Calendario: parsed.Id_Calendario\n      ? parseInt(parsed.Id_Calendario)\n      : null,\n    duracion_servicio: parsed.duracion_servicio\n      ? parseInt(parsed.duracion_servicio)\n      : null\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -368,
+        -64
+      ],
+      "id": "680c4f18-c1b3-47d1-a27b-f8b744439c12",
+      "name": "Code4"
+    },
+    {
+      "parameters": {
+        "jsCode": "return {\n  json: {\n    id: $json.id,\n    id_calendario: \"c_cc838e13e729989ad0a9504d1f5059d82924f94926d05265fd17d28ec5f989e0@group.calendar.google.com\"\n  }\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        144,
+        -64
+      ],
+      "id": "ab46d9a8-8067-4f57-b370-da21ac634cd8",
+      "name": "Code5"
+    }
+  ],
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "shared": [
+    {
+      "createdAt": "2025-12-18T18:08:35.404Z",
+      "updatedAt": "2025-12-18T18:08:35.404Z",
+      "role": "workflow:owner",
+      "workflowId": "SkBhqUyoDmcHD0hT",
+      "projectId": "HVrFlp8BcxZcmzQZ"
+    }
+  ],
+  "staticData": null,
+  "tags": [
+    {
+      "createdAt": "2026-02-27T20:29:07.942Z",
+      "updatedAt": "2026-02-27T20:29:12.634Z",
+      "id": "jysrWEYC6RXk1KPd",
+      "name": "chery"
+    }
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2026-02-27T20:29:35.000Z",
+  "versionId": "62945239-3169-4fa6-a700-3191b6144885"
+}
