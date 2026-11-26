@@ -1,0 +1,586 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "e4ca873d-1b2c-4042-b943-97941b0347e9",
+    "workflowId": "QSBf5hich0cLALad",
+    "nodes": [
+      {
+        "parameters": {
+          "operation": "getAll",
+          "calendar": {
+            "__rl": true,
+            "value": "6b557d3408ee001ee7bebafd6952c92b106e6e6cb0946a019a86e252caea4a5d@group.calendar.google.com",
+            "mode": "list",
+            "cachedResultName": "Alianz - Ana luis"
+          },
+          "returnAll": true,
+          "options": {
+            "timeMin": "={{$now}}",
+            "timeMax": "={{ $json.sieteDias }}",
+            "singleEvents": true
+          }
+        },
+        "name": "obtenerTurnosOcupados",
+        "type": "n8n-nodes-base.googleCalendar",
+        "typeVersion": 1,
+        "position": [
+          768,
+          -96
+        ],
+        "alwaysOutputData": true,
+        "id": "4cf0e4af-10d4-42a7-ad20-d0dacc6a217b",
+        "retryOnFail": true,
+        "maxTries": 5,
+        "credentials": {
+          "googleCalendarOAuth2Api": {
+            "id": "cNQ1bJyV4lYs9qoV",
+            "name": "Google Calendar account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "outputFieldName": "hoy",
+          "options": {}
+        },
+        "id": "3c115668-173b-4213-95a4-e7bf2fd5317a",
+        "name": "hoy",
+        "type": "n8n-nodes-base.dateTime",
+        "typeVersion": 2,
+        "position": [
+          288,
+          -96
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "addToDate",
+          "magnitude": "={{ $json.hoy}}",
+          "duration": 1,
+          "outputFieldName": "mañana",
+          "options": {}
+        },
+        "id": "2708fef0-ac96-4fc9-9188-fa0abe00ca40",
+        "name": "mañana",
+        "type": "n8n-nodes-base.dateTime",
+        "typeVersion": 2,
+        "position": [
+          432,
+          -96
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// ======================================================\n// RECOLECCIÓN DE INPUTS\n// ======================================================\nconst items = [];\n\n// Turnos ocupados: vienen por el input normal del nodo\nlet turnosOcupados = $input.all()\n  .map(i => i.json)\n  .filter(j => j && j.dia && j.inicio && j.final);\n\n// Filas del sheet: las traemos DIRECTO del nodo, sin depender del cableado de input\nlet sheetRows = $('Get row(s) in sheet').all().map(i => i.json);\n\n// ======================================================\n// CONFIGURACIÓN DESDE WORKFLOW PADRE\n// ======================================================\nconst webhookData = $('When Executed by Another Workflow').first().json;\nconst configuracion = webhookData.body || webhookData;\n\nconst diasAGenerar = configuracion.dias || 7;\n\n// Normaliza KM: saca puntos, comas, espacios y cualquier char no numérico\nfunction normalizarKM(valor) {\n  if (valor === null || valor === undefined) return NaN;\n  const limpio = valor.toString().replace(/[^\\d]/g, '');\n  return limpio ? parseInt(limpio, 10) : NaN;\n}\n\n// Normaliza nombre de modelo: minúsculas, sin espacios, guiones, guion bajo ni tildes\nfunction normalizarModelo(valor) {\n  return (valor || '')\n    .toString()\n    .trim()\n    .toLowerCase()\n    .normalize('NFD').replace(/[\\u0300-\\u036f]/g, '') // saca tildes\n    .replace(/[\\s\\-_]/g, '');\n}\n\nconst kmSolicitado = normalizarKM(configuracion.km);\nconst modeloSolicitado = normalizarModelo(configuracion.modelo);\n\n// ======================================================\n// OBTENER DURACIÓN SEGÚN MODELO + KM\n// ======================================================\nlet duracionTurnoMinutos = 60; // fallback\nlet debugInfo = { filaEncontrada: false, columnaEncontrada: false, valorCelda: null };\n\nif (sheetRows.length > 0) {\n  const filaKM = sheetRows.find(r => {\n    const kmFila = normalizarKM(r.KM ?? r.Km ?? r.km);\n    return kmFila === kmSolicitado;\n  });\n\n  if (filaKM) {\n    debugInfo.filaEncontrada = true;\n    const columnas = Object.keys(filaKM);\n\n    const columnaModelo = columnas.find(\n      col => normalizarModelo(col) === modeloSolicitado\n    );\n\n    if (columnaModelo && filaKM[columnaModelo]) {\n      debugInfo.columnaEncontrada = true;\n      debugInfo.valorCelda = filaKM[columnaModelo];\n\n      const match = /^(\\d+):(\\d{2}):(\\d{2})$/.exec(filaKM[columnaModelo].toString().trim());\n      if (match) {\n        duracionTurnoMinutos =\n          parseInt(match[1], 10) * 60 +\n          parseInt(match[2], 10);\n      }\n    }\n  }\n}\n\n// Log para depurar directamente en el panel de ejecución de n8n\nconsole.log('kmSolicitado:', kmSolicitado, '| modeloSolicitado:', modeloSolicitado, '| debugInfo:', debugInfo);\n\n// ======================================================\n// FUNCIONES DE TIEMPO\n// ======================================================\nfunction convertirAMinutos(hora) {\n  const [h, m] = hora.split(':').map(Number);\n  return h * 60 + m;\n}\n\nfunction convertirDesdeMinutos(min) {\n  // Contempla por si el cálculo cruza medianoche (min negativo o > 1440)\n  const minNormalizado = ((min % 1440) + 1440) % 1440;\n  const h = Math.floor(minNormalizado / 60);\n  const m = minNormalizado % 60;\n  return `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}`;\n}\n\nfunction generarSlots(inicio, fin, duracion) {\n  const slots = [];\n  const ini = convertirAMinutos(inicio);\n  const finM = convertirAMinutos(fin);\n\n  for (let m = ini; m + duracion <= finM; m += duracion) {\n    slots.push({\n      inicio: convertirDesdeMinutos(m),\n      fin: convertirDesdeMinutos(m + duracion)\n    });\n  }\n  return slots;\n}\n\nfunction hayConflicto(inicio, fin, ocupados) {\n  const ini = convertirAMinutos(inicio);\n  const finM = convertirAMinutos(fin);\n\n  return ocupados.some(t => {\n    const oIni = convertirAMinutos(t.inicio);\n    const oFin = convertirAMinutos(t.final);\n    return ini < oFin && finM > oIni;\n  });\n}\n\n// ======================================================\n// FECHAS LABORABLES\n// ======================================================\nfunction generarFechasProximosDias(cantidad) {\n  const feriados = [\n    '2025-01-01','2025-03-03','2025-03-04','2025-03-24',\n    '2025-04-18','2025-04-02','2025-05-01','2025-05-25',\n    '2025-06-20','2025-07-09','2025-08-17','2025-10-12',\n    '2025-11-24','2025-12-08','2025-12-25'\n  ];\n\n  const hoy = new Date();\n  const fechas = [];\n  let i = 1;\n\n  while (fechas.length < cantidad) {\n    const f = new Date(hoy);\n    f.setDate(hoy.getDate() + i);\n\n    const iso = f.toISOString().split('T')[0];\n    const dow = f.getDay();\n\n    if (dow >= 1 && dow <= 5 && !feriados.includes(iso)) {\n      fechas.push(iso);\n    }\n    i++;\n  }\n  return fechas;\n}\n\nfunction formatoCorto(fechaISO) {\n  const fecha = new Date(fechaISO);\n  const dias = [\"domingo\",\"lunes\",\"martes\",\"miércoles\",\"jueves\",\"viernes\",\"sábado\"];\n  const diaNombre = dias[fecha.getDay()];\n  const dia = String(fecha.getDate()).padStart(2,'0');\n  const mes = String(fecha.getMonth()+1).padStart(2,'0');\n  const anio = fecha.getFullYear();\n  return `${diaNombre.charAt(0).toUpperCase()+diaNombre.slice(1)} ${dia}/${mes}/${anio}`;\n}\n\n// ======================================================\n// GENERACIÓN DE TURNOS (AMPLIADA)\n// ======================================================\nconst jornada = [\n  { inicio: \"08:00\", fin: \"12:00\" },\n  { inicio: \"13:00\", fin: \"16:00\" }  // ← Modificado de 18:00 a 16:00 ticket #2223\n];\n\nconst MINUTOS_ANTES_LLEGADA = 15;\nconst MINUTOS_LAVADO = 90;\n\nconst fechas = generarFechasProximosDias(diasAGenerar);\nconst resultado = {};\n\nfor (const dia of fechas) {\n  const ocupadosDia = turnosOcupados.filter(t => t.dia === dia);\n  resultado[dia] = [];\n\n  for (const rango of jornada) {\n    const slots = generarSlots(rango.inicio, rango.fin, duracionTurnoMinutos);\n\n    for (const slot of slots) {\n      if (!hayConflicto(slot.inicio, slot.fin, ocupadosDia)) {\n        const horaLlegada = convertirDesdeMinutos(\n          convertirAMinutos(slot.inicio) - MINUTOS_ANTES_LLEGADA\n        );\n        const finalizacionLavado = convertirDesdeMinutos(\n          convertirAMinutos(slot.fin) + MINUTOS_LAVADO\n        );\n\n        resultado[dia].push({\n          dia,\n          inicio: slot.inicio,\n          fin: slot.fin,\n          horaLlegada,\n          finalizacionLavado,\n          fechaHora: `${dia} ${slot.inicio}-${slot.fin}`,\n          fecha_formato_corto: formatoCorto(dia)\n        });\n      }\n    }\n  }\n\n  resultado[dia].sort(\n    (a,b) => convertirAMinutos(a.inicio) - convertirAMinutos(b.inicio)\n  );\n}\n\n// ======================================================\n// SALIDA\n// ======================================================\nitems.push({\n  json: {\n    calendar: \"VM\",\n    modelo: configuracion.modelo,\n    km: kmSolicitado,\n    duracionTurnoMinutos,\n    debugInfo,\n    turnosDisponibles: resultado,\n    estadisticas: {\n      totalDias: Object.keys(resultado).length,\n      totalTurnosDisponibles: Object.values(resultado).flat().length,\n      turnosOcupadosRecibidos: turnosOcupados.length\n    }\n  }\n});\n\nreturn items;"
+        },
+        "id": "ecd5cf7b-51ac-4604-8f24-6f139b7ca98e",
+        "name": "turnosDisponibles",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1136,
+          -80
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\nconst returnItems = [];\n\n// Verificar si hay items\nif (!items || items.length === 0) {\n  return [];\n}\n\nfor (const item of items) {\n  // Verificar que el item tenga la estructura correcta\n  if (!item || !item.json || !item.json.start || !item.json.start.dateTime) {\n    continue; // Saltar este item si no tiene la estructura correcta\n  }\n  \n  let data = item.json;\n  \n  const dia = data.start.dateTime.split('T')[0];\n  const inicio = data.start.dateTime.split('T')[1].substring(0, 5);\n  const final = data.end.dateTime.split('T')[1].substring(0, 5);\n  \n  returnItems.push({\n    json: {\n      dia: dia,\n      inicio: inicio, \n      final: final\n    }\n  });\n}\n\nreturn returnItems;"
+        },
+        "id": "17806eee-2455-49e6-907c-0f419953f600",
+        "name": "turnosOcupados",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          976,
+          -80
+        ],
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "jsCode": "function calcularSieteDiasLaborables() {\n  const hoy = new Date();\n  \n  // Lista de feriados\n  const feriados = [\n    // 2025\n    '2025-01-01', // Año Nuevo\n    '2025-03-03', // Carnaval\n    '2025-03-04', // Carnaval\n    '2025-03-24', // Día Nacional de la Memoria por la Verdad y la Justicia\n    '2025-04-18', // Viernes Santo\n    '2025-04-02', // Día del Veterano y de los Caídos en la Guerra de Malvinas\n    '2025-05-01', // Día del Trabajador\n    '2025-05-25', // Día de la Revolución de Mayo\n    '2025-06-20', // Paso a la Inmortalidad del General Manuel Belgrano\n    '2025-06-21', // Paso a la Inmortalidad del General Manuel Belgrano (trasladado)\n    '2025-06-22', // Paso a la Inmortalidad del General Manuel Belgrano (puente)\n    '2025-07-09', // Día de la Independencia\n    '2025-08-17', // Paso a la Inmortalidad del General José de San Martín\n    '2025-10-12', // Día del Respeto a la Diversidad Cultural\n    '2025-11-24', // Día de la Soberanía Nacional\n    '2025-12-08', // Inmaculada Concepción de María\n    '2025-12-25', // Navidad\n  ];\n  \n  let diasLaborablesEncontrados = 0;\n  let i = 1; // Empezar desde mañana\n  let fechaFinal = null;\n  \n  // Buscar hasta encontrar exactamente 7 días laborables\n  while (diasLaborablesEncontrados < 7) {\n    const fecha = new Date(hoy);\n    fecha.setDate(hoy.getDate() + i);\n    \n    const fechaFormateada = fecha.toISOString().split('T')[0];\n    const dayOfWeek = fecha.getDay(); // 0=domingo, 1=lunes, ..., 6=sábado\n    \n    // Verificar si es día laborable (lunes a viernes) y no es feriado\n    const esLaborable = dayOfWeek >= 1 && dayOfWeek <= 5; // lunes a viernes\n    const noEsFeriado = !feriados.includes(fechaFormateada);\n    \n    if (esLaborable && noEsFeriado) {\n      diasLaborablesEncontrados++;\n      if (diasLaborablesEncontrados === 7) {\n        // Establecer hora específica y formato completo\n        fecha.setHours(12, 44, 14, 1); // 12:44:14.001\n        fechaFinal = fecha.toISOString().replace('Z', '-04:00'); // Cambiar Z por -04:00\n      }\n    }\n    \n    i++;\n  }\n  \n  return fechaFinal;\n}\n\nconst sieteDias = calcularSieteDiasLaborables();\n\nreturn [{\n  json: {\n    sieteDias: sieteDias\n  }\n}];"
+        },
+        "id": "fb5b1e71-8d18-4e9f-af6f-c3c2398ff0c3",
+        "name": "Code",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          576,
+          -96
+        ]
+      },
+      {
+        "parameters": {
+          "content": "## Obtener turnos disponibles random \n",
+          "height": 241.69481014663876,
+          "width": 1198.7483458459665
+        },
+        "id": "0009b714-9ab0-45fa-b8d1-4d535d9113b4",
+        "name": "Sticky Note2",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          -80,
+          -144
+        ]
+      },
+      {
+        "parameters": {
+          "workflowInputs": {
+            "values": [
+              {
+                "name": "km"
+              },
+              {
+                "name": "modelo"
+              }
+            ]
+          }
+        },
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "typeVersion": 1.1,
+        "position": [
+          -272,
+          -96
+        ],
+        "id": "30b83e30-9723-4d46-8814-acca18df9ac7",
+        "name": "When Executed by Another Workflow"
+      },
+      {
+        "parameters": {
+          "documentId": {
+            "__rl": true,
+            "value": "1rDATHkoxgH5GYkqzo3ereNi1W6zzTDKYMIMAyR3mmSo",
+            "mode": "list",
+            "cachedResultName": "Alianz MANTENIMIENTO",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1rDATHkoxgH5GYkqzo3ereNi1W6zzTDKYMIMAyR3mmSo/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": 1939395583,
+            "mode": "list",
+            "cachedResultName": "Tabla Tiempo Mantenimiento",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1rDATHkoxgH5GYkqzo3ereNi1W6zzTDKYMIMAyR3mmSo/edit#gid=1939395583"
+          },
+          "filtersUI": {
+            "values": [
+              {
+                "lookupColumn": "KM",
+                "lookupValue": "={{ $json.km }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.7,
+        "position": [
+          -64,
+          -96
+        ],
+        "id": "2d58a925-dd87-4764-b560-3457427bd4d3",
+        "name": "Get row(s) in sheet",
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "x7uIPa3IpQ8b4UgZ",
+            "name": "Google Sheets account"
+          }
+        }
+      }
+    ],
+    "connections": {
+      "obtenerTurnosOcupados": {
+        "main": [
+          [
+            {
+              "node": "turnosOcupados",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "hoy": {
+        "main": [
+          [
+            {
+              "node": "mañana",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "mañana": {
+        "main": [
+          [
+            {
+              "node": "Code",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "turnosOcupados": {
+        "main": [
+          [
+            {
+              "node": "turnosDisponibles",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code": {
+        "main": [
+          [
+            {
+              "node": "obtenerTurnosOcupados",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "When Executed by Another Workflow": {
+        "main": [
+          [
+            {
+              "node": "Get row(s) in sheet",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get row(s) in sheet": {
+        "main": [
+          [
+            {
+              "node": "hoy",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "system migration",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-11-11T13:45:30.653Z",
+    "updatedAt": "2026-11-11T13:45:30.653Z"
+  },
+  "activeVersionId": "e4ca873d-1b2c-4042-b943-97941b0347e9",
+  "connections": {
+    "obtenerTurnosOcupados": {
+      "main": [
+        [
+          {
+            "node": "turnosOcupados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "hoy": {
+      "main": [
+        [
+          {
+            "node": "mañana",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "mañana": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "turnosOcupados": {
+      "main": [
+        [
+          {
+            "node": "turnosDisponibles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "obtenerTurnosOcupados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "hoy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2025-09-12T15:32:14.495Z",
+  "id": "QSBf5hich0cLALad",
+  "isArchived": false,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "name": "TurnosDisponiblesSN",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "6b557d3408ee001ee7bebafd6952c92b106e6e6cb0946a019a86e252caea4a5d@group.calendar.google.com",
+          "mode": "list",
+          "cachedResultName": "Alianz - Ana luis"
+        },
+        "returnAll": true,
+        "options": {
+          "timeMin": "={{$now}}",
+          "timeMax": "={{ $json.sieteDias }}",
+          "singleEvents": true
+        }
+      },
+      "name": "obtenerTurnosOcupados",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [
+        768,
+        -96
+      ],
+      "alwaysOutputData": true,
+      "id": "4cf0e4af-10d4-42a7-ad20-d0dacc6a217b",
+      "retryOnFail": true,
+      "maxTries": 5,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "cNQ1bJyV4lYs9qoV",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "outputFieldName": "hoy",
+        "options": {}
+      },
+      "id": "3c115668-173b-4213-95a4-e7bf2fd5317a",
+      "name": "hoy",
+      "type": "n8n-nodes-base.dateTime",
+      "typeVersion": 2,
+      "position": [
+        288,
+        -96
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "addToDate",
+        "magnitude": "={{ $json.hoy}}",
+        "duration": 1,
+        "outputFieldName": "mañana",
+        "options": {}
+      },
+      "id": "2708fef0-ac96-4fc9-9188-fa0abe00ca40",
+      "name": "mañana",
+      "type": "n8n-nodes-base.dateTime",
+      "typeVersion": 2,
+      "position": [
+        432,
+        -96
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ======================================================\n// RECOLECCIÓN DE INPUTS\n// ======================================================\nconst items = [];\n\n// Turnos ocupados: vienen por el input normal del nodo\nlet turnosOcupados = $input.all()\n  .map(i => i.json)\n  .filter(j => j && j.dia && j.inicio && j.final);\n\n// Filas del sheet: las traemos DIRECTO del nodo, sin depender del cableado de input\nlet sheetRows = $('Get row(s) in sheet').all().map(i => i.json);\n\n// ======================================================\n// CONFIGURACIÓN DESDE WORKFLOW PADRE\n// ======================================================\nconst webhookData = $('When Executed by Another Workflow').first().json;\nconst configuracion = webhookData.body || webhookData;\n\nconst diasAGenerar = configuracion.dias || 7;\n\n// Normaliza KM: saca puntos, comas, espacios y cualquier char no numérico\nfunction normalizarKM(valor) {\n  if (valor === null || valor === undefined) return NaN;\n  const limpio = valor.toString().replace(/[^\\d]/g, '');\n  return limpio ? parseInt(limpio, 10) : NaN;\n}\n\n// Normaliza nombre de modelo: minúsculas, sin espacios, guiones, guion bajo ni tildes\nfunction normalizarModelo(valor) {\n  return (valor || '')\n    .toString()\n    .trim()\n    .toLowerCase()\n    .normalize('NFD').replace(/[\\u0300-\\u036f]/g, '') // saca tildes\n    .replace(/[\\s\\-_]/g, '');\n}\n\nconst kmSolicitado = normalizarKM(configuracion.km);\nconst modeloSolicitado = normalizarModelo(configuracion.modelo);\n\n// ======================================================\n// OBTENER DURACIÓN SEGÚN MODELO + KM\n// ======================================================\nlet duracionTurnoMinutos = 60; // fallback\nlet debugInfo = { filaEncontrada: false, columnaEncontrada: false, valorCelda: null };\n\nif (sheetRows.length > 0) {\n  const filaKM = sheetRows.find(r => {\n    const kmFila = normalizarKM(r.KM ?? r.Km ?? r.km);\n    return kmFila === kmSolicitado;\n  });\n\n  if (filaKM) {\n    debugInfo.filaEncontrada = true;\n    const columnas = Object.keys(filaKM);\n\n    const columnaModelo = columnas.find(\n      col => normalizarModelo(col) === modeloSolicitado\n    );\n\n    if (columnaModelo && filaKM[columnaModelo]) {\n      debugInfo.columnaEncontrada = true;\n      debugInfo.valorCelda = filaKM[columnaModelo];\n\n      const match = /^(\\d+):(\\d{2}):(\\d{2})$/.exec(filaKM[columnaModelo].toString().trim());\n      if (match) {\n        duracionTurnoMinutos =\n          parseInt(match[1], 10) * 60 +\n          parseInt(match[2], 10);\n      }\n    }\n  }\n}\n\n// Log para depurar directamente en el panel de ejecución de n8n\nconsole.log('kmSolicitado:', kmSolicitado, '| modeloSolicitado:', modeloSolicitado, '| debugInfo:', debugInfo);\n\n// ======================================================\n// FUNCIONES DE TIEMPO\n// ======================================================\nfunction convertirAMinutos(hora) {\n  const [h, m] = hora.split(':').map(Number);\n  return h * 60 + m;\n}\n\nfunction convertirDesdeMinutos(min) {\n  // Contempla por si el cálculo cruza medianoche (min negativo o > 1440)\n  const minNormalizado = ((min % 1440) + 1440) % 1440;\n  const h = Math.floor(minNormalizado / 60);\n  const m = minNormalizado % 60;\n  return `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}`;\n}\n\nfunction generarSlots(inicio, fin, duracion) {\n  const slots = [];\n  const ini = convertirAMinutos(inicio);\n  const finM = convertirAMinutos(fin);\n\n  for (let m = ini; m + duracion <= finM; m += duracion) {\n    slots.push({\n      inicio: convertirDesdeMinutos(m),\n      fin: convertirDesdeMinutos(m + duracion)\n    });\n  }\n  return slots;\n}\n\nfunction hayConflicto(inicio, fin, ocupados) {\n  const ini = convertirAMinutos(inicio);\n  const finM = convertirAMinutos(fin);\n\n  return ocupados.some(t => {\n    const oIni = convertirAMinutos(t.inicio);\n    const oFin = convertirAMinutos(t.final);\n    return ini < oFin && finM > oIni;\n  });\n}\n\n// ======================================================\n// FECHAS LABORABLES\n// ======================================================\nfunction generarFechasProximosDias(cantidad) {\n  const feriados = [\n    '2025-01-01','2025-03-03','2025-03-04','2025-03-24',\n    '2025-04-18','2025-04-02','2025-05-01','2025-05-25',\n    '2025-06-20','2025-07-09','2025-08-17','2025-10-12',\n    '2025-11-24','2025-12-08','2025-12-25'\n  ];\n\n  const hoy = new Date();\n  const fechas = [];\n  let i = 1;\n\n  while (fechas.length < cantidad) {\n    const f = new Date(hoy);\n    f.setDate(hoy.getDate() + i);\n\n    const iso = f.toISOString().split('T')[0];\n    const dow = f.getDay();\n\n    if (dow >= 1 && dow <= 5 && !feriados.includes(iso)) {\n      fechas.push(iso);\n    }\n    i++;\n  }\n  return fechas;\n}\n\nfunction formatoCorto(fechaISO) {\n  const fecha = new Date(fechaISO);\n  const dias = [\"domingo\",\"lunes\",\"martes\",\"miércoles\",\"jueves\",\"viernes\",\"sábado\"];\n  const diaNombre = dias[fecha.getDay()];\n  const dia = String(fecha.getDate()).padStart(2,'0');\n  const mes = String(fecha.getMonth()+1).padStart(2,'0');\n  const anio = fecha.getFullYear();\n  return `${diaNombre.charAt(0).toUpperCase()+diaNombre.slice(1)} ${dia}/${mes}/${anio}`;\n}\n\n// ======================================================\n// GENERACIÓN DE TURNOS (AMPLIADA)\n// ======================================================\nconst jornada = [\n  { inicio: \"08:00\", fin: \"12:00\" },\n  { inicio: \"13:00\", fin: \"16:00\" }  // ← Modificado de 18:00 a 16:00 ticket #2223\n];\n\nconst MINUTOS_ANTES_LLEGADA = 15;\nconst MINUTOS_LAVADO = 90;\n\nconst fechas = generarFechasProximosDias(diasAGenerar);\nconst resultado = {};\n\nfor (const dia of fechas) {\n  const ocupadosDia = turnosOcupados.filter(t => t.dia === dia);\n  resultado[dia] = [];\n\n  for (const rango of jornada) {\n    const slots = generarSlots(rango.inicio, rango.fin, duracionTurnoMinutos);\n\n    for (const slot of slots) {\n      if (!hayConflicto(slot.inicio, slot.fin, ocupadosDia)) {\n        const horaLlegada = convertirDesdeMinutos(\n          convertirAMinutos(slot.inicio) - MINUTOS_ANTES_LLEGADA\n        );\n        const finalizacionLavado = convertirDesdeMinutos(\n          convertirAMinutos(slot.fin) + MINUTOS_LAVADO\n        );\n\n        resultado[dia].push({\n          dia,\n          inicio: slot.inicio,\n          fin: slot.fin,\n          horaLlegada,\n          finalizacionLavado,\n          fechaHora: `${dia} ${slot.inicio}-${slot.fin}`,\n          fecha_formato_corto: formatoCorto(dia)\n        });\n      }\n    }\n  }\n\n  resultado[dia].sort(\n    (a,b) => convertirAMinutos(a.inicio) - convertirAMinutos(b.inicio)\n  );\n}\n\n// ======================================================\n// SALIDA\n// ======================================================\nitems.push({\n  json: {\n    calendar: \"VM\",\n    modelo: configuracion.modelo,\n    km: kmSolicitado,\n    duracionTurnoMinutos,\n    debugInfo,\n    turnosDisponibles: resultado,\n    estadisticas: {\n      totalDias: Object.keys(resultado).length,\n      totalTurnosDisponibles: Object.values(resultado).flat().length,\n      turnosOcupadosRecibidos: turnosOcupados.length\n    }\n  }\n});\n\nreturn items;"
+      },
+      "id": "ecd5cf7b-51ac-4604-8f24-6f139b7ca98e",
+      "name": "turnosDisponibles",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1136,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst returnItems = [];\n\n// Verificar si hay items\nif (!items || items.length === 0) {\n  return [];\n}\n\nfor (const item of items) {\n  // Verificar que el item tenga la estructura correcta\n  if (!item || !item.json || !item.json.start || !item.json.start.dateTime) {\n    continue; // Saltar este item si no tiene la estructura correcta\n  }\n  \n  let data = item.json;\n  \n  const dia = data.start.dateTime.split('T')[0];\n  const inicio = data.start.dateTime.split('T')[1].substring(0, 5);\n  const final = data.end.dateTime.split('T')[1].substring(0, 5);\n  \n  returnItems.push({\n    json: {\n      dia: dia,\n      inicio: inicio, \n      final: final\n    }\n  });\n}\n\nreturn returnItems;"
+      },
+      "id": "17806eee-2455-49e6-907c-0f419953f600",
+      "name": "turnosOcupados",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        976,
+        -80
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "function calcularSieteDiasLaborables() {\n  const hoy = new Date();\n  \n  // Lista de feriados\n  const feriados = [\n    // 2025\n    '2025-01-01', // Año Nuevo\n    '2025-03-03', // Carnaval\n    '2025-03-04', // Carnaval\n    '2025-03-24', // Día Nacional de la Memoria por la Verdad y la Justicia\n    '2025-04-18', // Viernes Santo\n    '2025-04-02', // Día del Veterano y de los Caídos en la Guerra de Malvinas\n    '2025-05-01', // Día del Trabajador\n    '2025-05-25', // Día de la Revolución de Mayo\n    '2025-06-20', // Paso a la Inmortalidad del General Manuel Belgrano\n    '2025-06-21', // Paso a la Inmortalidad del General Manuel Belgrano (trasladado)\n    '2025-06-22', // Paso a la Inmortalidad del General Manuel Belgrano (puente)\n    '2025-07-09', // Día de la Independencia\n    '2025-08-17', // Paso a la Inmortalidad del General José de San Martín\n    '2025-10-12', // Día del Respeto a la Diversidad Cultural\n    '2025-11-24', // Día de la Soberanía Nacional\n    '2025-12-08', // Inmaculada Concepción de María\n    '2025-12-25', // Navidad\n  ];\n  \n  let diasLaborablesEncontrados = 0;\n  let i = 1; // Empezar desde mañana\n  let fechaFinal = null;\n  \n  // Buscar hasta encontrar exactamente 7 días laborables\n  while (diasLaborablesEncontrados < 7) {\n    const fecha = new Date(hoy);\n    fecha.setDate(hoy.getDate() + i);\n    \n    const fechaFormateada = fecha.toISOString().split('T')[0];\n    const dayOfWeek = fecha.getDay(); // 0=domingo, 1=lunes, ..., 6=sábado\n    \n    // Verificar si es día laborable (lunes a viernes) y no es feriado\n    const esLaborable = dayOfWeek >= 1 && dayOfWeek <= 5; // lunes a viernes\n    const noEsFeriado = !feriados.includes(fechaFormateada);\n    \n    if (esLaborable && noEsFeriado) {\n      diasLaborablesEncontrados++;\n      if (diasLaborablesEncontrados === 7) {\n        // Establecer hora específica y formato completo\n        fecha.setHours(12, 44, 14, 1); // 12:44:14.001\n        fechaFinal = fecha.toISOString().replace('Z', '-04:00'); // Cambiar Z por -04:00\n      }\n    }\n    \n    i++;\n  }\n  \n  return fechaFinal;\n}\n\nconst sieteDias = calcularSieteDiasLaborables();\n\nreturn [{\n  json: {\n    sieteDias: sieteDias\n  }\n}];"
+      },
+      "id": "fb5b1e71-8d18-4e9f-af6f-c3c2398ff0c3",
+      "name": "Code",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        576,
+        -96
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Obtener turnos disponibles random \n",
+        "height": 241.69481014663876,
+        "width": 1198.7483458459665
+      },
+      "id": "0009b714-9ab0-45fa-b8d1-4d535d9113b4",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        -144
+      ]
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "km"
+            },
+            {
+              "name": "modelo"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -272,
+        -96
+      ],
+      "id": "30b83e30-9723-4d46-8814-acca18df9ac7",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1rDATHkoxgH5GYkqzo3ereNi1W6zzTDKYMIMAyR3mmSo",
+          "mode": "list",
+          "cachedResultName": "Alianz MANTENIMIENTO",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1rDATHkoxgH5GYkqzo3ereNi1W6zzTDKYMIMAyR3mmSo/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1939395583,
+          "mode": "list",
+          "cachedResultName": "Tabla Tiempo Mantenimiento",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1rDATHkoxgH5GYkqzo3ereNi1W6zzTDKYMIMAyR3mmSo/edit#gid=1939395583"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "KM",
+              "lookupValue": "={{ $json.km }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -64,
+        -96
+      ],
+      "id": "2d58a925-dd87-4764-b560-3457427bd4d3",
+      "name": "Get row(s) in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "x7uIPa3IpQ8b4UgZ",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {
+    "When Executed by Another Workflow": [
+      {
+        "json": {
+          "km": "160000",
+          "modelo": "Corolla"
+        }
+      }
+    ]
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "QSBf5hich0cLALad",
+      "projectId": "sSMIUUZ5rPWEROjK",
+      "createdAt": "2025-09-12T15:32:14.498Z",
+      "updatedAt": "2025-09-12T15:32:14.498Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [
+    {
+      "id": "2wNITLDUR4FoIzlb",
+      "name": "alianz",
+      "createdAt": "2026-02-13T19:45:33.941Z",
+      "updatedAt": "2026-02-13T19:45:33.941Z"
+    }
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2026-11-11T13:59:20.373Z",
+  "versionId": "e4ca873d-1b2c-4042-b943-97941b0347e9"
+}
