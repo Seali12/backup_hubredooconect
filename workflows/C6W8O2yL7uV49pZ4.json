@@ -1,0 +1,617 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "fbb2c9e2-c533-4569-8b29-1b4eae42636d",
+    "workflowId": "C6W8O2yL7uV49pZ4",
+    "nodes": [
+      {
+        "parameters": {
+          "inputSource": "passthrough"
+        },
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "typeVersion": 1.1,
+        "position": [
+          -144,
+          0
+        ],
+        "id": "3492c2e1-0533-4ade-b96a-9ea0d786651d",
+        "name": "When Executed by Another Workflow"
+      },
+      {
+        "parameters": {
+          "jsCode": "return (() => {\n  // -----------------------------\n  // 1. OBTENER TURNOS DE LOS TRES PILARES\n  // -----------------------------\n  const p1 = $('PILAR_1').first().json.turnosDisponibles || [];\n  const p2 = $('PILAR_2').first().json.turnosDisponibles || [];\n  const p3 = $('PILAR_3').first().json.turnosDisponibles || [];\n\n  const allTurnos = [...p1, ...p2, ...p3];\n\n  // -----------------------------\n  // 2. FUNCIÓN PARA SELECCIONAR HASTA 16 TURNOS\n  // -----------------------------\n  function pick(arr) {\n    const result = [];\n\n    // Obtener días únicos\n    const days = [...new Set(arr.map(t => t.dia))];\n\n    // -----------------------------\n    // PRIMERA PASADA:\n    // → elegir como máximo 1 turno por día\n    // -----------------------------\n    while (result.length < 16 && days.length > 0) {\n      // elegir un día al azar\n      const d = days.splice(\n        Math.floor(Math.random() * days.length),\n        1\n      )[0];\n\n      // turnos disponibles ese día\n      const options = arr.filter(t => t.dia === d);\n\n      if (options.length > 0) {\n        const chosen = options[Math.floor(Math.random() * options.length)];\n        result.push(chosen);\n      }\n    }\n\n    // -----------------------------\n    // SEGUNDA PASADA:\n    // → completar hasta 16 con cualquier turno restante\n    // -----------------------------\n    while (result.length < 16) {\n      const remaining = arr.filter(\n        t =>\n          !result.some(\n            r =>\n              r.dia === t.dia &&\n              r.horarioLlegada === t.horarioLlegada\n          )\n      );\n\n      if (remaining.length === 0) break;\n\n      const chosen =\n        remaining[Math.floor(Math.random() * remaining.length)];\n      result.push(chosen);\n    }\n\n    // -----------------------------\n    // 3. FORMATO FINAL PARA EL AGENTE\n    // -----------------------------\n    return result.map(t => ({\n      dia: t.dia,\n      inicio: t.horarioLlegada,\n      final: t.horarioEntrega,\n      Id_Calendario: t.Id_Calendario,\n      fechaFormato: t.fechaFormato\n    }));\n  }\n\n  // -----------------------------\n  // 4. RESPUESTA FINAL\n  // -----------------------------\n  return [\n    {\n      json: {\n        turnos: pick(allTurnos)\n      }\n    }\n  ];\n})();\n"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1056,
+          0
+        ],
+        "id": "0fc65221-a1e6-4900-8674-839775e2e6a9",
+        "name": "Code"
+      },
+      {
+        "parameters": {
+          "documentId": {
+            "__rl": true,
+            "value": "1Tw2liB1YvQ9drkigPwUbHtF-YBRmyWH9ljMKKsQvQFg",
+            "mode": "list",
+            "cachedResultName": "IA PV TOYOTA UZCUDUN",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Tw2liB1YvQ9drkigPwUbHtF-YBRmyWH9ljMKKsQvQFg/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": 1560890887,
+            "mode": "list",
+            "cachedResultName": "Tabla Tiempo Mantenimiento",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Tw2liB1YvQ9drkigPwUbHtF-YBRmyWH9ljMKKsQvQFg/edit#gid=1560890887"
+          },
+          "filtersUI": {
+            "values": [
+              {
+                "lookupColumn": "KM",
+                "lookupValue": "={{ Array.isArray(JSON.parse($json.query)) ? JSON.parse($json.query)[0].KM : JSON.parse($json.query).KM }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.7,
+        "position": [
+          16,
+          0
+        ],
+        "id": "a49a02ff-f703-4968-b086-100a7b3971f4",
+        "name": "Get row(s) in sheet",
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "zuvEAGM4xGwG9xvA",
+            "name": "Google Sheets account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "return (() => {\n  const data = $input.first().json\n  const queryData = $('When Executed by Another Workflow').first().json.query ? \n    JSON.parse($('When Executed by Another Workflow').first().json.query) : \n    $('When Executed by Another Workflow').first().json\n  \n  const sourceData = Array.isArray(queryData) ? queryData[0] : queryData\n  const modelo = sourceData.Modelo || sourceData.modelo || sourceData.MODELO\n  return [{json:{query:data[modelo]||\"00:30:00\"}}]\n})()"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          160,
+          0
+        ],
+        "id": "d0c47ddb-d28a-468a-b5b6-987528d735ca",
+        "name": "Code3"
+      },
+      {
+        "parameters": {
+          "jsCode": "return (() => {\n  const data = $('Get row(s) in sheet').first().json\n  const queryData = $('When Executed by Another Workflow').first().json.query ? \n    JSON.parse($('When Executed by Another Workflow').first().json.query) : \n    $('When Executed by Another Workflow').first().json\n  \n  const sourceData = Array.isArray(queryData) ? queryData[0] : queryData\n  const modelo = sourceData.modelo || sourceData.Modelo || sourceData.MODELO\n  return [{json:{query:data[modelo]||\"00:30:00\"}}]\n})()"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          432,
+          0
+        ],
+        "id": "f059ee2d-7857-483d-828c-132e38b32c62",
+        "name": "Code4"
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "value": "ZeqUoNwk3jcSYOfy",
+            "mode": "list",
+            "cachedResultName": "GET_TURNOS_1_TANDIL"
+          },
+          "workflowInputs": {
+            "mappingMode": "defineBelow",
+            "value": {},
+            "matchingColumns": [],
+            "schema": [],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": true
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1.2,
+        "position": [
+          304,
+          0
+        ],
+        "id": "02e8f9ec-278d-494e-b629-707772f85b51",
+        "name": "PILAR_1",
+        "retryOnFail": true,
+        "maxTries": 5,
+        "waitBetweenTries": 5000
+      },
+      {
+        "parameters": {
+          "jsCode": "return (() => {\n  const data = $('Get row(s) in sheet').first().json\n  const queryData = $('When Executed by Another Workflow').first().json.query ? \n    JSON.parse($('When Executed by Another Workflow').first().json.query) : \n    $('When Executed by Another Workflow').first().json\n  \n  const sourceData = Array.isArray(queryData) ? queryData[0] : queryData\n  const modelo = sourceData.modelo || sourceData.Modelo || sourceData.MODELO\n  return [{json:{query:data[modelo]||\"00:30:00\"}}]\n})()"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          752,
+          0
+        ],
+        "id": "01985f0f-ff4d-4dc0-84fb-739af679c3ad",
+        "name": "Code5"
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "value": "2mtMcnBcelzOGj94",
+            "mode": "list",
+            "cachedResultName": "GET_TURNOS_3_TANDIL"
+          },
+          "workflowInputs": {
+            "mappingMode": "defineBelow",
+            "value": {},
+            "matchingColumns": [],
+            "schema": [],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": true
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1.2,
+        "position": [
+          928,
+          0
+        ],
+        "id": "58a8e43f-99c1-4948-911f-210a40df388c",
+        "name": "PILAR_3",
+        "retryOnFail": true,
+        "maxTries": 5,
+        "waitBetweenTries": 5000
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "value": "UvUi9V5SjnyqpcKb",
+            "mode": "list",
+            "cachedResultName": "GET_TURNOS_2_TANDIL"
+          },
+          "workflowInputs": {
+            "mappingMode": "defineBelow",
+            "value": {},
+            "matchingColumns": [],
+            "schema": [],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": true
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1.2,
+        "position": [
+          624,
+          0
+        ],
+        "id": "957b2ebb-2c14-4b25-90a1-8340eb141c9d",
+        "name": "PILAR_2",
+        "retryOnFail": true,
+        "maxTries": 5,
+        "waitBetweenTries": 5000
+      }
+    ],
+    "connections": {
+      "When Executed by Another Workflow": {
+        "main": [
+          [
+            {
+              "node": "Get row(s) in sheet",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get row(s) in sheet": {
+        "main": [
+          [
+            {
+              "node": "Code3",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code3": {
+        "main": [
+          [
+            {
+              "node": "PILAR_1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code4": {
+        "main": [
+          [
+            {
+              "node": "PILAR_2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "PILAR_1": {
+        "main": [
+          [
+            {
+              "node": "Code4",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code5": {
+        "main": [
+          [
+            {
+              "node": "PILAR_3",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "PILAR_3": {
+        "main": [
+          [
+            {
+              "node": "Code",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "PILAR_2": {
+        "main": [
+          [
+            {
+              "node": "Code5",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "system migration",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-10-29T13:26:57.860Z",
+    "updatedAt": "2026-10-29T13:26:57.860Z"
+  },
+  "activeVersionId": "fbb2c9e2-c533-4569-8b29-1b4eae42636d",
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "Code3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code3": {
+      "main": [
+        [
+          {
+            "node": "PILAR_1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code4": {
+      "main": [
+        [
+          {
+            "node": "PILAR_2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PILAR_1": {
+      "main": [
+        [
+          {
+            "node": "Code4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code5": {
+      "main": [
+        [
+          {
+            "node": "PILAR_3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PILAR_3": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PILAR_2": {
+      "main": [
+        [
+          {
+            "node": "Code5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2025-12-30T21:29:35.890Z",
+  "id": "C6W8O2yL7uV49pZ4",
+  "isArchived": true,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "name": "GET-TURNOS-TANDIL",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -144,
+        0
+      ],
+      "id": "3492c2e1-0533-4ade-b96a-9ea0d786651d",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "jsCode": "return (() => {\n  // -----------------------------\n  // 1. OBTENER TURNOS DE LOS TRES PILARES\n  // -----------------------------\n  const p1 = $('PILAR_1').first().json.turnosDisponibles || [];\n  const p2 = $('PILAR_2').first().json.turnosDisponibles || [];\n  const p3 = $('PILAR_3').first().json.turnosDisponibles || [];\n\n  const allTurnos = [...p1, ...p2, ...p3];\n\n  // -----------------------------\n  // 2. FUNCIÓN PARA SELECCIONAR HASTA 16 TURNOS\n  // -----------------------------\n  function pick(arr) {\n    const result = [];\n\n    // Obtener días únicos\n    const days = [...new Set(arr.map(t => t.dia))];\n\n    // -----------------------------\n    // PRIMERA PASADA:\n    // → elegir como máximo 1 turno por día\n    // -----------------------------\n    while (result.length < 16 && days.length > 0) {\n      // elegir un día al azar\n      const d = days.splice(\n        Math.floor(Math.random() * days.length),\n        1\n      )[0];\n\n      // turnos disponibles ese día\n      const options = arr.filter(t => t.dia === d);\n\n      if (options.length > 0) {\n        const chosen = options[Math.floor(Math.random() * options.length)];\n        result.push(chosen);\n      }\n    }\n\n    // -----------------------------\n    // SEGUNDA PASADA:\n    // → completar hasta 16 con cualquier turno restante\n    // -----------------------------\n    while (result.length < 16) {\n      const remaining = arr.filter(\n        t =>\n          !result.some(\n            r =>\n              r.dia === t.dia &&\n              r.horarioLlegada === t.horarioLlegada\n          )\n      );\n\n      if (remaining.length === 0) break;\n\n      const chosen =\n        remaining[Math.floor(Math.random() * remaining.length)];\n      result.push(chosen);\n    }\n\n    // -----------------------------\n    // 3. FORMATO FINAL PARA EL AGENTE\n    // -----------------------------\n    return result.map(t => ({\n      dia: t.dia,\n      inicio: t.horarioLlegada,\n      final: t.horarioEntrega,\n      Id_Calendario: t.Id_Calendario,\n      fechaFormato: t.fechaFormato\n    }));\n  }\n\n  // -----------------------------\n  // 4. RESPUESTA FINAL\n  // -----------------------------\n  return [\n    {\n      json: {\n        turnos: pick(allTurnos)\n      }\n    }\n  ];\n})();\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1056,
+        0
+      ],
+      "id": "0fc65221-a1e6-4900-8674-839775e2e6a9",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1Tw2liB1YvQ9drkigPwUbHtF-YBRmyWH9ljMKKsQvQFg",
+          "mode": "list",
+          "cachedResultName": "IA PV TOYOTA UZCUDUN",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Tw2liB1YvQ9drkigPwUbHtF-YBRmyWH9ljMKKsQvQFg/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1560890887,
+          "mode": "list",
+          "cachedResultName": "Tabla Tiempo Mantenimiento",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Tw2liB1YvQ9drkigPwUbHtF-YBRmyWH9ljMKKsQvQFg/edit#gid=1560890887"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "KM",
+              "lookupValue": "={{ Array.isArray(JSON.parse($json.query)) ? JSON.parse($json.query)[0].KM : JSON.parse($json.query).KM }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        16,
+        0
+      ],
+      "id": "a49a02ff-f703-4968-b086-100a7b3971f4",
+      "name": "Get row(s) in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "zuvEAGM4xGwG9xvA",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return (() => {\n  const data = $input.first().json\n  const queryData = $('When Executed by Another Workflow').first().json.query ? \n    JSON.parse($('When Executed by Another Workflow').first().json.query) : \n    $('When Executed by Another Workflow').first().json\n  \n  const sourceData = Array.isArray(queryData) ? queryData[0] : queryData\n  const modelo = sourceData.Modelo || sourceData.modelo || sourceData.MODELO\n  return [{json:{query:data[modelo]||\"00:30:00\"}}]\n})()"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        160,
+        0
+      ],
+      "id": "d0c47ddb-d28a-468a-b5b6-987528d735ca",
+      "name": "Code3"
+    },
+    {
+      "parameters": {
+        "jsCode": "return (() => {\n  const data = $('Get row(s) in sheet').first().json\n  const queryData = $('When Executed by Another Workflow').first().json.query ? \n    JSON.parse($('When Executed by Another Workflow').first().json.query) : \n    $('When Executed by Another Workflow').first().json\n  \n  const sourceData = Array.isArray(queryData) ? queryData[0] : queryData\n  const modelo = sourceData.modelo || sourceData.Modelo || sourceData.MODELO\n  return [{json:{query:data[modelo]||\"00:30:00\"}}]\n})()"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        432,
+        0
+      ],
+      "id": "f059ee2d-7857-483d-828c-132e38b32c62",
+      "name": "Code4"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "ZeqUoNwk3jcSYOfy",
+          "mode": "list",
+          "cachedResultName": "GET_TURNOS_1_TANDIL"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        304,
+        0
+      ],
+      "id": "02e8f9ec-278d-494e-b629-707772f85b51",
+      "name": "PILAR_1",
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "jsCode": "return (() => {\n  const data = $('Get row(s) in sheet').first().json\n  const queryData = $('When Executed by Another Workflow').first().json.query ? \n    JSON.parse($('When Executed by Another Workflow').first().json.query) : \n    $('When Executed by Another Workflow').first().json\n  \n  const sourceData = Array.isArray(queryData) ? queryData[0] : queryData\n  const modelo = sourceData.modelo || sourceData.Modelo || sourceData.MODELO\n  return [{json:{query:data[modelo]||\"00:30:00\"}}]\n})()"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        752,
+        0
+      ],
+      "id": "01985f0f-ff4d-4dc0-84fb-739af679c3ad",
+      "name": "Code5"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "2mtMcnBcelzOGj94",
+          "mode": "list",
+          "cachedResultName": "GET_TURNOS_3_TANDIL"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        928,
+        0
+      ],
+      "id": "58a8e43f-99c1-4948-911f-210a40df388c",
+      "name": "PILAR_3",
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "UvUi9V5SjnyqpcKb",
+          "mode": "list",
+          "cachedResultName": "GET_TURNOS_2_TANDIL"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        624,
+        0
+      ],
+      "id": "957b2ebb-2c14-4b25-90a1-8340eb141c9d",
+      "name": "PILAR_2",
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000
+    }
+  ],
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "C6W8O2yL7uV49pZ4",
+      "projectId": "yu5q7ywoIxw2LYTz",
+      "createdAt": "2025-12-30T21:29:35.894Z",
+      "updatedAt": "2025-12-30T21:29:35.894Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2025-12-31T20:35:53.000Z",
+  "versionId": "fbb2c9e2-c533-4569-8b29-1b4eae42636d"
+}
