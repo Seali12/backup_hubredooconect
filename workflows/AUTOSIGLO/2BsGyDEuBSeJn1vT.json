@@ -1,0 +1,529 @@
+{
+  "active": false,
+  "activeVersion": null,
+  "activeVersionId": null,
+  "connections": {
+    "Code3": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code4": {
+      "main": [
+        [
+          {
+            "node": "Get_Tiempo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Calendar": {
+      "main": [
+        [
+          {
+            "node": "Code5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get_Reglas": {
+      "main": [
+        [
+          {
+            "node": "Code4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get_Tiempo": {
+      "main": [
+        [
+          {
+            "node": "Code3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Get many events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many events": {
+      "main": [
+        [
+          {
+            "node": "turnos_ocupados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "turnos_ocupados": {
+      "main": [
+        [
+          {
+            "node": "Get_Reglas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Google Calendar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2025-12-26T11:55:23.571Z",
+  "id": "2BsGyDEuBSeJn1vT",
+  "isArchived": false,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "name": "SET-TURNOS-CONVENCIONAL",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "// ==========================================\n// UTILIDADES\n// ==========================================\nfunction sumarMinutos(fechaStr, minutos) {\n  const fecha = new Date(fechaStr);\n  if (isNaN(fecha)) throw new Error(`Fecha inválida: ${fechaStr}`);\n  fecha.setMinutes(fecha.getMinutes() + minutos);\n  const [fechaPart, horaPart] = fecha.toISOString().split(\"T\");\n  return `${fechaPart}T${horaPart.substring(0, 5)}:00`;\n}\n\nfunction tiempoAHorasMinutos(tiempoStr) {\n  if (!tiempoStr || typeof tiempoStr !== \"string\") return 30;\n  const partes = tiempoStr.split(\":\").map(Number);\n  if (partes.length === 3) {\n    const [h, m, s] = partes;\n    return h * 60 + m + (s > 0 ? Math.round(s / 60) : 0);\n  }\n  if (partes.length === 2) {\n    const [h, m] = partes;\n    return h * 60 + m;\n  }\n  return parseInt(tiempoStr) || 30;\n}\n\n// ==========================================\n// NORMALIZAR OBJETO\n// ==========================================\nfunction normalizar(obj) {\n  if (!obj || typeof obj !== \"object\") return {};\n  const flat = {};\n  for (const [k, v] of Object.entries(obj)) {\n    flat[k.toLowerCase()] = v;\n  }\n  return {\n    fecha:         flat.fecha         || null,\n    hora_llegada:  flat.hora_llegada  || null,\n    hora_entrega:  flat.hora_entrega  || null,\n    patente:       flat.patente       || null,\n    modelo:        flat.modelo        || null,\n    nombre:        flat.nombre        || null,\n    telefono:      flat.telefono      || null,\n    email:         flat.email         || null,\n    vin:           flat.vin           || flat.chasis || null,\n    km:            flat.km            ?? null,\n    precio:        flat.precio        ?? null,\n    descripcion:   flat.descripcion   || null,\n    id_calendario: flat.id_calendario || null,\n  };\n}\n\n// ==========================================\n// EXTRAER INPUT\n// ==========================================\nfunction extraerSolicitud() {\n  try {\n    return normalizar($('When Executed by Another Workflow').first().json);\n  } catch (e) {\n    const raw = $(\"Execute Workflow Trigger\").all();\n    const first = Array.isArray(raw) ? raw[0] : raw;\n    const base = first?.json ?? first;\n    let parsed;\n    if (base?.query) {\n      parsed = typeof base.query === \"string\" ? JSON.parse(base.query) : base.query;\n    } else {\n      parsed = base;\n    }\n    return normalizar(parsed);\n  }\n}\n\n// ==========================================\n// NORMALIZAR MODELO\n// ==========================================\nconst MODELOS = [\n  \"Etios\", \"Yaris\", \"Yaris GR\", \"Corolla\", \"Prius\", \"Rav4\",\n  \"Innova\", \"Hilux\", \"SW4\", \"Hiace\", \"CH-R\", \"Camry\", \"Land Cruiser\"\n];\n\nfunction normalizarModelo(modeloRaw) {\n  if (!modeloRaw) return null;\n  const limpio = modeloRaw.toString().trim().toLowerCase();\n  const match = MODELOS.find(m => limpio.includes(m.toLowerCase()));\n  return match || null;\n}\n\nfunction normalizarMapa(obj) {\n  const map = {};\n  Object.keys(obj || {}).forEach(k => {\n    map[k.toLowerCase()] = obj[k];\n  });\n  return map;\n}\n\n// ==========================================\n// VALIDAR CONFLICTO CON TURNOS OCUPADOS\n// ==========================================\nfunction hayConflicto(nuevoInicio, nuevoFin, turnosOcupados) {\n  const inicio = new Date(nuevoInicio).getTime();\n  const fin    = new Date(nuevoFin).getTime();\n\n  for (const item of turnosOcupados) {\n    const dia = item.json;\n    if (!dia?.occupiedRanges) continue;\n\n    const fechaNuevo = nuevoInicio.split(\"T\")[0];\n    if (dia.date !== fechaNuevo) continue;\n\n    for (const rango of dia.occupiedRanges) {\n      // Convertir \"HH:MM\" a timestamp del mismo día\n      const rangoInicio = new Date(`${fechaNuevo}T${rango.from}:00`).getTime();\n      const rangoFin    = new Date(`${fechaNuevo}T${rango.to}:00`).getTime();\n\n      // Overlap: nuevo empieza antes de que termine el ocupado\n      //          y termina después de que empiece el ocupado\n      if (inicio < rangoFin && fin > rangoInicio) {\n        return {\n          conflicto: true,\n          turnoExistente: rango\n        };\n      }\n    }\n  }\n\n  return { conflicto: false };\n}\n\n// ==========================================\n// OBTENER DATOS\n// ==========================================\nconst solicitud = extraerSolicitud();\n\nconst modelo = normalizarModelo(\n  $(\"Code4\").first()?.json?.modelo ||\n  $(\"Code4\").first()?.json?.Modelo ||\n  solicitud.modelo\n);\n\nconst tiemposRaw = $(\"Get_Tiempo\").first()?.json || {};\nconst tiempos = Array.isArray(tiemposRaw) ? tiemposRaw[0] : tiemposRaw;\nconst tiemposMap = normalizarMapa(tiempos);\n\nconst reglasRaw = $(\"Get_Reglas\").first()?.json || {};\nconst reglas = Array.isArray(reglasRaw) ? reglasRaw[0] : reglasRaw;\n\nconst turnosOcupados = $(\"turnos_ocupados\").all();\n\n// ==========================================\n// CONSTRUIR FECHAS\n// ==========================================\nlet Fecha = solicitud.fecha;\nlet Fin   = null;\n\nif (Fecha && !Fecha.includes(\"T\") && solicitud.hora_llegada) {\n  Fecha = `${Fecha}T${solicitud.hora_llegada}:00`;\n}\n\nif (Fecha && solicitud.hora_entrega) {\n  Fin = `${Fecha.split(\"T\")[0]}T${solicitud.hora_entrega}:00`;\n}\n\nif (!Fecha || !Fin) {\n  return [{\n    json: {\n      error: \"Faltan campos requeridos (Fecha o Fin)\",\n      debug: { solicitud, Fecha, Fin }\n    }\n  }];\n}\n\n// ==========================================\n// CALCULAR TIEMPOS\n// ==========================================\nlet tiempoModeloStr = null;\n\nif (modelo) {\n  tiempoModeloStr = tiemposMap[modelo.toLowerCase()];\n}\n\nconst minutosModelo    = tiempoAHorasMinutos(tiempoModeloStr);\nconst minutosRecepcion = parseInt(reglas?.Recepcion || reglas?.recepcion) || 15;\n\nconst nuevaFechaInicio = sumarMinutos(Fecha, minutosRecepcion);\nconst nuevoFin         = sumarMinutos(nuevaFechaInicio, minutosModelo);\n\n// ==========================================\n// VALIDAR CONFLICTO\n// ==========================================\nconst { conflicto, turnoExistente } = hayConflicto(nuevaFechaInicio, nuevoFin, turnosOcupados);\n\nif (conflicto) {\n  return [{\n    json: {\n      error: \"Turno en conflicto con uno ya existente\",\n      turno_solicitado: {\n        inicio: nuevaFechaInicio,\n        fin:    nuevoFin\n      },\n      turno_existente: turnoExistente\n    }\n  }];\n}\n\n// ==========================================\n// OUTPUT\n// ==========================================\nconst titulo = `Servicio ${modelo || \"Sin modelo\"} - ${solicitud.nombre || \"Cliente desconocido\"} (${solicitud.patente || \"Sin patente\"})`;\n\nreturn [{\n  json: {\n    Fecha:             nuevaFechaInicio,\n    Fin:               nuevoFin,\n    Modelo:            modelo || \"Desconocido\",\n    Nombre:            solicitud.nombre,\n    Patente:           solicitud.patente,\n    Telefono:          solicitud.telefono,\n    Email:             solicitud.email,\n    Vin:               solicitud.vin,\n    Km:                solicitud.km,\n    Precio:            solicitud.precio,\n    Descripcion:       solicitud.descripcion,\n    Titulo:            titulo,\n    Calendar:          solicitud.id_calendario || reglas?.Id_Calendario || reglas?.id_calendario,\n    Tiempo_Modelo:     tiempoModeloStr || \"fallback 30\",\n    Fallback_Aplicado: !tiempoModeloStr,\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2064,
+        384
+      ],
+      "id": "3750a64c-6fe5-4864-9df3-1661c9a07b7a",
+      "name": "Code3"
+    },
+    {
+      "parameters": {
+        "jsCode": "const MODELOS = [\n  \"Etios\", \"Yaris\", \"Yaris GR\", \"Corolla\", \"Prius\", \"Rav4\",\n  \"Innova\", \"Hilux\", \"SW4\", \"Hiace\", \"CH-R\", \"Camry\", \"Land Cruiser\"\n];\n\nconst KM_VALIDOS = [\n  1000, 10000, 20000, 30000, 40000, 50000, 60000,\n  70000, 80000, 90000, 100000, 110000, 120000,\n  130000, 140000, 150000, 160000, 170000,\n  180000, 190000, 200000\n];\n\n// ==========================================\n// HELPERS\n// ==========================================\n\n// case insensitive\nfunction get(obj, key) {\n  if (!obj) return undefined;\n  const lower = key.toLowerCase();\n  const found = Object.keys(obj).find(k => k.toLowerCase() === lower);\n  return found ? obj[found] : undefined;\n}\n\n// normalizar modelo (PRO)\nfunction normalizarModelo(modeloRaw, texto = \"\") {\n  if (modeloRaw) {\n    const limpio = modeloRaw.toString().trim().toLowerCase();\n\n    const match = MODELOS.find(m =>\n      limpio.includes(m.toLowerCase())\n    );\n\n    if (match) return match;\n  }\n\n  // fallback: buscar en texto\n  for (const modelo of MODELOS) {\n    if (new RegExp(`\\\\b${modelo}\\\\b`, \"i\").test(texto)) {\n      return modelo;\n    }\n  }\n\n  return null;\n}\n\n// detectar KM desde texto\nfunction detectarKilometrajeTexto(texto) {\n  const match = texto.match(/(\\d{1,3}(?:\\.\\d{3})*|\\d+)\\s*km/i);\n  if (match) return parseInt(match[1].replace(/\\./g, \"\"), 10);\n  return null;\n}\n\n// normalizar KM al más cercano\nfunction normalizarKm(km) {\n  if (km === null || km === undefined) return null;\n\n  const kmNum = parseInt(km);\n  if (isNaN(kmNum)) return null;\n\n  let masCercano = KM_VALIDOS[0];\n  let menorDiferencia = Math.abs(kmNum - masCercano);\n\n  for (const valor of KM_VALIDOS) {\n    const diferencia = Math.abs(kmNum - valor);\n    if (diferencia < menorDiferencia) {\n      menorDiferencia = diferencia;\n      masCercano = valor;\n    }\n  }\n\n  return masCercano;\n}\n\n// detectar si viene de workflow o texto\nfunction esWorkflowDirecto(obj) {\n  return obj && (obj.KM !== undefined || obj.Modelo !== undefined);\n}\n\n// ==========================================\n// INPUT\n// ==========================================\n\nlet input;\n\n// intenta workflow directo\ntry {\n  input = $('When Executed by Another Workflow').first().json;\n} catch (e) {\n  // fallback: input tipo IA\n  const raw = $(\"Execute Workflow Trigger\").all();\n  const first = Array.isArray(raw) ? raw[0] : raw;\n  const base = first?.json ?? first;\n\n  if (base?.query) {\n    input = typeof base.query === \"string\" ? JSON.parse(base.query) : base.query;\n  } else {\n    input = base;\n  }\n}\n\n// ==========================================\n// PROCESAMIENTO\n// ==========================================\n\nlet modelo = null;\nlet kmOriginal = null;\n\n// 🔥 PRIORIDAD: datos estructurados\nif (esWorkflowDirecto(input)) {\n  modelo = normalizarModelo(get(input, \"Modelo\"));\n  kmOriginal = parseInt(get(input, \"KM\"));\n} else {\n  const texto = `${get(input, \"descripcion\") || \"\"} ${get(input, \"titulo\") || \"\"}`.trim();\n\n  modelo = normalizarModelo(get(input, \"modelo\"), texto);\n  kmOriginal =\n    get(input, \"km\") ??\n    get(input, \"kilometraje\") ??\n    detectarKilometrajeTexto(texto);\n}\n\n// normalizar KM final\nconst kmNormalizado = normalizarKm(kmOriginal);\n\n// ==========================================\n// OUTPUT\n// ==========================================\n\nreturn [{\n  json: {\n    modelo,\n    kilometraje: kmNormalizado,\n    kilometraje_original: kmOriginal,\n\n    // 🔹 passthrough completo (clave en producción)\n    ...input\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1696,
+        368
+      ],
+      "id": "1d1728b0-59f4-459c-8cf4-fa3f752298a9",
+      "name": "Code4"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    response:{\n      id_turno: $input.first().json.id,\n      id_calendario: $input.first().json.organizer.email,\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2752,
+        480
+      ],
+      "id": "23d39187-f245-44a6-8007-c08939bf2143",
+      "name": "Code5"
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "value": "945c93abf2338470e741ca8b20e070e6f96b11c1c3a59fe1bcc679a18d93fd4c@group.calendar.google.com",
+          "mode": "id"
+        },
+        "start": "={{ $json.Fecha }}",
+        "end": "={{ $json.Fin }}",
+        "additionalFields": {
+          "description": "={{ $json.Descripcion }}",
+          "summary": "={{ $json.Titulo }}"
+        }
+      },
+      "id": "f3f36819-4baf-4db3-87eb-3de2ea27876a",
+      "name": "Google Calendar",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.2,
+      "position": [
+        2480,
+        528
+      ],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "6nUV5YB0a8QXQr9G",
+          "name": "Google Calendar REDOO"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1Jdbnq9sin8gcZspRteOGOjhZUgCUAXXUq-SUmDmaDFY",
+          "mode": "list",
+          "cachedResultName": "Post-Ventas-AutoSiglo-IA",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Jdbnq9sin8gcZspRteOGOjhZUgCUAXXUq-SUmDmaDFY/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1907753866,
+          "mode": "list",
+          "cachedResultName": "Tabla Horarios Taller",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Jdbnq9sin8gcZspRteOGOjhZUgCUAXXUq-SUmDmaDFY/edit#gid=1907753866"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Taller",
+              "lookupValue": "=Convencional"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "21b7c19a-e8c4-4df5-adf4-5fedb020e04d",
+      "name": "Get_Reglas",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1520,
+        400
+      ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "XB4JnC6DbrhM2g5k",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1Jdbnq9sin8gcZspRteOGOjhZUgCUAXXUq-SUmDmaDFY",
+          "mode": "list",
+          "cachedResultName": "Post-Ventas-AutoSiglo-IA",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Jdbnq9sin8gcZspRteOGOjhZUgCUAXXUq-SUmDmaDFY/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1433812231,
+          "mode": "list",
+          "cachedResultName": "Tabla Tiempo CONVENCIONAL",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Jdbnq9sin8gcZspRteOGOjhZUgCUAXXUq-SUmDmaDFY/edit#gid=1433812231"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "KM",
+              "lookupValue": "={{ $json.kilometraje }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "0e399f9d-ddcb-4ad9-88d7-303c0d76c751",
+      "name": "Get_Tiempo",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1904,
+        384
+      ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "XB4JnC6DbrhM2g5k",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "KM"
+            },
+            {
+              "name": "Modelo"
+            },
+            {
+              "name": "fecha"
+            },
+            {
+              "name": "hora_llegada"
+            },
+            {
+              "name": "hora_entrega"
+            },
+            {
+              "name": "patente"
+            },
+            {
+              "name": "nombre"
+            },
+            {
+              "name": "dni"
+            },
+            {
+              "name": "email"
+            },
+            {
+              "name": "chasis"
+            },
+            {
+              "name": "telefono"
+            },
+            {
+              "name": "precio"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        672,
+        400
+      ],
+      "id": "67e6431f-06ab-4033-96c4-c87e4e9dc6d0",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "945c93abf2338470e741ca8b20e070e6f96b11c1c3a59fe1bcc679a18d93fd4c@group.calendar.google.com",
+          "mode": "list",
+          "cachedResultName": "AUTOSIGLO-CONVENCIONAL"
+        },
+        "returnAll": true,
+        "timeMax": "={{ $now.plus({ month: 1 }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        912,
+        400
+      ],
+      "id": "fd2129e7-c3b3-48a2-a540-a0dd14b51fa4",
+      "name": "Get many events",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "6nUV5YB0a8QXQr9G",
+          "name": "Google Calendar REDOO"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nconst occupiedByDay = {};\n\nfor (const item of items) {\n  const event = item.json;\n\n  const startDT = new Date(event.start.dateTime);\n  const endDT = new Date(event.end.dateTime);\n\n  const dateKey = startDT.toLocaleDateString('sv-SE', {\n    timeZone: 'America/Argentina/Buenos_Aires'\n  });\n\n  const startStr = startDT.toLocaleTimeString('es-AR', {\n    timeZone: 'America/Argentina/Buenos_Aires',\n    hour: '2-digit',\n    minute: '2-digit',\n    hour12: false\n  });\n\n  const endStr = endDT.toLocaleTimeString('es-AR', {\n    timeZone: 'America/Argentina/Buenos_Aires',\n    hour: '2-digit',\n    minute: '2-digit',\n    hour12: false\n  });\n\n  if (!occupiedByDay[dateKey]) {\n    occupiedByDay[dateKey] = {\n      date: dateKey,\n      dayOfWeek: startDT.toLocaleDateString('es-AR', {\n        timeZone: 'America/Argentina/Buenos_Aires',\n        weekday: 'long'\n      }),\n      occupiedRanges: []\n    };\n  }\n\n  occupiedByDay[dateKey].occupiedRanges.push({\n    from: startStr,\n    to: endStr,\n    summary: event.summary || 'Sin título'\n  });\n}\n\n// Ordenar por fecha y franjas por hora de inicio\nconst result = Object.values(occupiedByDay)\n  .sort((a, b) => a.date.localeCompare(b.date))\n  .map(day => ({\n    ...day,\n    occupiedRanges: day.occupiedRanges.sort((a, b) => a.from.localeCompare(b.from))\n  }));\n\nreturn result.map(day => ({ json: day }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        400
+      ],
+      "id": "6dbc194a-0870-4e02-b9fe-9b957e9f5026",
+      "name": "turnos_ocupados"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "e8654b6f-43bf-4735-b16b-6cc85fbee1df",
+              "leftValue": "={{ $json.error }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2272,
+        384
+      ],
+      "id": "8bd9722a-58c3-4182-8432-d55075e526a6",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "sendTo": "asistente.autosiglo@gmail.com",
+        "subject": "={{ $json.titulo }}",
+        "emailType": "text",
+        "message": "={{ $json.mail }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2080,
+        928
+      ],
+      "id": "6f3b9b6b-7caf-4d8d-9f38-d5dd5f934532",
+      "name": "Send a message",
+      "webhookId": "a13c6ea6-b82e-47bf-8e71-1e9295747f82",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "oJyjnZYnj0IdY89x",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        1744,
+        928
+      ],
+      "id": "f1aee0f7-f7d2-47bd-881e-7a4dae8bb3a6",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\n\nconst [year, month, day] = item.fecha.split('-');\nconst fecha = `${day}/${month}/${year}`;\n\nconst precioFormateado = parseInt(item.precio).toLocaleString('es-AR');\n\nconst ahora = new Date();\nconst fechaAgendamiento = ahora.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });\nconst horaAgendamiento = ahora.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });\n\nconst mail = [\n  `✅ NUEVO TURNO AGENDADO`,\n  `⏰ FECHA Y HORA DE AGENDAMIENTO: ${fechaAgendamiento} ${horaAgendamiento}`,\n  `📋 INFORMACIÓN DEL TURNO:`,\n  `─────────────────────────────────────────────────`,\n  `📅 Fecha: ${fecha}`,\n  `🕐 Horario de llegada: ${item.hora_llegada}`,\n  `🕐 Horario de entrega: ${item.hora_entrega}`,\n  `🏢 Bahía: Express`,\n  `🔧 Servicio: Mantenimiento con ${item.KM} km`,\n  `👤 DATOS DEL CLIENTE:`,\n  `─────────────────────────────────────────────────`,\n  `Nombre: ${item.nombre.toUpperCase()}`,\n  `Teléfono: ${item.telefono}`,\n  `Email: ${item.email}`,\n  `🚗 DATOS DEL VEHÍCULO:`,\n  `─────────────────────────────────────────────────`,\n  `Patente: ${item.patente}`,\n  `Modelo: ${item.Modelo}`,\n  `Kilometraje: ${item.KM}`,\n  `Chasis/VIN: ${item.chasis}`,\n  `💰 PRECIO INFORMADO: $${precioFormateado}`\n].join('\\n');\nconst titulo = `✅ NUEVO TURNO AGENDADO - Patente ${item.patente}`;\nreturn [{ json: { mail, titulo } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        928
+      ],
+      "id": "ee009682-18c7-4187-be93-76aaf6a301bf",
+      "name": "Code in JavaScript"
+    }
+  ],
+  "pinData": {
+    "When Executed by Another Workflow": [
+      {
+        "json": {
+          "KM": "90000",
+          "Modelo": "SW4",
+          "fecha": "2026-04-25",
+          "hora_llegada": "09:00",
+          "hora_entrega": "10:45",
+          "patente": "AE955RN",
+          "nombre": "Kasza Esteban Juan",
+          "dni": "16263130",
+          "email": "arch.kasza@gmail.com",
+          "chasis": "8AJBA3FS8M0302656",
+          "telefono": "+5491159538696",
+          "precio": 515300
+        }
+      }
+    ],
+    "When clicking ‘Execute workflow’": [
+      {
+        "json": {
+          "KM": "20000",
+          "Modelo": "Hilux",
+          "fecha": "2026-05-29",
+          "hora_llegada": "12:45",
+          "hora_entrega": "16:00",
+          "patente": "AH570BR",
+          "nombre": "Hugo Flores",
+          "dni": "",
+          "email": "",
+          "chasis": "8AJCB3DDOT3925756",
+          "telefono": "+5491131815458",
+          "precio": "522800"
+        }
+      }
+    ]
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "shared": [
+    {
+      "updatedAt": "2025-12-26T11:55:23.574Z",
+      "createdAt": "2025-12-26T11:55:23.574Z",
+      "role": "workflow:owner",
+      "workflowId": "2BsGyDEuBSeJn1vT",
+      "projectId": "u1tRAQnrD2pB0Q1A"
+    }
+  ],
+  "staticData": null,
+  "tags": [
+    {
+      "updatedAt": "2025-08-11T14:06:21.711Z",
+      "createdAt": "2025-08-11T14:06:21.711Z",
+      "id": "VdVyZu2vQPydLfDQ",
+      "name": "AUTOSIGLO"
+    }
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2026-04-28T20:20:56.944Z",
+  "versionId": "9de71da8-7700-4ac8-abb7-ab000007a574"
+}
