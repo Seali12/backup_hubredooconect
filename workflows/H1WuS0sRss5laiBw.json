@@ -1,0 +1,200 @@
+{
+  "active": false,
+  "activeVersion": null,
+  "activeVersionId": null,
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Pilot authentication",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pilot authentication": {
+      "main": [
+        [
+          {
+            "node": "Pilot authorization",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pilot authorization": {
+      "main": [
+        [
+          {
+            "node": "Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leads": {
+      "main": [
+        [
+          {
+            "node": "Leer lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer lead": {
+      "main": [
+        [
+          {
+            "node": "Resumen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-11-20T11:39:59.845Z",
+  "id": "H1WuS0sRss5laiBw",
+  "isArchived": true,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "name": "TEMP Ford - ver duplicados nuevos",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "id": "13998d2c-9a59-472d-9b7a-77a495fbc7e9",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "7d6a8c2e-7fdf-49c3-9120-99eb2e3e548b",
+      "name": "Pilot authentication",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        224,
+        0
+      ],
+      "parameters": {
+        "url": "https://api.pilotsolution.net/v1/users/authentication.php",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "options": {}
+      },
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "NHXyrkv9ca6Njn8R",
+          "name": "PILOT FORD COLOMBIA"
+        }
+      }
+    },
+    {
+      "id": "35912bd6-d7ac-4400-9aef-113da363f33c",
+      "name": "Pilot authorization",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        448,
+        0
+      ],
+      "parameters": {
+        "url": "https://api.pilotsolution.net/v1/users/authorization.php",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "identity_token",
+              "value": "={{ $json.result.entitydata.accounts[0].token }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "ef97e6c9-6438-4e35-97ab-6b65f42444e3",
+      "name": "Leads",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const L='11354:73B5FAAB-1CF2-4B14-9993-B557110DFE35,11361:53DE2818-32F9-4CDC-92B1-08C870A4DFED,11368:4D4D1839-1F5D-424D-BCD2-43C4B21F3216,11378:DFEFFD2B-4D07-40CC-93C8-3014F67AA5DD,11392:E1771654-2FCD-4C52-A469-CA54EFE4C7A5,11408:29FAB986-AE94-4236-8536-E836BF233698';\nreturn L.split(',').map(s => { const [dbid, id] = s.split(':'); return { json: { dbid, id } }; });"
+      }
+    },
+    {
+      "id": "6f125141-79fc-4ed5-a9e6-40b947001a84",
+      "name": "Leer lead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        896,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.pilotsolution.net/v1/welcomes/read.php",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ data: { id: $json.id }, header: { FlowName: \"lead_read\", SequenceId: 1, TimeStamp: 1248377, TrackingId: \"FD1C4A1A-CAFB-467E-825B-7FFB86CC21E3\", access_token: $(\"Pilot authorization\").first().json.result.entitydata.session.identityToken } }) }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 2000
+            }
+          }
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "3b713e08-6b1c-4d2e-8908-92586be161f3",
+      "name": "Resumen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const src = $('Leads').all();\nreturn [{ json: { rows: $input.all().map((it, i) => { const e = (it.json.result || {}).entitydata || {}; const d = e.desist || {}; return [src[i].json.dbid, (e.status || {}).name, (d.status || {}).code, (d.user || {}).fullname, d.comments].join('|'); }).join('\\n') } }];"
+      }
+    }
+  ],
+  "pinData": null,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "H1WuS0sRss5laiBw",
+      "projectId": "K8p6XEqA0L6D2uVt",
+      "createdAt": "2026-11-20T11:39:59.852Z",
+      "updatedAt": "2026-11-20T11:39:59.852Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2026-11-20T11:40:28.000Z",
+  "versionId": "b6962859-30f3-42fd-9e1d-12515e4104c8"
+}
