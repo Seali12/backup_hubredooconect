@@ -1,0 +1,583 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "43d11530-9bdd-42a7-b07b-e961c38ae30b",
+    "workflowId": "I2AoTBTESJGfDARe",
+    "nodes": [
+      {
+        "parameters": {
+          "inputSource": "passthrough"
+        },
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "typeVersion": 1.1,
+        "position": [
+          -176,
+          -128
+        ],
+        "id": "cde7ad2b-38f2-4a06-9740-3d7065938628",
+        "name": "When Executed by Another Workflow"
+      },
+      {
+        "parameters": {
+          "calendar": {
+            "__rl": true,
+            "value": "={{ $json.Calendar }}",
+            "mode": "id"
+          },
+          "start": "={{ $json.Fecha }}",
+          "end": "={{ $json.Fin }}",
+          "additionalFields": {
+            "description": "={{ $json.Descripcion }}",
+            "summary": "={{ $json.Titulo }}"
+          }
+        },
+        "type": "n8n-nodes-base.googleCalendar",
+        "typeVersion": 1.3,
+        "position": [
+          848,
+          -272
+        ],
+        "id": "b42e2778-a6aa-4519-8ff4-757280b50fc9",
+        "name": "Create an event",
+        "credentials": {
+          "googleCalendarOAuth2Api": {
+            "id": "VFsyOELtxOoaAxpu",
+            "name": "Google Calendar account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "// Recibir datos del workflow principal desde el normalizador Code2\nconst solicitud = $('Code2').first().json;\n\n// Obtener TODOS los turnos ocupados usando .all()\nconst pilar1Ocupados = $('CORDOBA_1').all().map(item => item.json).flat();\nconst pilar2Ocupados = $('CORDOBA_2').all().map(item => item.json).flat();\n\n// Convertir tiempo HH:MM a minutos\nfunction timeToMinutes(timeStr) {\n  const [hours, minutes] = timeStr.split(':').map(Number);\n  return hours * 60 + minutes;\n}\n\n// Función para verificar si hay conflicto de horarios\nfunction tieneConflicto(solicitudFecha, solicitudInicio, solicitudFin, ocupados) {\n  if (!Array.isArray(ocupados) || ocupados.length === 0) {\n    return false;\n  }\n  \n  const solicitudInicioMin = timeToMinutes(solicitudInicio);\n  const solicitudFinMin = timeToMinutes(solicitudFin);\n  \n  return ocupados.some(ocupado => {\n    // Verificar mismo día\n    if (ocupado.dia !== solicitudFecha) return false;\n    \n    const ocupadoInicioMin = timeToMinutes(ocupado.inicio);\n    const ocupadoFinMin = timeToMinutes(ocupado.final);\n    \n    // Verificar solapamiento (cualquier intersección)\n    return (solicitudInicioMin < ocupadoFinMin && solicitudFinMin > ocupadoInicioMin);\n  });\n}\n\n// Extraer fecha y horarios de la solicitud\nconst fechaISO = new Date(solicitud.Fecha);\nconst solicitudFecha = fechaISO.toISOString().split('T')[0]; // YYYY-MM-DD\n\n// Extraer hora directamente del string ISO\nconst solicitudInicio = solicitud.Fecha.split('T')[1].substring(0, 5); // HH:MM\nconst solicitudFin = solicitud.Fin.split('T')[1].substring(0, 5); // HH:MM\n\n// IDs de los calendarios\nconst PILAR_1_ID = \"58622da0b58e9d801afe2b5619058187dacb72f5b6221ad36ddfdc8fb4dff85f@group.calendar.google.com\";\nconst PILAR_2_ID = \"7179fff29ae72e0ff4f09d095df63f4e3085833bf42f6f0badd8a212c315031a@group.calendar.google.com\";\n\n// Verificar disponibilidad\nconst pilar1Disponible = !tieneConflicto(solicitudFecha, solicitudInicio, solicitudFin, pilar1Ocupados);\nconst pilar2Disponible = !tieneConflicto(solicitudFecha, solicitudInicio, solicitudFin, pilar2Ocupados);\n\nlet calendarioElegido;\nlet boxAsignado;\nlet error = null;\n\nif (pilar1Disponible && pilar2Disponible) {\n  // Ambos disponibles, elegir PILAR_1 por defecto\n  calendarioElegido = PILAR_1_ID;\n  boxAsignado = \"BOX 3: Asesor KEVIN\";\n} else if (pilar1Disponible) {\n  calendarioElegido = PILAR_1_ID;\n  boxAsignado = \"BOX 3: Asesor KEVIN\";\n} else if (pilar2Disponible) {\n  calendarioElegido = PILAR_2_ID;\n  boxAsignado = \"BOX 14: Asesor NICOLAS\";\n} else {\n  // Ninguno disponible\n  error = \"No hay calendarios disponibles para el horario solicitado\";\n}\n\n// Preparar respuesta\nif (error) {\n  return [{\n    json: {\n      error: error,\n      solicitud: solicitud\n    }\n  }];\n} else {\n  const respuesta = {\n    ...solicitud,\n    Calendar: calendarioElegido,\n    box: boxAsignado\n  };\n  \n  return [{\n    json: respuesta\n  }];\n}"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          688,
+          -128
+        ],
+        "id": "c37820f3-05f2-42ed-a608-ea30baabf85b",
+        "name": "Code1"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Normalizador de datos - maneja todas las estructuras posibles\nfunction extraerDatos(input) {\n  // Casos posibles de entrada\n  let datos;\n  \n  // Caso 1: Webhook con body\n  if (input.body) {\n    datos = input.body;\n  }\n  // Caso 2: Datos directos\n  else {\n    datos = input;\n  }\n  \n  // Si es array, tomar el primer elemento\n  if (Array.isArray(datos)) {\n    datos = datos[0];\n  }\n  \n  // Si tiene query, extraerlo\n  if (datos.query) {\n    // Si query es string, parsearlo\n    if (typeof datos.query === 'string') {\n      datos = JSON.parse(datos.query);\n    } else {\n      datos = datos.query;\n    }\n  }\n  \n  // Si después del parse es array, tomar primer elemento\n  if (Array.isArray(datos)) {\n    datos = datos[0];\n  }\n  \n  return datos;\n}\n\n// Obtener datos de entrada\nconst inputData = $json;\nconst solicitud = extraerDatos(inputData);\n\n// Devolver datos limpios\nreturn [{\n  json: solicitud\n}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -32,
+          -256
+        ],
+        "id": "5aa0de98-6a03-4ef0-a431-8323f68615b8",
+        "name": "Code2"
+      },
+      {
+        "parameters": {
+          "operation": "getAll",
+          "calendar": {
+            "__rl": true,
+            "value": "=58622da0b58e9d801afe2b5619058187dacb72f5b6221ad36ddfdc8fb4dff85f@group.calendar.google.com",
+            "mode": "id"
+          },
+          "returnAll": true,
+          "timeMax": "={{ $now.plus({ month: 1}) }}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleCalendar",
+        "typeVersion": 1.3,
+        "position": [
+          112,
+          -128
+        ],
+        "id": "de174ad3-8789-49e1-9456-1e93bd43bf76",
+        "name": "CORDOBA_1_CALENDARIO1",
+        "alwaysOutputData": true,
+        "retryOnFail": true,
+        "waitBetweenTries": 3000,
+        "executeOnce": true,
+        "credentials": {
+          "googleCalendarOAuth2Api": {
+            "id": "VFsyOELtxOoaAxpu",
+            "name": "Google Calendar account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "getAll",
+          "calendar": {
+            "__rl": true,
+            "value": "=7179fff29ae72e0ff4f09d095df63f4e3085833bf42f6f0badd8a212c315031a@group.calendar.google.com",
+            "mode": "id"
+          },
+          "returnAll": true,
+          "timeMax": "={{ $now.plus({ month: 1}) }}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleCalendar",
+        "typeVersion": 1.3,
+        "position": [
+          384,
+          -128
+        ],
+        "id": "c4cae19d-0854-4250-be3c-ae71e99ae08c",
+        "name": "CORDOBA_2_CALENDARIO1",
+        "alwaysOutputData": true,
+        "retryOnFail": true,
+        "waitBetweenTries": 3000,
+        "executeOnce": true,
+        "credentials": {
+          "googleCalendarOAuth2Api": {
+            "id": "VFsyOELtxOoaAxpu",
+            "name": "Google Calendar account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\nconst returnItems = [];\n\n// Verificar si hay items\nif (!items || items.length === 0) {\n  return [];\n}\n\nfor (const item of items) {\n  // Verificar que el item tenga la estructura correcta\n  if (!item || !item.json || !item.json.start || !item.json.start.dateTime) {\n    continue; // Saltar este item si no tiene la estructura correcta\n  }\n  \n  let data = item.json;\n  \n  const dia = data.start.dateTime.split('T')[0];\n  const inicio = data.start.dateTime.split('T')[1].substring(0, 5);\n  const final = data.end.dateTime.split('T')[1].substring(0, 5);\n  \n  returnItems.push({\n    json: {\n      dia: dia,\n      inicio: inicio, \n      final: final\n    }\n  });\n}\n\nreturn returnItems;"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          256,
+          -256
+        ],
+        "id": "f9500db3-740d-44b1-bdda-e5534f94756a",
+        "name": "CORDOBA_1",
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\nconst returnItems = [];\n\n// Verificar si hay items\nif (!items || items.length === 0) {\n  return [];\n}\n\nfor (const item of items) {\n  // Verificar que el item tenga la estructura correcta\n  if (!item || !item.json || !item.json.start || !item.json.start.dateTime) {\n    continue; // Saltar este item si no tiene la estructura correcta\n  }\n  \n  let data = item.json;\n  \n  const dia = data.start.dateTime.split('T')[0];\n  const inicio = data.start.dateTime.split('T')[1].substring(0, 5);\n  const final = data.end.dateTime.split('T')[1].substring(0, 5);\n  \n  returnItems.push({\n    json: {\n      dia: dia,\n      inicio: inicio, \n      final: final\n    }\n  });\n}\n\nreturn returnItems;"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          544,
+          -272
+        ],
+        "id": "802119dd-3851-49fc-a99b-dbee04a7c3d5",
+        "name": "CORDOBA_2",
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "jsCode": "return [{\n  json: {\n    id_turno: $input.first().json.id,\n    id_calendario: $input.first().json.organizer.email,\n  }\n}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1056,
+          -112
+        ],
+        "id": "10584688-7979-42e1-98dc-df44fb054911",
+        "name": "Code"
+      }
+    ],
+    "connections": {
+      "When Executed by Another Workflow": {
+        "main": [
+          [
+            {
+              "node": "Code2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code1": {
+        "main": [
+          [
+            {
+              "node": "Create an event",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code2": {
+        "main": [
+          [
+            {
+              "node": "CORDOBA_1_CALENDARIO1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "CORDOBA_1_CALENDARIO1": {
+        "main": [
+          [
+            {
+              "node": "CORDOBA_1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "CORDOBA_2_CALENDARIO1": {
+        "main": [
+          [
+            {
+              "node": "CORDOBA_2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "CORDOBA_1": {
+        "main": [
+          [
+            {
+              "node": "CORDOBA_2_CALENDARIO1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "CORDOBA_2": {
+        "main": [
+          [
+            {
+              "node": "Code1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Create an event": {
+        "main": [
+          [
+            {
+              "node": "Code",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "system migration",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-11-04T19:34:56.292Z",
+    "updatedAt": "2026-11-04T19:34:56.292Z"
+  },
+  "activeVersionId": "43d11530-9bdd-42a7-b07b-e961c38ae30b",
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Code2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code1": {
+      "main": [
+        [
+          {
+            "node": "Create an event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code2": {
+      "main": [
+        [
+          {
+            "node": "CORDOBA_1_CALENDARIO1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CORDOBA_1_CALENDARIO1": {
+      "main": [
+        [
+          {
+            "node": "CORDOBA_1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CORDOBA_2_CALENDARIO1": {
+      "main": [
+        [
+          {
+            "node": "CORDOBA_2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CORDOBA_1": {
+      "main": [
+        [
+          {
+            "node": "CORDOBA_2_CALENDARIO1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CORDOBA_2": {
+      "main": [
+        [
+          {
+            "node": "Code1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create an event": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2025-09-29T14:08:27.264Z",
+  "id": "I2AoTBTESJGfDARe",
+  "isArchived": false,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "name": "SET_CALENDARIO_CORDOBA",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -176,
+        -128
+      ],
+      "id": "cde7ad2b-38f2-4a06-9740-3d7065938628",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "value": "={{ $json.Calendar }}",
+          "mode": "id"
+        },
+        "start": "={{ $json.Fecha }}",
+        "end": "={{ $json.Fin }}",
+        "additionalFields": {
+          "description": "={{ $json.Descripcion }}",
+          "summary": "={{ $json.Titulo }}"
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        848,
+        -272
+      ],
+      "id": "b42e2778-a6aa-4519-8ff4-757280b50fc9",
+      "name": "Create an event",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "VFsyOELtxOoaAxpu",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Recibir datos del workflow principal desde el normalizador Code2\nconst solicitud = $('Code2').first().json;\n\n// Obtener TODOS los turnos ocupados usando .all()\nconst pilar1Ocupados = $('CORDOBA_1').all().map(item => item.json).flat();\nconst pilar2Ocupados = $('CORDOBA_2').all().map(item => item.json).flat();\n\n// Convertir tiempo HH:MM a minutos\nfunction timeToMinutes(timeStr) {\n  const [hours, minutes] = timeStr.split(':').map(Number);\n  return hours * 60 + minutes;\n}\n\n// Función para verificar si hay conflicto de horarios\nfunction tieneConflicto(solicitudFecha, solicitudInicio, solicitudFin, ocupados) {\n  if (!Array.isArray(ocupados) || ocupados.length === 0) {\n    return false;\n  }\n  \n  const solicitudInicioMin = timeToMinutes(solicitudInicio);\n  const solicitudFinMin = timeToMinutes(solicitudFin);\n  \n  return ocupados.some(ocupado => {\n    // Verificar mismo día\n    if (ocupado.dia !== solicitudFecha) return false;\n    \n    const ocupadoInicioMin = timeToMinutes(ocupado.inicio);\n    const ocupadoFinMin = timeToMinutes(ocupado.final);\n    \n    // Verificar solapamiento (cualquier intersección)\n    return (solicitudInicioMin < ocupadoFinMin && solicitudFinMin > ocupadoInicioMin);\n  });\n}\n\n// Extraer fecha y horarios de la solicitud\nconst fechaISO = new Date(solicitud.Fecha);\nconst solicitudFecha = fechaISO.toISOString().split('T')[0]; // YYYY-MM-DD\n\n// Extraer hora directamente del string ISO\nconst solicitudInicio = solicitud.Fecha.split('T')[1].substring(0, 5); // HH:MM\nconst solicitudFin = solicitud.Fin.split('T')[1].substring(0, 5); // HH:MM\n\n// IDs de los calendarios\nconst PILAR_1_ID = \"58622da0b58e9d801afe2b5619058187dacb72f5b6221ad36ddfdc8fb4dff85f@group.calendar.google.com\";\nconst PILAR_2_ID = \"7179fff29ae72e0ff4f09d095df63f4e3085833bf42f6f0badd8a212c315031a@group.calendar.google.com\";\n\n// Verificar disponibilidad\nconst pilar1Disponible = !tieneConflicto(solicitudFecha, solicitudInicio, solicitudFin, pilar1Ocupados);\nconst pilar2Disponible = !tieneConflicto(solicitudFecha, solicitudInicio, solicitudFin, pilar2Ocupados);\n\nlet calendarioElegido;\nlet boxAsignado;\nlet error = null;\n\nif (pilar1Disponible && pilar2Disponible) {\n  // Ambos disponibles, elegir PILAR_1 por defecto\n  calendarioElegido = PILAR_1_ID;\n  boxAsignado = \"BOX 3: Asesor KEVIN\";\n} else if (pilar1Disponible) {\n  calendarioElegido = PILAR_1_ID;\n  boxAsignado = \"BOX 3: Asesor KEVIN\";\n} else if (pilar2Disponible) {\n  calendarioElegido = PILAR_2_ID;\n  boxAsignado = \"BOX 14: Asesor NICOLAS\";\n} else {\n  // Ninguno disponible\n  error = \"No hay calendarios disponibles para el horario solicitado\";\n}\n\n// Preparar respuesta\nif (error) {\n  return [{\n    json: {\n      error: error,\n      solicitud: solicitud\n    }\n  }];\n} else {\n  const respuesta = {\n    ...solicitud,\n    Calendar: calendarioElegido,\n    box: boxAsignado\n  };\n  \n  return [{\n    json: respuesta\n  }];\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        688,
+        -128
+      ],
+      "id": "c37820f3-05f2-42ed-a608-ea30baabf85b",
+      "name": "Code1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalizador de datos - maneja todas las estructuras posibles\nfunction extraerDatos(input) {\n  // Casos posibles de entrada\n  let datos;\n  \n  // Caso 1: Webhook con body\n  if (input.body) {\n    datos = input.body;\n  }\n  // Caso 2: Datos directos\n  else {\n    datos = input;\n  }\n  \n  // Si es array, tomar el primer elemento\n  if (Array.isArray(datos)) {\n    datos = datos[0];\n  }\n  \n  // Si tiene query, extraerlo\n  if (datos.query) {\n    // Si query es string, parsearlo\n    if (typeof datos.query === 'string') {\n      datos = JSON.parse(datos.query);\n    } else {\n      datos = datos.query;\n    }\n  }\n  \n  // Si después del parse es array, tomar primer elemento\n  if (Array.isArray(datos)) {\n    datos = datos[0];\n  }\n  \n  return datos;\n}\n\n// Obtener datos de entrada\nconst inputData = $json;\nconst solicitud = extraerDatos(inputData);\n\n// Devolver datos limpios\nreturn [{\n  json: solicitud\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -32,
+        -256
+      ],
+      "id": "5aa0de98-6a03-4ef0-a431-8323f68615b8",
+      "name": "Code2"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "=58622da0b58e9d801afe2b5619058187dacb72f5b6221ad36ddfdc8fb4dff85f@group.calendar.google.com",
+          "mode": "id"
+        },
+        "returnAll": true,
+        "timeMax": "={{ $now.plus({ month: 1}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        112,
+        -128
+      ],
+      "id": "de174ad3-8789-49e1-9456-1e93bd43bf76",
+      "name": "CORDOBA_1_CALENDARIO1",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "waitBetweenTries": 3000,
+      "executeOnce": true,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "VFsyOELtxOoaAxpu",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "=7179fff29ae72e0ff4f09d095df63f4e3085833bf42f6f0badd8a212c315031a@group.calendar.google.com",
+          "mode": "id"
+        },
+        "returnAll": true,
+        "timeMax": "={{ $now.plus({ month: 1}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        384,
+        -128
+      ],
+      "id": "c4cae19d-0854-4250-be3c-ae71e99ae08c",
+      "name": "CORDOBA_2_CALENDARIO1",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "waitBetweenTries": 3000,
+      "executeOnce": true,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "VFsyOELtxOoaAxpu",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst returnItems = [];\n\n// Verificar si hay items\nif (!items || items.length === 0) {\n  return [];\n}\n\nfor (const item of items) {\n  // Verificar que el item tenga la estructura correcta\n  if (!item || !item.json || !item.json.start || !item.json.start.dateTime) {\n    continue; // Saltar este item si no tiene la estructura correcta\n  }\n  \n  let data = item.json;\n  \n  const dia = data.start.dateTime.split('T')[0];\n  const inicio = data.start.dateTime.split('T')[1].substring(0, 5);\n  const final = data.end.dateTime.split('T')[1].substring(0, 5);\n  \n  returnItems.push({\n    json: {\n      dia: dia,\n      inicio: inicio, \n      final: final\n    }\n  });\n}\n\nreturn returnItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        256,
+        -256
+      ],
+      "id": "f9500db3-740d-44b1-bdda-e5534f94756a",
+      "name": "CORDOBA_1",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst returnItems = [];\n\n// Verificar si hay items\nif (!items || items.length === 0) {\n  return [];\n}\n\nfor (const item of items) {\n  // Verificar que el item tenga la estructura correcta\n  if (!item || !item.json || !item.json.start || !item.json.start.dateTime) {\n    continue; // Saltar este item si no tiene la estructura correcta\n  }\n  \n  let data = item.json;\n  \n  const dia = data.start.dateTime.split('T')[0];\n  const inicio = data.start.dateTime.split('T')[1].substring(0, 5);\n  const final = data.end.dateTime.split('T')[1].substring(0, 5);\n  \n  returnItems.push({\n    json: {\n      dia: dia,\n      inicio: inicio, \n      final: final\n    }\n  });\n}\n\nreturn returnItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        544,
+        -272
+      ],
+      "id": "802119dd-3851-49fc-a99b-dbee04a7c3d5",
+      "name": "CORDOBA_2",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    id_turno: $input.first().json.id,\n    id_calendario: $input.first().json.organizer.email,\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1056,
+        -112
+      ],
+      "id": "10584688-7979-42e1-98dc-df44fb054911",
+      "name": "Code"
+    }
+  ],
+  "pinData": {
+    "When Executed by Another Workflow": [
+      {
+        "json": {
+          "query": "{\"Fecha\":\"2026-03-16T08:00:00\",\"Fin\":\"2026-03-16T09:30:00\",\"Descripcion\":\"Servicio programado 30000 km - ONIX 1.2\\nPatente: auto1111\\nNombre: prueba redoo\\nTaller: Córdoba Capital\\nKilometraje: 30000 km\\nPrecio: $240.940\",\"Titulo\":\"2026-03-16 - Turno Agendado en Taller Córdoba - auto1111 - prueba redoo\"}"
+        }
+      }
+    ]
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "I2AoTBTESJGfDARe",
+      "projectId": "ZjcvWAM7NzgUDQT2",
+      "createdAt": "2025-09-29T14:08:27.266Z",
+      "updatedAt": "2025-09-29T14:08:27.266Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [
+    {
+      "id": "gWPya5QbcohaweQK",
+      "name": "Chexa",
+      "createdAt": "2025-09-05T03:09:59.791Z",
+      "updatedAt": "2026-02-27T20:35:35.652Z"
+    }
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2026-11-04T20:06:09.429Z",
+  "versionId": "43d11530-9bdd-42a7-b07b-e961c38ae30b"
+}
