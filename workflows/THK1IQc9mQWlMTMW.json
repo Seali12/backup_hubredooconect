@@ -1,0 +1,1730 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "38cd36ed-e051-4efd-af9e-4eb9455fdc8a",
+    "workflowId": "THK1IQc9mQWlMTMW",
+    "nodes": [
+      {
+        "id": "b8f73f7a-9a18-4a02-97a6-ff5f8319204e",
+        "name": "Cada 5 min - primer contacto",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          0,
+          0
+        ],
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "minutes",
+                "minutesInterval": 5
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "3fd7c28a-2182-4b0e-bbcd-649fdda04cb0",
+        "name": "Sumar clics a contacto abierto",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          224,
+          0
+        ],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "UPDATE meli_leads l JOIN meli_leads m ON m.user_id = l.user_id AND m.id <> l.id AND m.status IN ('template_sent', 'in_conversation') AND m.received_at >= NOW() - INTERVAL 2 DAY AND RIGHT(REGEXP_REPLACE(m.buyer_phone, '[^0-9]', ''), 8) = RIGHT(REGEXP_REPLACE(l.buyer_phone, '[^0-9]', ''), 8) SET l.status = m.status WHERE l.user_id = 2702850938 AND l.item_id = 'MLA2756424694' AND l.status = 'active' AND l.bot_uploaded = 0 AND REGEXP_REPLACE(IFNULL(l.buyer_phone, ''), '[^0-9]', '') <> ''",
+          "options": {}
+        },
+        "credentials": {
+          "mySql": {
+            "id": "FezTcDnLo3SqPHvd",
+            "name": "MySQL account"
+          }
+        },
+        "executeOnce": true
+      },
+      {
+        "id": "c75c598d-9907-45de-ad2e-1c413fa51913",
+        "name": "Leads nuevos sin WhatsApp",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          448,
+          0
+        ],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT * FROM meli_leads WHERE user_id = 2702850938 AND item_id = 'MLA2756424694' AND status = 'active' AND bot_uploaded = 0 AND REGEXP_REPLACE(IFNULL(buyer_phone, ''), '[^0-9]', '') <> '' AND received_at <= NOW() - INTERVAL 5 MINUTE AND received_at >= NOW() - INTERVAL 30 MINUTE ORDER BY received_at LIMIT 100",
+          "options": {}
+        },
+        "credentials": {
+          "mySql": {
+            "id": "FezTcDnLo3SqPHvd",
+            "name": "MySQL account"
+          }
+        },
+        "executeOnce": true
+      },
+      {
+        "id": "4cc83fd3-5aa0-4ad9-95b4-1bdb5f8c81b8",
+        "name": "Agrupar por telefono",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          672,
+          0
+        ],
+        "parameters": {
+          "jsCode": "// Un solo WhatsApp por persona aunque haya hecho varios clics\nconst nacional = (tel) => {\n  let d = String(tel || '').replace(/\\D/g, '');\n  if (d.startsWith('54')) d = d.slice(2);\n  if (d.startsWith('9')) d = d.slice(1);\n  if (d.startsWith('0')) d = d.slice(1);\n  return d;\n};\nconst grupos = {};\nfor (const { json: l } of $input.all()) {\n  const nac = nacional(l.buyer_phone);\n  if (nac.length < 10) continue;\n  const key = nac.slice(-8);\n  (grupos[key] = grupos[key] || []).push({ ...l, nac });\n}\nreturn Object.values(grupos).map(leads => {\n  const ultimo = leads[leads.length - 1];\n  const nombre = String(ultimo.buyer_nombre || '').trim();\n  return { json: {\n    ids_sql: leads.map(l => `'${l.id}'`).join(','),\n    ml_lead_id: ultimo.id,\n    telefono: '+549' + ultimo.nac.slice(-10),\n    nombre_pila: nombre.split(' ')[0] || nombre,\n    nombre,\n    email: ultimo.buyer_email || '-',\n    // el template ya dice \"NISSAN {{2}}\": se saca \"Nuevo Nissan\"/\"Nissan\" del titulo\n    modelo: String(ultimo.item_titulo || '').replace(/^\\s*(nuevo\\s+)?nissan\\s+/i, '').trim()\n  } };\n});"
+        }
+      },
+      {
+        "id": "9b26b0d9-7c07-4c03-840d-72cf591bc8dd",
+        "name": "Twilio template primer contacto",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          896,
+          0
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.twilio.com/2010-04-01/Accounts/TWILIO_SID_OCULTO/Messages.json",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpBasicAuth",
+          "sendBody": true,
+          "contentType": "multipart-form-data",
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "MessagingServiceSid",
+                "value": "MGb0752daac2cb0fa7e1a893dae90651a3"
+              },
+              {
+                "name": "To",
+                "value": "=whatsapp:{{ $json.telefono }}"
+              },
+              {
+                "name": "ContentSid",
+                "value": "HX30f301096e8e8c8990a68d60b8a56fe1"
+              },
+              {
+                "name": "ContentVariables",
+                "value": "={{ JSON.stringify({ \"1\": $json.nombre_pila, \"2\": $json.modelo, \"3\": $json.nombre, \"4\": $json.email, \"5\": $json.ml_lead_id }) }}"
+              },
+              {
+                "name": "From",
+                "value": "whatsapp:+5491176470070"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "credentials": {
+          "httpBasicAuth": {
+            "id": "2mSmUWqeRXMBKQOe",
+            "name": "NISSAN ARGENTINA-TWILIO"
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "id": "1e6ccb68-c283-44d1-93ff-b33af26354aa",
+        "name": "Marcar template enviado",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          1120,
+          0
+        ],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "UPDATE meli_leads SET status = '{{ $json.sid ? 'template_sent' : 'template_error' }}', sf_response = '{{ String($json.sid || $json.message || $json.error?.message || '').replace(/'/g, \"''\").slice(0, 250) }}' WHERE user_id = 2702850938 AND id IN ({{ $('Agrupar por telefono').item.json.ids_sql }})",
+          "options": {}
+        },
+        "credentials": {
+          "mySql": {
+            "id": "FezTcDnLo3SqPHvd",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "id": "9730e80b-82a5-4ced-86ce-be5f71131d4e",
+        "name": "Cada 5 min - sin respuesta",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          0,
+          224
+        ],
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "minutes",
+                "minutesInterval": 5
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "2ac4dcd6-79eb-41a0-86eb-4ddcb4296583",
+        "name": "Leads sin respuesta",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          224,
+          224
+        ],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT * FROM meli_leads WHERE user_id = 2702850938 AND item_id = 'MLA2756424694' AND bot_uploaded = 0 AND ((status = 'template_sent' AND RIGHT(REGEXP_REPLACE(buyer_phone, '[^0-9]', ''), 8) IN (SELECT suf FROM (SELECT RIGHT(REGEXP_REPLACE(buyer_phone, '[^0-9]', ''), 8) AS suf FROM meli_leads WHERE user_id = 2702850938 AND item_id = 'MLA2756424694' AND status = 'template_sent' AND received_at <= NOW() - INTERVAL 70 MINUTE AND received_at >= NOW() - INTERVAL 3 HOUR) t)) OR (status = 'active' AND REGEXP_REPLACE(IFNULL(buyer_phone, ''), '[^0-9]', '') = '' AND received_at <= NOW() - INTERVAL 5 MINUTE AND received_at >= NOW() - INTERVAL 30 MINUTE) OR (status = 'template_error') OR (status = 'in_conversation' AND received_at <= NOW() - INTERVAL 24 HOUR AND received_at >= NOW() - INTERVAL 5 DAY)) ORDER BY received_at LIMIT 100",
+          "options": {}
+        },
+        "credentials": {
+          "mySql": {
+            "id": "FezTcDnLo3SqPHvd",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "id": "d4d6d2af-a5e9-4900-8af1-214208abc3b2",
+        "name": "Armar carga sin respuesta",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          448,
+          224
+        ],
+        "parameters": {
+          "jsCode": "// Concesionario: se deduce la ciudad por la característica del celular.\n// AMBA (11 y 2xx del conurbano) o desconocida -> '' (el matcher elige una sucursal CABA, como hoy).\nconst CARACTERISTICAS = {\n  '2901': 'Ushuaia', '2964': 'Río Grande', '2966': 'Comodoro Rivadavia', '2920': 'Neuquén', '294': 'Neuquén',\n  '2954': 'Santa Rosa', '2302': 'General Pico', '3564': 'San Francisco', '3492': 'Rafaela', '3462': 'Venado Tuerto',\n  '2284': 'Olavarría', '2324': 'Mercedes', '2477': 'Pergamino', '2392': 'Trenque Lauquen', '2227': 'Lobos',\n  '3489': 'Campana', '230': 'Pilar', '291': 'Bahía Blanca', '223': 'Mar del Plata', '236': 'Junín', '336': 'San Nicolás',\n  '362': 'Resistencia', '364': 'Roque Saenz Peña', '370': 'Resistencia', '280': 'Trelew', '297': 'Comodoro Rivadavia',\n  '351': 'Córdoba', '353': 'Villa María', '379': 'Corrientes', '343': 'Paraná', '345': 'Concordia',\n  '261': 'Godoy Cruz', '260': 'San Rafael', '266': 'Godoy Cruz', '376': 'Posadas', '299': 'Neuquén', '264': 'San Juan',\n  '342': 'Santa Fe', '341': 'Rosario', '381': 'Yerba Buena', '387': 'Yerba Buena', '388': 'Yerba Buena',\n  '385': 'Yerba Buena', '383': 'Yerba Buena', '380': 'Yerba Buena'\n};\nconst nacional = (tel) => {\n  let d = String(tel || '').replace(/\\D/g, '');\n  if (d.startsWith('54')) d = d.slice(2);\n  if (d.startsWith('9')) d = d.slice(1);\n  if (d.startsWith('0')) d = d.slice(1);\n  return d;\n};\nconst ciudad = (nac) => {\n  for (const len of [4, 3]) { const c = CARACTERISTICAS[nac.slice(0, len)]; if (c) return c; }\n  return '';\n};\nconst dniDeCuit = (cuit) => { const d = String(cuit || '').replace(/\\D/g, ''); return d.length === 11 ? d.slice(2, 10) : '-'; };\n\n// Nissan: un solo lead por persona, con la última publicación consultada (vienen ordenados por received_at).\n// Todos los clics de la persona viajan en ml_lead_ids y quedan marcados como enviados.\nconst grupos = new Map();\nfor (const { json: l } of $input.all()) {\n  const nac = nacional(l.buyer_phone);\n  const key = nac.length >= 10 ? nac.slice(-8) : l.id;\n  const g = grupos.get(key) || { ids: [], ultimo: null, nac };\n  g.ids.push(l.id);\n  g.ultimo = l;\n  grupos.set(key, g);\n}\n\n// Motivo de la carga automática. El WhatsApp de cierre solo va a quien recibió el template y no contestó.\nconst MOTIVO = {\n  template_sent: 'El cliente no respondió el WhatsApp en 1 hora',\n  template_error: 'No se pudo enviar el WhatsApp; se requiere contacto desde el concesionario',\n  in_conversation: 'El cliente conversó con el asesor virtual pero la conversación no se cerró'\n};\n\nreturn [...grupos.values()].map(({ ids, ultimo: l, nac }) => {\n  const tieneTel = nac.length >= 10;\n  const nombre = String(l.buyer_nombre || '').trim();\n  const motivo = !tieneTel ? 'El lead no tiene celular' : (MOTIVO[l.status] || MOTIVO.template_sent);\n  return { json: {\n    goodLead: 'true',\n    idConversation: '',\n    number: tieneTel ? '+549' + nac.slice(-10) : '',\n    name: nombre,\n    pago: 'No especifica',\n    usado: 'No especifica',\n    interes: 'cold',\n    productoInteres: l.item_titulo || '',\n    resumen: `Lead de Mercado Libre (publicación ${l.item_id}: ${l.item_titulo}). ${motivo}; se deriva automáticamente.`,\n    dni: dniDeCuit(l.buyer_cuit),\n    email: l.buyer_email || '-',\n    sucursal: tieneTel ? ciudad(nac) : '',\n    ml_lead_ids: ids.join(','),\n    nombre_pila: nombre.split(' ')[0] || nombre,\n    enviar_whatsapp: tieneTel && l.status === 'template_sent'\n  } };\n});"
+        }
+      },
+      {
+        "id": "ad8bf574-129d-478a-8f32-d9909f885e58",
+        "name": "close_conversation NISSAN ML v2",
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1.2,
+        "position": [
+          672,
+          224
+        ],
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "value": "STrBWKCOIKeMuXwl",
+            "mode": "list",
+            "cachedResultName": "close_conversation NISSAN ML v2"
+          },
+          "mode": "each",
+          "workflowInputs": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "goodLead": "={{ $json.goodLead }}",
+              "idConversation": "={{ $json.idConversation }}",
+              "number": "={{ $json.number }}",
+              "name": "={{ $json.name }}",
+              "pago": "={{ $json.pago }}",
+              "usado": "={{ $json.usado }}",
+              "interes": "={{ $json.interes }}",
+              "productoInteres": "={{ $json.productoInteres }}",
+              "resumen": "={{ $json.resumen }}",
+              "dni": "={{ $json.dni }}",
+              "email": "={{ $json.email }}",
+              "sucursal": "={{ $json.sucursal }}",
+              "no_derivar": "false",
+              "ml_lead_ids": "={{ $json.ml_lead_ids }}"
+            },
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "goodLead",
+                "displayName": "goodLead",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "idConversation",
+                "displayName": "idConversation",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "number",
+                "displayName": "number",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "name",
+                "displayName": "name",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "pago",
+                "displayName": "pago",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "usado",
+                "displayName": "usado",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "interes",
+                "displayName": "interes",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "productoInteres",
+                "displayName": "productoInteres",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "resumen",
+                "displayName": "resumen",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "dni",
+                "displayName": "dni",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "email",
+                "displayName": "email",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "sucursal",
+                "displayName": "sucursal",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "nombre_corregido",
+                "displayName": "nombre_corregido",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": true
+              },
+              {
+                "id": "no_derivar",
+                "displayName": "no_derivar",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "ml_lead_ids",
+                "displayName": "ml_lead_ids",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "ml_nombre",
+                "displayName": "ml_nombre",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": true
+              },
+              {
+                "id": "ml_email",
+                "displayName": "ml_email",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": true
+              },
+              {
+                "id": "ml_dni",
+                "displayName": "ml_dni",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": true
+              },
+              {
+                "id": "ml_modelo",
+                "displayName": "ml_modelo",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": true
+              },
+              {
+                "id": "ml_phone",
+                "displayName": "ml_phone",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": true
+              }
+            ],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": false
+          },
+          "options": {
+            "waitForSubWorkflow": true
+          }
+        }
+      },
+      {
+        "id": "34b7dbbb-8c8a-4da3-b59f-6b1b63ac4b23",
+        "name": "Mandar WhatsApp de cierre?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          896,
+          224
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "leftValue": "={{ $('Armar carga sin respuesta').item.json.enviar_whatsapp }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        }
+      },
+      {
+        "id": "99ffa2bb-2b03-49b9-9dbc-d0e88525b01a",
+        "name": "Twilio template cierre sin respuesta",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1120,
+          224
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.twilio.com/2010-04-01/Accounts/TWILIO_SID_OCULTO/Messages.json",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpBasicAuth",
+          "sendBody": true,
+          "contentType": "multipart-form-data",
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "MessagingServiceSid",
+                "value": "MGb0752daac2cb0fa7e1a893dae90651a3"
+              },
+              {
+                "name": "To",
+                "value": "=whatsapp:{{ $('Armar carga sin respuesta').item.json.number }}"
+              },
+              {
+                "name": "ContentSid",
+                "value": "HX02ecf6ad9344e24864b90a1a16f1dd74"
+              },
+              {
+                "name": "ContentVariables",
+                "value": "={{ JSON.stringify({ \"1\": $('Armar carga sin respuesta').item.json.nombre_pila }) }}"
+              },
+              {
+                "name": "From",
+                "value": "whatsapp:+5491176470070"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "credentials": {
+          "httpBasicAuth": {
+            "id": "2mSmUWqeRXMBKQOe",
+            "name": "NISSAN ARGENTINA-TWILIO"
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "id": "76788a04-e260-457b-ac09-4299efa49b18",
+        "name": "Webhook bot - buscar lead ML",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.1,
+        "position": [
+          0,
+          544
+        ],
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "nissan-ml-lead",
+          "responseMode": "responseNode",
+          "options": {}
+        },
+        "webhookId": "847a2452-cb27-4fe7-bb5d-843cd5b37cf8"
+      },
+      {
+        "id": "7884fbe7-5f37-49b6-b5da-a3121370c3b3",
+        "name": "Sufijo telefono",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          224,
+          544
+        ],
+        "parameters": {
+          "jsCode": "const b = $input.first().json.body || {};\nconst d = String(b.phone || b.from || '').replace(/\\D/g, '');\nreturn [{ json: { sufijo: d.length >= 8 ? d.slice(-8) : '' } }];"
+        }
+      },
+      {
+        "id": "fcca8dc5-d27e-4a22-8ef3-0be2a7a1d195",
+        "name": "Buscar leads del telefono",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          448,
+          544
+        ],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT * FROM meli_leads WHERE user_id = 2702850938 AND item_id = 'MLA2756424694' AND bot_uploaded = 0 AND status IN ('active', 'template_sent', 'in_conversation') AND '{{ $json.sufijo }}' <> '' AND RIGHT(REGEXP_REPLACE(buyer_phone, '[^0-9]', ''), 8) = '{{ $json.sufijo }}' AND received_at >= NOW() - INTERVAL 7 DAY ORDER BY received_at",
+          "options": {}
+        },
+        "credentials": {
+          "mySql": {
+            "id": "FezTcDnLo3SqPHvd",
+            "name": "MySQL account"
+          }
+        },
+        "alwaysOutputData": true
+      },
+      {
+        "id": "6d2958e0-2cf6-43de-a17c-1b813d03d4f9",
+        "name": "Armar datos para el agente",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          672,
+          544
+        ],
+        "parameters": {
+          "jsCode": "const leads = $input.all().map(i => i.json).filter(l => l.id);\nif (!leads.length) return [{ json: { found: false, ml_caso: 'sin_datos_ml' } }];\nconst ultimo = leads[leads.length - 1];\nlet d = String(ultimo.buyer_phone || '').replace(/\\D/g, '');\nif (d.startsWith('54')) d = d.slice(2);\nif (d.startsWith('9')) d = d.slice(1);\nif (d.startsWith('0')) d = d.slice(1);\nconst cuit = String(ultimo.buyer_cuit || '').replace(/\\D/g, '');\nreturn [{ json: {\n  found: true,\n  ml_caso: leads.some(l => l.status === 'template_sent') ? 'template' : 'dos_clics',\n  ml_lead_ids: leads.map(l => l.id).join(','),\n  ids_sql: leads.map(l => `'${l.id}'`).join(','),\n  ml_nombre: String(ultimo.buyer_nombre || '').trim(),\n  ml_email: ultimo.buyer_email || '-',\n  ml_phone: d.length >= 10 ? '+549' + d.slice(-10) : '-',\n  ml_dni: cuit.length === 11 ? cuit.slice(2, 10) : '-',\n  modelo: ultimo.item_titulo || '',\n  item_permalink: ultimo.item_permalink || ''\n} }];"
+        }
+      },
+      {
+        "id": "22ef73f8-69ef-4b92-b0c2-7a343d2ecbef",
+        "name": "Encontrado?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          896,
+          544
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "leftValue": "={{ $json.found }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        }
+      },
+      {
+        "id": "c705edba-696f-48d7-bf74-f43086e207d7",
+        "name": "Marcar en conversacion",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          1120,
+          448
+        ],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "UPDATE meli_leads SET status = 'in_conversation' WHERE user_id = 2702850938 AND id IN ({{ $json.ids_sql }})",
+          "options": {}
+        },
+        "credentials": {
+          "mySql": {
+            "id": "FezTcDnLo3SqPHvd",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "id": "cedb5c4d-f2d5-4b3a-905b-207ea896efc4",
+        "name": "Responder lead",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          1344,
+          448
+        ],
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify($('Armar datos para el agente').first().json) }}",
+          "options": {}
+        }
+      },
+      {
+        "id": "f6c628f2-c48e-4995-abdf-b12c64b3182d",
+        "name": "Responder sin lead",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          1120,
+          640
+        ],
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "{ \"found\": false, \"ml_caso\": \"sin_datos_ml\" }",
+          "options": {}
+        }
+      }
+    ],
+    "connections": {
+      "Cada 5 min - primer contacto": {
+        "main": [
+          [
+            {
+              "node": "Sumar clics a contacto abierto",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Sumar clics a contacto abierto": {
+        "main": [
+          [
+            {
+              "node": "Leads nuevos sin WhatsApp",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Leads nuevos sin WhatsApp": {
+        "main": [
+          [
+            {
+              "node": "Agrupar por telefono",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Agrupar por telefono": {
+        "main": [
+          [
+            {
+              "node": "Twilio template primer contacto",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Twilio template primer contacto": {
+        "main": [
+          [
+            {
+              "node": "Marcar template enviado",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Cada 5 min - sin respuesta": {
+        "main": [
+          [
+            {
+              "node": "Leads sin respuesta",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Leads sin respuesta": {
+        "main": [
+          [
+            {
+              "node": "Armar carga sin respuesta",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Armar carga sin respuesta": {
+        "main": [
+          [
+            {
+              "node": "close_conversation NISSAN ML v2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "close_conversation NISSAN ML v2": {
+        "main": [
+          [
+            {
+              "node": "Mandar WhatsApp de cierre?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Mandar WhatsApp de cierre?": {
+        "main": [
+          [
+            {
+              "node": "Twilio template cierre sin respuesta",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Webhook bot - buscar lead ML": {
+        "main": [
+          [
+            {
+              "node": "Sufijo telefono",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Sufijo telefono": {
+        "main": [
+          [
+            {
+              "node": "Buscar leads del telefono",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Buscar leads del telefono": {
+        "main": [
+          [
+            {
+              "node": "Armar datos para el agente",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Armar datos para el agente": {
+        "main": [
+          [
+            {
+              "node": "Encontrado?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Encontrado?": {
+        "main": [
+          [
+            {
+              "node": "Marcar en conversacion",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Responder sin lead",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Marcar en conversacion": {
+        "main": [
+          [
+            {
+              "node": "Responder lead",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "MARCELO AGUSTIN DRI (via MCP)",
+    "name": "Cargar template_error y conversaciones colgadas",
+    "description": "template_error: a Pilot como Frío sin WhatsApp. in_conversation de 24 h a 5 días sin cargar (el bot no cerró): a Pilot como Frío sin WhatsApp.",
+    "autosaved": false,
+    "createdAt": "2026-11-12T13:10:38.845Z",
+    "updatedAt": "2026-11-12T13:10:38.845Z"
+  },
+  "activeVersionId": "38cd36ed-e051-4efd-af9e-4eb9455fdc8a",
+  "connections": {
+    "Cada 5 min - primer contacto": {
+      "main": [
+        [
+          {
+            "node": "Sumar clics a contacto abierto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sumar clics a contacto abierto": {
+      "main": [
+        [
+          {
+            "node": "Leads nuevos sin WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leads nuevos sin WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Agrupar por telefono",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agrupar por telefono": {
+      "main": [
+        [
+          {
+            "node": "Twilio template primer contacto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Twilio template primer contacto": {
+      "main": [
+        [
+          {
+            "node": "Marcar template enviado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cada 5 min - sin respuesta": {
+      "main": [
+        [
+          {
+            "node": "Leads sin respuesta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leads sin respuesta": {
+      "main": [
+        [
+          {
+            "node": "Armar carga sin respuesta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Armar carga sin respuesta": {
+      "main": [
+        [
+          {
+            "node": "close_conversation NISSAN ML v2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "close_conversation NISSAN ML v2": {
+      "main": [
+        [
+          {
+            "node": "Mandar WhatsApp de cierre?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mandar WhatsApp de cierre?": {
+      "main": [
+        [
+          {
+            "node": "Twilio template cierre sin respuesta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook bot - buscar lead ML": {
+      "main": [
+        [
+          {
+            "node": "Sufijo telefono",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sufijo telefono": {
+      "main": [
+        [
+          {
+            "node": "Buscar leads del telefono",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar leads del telefono": {
+      "main": [
+        [
+          {
+            "node": "Armar datos para el agente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Armar datos para el agente": {
+      "main": [
+        [
+          {
+            "node": "Encontrado?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Encontrado?": {
+      "main": [
+        [
+          {
+            "node": "Marcar en conversacion",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder sin lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marcar en conversacion": {
+      "main": [
+        [
+          {
+            "node": "Responder lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-11-04T22:33:55.721Z",
+  "id": "THK1IQc9mQWlMTMW",
+  "isArchived": false,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "name": "NISSAN ML - Leads Mercado Libre",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "id": "b8f73f7a-9a18-4a02-97a6-ff5f8319204e",
+      "name": "Cada 5 min - primer contacto",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "3fd7c28a-2182-4b0e-bbcd-649fdda04cb0",
+      "name": "Sumar clics a contacto abierto",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        224,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE meli_leads l JOIN meli_leads m ON m.user_id = l.user_id AND m.id <> l.id AND m.status IN ('template_sent', 'in_conversation') AND m.received_at >= NOW() - INTERVAL 2 DAY AND RIGHT(REGEXP_REPLACE(m.buyer_phone, '[^0-9]', ''), 8) = RIGHT(REGEXP_REPLACE(l.buyer_phone, '[^0-9]', ''), 8) SET l.status = m.status WHERE l.user_id = 2702850938 AND l.item_id = 'MLA2756424694' AND l.status = 'active' AND l.bot_uploaded = 0 AND REGEXP_REPLACE(IFNULL(l.buyer_phone, ''), '[^0-9]', '') <> ''",
+        "options": {}
+      },
+      "credentials": {
+        "mySql": {
+          "id": "FezTcDnLo3SqPHvd",
+          "name": "MySQL account"
+        }
+      },
+      "executeOnce": true
+    },
+    {
+      "id": "c75c598d-9907-45de-ad2e-1c413fa51913",
+      "name": "Leads nuevos sin WhatsApp",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        448,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM meli_leads WHERE user_id = 2702850938 AND item_id = 'MLA2756424694' AND status = 'active' AND bot_uploaded = 0 AND REGEXP_REPLACE(IFNULL(buyer_phone, ''), '[^0-9]', '') <> '' AND received_at <= NOW() - INTERVAL 5 MINUTE AND received_at >= NOW() - INTERVAL 30 MINUTE ORDER BY received_at LIMIT 100",
+        "options": {}
+      },
+      "credentials": {
+        "mySql": {
+          "id": "FezTcDnLo3SqPHvd",
+          "name": "MySQL account"
+        }
+      },
+      "executeOnce": true
+    },
+    {
+      "id": "4cc83fd3-5aa0-4ad9-95b4-1bdb5f8c81b8",
+      "name": "Agrupar por telefono",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Un solo WhatsApp por persona aunque haya hecho varios clics\nconst nacional = (tel) => {\n  let d = String(tel || '').replace(/\\D/g, '');\n  if (d.startsWith('54')) d = d.slice(2);\n  if (d.startsWith('9')) d = d.slice(1);\n  if (d.startsWith('0')) d = d.slice(1);\n  return d;\n};\nconst grupos = {};\nfor (const { json: l } of $input.all()) {\n  const nac = nacional(l.buyer_phone);\n  if (nac.length < 10) continue;\n  const key = nac.slice(-8);\n  (grupos[key] = grupos[key] || []).push({ ...l, nac });\n}\nreturn Object.values(grupos).map(leads => {\n  const ultimo = leads[leads.length - 1];\n  const nombre = String(ultimo.buyer_nombre || '').trim();\n  return { json: {\n    ids_sql: leads.map(l => `'${l.id}'`).join(','),\n    ml_lead_id: ultimo.id,\n    telefono: '+549' + ultimo.nac.slice(-10),\n    nombre_pila: nombre.split(' ')[0] || nombre,\n    nombre,\n    email: ultimo.buyer_email || '-',\n    // el template ya dice \"NISSAN {{2}}\": se saca \"Nuevo Nissan\"/\"Nissan\" del titulo\n    modelo: String(ultimo.item_titulo || '').replace(/^\\s*(nuevo\\s+)?nissan\\s+/i, '').trim()\n  } };\n});"
+      }
+    },
+    {
+      "id": "9b26b0d9-7c07-4c03-840d-72cf591bc8dd",
+      "name": "Twilio template primer contacto",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        896,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.twilio.com/2010-04-01/Accounts/TWILIO_SID_OCULTO/Messages.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "MessagingServiceSid",
+              "value": "MGb0752daac2cb0fa7e1a893dae90651a3"
+            },
+            {
+              "name": "To",
+              "value": "=whatsapp:{{ $json.telefono }}"
+            },
+            {
+              "name": "ContentSid",
+              "value": "HX30f301096e8e8c8990a68d60b8a56fe1"
+            },
+            {
+              "name": "ContentVariables",
+              "value": "={{ JSON.stringify({ \"1\": $json.nombre_pila, \"2\": $json.modelo, \"3\": $json.nombre, \"4\": $json.email, \"5\": $json.ml_lead_id }) }}"
+            },
+            {
+              "name": "From",
+              "value": "whatsapp:+5491176470070"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "2mSmUWqeRXMBKQOe",
+          "name": "NISSAN ARGENTINA-TWILIO"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "1e6ccb68-c283-44d1-93ff-b33af26354aa",
+      "name": "Marcar template enviado",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        1120,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE meli_leads SET status = '{{ $json.sid ? 'template_sent' : 'template_error' }}', sf_response = '{{ String($json.sid || $json.message || $json.error?.message || '').replace(/'/g, \"''\").slice(0, 250) }}' WHERE user_id = 2702850938 AND id IN ({{ $('Agrupar por telefono').item.json.ids_sql }})",
+        "options": {}
+      },
+      "credentials": {
+        "mySql": {
+          "id": "FezTcDnLo3SqPHvd",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "id": "9730e80b-82a5-4ced-86ce-be5f71131d4e",
+      "name": "Cada 5 min - sin respuesta",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        224
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "2ac4dcd6-79eb-41a0-86eb-4ddcb4296583",
+      "name": "Leads sin respuesta",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        224,
+        224
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM meli_leads WHERE user_id = 2702850938 AND item_id = 'MLA2756424694' AND bot_uploaded = 0 AND ((status = 'template_sent' AND RIGHT(REGEXP_REPLACE(buyer_phone, '[^0-9]', ''), 8) IN (SELECT suf FROM (SELECT RIGHT(REGEXP_REPLACE(buyer_phone, '[^0-9]', ''), 8) AS suf FROM meli_leads WHERE user_id = 2702850938 AND item_id = 'MLA2756424694' AND status = 'template_sent' AND received_at <= NOW() - INTERVAL 70 MINUTE AND received_at >= NOW() - INTERVAL 3 HOUR) t)) OR (status = 'active' AND REGEXP_REPLACE(IFNULL(buyer_phone, ''), '[^0-9]', '') = '' AND received_at <= NOW() - INTERVAL 5 MINUTE AND received_at >= NOW() - INTERVAL 30 MINUTE) OR (status = 'template_error') OR (status = 'in_conversation' AND received_at <= NOW() - INTERVAL 24 HOUR AND received_at >= NOW() - INTERVAL 5 DAY)) ORDER BY received_at LIMIT 100",
+        "options": {}
+      },
+      "credentials": {
+        "mySql": {
+          "id": "FezTcDnLo3SqPHvd",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "id": "d4d6d2af-a5e9-4900-8af1-214208abc3b2",
+      "name": "Armar carga sin respuesta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        224
+      ],
+      "parameters": {
+        "jsCode": "// Concesionario: se deduce la ciudad por la característica del celular.\n// AMBA (11 y 2xx del conurbano) o desconocida -> '' (el matcher elige una sucursal CABA, como hoy).\nconst CARACTERISTICAS = {\n  '2901': 'Ushuaia', '2964': 'Río Grande', '2966': 'Comodoro Rivadavia', '2920': 'Neuquén', '294': 'Neuquén',\n  '2954': 'Santa Rosa', '2302': 'General Pico', '3564': 'San Francisco', '3492': 'Rafaela', '3462': 'Venado Tuerto',\n  '2284': 'Olavarría', '2324': 'Mercedes', '2477': 'Pergamino', '2392': 'Trenque Lauquen', '2227': 'Lobos',\n  '3489': 'Campana', '230': 'Pilar', '291': 'Bahía Blanca', '223': 'Mar del Plata', '236': 'Junín', '336': 'San Nicolás',\n  '362': 'Resistencia', '364': 'Roque Saenz Peña', '370': 'Resistencia', '280': 'Trelew', '297': 'Comodoro Rivadavia',\n  '351': 'Córdoba', '353': 'Villa María', '379': 'Corrientes', '343': 'Paraná', '345': 'Concordia',\n  '261': 'Godoy Cruz', '260': 'San Rafael', '266': 'Godoy Cruz', '376': 'Posadas', '299': 'Neuquén', '264': 'San Juan',\n  '342': 'Santa Fe', '341': 'Rosario', '381': 'Yerba Buena', '387': 'Yerba Buena', '388': 'Yerba Buena',\n  '385': 'Yerba Buena', '383': 'Yerba Buena', '380': 'Yerba Buena'\n};\nconst nacional = (tel) => {\n  let d = String(tel || '').replace(/\\D/g, '');\n  if (d.startsWith('54')) d = d.slice(2);\n  if (d.startsWith('9')) d = d.slice(1);\n  if (d.startsWith('0')) d = d.slice(1);\n  return d;\n};\nconst ciudad = (nac) => {\n  for (const len of [4, 3]) { const c = CARACTERISTICAS[nac.slice(0, len)]; if (c) return c; }\n  return '';\n};\nconst dniDeCuit = (cuit) => { const d = String(cuit || '').replace(/\\D/g, ''); return d.length === 11 ? d.slice(2, 10) : '-'; };\n\n// Nissan: un solo lead por persona, con la última publicación consultada (vienen ordenados por received_at).\n// Todos los clics de la persona viajan en ml_lead_ids y quedan marcados como enviados.\nconst grupos = new Map();\nfor (const { json: l } of $input.all()) {\n  const nac = nacional(l.buyer_phone);\n  const key = nac.length >= 10 ? nac.slice(-8) : l.id;\n  const g = grupos.get(key) || { ids: [], ultimo: null, nac };\n  g.ids.push(l.id);\n  g.ultimo = l;\n  grupos.set(key, g);\n}\n\n// Motivo de la carga automática. El WhatsApp de cierre solo va a quien recibió el template y no contestó.\nconst MOTIVO = {\n  template_sent: 'El cliente no respondió el WhatsApp en 1 hora',\n  template_error: 'No se pudo enviar el WhatsApp; se requiere contacto desde el concesionario',\n  in_conversation: 'El cliente conversó con el asesor virtual pero la conversación no se cerró'\n};\n\nreturn [...grupos.values()].map(({ ids, ultimo: l, nac }) => {\n  const tieneTel = nac.length >= 10;\n  const nombre = String(l.buyer_nombre || '').trim();\n  const motivo = !tieneTel ? 'El lead no tiene celular' : (MOTIVO[l.status] || MOTIVO.template_sent);\n  return { json: {\n    goodLead: 'true',\n    idConversation: '',\n    number: tieneTel ? '+549' + nac.slice(-10) : '',\n    name: nombre,\n    pago: 'No especifica',\n    usado: 'No especifica',\n    interes: 'cold',\n    productoInteres: l.item_titulo || '',\n    resumen: `Lead de Mercado Libre (publicación ${l.item_id}: ${l.item_titulo}). ${motivo}; se deriva automáticamente.`,\n    dni: dniDeCuit(l.buyer_cuit),\n    email: l.buyer_email || '-',\n    sucursal: tieneTel ? ciudad(nac) : '',\n    ml_lead_ids: ids.join(','),\n    nombre_pila: nombre.split(' ')[0] || nombre,\n    enviar_whatsapp: tieneTel && l.status === 'template_sent'\n  } };\n});"
+      }
+    },
+    {
+      "id": "ad8bf574-129d-478a-8f32-d9909f885e58",
+      "name": "close_conversation NISSAN ML v2",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        672,
+        224
+      ],
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "STrBWKCOIKeMuXwl",
+          "mode": "list",
+          "cachedResultName": "close_conversation NISSAN ML v2"
+        },
+        "mode": "each",
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "goodLead": "={{ $json.goodLead }}",
+            "idConversation": "={{ $json.idConversation }}",
+            "number": "={{ $json.number }}",
+            "name": "={{ $json.name }}",
+            "pago": "={{ $json.pago }}",
+            "usado": "={{ $json.usado }}",
+            "interes": "={{ $json.interes }}",
+            "productoInteres": "={{ $json.productoInteres }}",
+            "resumen": "={{ $json.resumen }}",
+            "dni": "={{ $json.dni }}",
+            "email": "={{ $json.email }}",
+            "sucursal": "={{ $json.sucursal }}",
+            "no_derivar": "false",
+            "ml_lead_ids": "={{ $json.ml_lead_ids }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "goodLead",
+              "displayName": "goodLead",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "idConversation",
+              "displayName": "idConversation",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "number",
+              "displayName": "number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "pago",
+              "displayName": "pago",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "usado",
+              "displayName": "usado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "interes",
+              "displayName": "interes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "productoInteres",
+              "displayName": "productoInteres",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "resumen",
+              "displayName": "resumen",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "dni",
+              "displayName": "dni",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "sucursal",
+              "displayName": "sucursal",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "nombre_corregido",
+              "displayName": "nombre_corregido",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "no_derivar",
+              "displayName": "no_derivar",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ml_lead_ids",
+              "displayName": "ml_lead_ids",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ml_nombre",
+              "displayName": "ml_nombre",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "ml_email",
+              "displayName": "ml_email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "ml_dni",
+              "displayName": "ml_dni",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "ml_modelo",
+              "displayName": "ml_modelo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "ml_phone",
+              "displayName": "ml_phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "34b7dbbb-8c8a-4da3-b59f-6b1b63ac4b23",
+      "name": "Mandar WhatsApp de cierre?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        896,
+        224
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $('Armar carga sin respuesta').item.json.enviar_whatsapp }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "99ffa2bb-2b03-49b9-9dbc-d0e88525b01a",
+      "name": "Twilio template cierre sin respuesta",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        224
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.twilio.com/2010-04-01/Accounts/TWILIO_SID_OCULTO/Messages.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "MessagingServiceSid",
+              "value": "MGb0752daac2cb0fa7e1a893dae90651a3"
+            },
+            {
+              "name": "To",
+              "value": "=whatsapp:{{ $('Armar carga sin respuesta').item.json.number }}"
+            },
+            {
+              "name": "ContentSid",
+              "value": "HX02ecf6ad9344e24864b90a1a16f1dd74"
+            },
+            {
+              "name": "ContentVariables",
+              "value": "={{ JSON.stringify({ \"1\": $('Armar carga sin respuesta').item.json.nombre_pila }) }}"
+            },
+            {
+              "name": "From",
+              "value": "whatsapp:+5491176470070"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "2mSmUWqeRXMBKQOe",
+          "name": "NISSAN ARGENTINA-TWILIO"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "76788a04-e260-457b-ac09-4299efa49b18",
+      "name": "Webhook bot - buscar lead ML",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        544
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "nissan-ml-lead",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "847a2452-cb27-4fe7-bb5d-843cd5b37cf8"
+    },
+    {
+      "id": "7884fbe7-5f37-49b6-b5da-a3121370c3b3",
+      "name": "Sufijo telefono",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        544
+      ],
+      "parameters": {
+        "jsCode": "const b = $input.first().json.body || {};\nconst d = String(b.phone || b.from || '').replace(/\\D/g, '');\nreturn [{ json: { sufijo: d.length >= 8 ? d.slice(-8) : '' } }];"
+      }
+    },
+    {
+      "id": "fcca8dc5-d27e-4a22-8ef3-0be2a7a1d195",
+      "name": "Buscar leads del telefono",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        448,
+        544
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM meli_leads WHERE user_id = 2702850938 AND item_id = 'MLA2756424694' AND bot_uploaded = 0 AND status IN ('active', 'template_sent', 'in_conversation') AND '{{ $json.sufijo }}' <> '' AND RIGHT(REGEXP_REPLACE(buyer_phone, '[^0-9]', ''), 8) = '{{ $json.sufijo }}' AND received_at >= NOW() - INTERVAL 7 DAY ORDER BY received_at",
+        "options": {}
+      },
+      "credentials": {
+        "mySql": {
+          "id": "FezTcDnLo3SqPHvd",
+          "name": "MySQL account"
+        }
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "id": "6d2958e0-2cf6-43de-a17c-1b813d03d4f9",
+      "name": "Armar datos para el agente",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        544
+      ],
+      "parameters": {
+        "jsCode": "const leads = $input.all().map(i => i.json).filter(l => l.id);\nif (!leads.length) return [{ json: { found: false, ml_caso: 'sin_datos_ml' } }];\nconst ultimo = leads[leads.length - 1];\nlet d = String(ultimo.buyer_phone || '').replace(/\\D/g, '');\nif (d.startsWith('54')) d = d.slice(2);\nif (d.startsWith('9')) d = d.slice(1);\nif (d.startsWith('0')) d = d.slice(1);\nconst cuit = String(ultimo.buyer_cuit || '').replace(/\\D/g, '');\nreturn [{ json: {\n  found: true,\n  ml_caso: leads.some(l => l.status === 'template_sent') ? 'template' : 'dos_clics',\n  ml_lead_ids: leads.map(l => l.id).join(','),\n  ids_sql: leads.map(l => `'${l.id}'`).join(','),\n  ml_nombre: String(ultimo.buyer_nombre || '').trim(),\n  ml_email: ultimo.buyer_email || '-',\n  ml_phone: d.length >= 10 ? '+549' + d.slice(-10) : '-',\n  ml_dni: cuit.length === 11 ? cuit.slice(2, 10) : '-',\n  modelo: ultimo.item_titulo || '',\n  item_permalink: ultimo.item_permalink || ''\n} }];"
+      }
+    },
+    {
+      "id": "22ef73f8-69ef-4b92-b0c2-7a343d2ecbef",
+      "name": "Encontrado?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        896,
+        544
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.found }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "c705edba-696f-48d7-bf74-f43086e207d7",
+      "name": "Marcar en conversacion",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        1120,
+        448
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE meli_leads SET status = 'in_conversation' WHERE user_id = 2702850938 AND id IN ({{ $json.ids_sql }})",
+        "options": {}
+      },
+      "credentials": {
+        "mySql": {
+          "id": "FezTcDnLo3SqPHvd",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "id": "cedb5c4d-f2d5-4b3a-905b-207ea896efc4",
+      "name": "Responder lead",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1344,
+        448
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($('Armar datos para el agente').first().json) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "f6c628f2-c48e-4995-abdf-b12c64b3182d",
+      "name": "Responder sin lead",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1120,
+        640
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{ \"found\": false, \"ml_caso\": \"sin_datos_ml\" }",
+        "options": {}
+      }
+    }
+  ],
+  "pinData": null,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "THK1IQc9mQWlMTMW",
+      "projectId": "K8p6XEqA0L6D2uVt",
+      "createdAt": "2026-11-04T22:33:55.722Z",
+      "updatedAt": "2026-11-04T22:33:55.722Z"
+    }
+  ],
+  "staticData": {
+    "node:Cada 5 min - primer contacto": {
+      "recurrenceRules": [
+        null
+      ],
+      "recurrenceRuleSignatures": [
+        null
+      ]
+    },
+    "node:Cada 5 min - sin respuesta": {
+      "recurrenceRules": [
+        null
+      ],
+      "recurrenceRuleSignatures": [
+        null
+      ]
+    }
+  },
+  "tags": [],
+  "triggerCount": 3,
+  "updatedAt": "2026-11-12T13:10:38.841Z",
+  "versionId": "38cd36ed-e051-4efd-af9e-4eb9455fdc8a"
+}
