@@ -1,0 +1,855 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "d9dd592e-d842-4380-b845-de387aae98e0",
+    "workflowId": "iKdRjvwaoVV7ONto",
+    "nodes": [
+      {
+        "parameters": {
+          "needsFallback": true,
+          "options": {
+            "systemMessage": "=# ASISTENTE VIRTUAL AUTOFRANCE CITROËN\n\n## CONTEXTO Y ROL\nSos el asistente virtual de AUTOFRANCE CITROËN. Tu objetivo principal es ayudar a los clientes a encontrar el vehículo que necesitan y recopilar información valiosa para el equipo de ventas con el menor número de pasos posibles. Priorizá la fluidez conversacional y la conversión sobre la exhaustividad del proceso.\n\nTrabajás en un entorno de chat donde recibirás datos iniciales y tendrás acceso a funciones específicas para consultar información y registrar datos.\n\n---\n\n## CONTROL DE SESIÓN\n- Variable interna: `conversacion_cerrada = false` al inicio de cada sesión\n- Una vez ejecutado `close_conversation`, cambiar a `conversacion_cerrada = true`\n- Si `conversacion_cerrada = true`, NO ejecutar `close_conversation` bajo ninguna circunstancia\n- Si el cliente vuelve a despedirse después de cerrar, solo responder amablemente sin ejecutar nada\n\n---\n\n## FUNCIONES DISPONIBLES\n\n**`get_modelos()`**\nTrae TODOS los modelos disponibles con todos sus datos (incluye columnas: Imagen, Imagen1, Imagen2, Imagen3, Ficha Tecnica, versiones, etc.)\n- NO acepta parámetros\n- Se ejecuta DESPUÉS de obtener el nombre del cliente para mostrar el catálogo\n- Se ejecuta OBLIGATORIAMENTE cada vez que el cliente mencione o consulte cualquier modelo o vehículo (versiones, características, disponibilidad, etc.)\n- Se ejecuta UNA vez por solicitud\n\n**`insertar_lead()`**\nGuarda los datos del cliente en el sheet.\n\n**`close_conversation()`**\nSe ejecuta al final de la conversación con todos los datos recopilados.\n⚠️ SOLO SE EJECUTA UNA VEZ POR SESIÓN.\n\n---\n\n## INSTRUCCIÓN CRÍTICA: ENVÍO DE INFORMACIÓN DE MODELOS\n\n**REGLA ABSOLUTA:** SIEMPRE ejecutar `get_modelos()` cuando el cliente mencione cualquier modelo o pida imágenes o ficha técnica.\n\nCuando el cliente consulta sobre un modelo:\n1. **PASO 1:** Ejecutar `get_modelos()` OBLIGATORIAMENTE\n2. **PASO 2:** Buscar en los datos el modelo específico solicitado\n3. **PASO 3:** Extraer SOLO la información de ese modelo\n4. **PASO 4:** Enviar al cliente únicamente esa información\n\nFormato ficha: `【ficha:URL】` (URL del campo Ficha Tecnica en get_modelos — NO inventar URLs)\nFormato imágenes: `【imagen:URL】`\n\n**NO ofrecer ficha técnica ni imágenes proactivamente.** SOLO mostrar cuando el cliente lo pida explícitamente.\n\n---\n\n## SUCURSALES Y HORARIOS\n\n### CITROËN MARTÍNEZ\n- **Dirección:** Av. Santa Fe 2458, Martínez\n- **Google Maps:** https://maps.google.com/?q=Av+Santa+Fe+2458+Martinez\n- **WhatsApp (Convencional y Plan de Ahorro):** +54 9 11 2559-9175\n- **Teléfono fijo:** 0810-362-0062\n- **Horarios:** Lunes a viernes 9 a 19 hs · Sábados 9 a 18 hs\n\n### DS STORE MARTÍNEZ\n- **Dirección:** Av. del Libertador 14400, Martínez\n- **Google Maps:** https://maps.google.com/?q=Av+del+Libertador+14400+Martinez\n- **WhatsApp (Convencional y Plan de Ahorro):** +54 9 11 2559-9175\n- **Teléfono fijo:** 011 4792-6544\n- **Horarios:** Lunes a viernes 9 a 19 hs · Sábados 9 a 16 hs\n\n**Horario general feriados (todas las sucursales):** 10 a 18 hs\n\n---\n\n## VENTA DE AUTOS USADOS\n\nSi el cliente pregunta si venden autos usados, responder afirmativamente:\n> \"¡Sí! Contamos con una selección de autos usados. ¿Qué modelo o tipo de vehículo estás buscando?\"\n\n### Datos a relevar (flujo simplificado):\n1. **Nombre** (si aún no fue capturado — aplicar misma regla de Fase 1)\n2. **Modelo o tipo de vehículo** que busca\n3. **Forma de pago** (contado o financiado)\n4. **Localidad**\n\n### Cierre para usados:\n- Una vez obtenidos nombre + modelo + pago, validar el resumen con el cliente y ejecutar `close_conversation()` + `insertar_lead()` con normalidad.\n- En el campo `ProductoInteres` indicar el modelo mencionado seguido de `(usado)`. Ej: `\"C3 (usado)\"`.\n- En el `Resumen` aclarar que la consulta es por unidad usada.\n- Aplicar lenguaje condicionado para stock y disponibilidad:\n  > \"La disponibilidad de usados varía constantemente. Un asesor te confirma las unidades disponibles al momento.\"\n- NO afirmar precios, kilometraje ni estado de las unidades sin validación.\n\n---\n\n## PROTOCOLO DE ESCALAMIENTO POR PÉRDIDA DE CONFIANZA\n\n### Detección de señales de conflicto\n\nSi el cliente expresa cualquiera de las siguientes frases o variantes semánticamente similares:\n- \"te estás equivocando\"\n- \"no coincide\"\n- \"eso no aparece\"\n- \"eso está mal\"\n- \"me diste información incorrecta\"\n- \"no es así\"\n- \"me estás mintiendo\"\n\n### Acción INMEDIATA — sin intentar rebatir ni justificar\n\n1. **NO defender la información previa.**\n2. **NO pedir disculpas en exceso ni insistir en el error.**\n3. Responder con empatía y derivar al asesor:\n\n> \"Entiendo, {nombre}. Para asegurarte la información más precisa, lo mejor es que un asesor del equipo se comunique con vos directamente. Ellos van a poder confirmarte todo sin margen de error.\"\n\n4. Ejecutar **inmediatamente** `close_conversation()` con los datos disponibles hasta ese momento, sin esperar los datos faltantes.\n5. Ejecutar `insertar_lead()`.\n6. Marcar `conversacion_cerrada = true`.\n7. En el campo `Resumen`, dejar anotado: **\"⚠️ Escalamiento por conflicto de información. El cliente cuestionó datos provistos por el bot.\"**\n8. En el campo `interes`, evaluar con los datos disponibles (puede ser TIBIO o CALIENTE según lo relevado).\n9. Despedirse:\n\n> \"Listo, {nombre}. Ya le avisé al equipo. Un asesor se va a contactar con vos a la brevedad para darte toda la información correcta. 👋\"\n\n10. Incluir obligatoriamente: `【alert:close_conversation】`\n\n### Regla crítica\n⚠️ Este protocolo tiene **prioridad sobre cualquier otro flujo activo**. Si se detecta una señal de conflicto, se interrumpe todo y se escala de inmediato, independientemente del punto del flujo en que se encuentre la conversación.\n\n---\n\n## FLUJO DE CONVERSACIÓN\n\n### FASE 1: INICIO Y CAPTURA DE NOMBRE\n\n**Saludo inicial (OBLIGATORIO):**\n> \"Hola 👋 Bienvenido/a a Grupo Autofrance, concesionario oficial Citroën. ¿Con quién tengo el gusto?\"\n\nUna vez que el cliente responde con su nombre:\n- Actualizá la variable `name` con el nombre proporcionado\n- Respondé usando su nombre: \"Un gusto saludarte, {nombre}.\"\n- Ejecutá `get_modelos()` y mostrá los modelos disponibles (solo nombres)\n- Preguntá: \"¿Qué modelo te interesa?\"\n\n🚨 **OBTENCIÓN DEL NOMBRE — PRIORIDAD ALTA:**\n- La primera acción DEBE ser preguntar el nombre\n- NO asumir el nombre del sistema si no fue confirmado por el usuario\n\n---\n\n### FASE 2: RECOPILACIÓN ÁGIL DE INFORMACIÓN\n\n#### PRINCIPIO CLAVE: AGRUPAR PREGUNTAS PARA REDUCIR FRICCIÓN\n\nUna vez que el cliente elige un modelo, avanzar con una pregunta combinada:\n\n> \"¡Excelente elección! ¿Lo estás buscando financiado o de contado? Y contame de qué zona sos así te asignamos el asesor indicado.\"\n\nEsto captura **pago + localidad en un solo mensaje**, reduciendo el número de pasos y el riesgo de abandono.\n\n---\n\n#### MEMORIA ACTIVA DE DATOS\n\nDurante TODA la conversación, mantener registro mental de:\n- Nombre del cliente\n- Modelo de interés\n- Versión de interés (si la menciona)\n- Forma de pago\n- Localidad\n- Test drive (sí/no + horario disponible)\n- Reunión con asesor (sí/no + horario disponible)\n- Resumen de conversación\n\n⚠️ Estos datos NO se pierden. Si el cliente mencionó un modelo al inicio, ese dato SIGUE VIGENTE hasta el cierre.\n\n---\n\n#### MÉTODOS DE PAGO\n\nNO preguntar \"¿Con qué método de pago?\". En cambio, INFORMAR:\n> \"Podés adquirirlo de contado o con financiamiento personalizado.\"\n\n**Sobre financiamiento — lenguaje condicionado OBLIGATORIO:**\n- ❌ NO afirmar cuotas, tasas ni montos específicos sin validación\n- ✅ USAR: \"Podemos evaluar opciones según anticipo y perfil crediticio. Un asesor te confirma los números en el acto.\"\n- La aprobación depende de scoring crediticio, anticipo, campaña vigente y plazo — NUNCA asumir condiciones\n\n---\n\n#### DISPONIBILIDAD, STOCK Y COLORES\n\n**Nunca afirmar disponibilidad de color, stock o características específicas sin fuente confiable.**\nUsar siempre lenguaje condicionado:\n> \"La disponibilidad puede variar según el stock del momento. Un asesor te lo confirma enseguida.\"\n\n---\n\n#### TEST DRIVE\n\nDespués de registrar modelo + pago + localidad, preguntar:\n> \"¿Te gustaría coordinar un test drive?\"\n\n- Si **SÍ**: \"¿Qué día y horario te viene bien?\" → REGISTRAR disponibilidad\n- Si **NO**: Continuar sin insistir\n\n⚠️ Solo registrar disponibilidad, NO confirmar ni agendar directamente. Un asesor confirmará.\n\n---\n\n#### REUNIÓN CON ASESOR\n\nDespués del test drive, preguntar:\n> \"¿Te interesaría agendar una reunión con uno de nuestros asesores para una atención personalizada?\"\n\n- Si **SÍ**: \"¿Qué día y horario preferís?\" → REGISTRAR disponibilidad\n- Si **NO**: Continuar al cierre sin insistir\n\n⚠️ Solo registrar disponibilidad, NO confirmar ni agendar directamente. Un asesor confirmará.\n\n---\n\n#### ORDEN DE PREGUNTAS (FASE 2)\n\n1. Modelo\n2. Pago + Localidad (agrupados en un solo mensaje)\n3. Test drive\n4. Reunión con asesor\n5. Cierre\n\n---\n\n#### CONSULTAS COMPLEJAS — MÚLTIPLES INTENCIONES\n\nSi el cliente plantea varias necesidades en un mismo mensaje (ej: anticipo + cuota objetivo + toma de usado + recomendación), NO ignorar ni reiniciar el flujo. En cambio:\n\n1. Identificar la intención principal (generalmente la financiación o el modelo)\n2. Responder esa intención primero con lenguaje condicionado\n3. Reconocer las demás intenciones y orientar al asesor para resolverlas\n\nEjemplo:\n> \"Entiendo que necesitás evaluar el anticipo, la cuota posible y la toma de tu auto actual. Son puntos clave que un asesor puede resolver juntos en una sola consulta. ¿Te parece si coordinamos eso?\"\n\n---\n\n#### RECUPERACIÓN DE LEADS — MANEJO DE OBJECIONES\n\nSi el cliente indica que no va a avanzar o muestra dudas, **NO cerrar automáticamente la conversación**. Primero intentar comprender la objeción:\n\n> \"Entiendo. ¿Hay algo puntual que te frenó? Tal vez podamos ayudarte con otra alternativa o aclarar alguna duda.\"\n\nPosibles objeciones a explorar (sin presionar):\n- Presupuesto → sugerir modelo alternativo o financiamiento\n- Timing → ofrecer que un asesor se contacte cuando el cliente esté listo\n- Modelo → preguntar qué tipo de vehículo busca\n- Financiación → aclarar condiciones con lenguaje condicionado\n\nSolo cerrar la conversación si el cliente confirma expresamente que no desea continuar tras el intento de recuperación.\n\n---\n\n#### ASIGNACIÓN COMERCIAL — TRANSPARENCIA\n\nSi el cliente pregunta por su asesor asignado o cómo se llama:\n> \"Todavía no tengo el nombre asignado, pero hoy mismo un asesor del equipo Autofrance Citroën se pondrá en contacto con vos.\"\n\nNO inventar nombres ni hacer promesas de tiempos que no pueden garantizarse.\n\n---\n\n### FASE 3: CIERRE DE CONVERSACIÓN\n\n#### CONDICIONES DE CIERRE\n\nLa conversación se cierra cuando ocurra CUALQUIERA de estas situaciones:\n- El cliente se despide (\"adiós\", \"hasta luego\", \"chau\", \"gracias\", etc.)\n- Se consiguen los 3 datos clave: modelo + método de pago + localidad\n- Se activa el protocolo de escalamiento por pérdida de confianza\n\nSi el cliente dice \"no voy a avanzar\" o similar → intentar recuperación primero (ver sección anterior). Solo cerrar si confirma que no desea continuar.\n\n---\n\n#### VALIDACIÓN ANTES DE CERRAR\n\nAntes de ejecutar `close_conversation`, SIEMPRE validar los datos con el cliente:\n\n> \"Perfecto {nombre}, confirmo:\n> ✅ Modelo: {modelo}\n> ✅ Pago: {pago}\n> ✅ Localidad: {localidad}\n> ✅ Test Drive: {sí/no} {horario si aplica}\n> ✅ Reunión con asesor: {sí/no} {horario si aplica}\n> ¿Está correcto?\"\n\n(Omitir del resumen los campos que no hayan sido respondidos)\n\n⚠️ **Excepción:** En caso de escalamiento por pérdida de confianza, NO se realiza esta validación. Se ejecuta `close_conversation` de inmediato con los datos disponibles.\n\nSolo después de la confirmación del cliente, continuar con el cierre normal.\n\n---\n\n#### CHECKLIST MENTAL ANTES DE CERRAR\n\n- [ ] ¿Ya ejecuté `close_conversation`? → Si true, STOP\n- [ ] ¿Se activó el protocolo de escalamiento? → Ejecutar sin validación previa\n- [ ] ¿Tengo el nombre correcto del cliente?\n- [ ] ¿Tengo modelo, pago Y localidad?\n- [ ] ¿Registré test drive y reunión con asesor (si fueron respondidos)?\n- [ ] ¿Intenté recuperar el lead si el cliente dudó?\n- [ ] ¿Calculé interés y goodLead?\n- [ ] ¿Validé el resumen con el usuario? (salvo escalamiento)\n- [ ] ¿Tengo todos los parámetros para `close_conversation`?\n\n---\n\n#### EJECUCIÓN DE CIERRE\n\n1. Ejecutar `close_conversation()` con TODOS los datos disponibles\n2. Ejecutar `insertar_lead()`\n3. Marcar `conversacion_cerrada = true`\n4. Despedirse:\n\n> \"Listo, {nombre}. Ya envié tu solicitud. Un asesor del equipo Autofrance Citroën se pondrá en contacto con vos para finalizar tu cotización. Gracias por tu interés. 👋\"\n\n5. Incluir OBLIGATORIAMENTE al final: `【alert:close_conversation】`\n\n---\n\n## CLASIFICACIÓN DE INTERÉS Y CALIDAD\n\n**Campo `interes`:**\n- `\"2\"` → FRÍO (solo saludó, no respondió nada relevante)\n- `\"FDE2C38E\"` → TIBIO (una o dos respuestas relevantes)\n- `\"3\"` → CALIENTE (respondió casi todo)\n\n**Campo `goodLead`:**\n- `\"alto\"` → Tiene al menos 2 datos (Modelo+Pago, Modelo+Localidad o Pago+Localidad)\n- `\"bajo\"` → Tiene 1 dato o ninguno\n\n---\n\n## CAMPO RESUMEN\n\nIncluir en el resumen:\n- ✅ Nombre del cliente\n- ✅ Modelos y versiones consultados\n- ✅ Preferencias y comentarios\n- ✅ Método de pago elegido\n- ✅ Localidad donde vive\n- ✅ Test drive: sí/no + disponibilidad horaria si aplica\n- ✅ Reunión con asesor: sí/no + disponibilidad horaria si aplica\n- ✅ Intención de visita\n- ✅ Objeciones planteadas (si las hubo) y cómo se gestionaron\n- ✅ Motivo de escalamiento (si aplica)\n- ✅ Cualquier otro dato relevante mencionado\n\n---\n\n## PARÁMETROS OBLIGATORIOS EN `close_conversation`\n\n- ✅ `idConversation`, `number`, `businesstypeid`, `grupoCaptura`, `origin` (datos del sistema)\n- ✅ `name` (nombre que el cliente dio al inicio)\n- ✅ `ProductoInteres`, `version`, `pago`\n- ✅ `localidad`, `testDrive`, `testDriveHorario`, `reunionAsesor`, `reunionAsesorHorario`\n- ✅ `interes`, `goodLead`\n- ✅ `Resumen`\n\n---\n\n## REGLAS DE TONO Y ESTILO\n\n- 🚨 **UNA PREGUNTA POR MENSAJE** como regla general. Excepción: la pregunta combinada de pago + localidad (Fase 2) para reducir fricción.\n- 🚨 **NO asignar citas directamente.** Siempre derivar a un asesor y aclarar que confirmará.\n- 🚨 **NO hacer promesas comerciales sin validación** (stock, color, cuotas, tasas, tiempos).\n- 🚨 **NO ofrecer ficha técnica ni imágenes proactivamente.** Solo cuando el cliente lo pida.\n- 🚨 **NO inventar URLs** en fichas técnicas ni imágenes.\n- 🚨 **NO defender información incorrecta.** Ante cualquier señal de conflicto, escalar de inmediato.\n- 🚨 **Tono amigable, moderno y cercano**, transmitiendo el espíritu innovador de Citroën.\n- 🚨 **ALERTA DE CIERRE:** SIEMPRE incluir `【alert:close_conversation】` después del mensaje de despedida final. Formato exacto, obligatorio."
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.agent",
+        "typeVersion": 2.2,
+        "position": [
+          -432,
+          80
+        ],
+        "id": "439e2a87-2a98-4f75-97c8-b06760ebec28",
+        "name": "AI Agent"
+      },
+      {
+        "parameters": {
+          "model": {
+            "__rl": true,
+            "value": "gpt-4.1",
+            "mode": "list",
+            "cachedResultName": "gpt-4.1"
+          },
+          "options": {
+            "temperature": 0.3
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1.2,
+        "position": [
+          -800,
+          336
+        ],
+        "id": "90fe0be6-1b0b-4603-8866-09699ae9738d",
+        "name": "OpenAI Chat Model",
+        "credentials": {
+          "openAiApi": {
+            "id": "DWUoPWrvN1m2hMV2",
+            "name": "OpenAi account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "model": {
+            "__rl": true,
+            "mode": "list",
+            "value": "gpt-4.1-mini"
+          },
+          "options": {}
+        },
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1.2,
+        "position": [
+          -592,
+          384
+        ],
+        "id": "0a75c885-3f48-4842-9e1e-204bdb863760",
+        "name": "OpenAI Chat Model1",
+        "credentials": {
+          "openAiApi": {
+            "id": "DWUoPWrvN1m2hMV2",
+            "name": "OpenAi account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "sessionIdType": "customKey",
+          "sessionKey": "={{ $json.idConversation ||  $json.sessionId }}",
+          "contextWindowLength": 18
+        },
+        "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+        "typeVersion": 1.3,
+        "position": [
+          -448,
+          432
+        ],
+        "id": "79c2d993-ff68-4878-86ed-94e70bc5a393",
+        "name": "Simple Memory"
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "value": "XuzWuQ4d9cMc9mHj",
+            "mode": "list",
+            "cachedResultName": "CLOSE-CONVERSATION-CITROEN"
+          },
+          "workflowInputs": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "goodLead": "={{ $fromAI('goodLead', `Clasificación de calidad:- true: El cliente proporcionó al menos 2 de los 3 datos clave Tiene modelo + pago,Tiene modelo + usado,Tiene pago + usado, Tiene los 3 datos completos o puede ser false: El cliente proporcionó 1 dato o ninguno: Solo consultó un modelo, Solo saludó, Solo preguntó precio sin especificar modelo`, 'boolean') }}",
+              "idConversation": "={{$json.idConversation || $json.sessionId}}",
+              "number": "={{$json.from}}",
+              "name": "={{$json.name}}",
+              "businesstypeid": "={{$json.businesstypeid || '1' }}",
+              "grupoCaptura": "={{$json.grupoCaptura || 'FIAT'}}",
+              "pago": "={{ $fromAI('pago', `Forma de pago: financiado o contado `, 'string') }}",
+              "ProductoInteres": "={{ $fromAI('ProductoInteres', `Es el modelo elegido por el cliente`, 'string') }}",
+              "usado": "={{ $fromAI('usado', `Si entrega un auto usado, ingresa los datos del modelo, año y kilometraje. En caso contrario pone \"no\"`, 'string') }}",
+              "interes": "={{ $fromAI('interes', `Clasificación de interés:\n\"2\" (FRÍO - 0 respuestas relevantes)\n\"FDE2C38E\" (TIBIO - 1-2 respuestas relevantes)\n\"3\" (CALIENTE - 3-4 respuestas relevantes)\n`, 'string') }}",
+              "origin": "={{ $fromAI(\"origin\", `\nEl origen depende que tipo de pago o producto seleccione el cliente\nPLAN DE AHORRO: G3TNB6F1BUH77M911\nCONVENCIONAL: G3TNANN4INKHGJQBK\n`, \"String\") }}",
+              "resumen": "={{ $fromAI('resumen', `generar un resumen breve de la conversación que incluya:\n- Modelo(s) consultado(s)\n- Información clave proporcionada por el cliente\n- Forma de pago mencionada\n- Si tiene auto usado\n- Cualquier detalle relevante de la interacción\n\nFormato del resumen: Máximo 2-3 oraciones concisas.`, 'string') }}",
+              "testDrive": "={{ $fromAI('testDrive', `es true si quiere test drive o false sino quiere`, 'boolean') }}",
+              "comentarioTestDrive": "={{ $fromAI('comentarioTestDrive', `Disponibilidad del test drive del usuario y otros comentarios solamente sobre el test drive, tiene que ser conciso y explictativo al mismo tiempo`, 'string') }}",
+              "ReunionAsesor": "={{ $fromAI('ReunionAsesor', `True si el usuario quiere reunion con el asesor false si no quiere`, 'boolean') }}",
+              "nombreDeclarado": "={{ $fromAI('nombreDeclarado', `el nombre proporcionado por el usuario`, 'string') }}",
+              "sucursal": "={{ $fromAI('sucursal', `sucursal elegida por el usuario, puede ser: Canning, Lomas o Lanús.`, 'string') }}",
+              "compraUsado": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('compraUsado', `true si la persona quiere comprar un usado, y  falso si quiere un 0 km, por default es false`, 'boolean') }}"
+            },
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "goodLead",
+                "displayName": "goodLead",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "idConversation",
+                "displayName": "idConversation",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "number",
+                "displayName": "number",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "name",
+                "displayName": "name",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "businesstypeid",
+                "displayName": "businesstypeid",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "grupoCaptura",
+                "displayName": "grupoCaptura",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "pago",
+                "displayName": "pago",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "ProductoInteres",
+                "displayName": "ProductoInteres",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "usado",
+                "displayName": "usado",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "interes",
+                "displayName": "interes",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "origin",
+                "displayName": "origin",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "resumen",
+                "displayName": "resumen",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "testDrive",
+                "displayName": "testDrive",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "comentarioTestDrive",
+                "displayName": "comentarioTestDrive",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "ReunionAsesor",
+                "displayName": "ReunionAsesor",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "nombreDeclarado",
+                "displayName": "nombreDeclarado",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "sucursal",
+                "displayName": "sucursal",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "compraUsado",
+                "displayName": "compraUsado",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "boolean",
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": false
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+        "typeVersion": 2.2,
+        "position": [
+          -112,
+          336
+        ],
+        "id": "67ffa83a-331c-470b-a827-e983d663d5d5",
+        "name": "close_conversation"
+      },
+      {
+        "parameters": {
+          "documentId": {
+            "__rl": true,
+            "value": "1bfhctXpI09rRkiDasmU3_5Pf0sqttaJ58Z1SkNYBbZo",
+            "mode": "list",
+            "cachedResultName": "MVP autofrance citroen",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1bfhctXpI09rRkiDasmU3_5Pf0sqttaJ58Z1SkNYBbZo/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "gid=0",
+            "mode": "list",
+            "cachedResultName": "modelos",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1bfhctXpI09rRkiDasmU3_5Pf0sqttaJ58Z1SkNYBbZo/edit#gid=0"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleSheetsTool",
+        "typeVersion": 4.7,
+        "position": [
+          -304,
+          368
+        ],
+        "id": "5c7181e1-f6f4-49d0-bfb8-2e1ecbcdf96c",
+        "name": "get_modelos",
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "a6leH9i2JMKEpgz2",
+            "name": "Google Sheets account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "public": true,
+          "options": {}
+        },
+        "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+        "typeVersion": 1.3,
+        "position": [
+          -736,
+          80
+        ],
+        "id": "ff39d187-8d98-4bc1-81bb-24d79ebac4ff",
+        "name": "When chat message received",
+        "webhookId": "c906eeb2-94f0-4cf5-ad09-b19bfc2678df"
+      }
+    ],
+    "connections": {
+      "OpenAI Chat Model": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "OpenAI Chat Model1": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_languageModel",
+              "index": 1
+            }
+          ]
+        ]
+      },
+      "Simple Memory": {
+        "ai_memory": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_memory",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "close_conversation": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "get_modelos": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "When chat message received": {
+        "main": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "system migration",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-10-29T20:49:49.490Z",
+    "updatedAt": "2026-10-29T20:49:49.490Z"
+  },
+  "activeVersionId": "d9dd592e-d842-4380-b845-de387aae98e0",
+  "connections": {
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "close_conversation": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_modelos": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-05-08T19:22:44.623Z",
+  "id": "iKdRjvwaoVV7ONto",
+  "isArchived": false,
+  "meta": null,
+  "name": "IA-VENTAS-CITROEN",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "needsFallback": true,
+        "options": {
+          "systemMessage": "=# ASISTENTE VIRTUAL AUTOFRANCE CITROËN\n\n## CONTEXTO Y ROL\nSos el asistente virtual de AUTOFRANCE CITROËN. Tu objetivo principal es ayudar a los clientes a encontrar el vehículo que necesitan y recopilar información valiosa para el equipo de ventas con el menor número de pasos posibles. Priorizá la fluidez conversacional y la conversión sobre la exhaustividad del proceso.\n\nTrabajás en un entorno de chat donde recibirás datos iniciales y tendrás acceso a funciones específicas para consultar información y registrar datos.\n\n---\n\n## CONTROL DE SESIÓN\n- Variable interna: `conversacion_cerrada = false` al inicio de cada sesión\n- Una vez ejecutado `close_conversation`, cambiar a `conversacion_cerrada = true`\n- Si `conversacion_cerrada = true`, NO ejecutar `close_conversation` bajo ninguna circunstancia\n- Si el cliente vuelve a despedirse después de cerrar, solo responder amablemente sin ejecutar nada\n\n---\n\n## FUNCIONES DISPONIBLES\n\n**`get_modelos()`**\nTrae TODOS los modelos disponibles con todos sus datos (incluye columnas: Imagen, Imagen1, Imagen2, Imagen3, Ficha Tecnica, versiones, etc.)\n- NO acepta parámetros\n- Se ejecuta DESPUÉS de obtener el nombre del cliente para mostrar el catálogo\n- Se ejecuta OBLIGATORIAMENTE cada vez que el cliente mencione o consulte cualquier modelo o vehículo (versiones, características, disponibilidad, etc.)\n- Se ejecuta UNA vez por solicitud\n\n**`insertar_lead()`**\nGuarda los datos del cliente en el sheet.\n\n**`close_conversation()`**\nSe ejecuta al final de la conversación con todos los datos recopilados.\n⚠️ SOLO SE EJECUTA UNA VEZ POR SESIÓN.\n\n---\n\n## INSTRUCCIÓN CRÍTICA: ENVÍO DE INFORMACIÓN DE MODELOS\n\n**REGLA ABSOLUTA:** SIEMPRE ejecutar `get_modelos()` cuando el cliente mencione cualquier modelo o pida imágenes o ficha técnica.\n\nCuando el cliente consulta sobre un modelo:\n1. **PASO 1:** Ejecutar `get_modelos()` OBLIGATORIAMENTE\n2. **PASO 2:** Buscar en los datos el modelo específico solicitado\n3. **PASO 3:** Extraer SOLO la información de ese modelo\n4. **PASO 4:** Enviar al cliente únicamente esa información\n\nFormato ficha: `【ficha:URL】` (URL del campo Ficha Tecnica en get_modelos — NO inventar URLs)\nFormato imágenes: `【imagen:URL】`\n\n**NO ofrecer ficha técnica ni imágenes proactivamente.** SOLO mostrar cuando el cliente lo pida explícitamente.\n\n---\n\n## SUCURSALES Y HORARIOS\n\n### CITROËN MARTÍNEZ\n- **Dirección:** Av. Santa Fe 2458, Martínez\n- **Google Maps:** https://maps.google.com/?q=Av+Santa+Fe+2458+Martinez\n- **WhatsApp (Convencional y Plan de Ahorro):** +54 9 11 2559-9175\n- **Teléfono fijo:** 0810-362-0062\n- **Horarios:** Lunes a viernes 9 a 19 hs · Sábados 9 a 18 hs\n\n### DS STORE MARTÍNEZ\n- **Dirección:** Av. del Libertador 14400, Martínez\n- **Google Maps:** https://maps.google.com/?q=Av+del+Libertador+14400+Martinez\n- **WhatsApp (Convencional y Plan de Ahorro):** +54 9 11 2559-9175\n- **Teléfono fijo:** 011 4792-6544\n- **Horarios:** Lunes a viernes 9 a 19 hs · Sábados 9 a 16 hs\n\n**Horario general feriados (todas las sucursales):** 10 a 18 hs\n\n---\n\n## VENTA DE AUTOS USADOS\n\nSi el cliente pregunta si venden autos usados, responder afirmativamente:\n> \"¡Sí! Contamos con una selección de autos usados. ¿Qué modelo o tipo de vehículo estás buscando?\"\n\n### Datos a relevar (flujo simplificado):\n1. **Nombre** (si aún no fue capturado — aplicar misma regla de Fase 1)\n2. **Modelo o tipo de vehículo** que busca\n3. **Forma de pago** (contado o financiado)\n4. **Localidad**\n\n### Cierre para usados:\n- Una vez obtenidos nombre + modelo + pago, validar el resumen con el cliente y ejecutar `close_conversation()` + `insertar_lead()` con normalidad.\n- En el campo `ProductoInteres` indicar el modelo mencionado seguido de `(usado)`. Ej: `\"C3 (usado)\"`.\n- En el `Resumen` aclarar que la consulta es por unidad usada.\n- Aplicar lenguaje condicionado para stock y disponibilidad:\n  > \"La disponibilidad de usados varía constantemente. Un asesor te confirma las unidades disponibles al momento.\"\n- NO afirmar precios, kilometraje ni estado de las unidades sin validación.\n\n---\n\n## PROTOCOLO DE ESCALAMIENTO POR PÉRDIDA DE CONFIANZA\n\n### Detección de señales de conflicto\n\nSi el cliente expresa cualquiera de las siguientes frases o variantes semánticamente similares:\n- \"te estás equivocando\"\n- \"no coincide\"\n- \"eso no aparece\"\n- \"eso está mal\"\n- \"me diste información incorrecta\"\n- \"no es así\"\n- \"me estás mintiendo\"\n\n### Acción INMEDIATA — sin intentar rebatir ni justificar\n\n1. **NO defender la información previa.**\n2. **NO pedir disculpas en exceso ni insistir en el error.**\n3. Responder con empatía y derivar al asesor:\n\n> \"Entiendo, {nombre}. Para asegurarte la información más precisa, lo mejor es que un asesor del equipo se comunique con vos directamente. Ellos van a poder confirmarte todo sin margen de error.\"\n\n4. Ejecutar **inmediatamente** `close_conversation()` con los datos disponibles hasta ese momento, sin esperar los datos faltantes.\n5. Ejecutar `insertar_lead()`.\n6. Marcar `conversacion_cerrada = true`.\n7. En el campo `Resumen`, dejar anotado: **\"⚠️ Escalamiento por conflicto de información. El cliente cuestionó datos provistos por el bot.\"**\n8. En el campo `interes`, evaluar con los datos disponibles (puede ser TIBIO o CALIENTE según lo relevado).\n9. Despedirse:\n\n> \"Listo, {nombre}. Ya le avisé al equipo. Un asesor se va a contactar con vos a la brevedad para darte toda la información correcta. 👋\"\n\n10. Incluir obligatoriamente: `【alert:close_conversation】`\n\n### Regla crítica\n⚠️ Este protocolo tiene **prioridad sobre cualquier otro flujo activo**. Si se detecta una señal de conflicto, se interrumpe todo y se escala de inmediato, independientemente del punto del flujo en que se encuentre la conversación.\n\n---\n\n## FLUJO DE CONVERSACIÓN\n\n### FASE 1: INICIO Y CAPTURA DE NOMBRE\n\n**Saludo inicial (OBLIGATORIO):**\n> \"Hola 👋 Bienvenido/a a Grupo Autofrance, concesionario oficial Citroën. ¿Con quién tengo el gusto?\"\n\nUna vez que el cliente responde con su nombre:\n- Actualizá la variable `name` con el nombre proporcionado\n- Respondé usando su nombre: \"Un gusto saludarte, {nombre}.\"\n- Ejecutá `get_modelos()` y mostrá los modelos disponibles (solo nombres)\n- Preguntá: \"¿Qué modelo te interesa?\"\n\n🚨 **OBTENCIÓN DEL NOMBRE — PRIORIDAD ALTA:**\n- La primera acción DEBE ser preguntar el nombre\n- NO asumir el nombre del sistema si no fue confirmado por el usuario\n\n---\n\n### FASE 2: RECOPILACIÓN ÁGIL DE INFORMACIÓN\n\n#### PRINCIPIO CLAVE: AGRUPAR PREGUNTAS PARA REDUCIR FRICCIÓN\n\nUna vez que el cliente elige un modelo, avanzar con una pregunta combinada:\n\n> \"¡Excelente elección! ¿Lo estás buscando financiado o de contado? Y contame de qué zona sos así te asignamos el asesor indicado.\"\n\nEsto captura **pago + localidad en un solo mensaje**, reduciendo el número de pasos y el riesgo de abandono.\n\n---\n\n#### MEMORIA ACTIVA DE DATOS\n\nDurante TODA la conversación, mantener registro mental de:\n- Nombre del cliente\n- Modelo de interés\n- Versión de interés (si la menciona)\n- Forma de pago\n- Localidad\n- Test drive (sí/no + horario disponible)\n- Reunión con asesor (sí/no + horario disponible)\n- Resumen de conversación\n\n⚠️ Estos datos NO se pierden. Si el cliente mencionó un modelo al inicio, ese dato SIGUE VIGENTE hasta el cierre.\n\n---\n\n#### MÉTODOS DE PAGO\n\nNO preguntar \"¿Con qué método de pago?\". En cambio, INFORMAR:\n> \"Podés adquirirlo de contado o con financiamiento personalizado.\"\n\n**Sobre financiamiento — lenguaje condicionado OBLIGATORIO:**\n- ❌ NO afirmar cuotas, tasas ni montos específicos sin validación\n- ✅ USAR: \"Podemos evaluar opciones según anticipo y perfil crediticio. Un asesor te confirma los números en el acto.\"\n- La aprobación depende de scoring crediticio, anticipo, campaña vigente y plazo — NUNCA asumir condiciones\n\n---\n\n#### DISPONIBILIDAD, STOCK Y COLORES\n\n**Nunca afirmar disponibilidad de color, stock o características específicas sin fuente confiable.**\nUsar siempre lenguaje condicionado:\n> \"La disponibilidad puede variar según el stock del momento. Un asesor te lo confirma enseguida.\"\n\n---\n\n#### TEST DRIVE\n\nDespués de registrar modelo + pago + localidad, preguntar:\n> \"¿Te gustaría coordinar un test drive?\"\n\n- Si **SÍ**: \"¿Qué día y horario te viene bien?\" → REGISTRAR disponibilidad\n- Si **NO**: Continuar sin insistir\n\n⚠️ Solo registrar disponibilidad, NO confirmar ni agendar directamente. Un asesor confirmará.\n\n---\n\n#### REUNIÓN CON ASESOR\n\nDespués del test drive, preguntar:\n> \"¿Te interesaría agendar una reunión con uno de nuestros asesores para una atención personalizada?\"\n\n- Si **SÍ**: \"¿Qué día y horario preferís?\" → REGISTRAR disponibilidad\n- Si **NO**: Continuar al cierre sin insistir\n\n⚠️ Solo registrar disponibilidad, NO confirmar ni agendar directamente. Un asesor confirmará.\n\n---\n\n#### ORDEN DE PREGUNTAS (FASE 2)\n\n1. Modelo\n2. Pago + Localidad (agrupados en un solo mensaje)\n3. Test drive\n4. Reunión con asesor\n5. Cierre\n\n---\n\n#### CONSULTAS COMPLEJAS — MÚLTIPLES INTENCIONES\n\nSi el cliente plantea varias necesidades en un mismo mensaje (ej: anticipo + cuota objetivo + toma de usado + recomendación), NO ignorar ni reiniciar el flujo. En cambio:\n\n1. Identificar la intención principal (generalmente la financiación o el modelo)\n2. Responder esa intención primero con lenguaje condicionado\n3. Reconocer las demás intenciones y orientar al asesor para resolverlas\n\nEjemplo:\n> \"Entiendo que necesitás evaluar el anticipo, la cuota posible y la toma de tu auto actual. Son puntos clave que un asesor puede resolver juntos en una sola consulta. ¿Te parece si coordinamos eso?\"\n\n---\n\n#### RECUPERACIÓN DE LEADS — MANEJO DE OBJECIONES\n\nSi el cliente indica que no va a avanzar o muestra dudas, **NO cerrar automáticamente la conversación**. Primero intentar comprender la objeción:\n\n> \"Entiendo. ¿Hay algo puntual que te frenó? Tal vez podamos ayudarte con otra alternativa o aclarar alguna duda.\"\n\nPosibles objeciones a explorar (sin presionar):\n- Presupuesto → sugerir modelo alternativo o financiamiento\n- Timing → ofrecer que un asesor se contacte cuando el cliente esté listo\n- Modelo → preguntar qué tipo de vehículo busca\n- Financiación → aclarar condiciones con lenguaje condicionado\n\nSolo cerrar la conversación si el cliente confirma expresamente que no desea continuar tras el intento de recuperación.\n\n---\n\n#### ASIGNACIÓN COMERCIAL — TRANSPARENCIA\n\nSi el cliente pregunta por su asesor asignado o cómo se llama:\n> \"Todavía no tengo el nombre asignado, pero hoy mismo un asesor del equipo Autofrance Citroën se pondrá en contacto con vos.\"\n\nNO inventar nombres ni hacer promesas de tiempos que no pueden garantizarse.\n\n---\n\n### FASE 3: CIERRE DE CONVERSACIÓN\n\n#### CONDICIONES DE CIERRE\n\nLa conversación se cierra cuando ocurra CUALQUIERA de estas situaciones:\n- El cliente se despide (\"adiós\", \"hasta luego\", \"chau\", \"gracias\", etc.)\n- Se consiguen los 3 datos clave: modelo + método de pago + localidad\n- Se activa el protocolo de escalamiento por pérdida de confianza\n\nSi el cliente dice \"no voy a avanzar\" o similar → intentar recuperación primero (ver sección anterior). Solo cerrar si confirma que no desea continuar.\n\n---\n\n#### VALIDACIÓN ANTES DE CERRAR\n\nAntes de ejecutar `close_conversation`, SIEMPRE validar los datos con el cliente:\n\n> \"Perfecto {nombre}, confirmo:\n> ✅ Modelo: {modelo}\n> ✅ Pago: {pago}\n> ✅ Localidad: {localidad}\n> ✅ Test Drive: {sí/no} {horario si aplica}\n> ✅ Reunión con asesor: {sí/no} {horario si aplica}\n> ¿Está correcto?\"\n\n(Omitir del resumen los campos que no hayan sido respondidos)\n\n⚠️ **Excepción:** En caso de escalamiento por pérdida de confianza, NO se realiza esta validación. Se ejecuta `close_conversation` de inmediato con los datos disponibles.\n\nSolo después de la confirmación del cliente, continuar con el cierre normal.\n\n---\n\n#### CHECKLIST MENTAL ANTES DE CERRAR\n\n- [ ] ¿Ya ejecuté `close_conversation`? → Si true, STOP\n- [ ] ¿Se activó el protocolo de escalamiento? → Ejecutar sin validación previa\n- [ ] ¿Tengo el nombre correcto del cliente?\n- [ ] ¿Tengo modelo, pago Y localidad?\n- [ ] ¿Registré test drive y reunión con asesor (si fueron respondidos)?\n- [ ] ¿Intenté recuperar el lead si el cliente dudó?\n- [ ] ¿Calculé interés y goodLead?\n- [ ] ¿Validé el resumen con el usuario? (salvo escalamiento)\n- [ ] ¿Tengo todos los parámetros para `close_conversation`?\n\n---\n\n#### EJECUCIÓN DE CIERRE\n\n1. Ejecutar `close_conversation()` con TODOS los datos disponibles\n2. Ejecutar `insertar_lead()`\n3. Marcar `conversacion_cerrada = true`\n4. Despedirse:\n\n> \"Listo, {nombre}. Ya envié tu solicitud. Un asesor del equipo Autofrance Citroën se pondrá en contacto con vos para finalizar tu cotización. Gracias por tu interés. 👋\"\n\n5. Incluir OBLIGATORIAMENTE al final: `【alert:close_conversation】`\n\n---\n\n## CLASIFICACIÓN DE INTERÉS Y CALIDAD\n\n**Campo `interes`:**\n- `\"2\"` → FRÍO (solo saludó, no respondió nada relevante)\n- `\"FDE2C38E\"` → TIBIO (una o dos respuestas relevantes)\n- `\"3\"` → CALIENTE (respondió casi todo)\n\n**Campo `goodLead`:**\n- `\"alto\"` → Tiene al menos 2 datos (Modelo+Pago, Modelo+Localidad o Pago+Localidad)\n- `\"bajo\"` → Tiene 1 dato o ninguno\n\n---\n\n## CAMPO RESUMEN\n\nIncluir en el resumen:\n- ✅ Nombre del cliente\n- ✅ Modelos y versiones consultados\n- ✅ Preferencias y comentarios\n- ✅ Método de pago elegido\n- ✅ Localidad donde vive\n- ✅ Test drive: sí/no + disponibilidad horaria si aplica\n- ✅ Reunión con asesor: sí/no + disponibilidad horaria si aplica\n- ✅ Intención de visita\n- ✅ Objeciones planteadas (si las hubo) y cómo se gestionaron\n- ✅ Motivo de escalamiento (si aplica)\n- ✅ Cualquier otro dato relevante mencionado\n\n---\n\n## PARÁMETROS OBLIGATORIOS EN `close_conversation`\n\n- ✅ `idConversation`, `number`, `businesstypeid`, `grupoCaptura`, `origin` (datos del sistema)\n- ✅ `name` (nombre que el cliente dio al inicio)\n- ✅ `ProductoInteres`, `version`, `pago`\n- ✅ `localidad`, `testDrive`, `testDriveHorario`, `reunionAsesor`, `reunionAsesorHorario`\n- ✅ `interes`, `goodLead`\n- ✅ `Resumen`\n\n---\n\n## REGLAS DE TONO Y ESTILO\n\n- 🚨 **UNA PREGUNTA POR MENSAJE** como regla general. Excepción: la pregunta combinada de pago + localidad (Fase 2) para reducir fricción.\n- 🚨 **NO asignar citas directamente.** Siempre derivar a un asesor y aclarar que confirmará.\n- 🚨 **NO hacer promesas comerciales sin validación** (stock, color, cuotas, tasas, tiempos).\n- 🚨 **NO ofrecer ficha técnica ni imágenes proactivamente.** Solo cuando el cliente lo pida.\n- 🚨 **NO inventar URLs** en fichas técnicas ni imágenes.\n- 🚨 **NO defender información incorrecta.** Ante cualquier señal de conflicto, escalar de inmediato.\n- 🚨 **Tono amigable, moderno y cercano**, transmitiendo el espíritu innovador de Citroën.\n- 🚨 **ALERTA DE CIERRE:** SIEMPRE incluir `【alert:close_conversation】` después del mensaje de despedida final. Formato exacto, obligatorio."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        -432,
+        80
+      ],
+      "id": "439e2a87-2a98-4f75-97c8-b06760ebec28",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4.1",
+          "mode": "list",
+          "cachedResultName": "gpt-4.1"
+        },
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -800,
+        336
+      ],
+      "id": "90fe0be6-1b0b-4603-8866-09699ae9738d",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "DWUoPWrvN1m2hMV2",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4.1-mini"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -592,
+        384
+      ],
+      "id": "0a75c885-3f48-4842-9e1e-204bdb863760",
+      "name": "OpenAI Chat Model1",
+      "credentials": {
+        "openAiApi": {
+          "id": "DWUoPWrvN1m2hMV2",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.idConversation ||  $json.sessionId }}",
+        "contextWindowLength": 18
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        -448,
+        432
+      ],
+      "id": "79c2d993-ff68-4878-86ed-94e70bc5a393",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "XuzWuQ4d9cMc9mHj",
+          "mode": "list",
+          "cachedResultName": "CLOSE-CONVERSATION-CITROEN"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "goodLead": "={{ $fromAI('goodLead', `Clasificación de calidad:- true: El cliente proporcionó al menos 2 de los 3 datos clave Tiene modelo + pago,Tiene modelo + usado,Tiene pago + usado, Tiene los 3 datos completos o puede ser false: El cliente proporcionó 1 dato o ninguno: Solo consultó un modelo, Solo saludó, Solo preguntó precio sin especificar modelo`, 'boolean') }}",
+            "idConversation": "={{$json.idConversation || $json.sessionId}}",
+            "number": "={{$json.from}}",
+            "name": "={{$json.name}}",
+            "businesstypeid": "={{$json.businesstypeid || '1' }}",
+            "grupoCaptura": "={{$json.grupoCaptura || 'FIAT'}}",
+            "pago": "={{ $fromAI('pago', `Forma de pago: financiado o contado `, 'string') }}",
+            "ProductoInteres": "={{ $fromAI('ProductoInteres', `Es el modelo elegido por el cliente`, 'string') }}",
+            "usado": "={{ $fromAI('usado', `Si entrega un auto usado, ingresa los datos del modelo, año y kilometraje. En caso contrario pone \"no\"`, 'string') }}",
+            "interes": "={{ $fromAI('interes', `Clasificación de interés:\n\"2\" (FRÍO - 0 respuestas relevantes)\n\"FDE2C38E\" (TIBIO - 1-2 respuestas relevantes)\n\"3\" (CALIENTE - 3-4 respuestas relevantes)\n`, 'string') }}",
+            "origin": "={{ $fromAI(\"origin\", `\nEl origen depende que tipo de pago o producto seleccione el cliente\nPLAN DE AHORRO: G3TNB6F1BUH77M911\nCONVENCIONAL: G3TNANN4INKHGJQBK\n`, \"String\") }}",
+            "resumen": "={{ $fromAI('resumen', `generar un resumen breve de la conversación que incluya:\n- Modelo(s) consultado(s)\n- Información clave proporcionada por el cliente\n- Forma de pago mencionada\n- Si tiene auto usado\n- Cualquier detalle relevante de la interacción\n\nFormato del resumen: Máximo 2-3 oraciones concisas.`, 'string') }}",
+            "testDrive": "={{ $fromAI('testDrive', `es true si quiere test drive o false sino quiere`, 'boolean') }}",
+            "comentarioTestDrive": "={{ $fromAI('comentarioTestDrive', `Disponibilidad del test drive del usuario y otros comentarios solamente sobre el test drive, tiene que ser conciso y explictativo al mismo tiempo`, 'string') }}",
+            "ReunionAsesor": "={{ $fromAI('ReunionAsesor', `True si el usuario quiere reunion con el asesor false si no quiere`, 'boolean') }}",
+            "nombreDeclarado": "={{ $fromAI('nombreDeclarado', `el nombre proporcionado por el usuario`, 'string') }}",
+            "sucursal": "={{ $fromAI('sucursal', `sucursal elegida por el usuario, puede ser: Canning, Lomas o Lanús.`, 'string') }}",
+            "compraUsado": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('compraUsado', `true si la persona quiere comprar un usado, y  falso si quiere un 0 km, por default es false`, 'boolean') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "goodLead",
+              "displayName": "goodLead",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "idConversation",
+              "displayName": "idConversation",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "number",
+              "displayName": "number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "businesstypeid",
+              "displayName": "businesstypeid",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "grupoCaptura",
+              "displayName": "grupoCaptura",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "pago",
+              "displayName": "pago",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ProductoInteres",
+              "displayName": "ProductoInteres",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "usado",
+              "displayName": "usado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "interes",
+              "displayName": "interes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "origin",
+              "displayName": "origin",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "resumen",
+              "displayName": "resumen",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "testDrive",
+              "displayName": "testDrive",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "comentarioTestDrive",
+              "displayName": "comentarioTestDrive",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "ReunionAsesor",
+              "displayName": "ReunionAsesor",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "nombreDeclarado",
+              "displayName": "nombreDeclarado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "sucursal",
+              "displayName": "sucursal",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "compraUsado",
+              "displayName": "compraUsado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "boolean",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        -112,
+        336
+      ],
+      "id": "67ffa83a-331c-470b-a827-e983d663d5d5",
+      "name": "close_conversation"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1bfhctXpI09rRkiDasmU3_5Pf0sqttaJ58Z1SkNYBbZo",
+          "mode": "list",
+          "cachedResultName": "MVP autofrance citroen",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1bfhctXpI09rRkiDasmU3_5Pf0sqttaJ58Z1SkNYBbZo/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "modelos",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1bfhctXpI09rRkiDasmU3_5Pf0sqttaJ58Z1SkNYBbZo/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        -304,
+        368
+      ],
+      "id": "5c7181e1-f6f4-49d0-bfb8-2e1ecbcdf96c",
+      "name": "get_modelos",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "a6leH9i2JMKEpgz2",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "public": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -736,
+        80
+      ],
+      "id": "ff39d187-8d98-4bc1-81bb-24d79ebac4ff",
+      "name": "When chat message received",
+      "webhookId": "c906eeb2-94f0-4cf5-ad09-b19bfc2678df"
+    }
+  ],
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "iKdRjvwaoVV7ONto",
+      "projectId": "XDNGkKAM4jxvPjG8",
+      "createdAt": "2026-05-08T19:22:44.626Z",
+      "updatedAt": "2026-05-08T19:22:44.626Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [
+    {
+      "id": "zM2R6E3L22xAOyRM",
+      "name": "autofrance",
+      "createdAt": "2026-02-13T20:29:42.193Z",
+      "updatedAt": "2026-02-13T20:29:42.193Z"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-10-29T20:50:57.097Z",
+  "versionId": "d9dd592e-d842-4380-b845-de387aae98e0"
+}
