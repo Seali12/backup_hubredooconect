@@ -1,0 +1,660 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "c3077014-617c-4526-a4de-6fb7090a0175",
+    "workflowId": "uG3l7Tv5aaGtbwLr",
+    "nodes": [
+      {
+        "id": "39e64e23-976a-4735-a905-b5fbb6bf2e3a",
+        "name": "Todas las noches 2:00 COL",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          0,
+          0
+        ],
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "cronExpression",
+                "expression": "0 7 * * *"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "e43b5c33-b1b8-4166-aede-23a03d6c9059",
+        "name": "Pilot authentication",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          224,
+          0
+        ],
+        "parameters": {
+          "url": "https://api.pilotsolution.net/v1/users/authentication.php",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpCustomAuth",
+          "options": {}
+        },
+        "credentials": {
+          "httpCustomAuth": {
+            "id": "NHXyrkv9ca6Njn8R",
+            "name": "PILOT FORD COLOMBIA"
+          }
+        },
+        "executeOnce": true
+      },
+      {
+        "id": "db16109d-53a5-45b3-aedf-22df5658d51e",
+        "name": "Pilot authorization",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          448,
+          0
+        ],
+        "parameters": {
+          "url": "https://api.pilotsolution.net/v1/users/authorization.php",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "identity_token",
+                "value": "={{ $json.result.entitydata.accounts[0].token }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "executeOnce": true
+      },
+      {
+        "id": "9d8334f5-ad52-4cfc-a87e-52019531ff78",
+        "name": "Contar leads Pilot",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          672,
+          0
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.pilotsolution.net/v1/welcomes/list.php",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ \"data\": { \"limit\": 100, \"page\": 1, \"filters\": [ { \"field\": \"created\", \"operation\": \">=\", \"value\": new Date(Date.now() - 48*3600*1000).toISOString().slice(0,19) + \".000\" } ], \"wildCard\": \"*\", \"sorts\": [ { \"field\": \"created\", \"order\": \"DESC\" } ] }, \"header\": { \"FlowName\": \"List_Leads\", \"SequenceId\": 1, \"TimeStamp\": 1248377, \"TrackingId\": \"FD1C4A1A-CAFB-467E-825B-7FFB86CC21E3\", \"access_token\": $(\"Pilot authorization\").first().json.result.entitydata.session.identityToken } }) }}",
+          "options": {}
+        },
+        "executeOnce": true
+      },
+      {
+        "id": "81bb7839-4879-498b-b4e8-167517f5e1f4",
+        "name": "Paginas",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          896,
+          0
+        ],
+        "parameters": {
+          "jsCode": "const r = $json.result || {};\nif (r.status !== 'success') throw new Error('Pilot list.php no respondio success: ' + JSON.stringify($json).slice(0, 300));\n// ponytail: page_count de Pilot viene siempre 50; se calcula con rows_count\nconst n = Math.min(Math.ceil((Number((r.aditional_data || {}).rows_count) || 0) / 100), 50) || 1;\nconst out = [];\nfor (let p = 1; p <= n; p++) out.push({ json: { page: p } });\nreturn out;"
+        }
+      },
+      {
+        "id": "a57ec04b-f3f1-450d-a43c-7e9e621ae747",
+        "name": "Listar leads Pilot",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1120,
+          0
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.pilotsolution.net/v1/welcomes/list.php",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ \"data\": { \"limit\": 100, \"page\": $json.page, \"filters\": [ { \"field\": \"created\", \"operation\": \">=\", \"value\": new Date(Date.now() - 48*3600*1000).toISOString().slice(0,19) + \".000\" } ], \"wildCard\": \"*\", \"sorts\": [ { \"field\": \"created\", \"order\": \"DESC\" } ] }, \"header\": { \"FlowName\": \"List_Leads\", \"SequenceId\": 1, \"TimeStamp\": 1248377, \"TrackingId\": \"FD1C4A1A-CAFB-467E-825B-7FFB86CC21E3\", \"access_token\": $(\"Pilot authorization\").first().json.result.entitydata.session.identityToken } }) }}",
+          "options": {
+            "batching": {
+              "batch": {
+                "batchSize": 1,
+                "batchInterval": 3000
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "a9b926fe-55ae-4df5-9a9b-bde5b2874d05",
+        "name": "Leer base",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          1344,
+          0
+        ],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT id, pilot_tracking_id, pilot_cellphone, pilot_firstname, status, `lead`, grado_interes, reason, DATE_FORMAT(created_at, '%Y-%m-%dT%H:%i:%sZ') AS created_utc FROM ford_colombia WHERE created_at >= UTC_TIMESTAMP() - INTERVAL 50 HOUR",
+          "options": {}
+        },
+        "credentials": {
+          "mySql": {
+            "id": "Vl0rIdPXBmN5yKfQ",
+            "name": "MSQL-FORD-COLOMBIA"
+          }
+        },
+        "executeOnce": true,
+        "alwaysOutputData": true
+      },
+      {
+        "id": "203a6819-5b18-4e76-941d-06fb358e6820",
+        "name": "Comparar",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1568,
+          0
+        ],
+        "parameters": {
+          "jsCode": "const H = 3600 * 1000, now = Date.now();\nconst pilot = {};\nfor (const it of $('Listar leads Pilot').all()) {\n  const r = it.json.result || {};\n  if (r.status !== 'success') throw new Error('Pilot list.php fallo: ' + JSON.stringify(it.json).slice(0, 300));\n  // ford_digital_colombia = web; digital_ford = chatbot. Los dos los carga nuestro flujo.\n  for (const x of (r.entitydata || [])) if (['ford_digital_colombia', 'digital_ford'].includes((x.origin || {}).code)) pilot[String(x.id).toUpperCase()] = x;\n}\nconst rows = $('Leer base').all().map(i => i.json).filter(r => r.id);\nconst byGuid = {};\nfor (const r of rows) if (r.pilot_tracking_id) byGuid[String(r.pilot_tracking_id).toUpperCase()] = r;\nconst t = d => Date.parse(String(d || '').replace('+0000', 'Z'));\nconst tel = x => (x.prospect || {}).cellphone || '';\nconst noLlegaron = Object.values(pilot)\n  .filter(x => now - t((x.created || {}).dt) > 2 * H && !byGuid[String(x.id).toUpperCase()])\n  .map(x => ({ guid: x.id, tel: tel(x), nombre: (x.prospect || {}).firstname, creado: (x.created || {}).dt, asignado: ((x.asigned || {}).user || {}).fullname }));\nconst desincronizados = [];\nfor (const r of rows) {\n  const x = pilot[String(r.pilot_tracking_id || '').toUpperCase()];\n  if (!x) continue;\n  if (r.lead === 'good_lead' && r.grado_interes && !(x.interest_level || {}).code) desincronizados.push({ id: r.id, tel: r.pilot_cellphone, base: 'good_lead ' + (r.grado_interes || ''), pilot: (x.status || {}).name + ', sin grado' });\n  if (r.lead === 'bad_lead' && (x.status || {}).code === '100') desincronizados.push({ id: r.id, tel: r.pilot_cellphone, base: 'bad_lead', pilot: 'Sin Gestion' });\n}\nconst noConfirmo = rows.filter(r => String(r.reason || '').startsWith('Pilot no confirm')).map(r => ({ id: r.id, tel: r.pilot_cellphone, reason: r.reason }));\nconst trabados = rows.filter(r => !r.lead && now - t(r.created_utc) > 26 * H && now - t(r.created_utc) < 48 * H).map(r => ({ id: r.id, tel: r.pilot_cellphone, status: r.status, creado: r.created_utc }));\nconst total = noLlegaron.length + desincronizados.length + noConfirmo.length + trabados.length;\nreturn [{ json: { total, pilot_leads: Object.keys(pilot).length, base_leads: rows.length, noLlegaron, desincronizados, noConfirmo, trabados } }];"
+        }
+      },
+      {
+        "id": "007b1aee-22ed-447c-b5ed-59da9be68683",
+        "name": "Armar mail",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1792,
+          0
+        ],
+        "parameters": {
+          "jsCode": "const j = $json;\nif (!j.total) return []; // ponytail: sin diferencias no se manda nada\nconst esc = s => String(s ?? '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));\nconst tabla = (titulo, nota, lista) => !lista.length ? '' :\n  `<h3>${titulo} (${lista.length})</h3><p>${nota}</p><table border=\"1\" cellpadding=\"4\" style=\"border-collapse:collapse;font-size:13px\"><tr>${Object.keys(lista[0]).map(k => `<th>${esc(k)}</th>`).join('')}</tr>` +\n  lista.map(r => `<tr>${Object.values(r).map(v => `<td>${esc(v)}</td>`).join('')}</tr>`).join('') + '</table>';\nconst html = `<p>Últimas 48 h: ${j.pilot_leads} leads en Pilot (ford_digital_colombia), ${j.base_leads} en la base.</p>` +\n  tabla('No llegaron a la base', 'Están en Pilot y no tenemos registro. Probable caída del webhook o del n8n.', j.noLlegaron) +\n  tabla('Desincronizados', 'La base y Pilot dicen cosas distintas.', j.desincronizados) +\n  tabla('Pilot no confirmó', 'Pilot no aceptó la calificación al cerrar.', j.noConfirmo) +\n  tabla('Trabados', 'Más de 26 h sin cerrar.', j.trabados);\nreturn [{ json: { subject: `Ford Colombia: ${j.total} diferencias Pilot vs base`, html } }];"
+        }
+      },
+      {
+        "id": "371e0727-41f4-424b-86a4-95d1d12936bd",
+        "name": "Mandar mail",
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2.2,
+        "position": [
+          2016,
+          0
+        ],
+        "parameters": {
+          "resource": "message",
+          "operation": "send",
+          "sendTo": "ijcabaleiro@gmail.com",
+          "subject": "={{ $json.subject }}",
+          "emailType": "html",
+          "message": "={{ $json.html }}",
+          "options": {
+            "appendAttribution": false
+          }
+        },
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "jwGXROodBSgsAjaM",
+            "name": "Gmail notificaciones IA"
+          }
+        },
+        "webhookId": "82a870cc-01d2-4da8-8723-6c422e9600d1"
+      }
+    ],
+    "connections": {
+      "Todas las noches 2:00 COL": {
+        "main": [
+          [
+            {
+              "node": "Pilot authentication",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Pilot authentication": {
+        "main": [
+          [
+            {
+              "node": "Pilot authorization",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Pilot authorization": {
+        "main": [
+          [
+            {
+              "node": "Contar leads Pilot",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Contar leads Pilot": {
+        "main": [
+          [
+            {
+              "node": "Paginas",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Paginas": {
+        "main": [
+          [
+            {
+              "node": "Listar leads Pilot",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Listar leads Pilot": {
+        "main": [
+          [
+            {
+              "node": "Leer base",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Leer base": {
+        "main": [
+          [
+            {
+              "node": "Comparar",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Comparar": {
+        "main": [
+          [
+            {
+              "node": "Armar mail",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Armar mail": {
+        "main": [
+          [
+            {
+              "node": "Mandar mail",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "MARCELO AGUSTIN DRI (via MCP)",
+    "name": "Incluir origen digital_ford (chatbot)",
+    "description": "Updated nodes: Comparar",
+    "autosaved": false,
+    "createdAt": "2026-11-24T19:45:19.388Z",
+    "updatedAt": "2026-11-24T19:45:19.388Z"
+  },
+  "activeVersionId": "c3077014-617c-4526-a4de-6fb7090a0175",
+  "connections": {
+    "Todas las noches 2:00 COL": {
+      "main": [
+        [
+          {
+            "node": "Pilot authentication",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pilot authentication": {
+      "main": [
+        [
+          {
+            "node": "Pilot authorization",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pilot authorization": {
+      "main": [
+        [
+          {
+            "node": "Contar leads Pilot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Contar leads Pilot": {
+      "main": [
+        [
+          {
+            "node": "Paginas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Paginas": {
+      "main": [
+        [
+          {
+            "node": "Listar leads Pilot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Listar leads Pilot": {
+      "main": [
+        [
+          {
+            "node": "Leer base",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer base": {
+      "main": [
+        [
+          {
+            "node": "Comparar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Comparar": {
+      "main": [
+        [
+          {
+            "node": "Armar mail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Armar mail": {
+      "main": [
+        [
+          {
+            "node": "Mandar mail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-11-24T16:43:23.750Z",
+  "id": "uG3l7Tv5aaGtbwLr",
+  "isArchived": false,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "name": "Ford Colombia - chequeo nocturno Pilot vs base",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "id": "39e64e23-976a-4735-a905-b5fbb6bf2e3a",
+      "name": "Todas las noches 2:00 COL",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 7 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "e43b5c33-b1b8-4166-aede-23a03d6c9059",
+      "name": "Pilot authentication",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        224,
+        0
+      ],
+      "parameters": {
+        "url": "https://api.pilotsolution.net/v1/users/authentication.php",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "options": {}
+      },
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "NHXyrkv9ca6Njn8R",
+          "name": "PILOT FORD COLOMBIA"
+        }
+      },
+      "executeOnce": true
+    },
+    {
+      "id": "db16109d-53a5-45b3-aedf-22df5658d51e",
+      "name": "Pilot authorization",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        448,
+        0
+      ],
+      "parameters": {
+        "url": "https://api.pilotsolution.net/v1/users/authorization.php",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "identity_token",
+              "value": "={{ $json.result.entitydata.accounts[0].token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "executeOnce": true
+    },
+    {
+      "id": "9d8334f5-ad52-4cfc-a87e-52019531ff78",
+      "name": "Contar leads Pilot",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        672,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.pilotsolution.net/v1/welcomes/list.php",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ \"data\": { \"limit\": 100, \"page\": 1, \"filters\": [ { \"field\": \"created\", \"operation\": \">=\", \"value\": new Date(Date.now() - 48*3600*1000).toISOString().slice(0,19) + \".000\" } ], \"wildCard\": \"*\", \"sorts\": [ { \"field\": \"created\", \"order\": \"DESC\" } ] }, \"header\": { \"FlowName\": \"List_Leads\", \"SequenceId\": 1, \"TimeStamp\": 1248377, \"TrackingId\": \"FD1C4A1A-CAFB-467E-825B-7FFB86CC21E3\", \"access_token\": $(\"Pilot authorization\").first().json.result.entitydata.session.identityToken } }) }}",
+        "options": {}
+      },
+      "executeOnce": true
+    },
+    {
+      "id": "81bb7839-4879-498b-b4e8-167517f5e1f4",
+      "name": "Paginas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const r = $json.result || {};\nif (r.status !== 'success') throw new Error('Pilot list.php no respondio success: ' + JSON.stringify($json).slice(0, 300));\n// ponytail: page_count de Pilot viene siempre 50; se calcula con rows_count\nconst n = Math.min(Math.ceil((Number((r.aditional_data || {}).rows_count) || 0) / 100), 50) || 1;\nconst out = [];\nfor (let p = 1; p <= n; p++) out.push({ json: { page: p } });\nreturn out;"
+      }
+    },
+    {
+      "id": "a57ec04b-f3f1-450d-a43c-7e9e621ae747",
+      "name": "Listar leads Pilot",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.pilotsolution.net/v1/welcomes/list.php",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ \"data\": { \"limit\": 100, \"page\": $json.page, \"filters\": [ { \"field\": \"created\", \"operation\": \">=\", \"value\": new Date(Date.now() - 48*3600*1000).toISOString().slice(0,19) + \".000\" } ], \"wildCard\": \"*\", \"sorts\": [ { \"field\": \"created\", \"order\": \"DESC\" } ] }, \"header\": { \"FlowName\": \"List_Leads\", \"SequenceId\": 1, \"TimeStamp\": 1248377, \"TrackingId\": \"FD1C4A1A-CAFB-467E-825B-7FFB86CC21E3\", \"access_token\": $(\"Pilot authorization\").first().json.result.entitydata.session.identityToken } }) }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 3000
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "a9b926fe-55ae-4df5-9a9b-bde5b2874d05",
+      "name": "Leer base",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        1344,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, pilot_tracking_id, pilot_cellphone, pilot_firstname, status, `lead`, grado_interes, reason, DATE_FORMAT(created_at, '%Y-%m-%dT%H:%i:%sZ') AS created_utc FROM ford_colombia WHERE created_at >= UTC_TIMESTAMP() - INTERVAL 50 HOUR",
+        "options": {}
+      },
+      "credentials": {
+        "mySql": {
+          "id": "Vl0rIdPXBmN5yKfQ",
+          "name": "MSQL-FORD-COLOMBIA"
+        }
+      },
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "id": "203a6819-5b18-4e76-941d-06fb358e6820",
+      "name": "Comparar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const H = 3600 * 1000, now = Date.now();\nconst pilot = {};\nfor (const it of $('Listar leads Pilot').all()) {\n  const r = it.json.result || {};\n  if (r.status !== 'success') throw new Error('Pilot list.php fallo: ' + JSON.stringify(it.json).slice(0, 300));\n  // ford_digital_colombia = web; digital_ford = chatbot. Los dos los carga nuestro flujo.\n  for (const x of (r.entitydata || [])) if (['ford_digital_colombia', 'digital_ford'].includes((x.origin || {}).code)) pilot[String(x.id).toUpperCase()] = x;\n}\nconst rows = $('Leer base').all().map(i => i.json).filter(r => r.id);\nconst byGuid = {};\nfor (const r of rows) if (r.pilot_tracking_id) byGuid[String(r.pilot_tracking_id).toUpperCase()] = r;\nconst t = d => Date.parse(String(d || '').replace('+0000', 'Z'));\nconst tel = x => (x.prospect || {}).cellphone || '';\nconst noLlegaron = Object.values(pilot)\n  .filter(x => now - t((x.created || {}).dt) > 2 * H && !byGuid[String(x.id).toUpperCase()])\n  .map(x => ({ guid: x.id, tel: tel(x), nombre: (x.prospect || {}).firstname, creado: (x.created || {}).dt, asignado: ((x.asigned || {}).user || {}).fullname }));\nconst desincronizados = [];\nfor (const r of rows) {\n  const x = pilot[String(r.pilot_tracking_id || '').toUpperCase()];\n  if (!x) continue;\n  if (r.lead === 'good_lead' && r.grado_interes && !(x.interest_level || {}).code) desincronizados.push({ id: r.id, tel: r.pilot_cellphone, base: 'good_lead ' + (r.grado_interes || ''), pilot: (x.status || {}).name + ', sin grado' });\n  if (r.lead === 'bad_lead' && (x.status || {}).code === '100') desincronizados.push({ id: r.id, tel: r.pilot_cellphone, base: 'bad_lead', pilot: 'Sin Gestion' });\n}\nconst noConfirmo = rows.filter(r => String(r.reason || '').startsWith('Pilot no confirm')).map(r => ({ id: r.id, tel: r.pilot_cellphone, reason: r.reason }));\nconst trabados = rows.filter(r => !r.lead && now - t(r.created_utc) > 26 * H && now - t(r.created_utc) < 48 * H).map(r => ({ id: r.id, tel: r.pilot_cellphone, status: r.status, creado: r.created_utc }));\nconst total = noLlegaron.length + desincronizados.length + noConfirmo.length + trabados.length;\nreturn [{ json: { total, pilot_leads: Object.keys(pilot).length, base_leads: rows.length, noLlegaron, desincronizados, noConfirmo, trabados } }];"
+      }
+    },
+    {
+      "id": "007b1aee-22ed-447c-b5ed-59da9be68683",
+      "name": "Armar mail",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const j = $json;\nif (!j.total) return []; // ponytail: sin diferencias no se manda nada\nconst esc = s => String(s ?? '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));\nconst tabla = (titulo, nota, lista) => !lista.length ? '' :\n  `<h3>${titulo} (${lista.length})</h3><p>${nota}</p><table border=\"1\" cellpadding=\"4\" style=\"border-collapse:collapse;font-size:13px\"><tr>${Object.keys(lista[0]).map(k => `<th>${esc(k)}</th>`).join('')}</tr>` +\n  lista.map(r => `<tr>${Object.values(r).map(v => `<td>${esc(v)}</td>`).join('')}</tr>`).join('') + '</table>';\nconst html = `<p>Últimas 48 h: ${j.pilot_leads} leads en Pilot (ford_digital_colombia), ${j.base_leads} en la base.</p>` +\n  tabla('No llegaron a la base', 'Están en Pilot y no tenemos registro. Probable caída del webhook o del n8n.', j.noLlegaron) +\n  tabla('Desincronizados', 'La base y Pilot dicen cosas distintas.', j.desincronizados) +\n  tabla('Pilot no confirmó', 'Pilot no aceptó la calificación al cerrar.', j.noConfirmo) +\n  tabla('Trabados', 'Más de 26 h sin cerrar.', j.trabados);\nreturn [{ json: { subject: `Ford Colombia: ${j.total} diferencias Pilot vs base`, html } }];"
+      }
+    },
+    {
+      "id": "371e0727-41f4-424b-86a4-95d1d12936bd",
+      "name": "Mandar mail",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2016,
+        0
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "sendTo": "ijcabaleiro@gmail.com",
+        "subject": "={{ $json.subject }}",
+        "emailType": "html",
+        "message": "={{ $json.html }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "jwGXROodBSgsAjaM",
+          "name": "Gmail notificaciones IA"
+        }
+      },
+      "webhookId": "82a870cc-01d2-4da8-8723-6c422e9600d1"
+    }
+  ],
+  "pinData": null,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "uG3l7Tv5aaGtbwLr",
+      "projectId": "K8p6XEqA0L6D2uVt",
+      "createdAt": "2026-11-24T16:43:23.753Z",
+      "updatedAt": "2026-11-24T16:43:23.753Z"
+    }
+  ],
+  "staticData": {
+    "node:Todas las noches 2:00 COL": {
+      "recurrenceRules": [
+        null
+      ],
+      "recurrenceRuleSignatures": [
+        null
+      ]
+    }
+  },
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2026-11-24T19:45:19.385Z",
+  "versionId": "c3077014-617c-4526-a4de-6fb7090a0175"
+}
