@@ -1,0 +1,1623 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "defb5d2a-b3b2-41d0-8bd5-17116e3a3dc7",
+    "workflowId": "jZ0LBnMYXiaAm8hE",
+    "nodes": [
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "minutes",
+                "minutesInterval": 10
+              }
+            ]
+          }
+        },
+        "id": "16ee3b19-eef1-4d30-abcb-3b75d6235c88",
+        "name": "⏰ Schedule Trigger",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          -144,
+          128
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT l.*, t.access_token, i.destino, i.destino_config, i.origen_sf \nFROM meli_leads l \nJOIN meli_tokens t ON l.user_id = t.user_id \nJOIN meli_integraciones i ON l.user_id = i.user_id \nWHERE l.status = 'active' \nAND l.buyer_id IS NOT NULL \nAND l.buyer_id != 0\nAND l.buyer_nombre IS NOT NULL\nAND l.user_id IN (3328612086,310104776) \nAND l.bot_uploaded = 0\nAND l.received_at <= DATE_SUB(NOW(), INTERVAL 15 MINUTE)\nLIMIT 100",
+          "options": {}
+        },
+        "id": "06606808-988c-4af3-a5e4-5ecf01dc09fa",
+        "name": "🗄️ Buscar leads pending",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          32,
+          128
+        ],
+        "alwaysOutputData": false,
+        "credentials": {
+          "mySql": {
+            "id": "FezTcDnLo3SqPHvd",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "leftValue": "={{ $input.all().length }}",
+                "rightValue": 0,
+                "operator": {
+                  "type": "number",
+                  "operation": "gt"
+                },
+                "id": "704640a7-85b2-408f-9f5c-9d457aadd4fb"
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "dae49a88-7bba-4062-ba45-1ff781827bff",
+        "name": "🔍 Hay leads?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          256,
+          128
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT * FROM meli_asesores \nWHERE user_id = {{ $json.user_id }} \nAND (\n  RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo1 }}'\n  OR RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo2 }}'\n  OR telefono IS NULL\n  OR telefono = ''\n)\nORDER BY \n  CASE \n    WHEN RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo1 }}' THEN 0\n    WHEN RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo2 }}' THEN 1\n    ELSE 2 \n  END\nLIMIT 1",
+          "options": {}
+        },
+        "id": "c01eae1c-1ac2-4064-acfd-b1ce8aa3ca6a",
+        "name": "🗄️ Buscar asesor",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          544,
+          -608
+        ],
+        "alwaysOutputData": true,
+        "credentials": {
+          "mySql": {
+            "id": "FezTcDnLo3SqPHvd",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "leftValue": "={{ $json.destino }}",
+                "rightValue": "pilot",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals"
+                },
+                "id": "bc74d2f0-c4d2-458c-9eba-f8482032f809"
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "f7088599-698a-45f1-8bc8-2612a64cf33b",
+        "name": "🔍 Destino?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          1952,
+          128
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "{{ $json.query }}",
+          "options": {}
+        },
+        "id": "d446d23c-75c7-4b29-a571-c3c5c536874b",
+        "name": "💾 Update status MySQL",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          2800,
+          112
+        ],
+        "credentials": {
+          "mySql": {
+            "id": "FezTcDnLo3SqPHvd",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "UPDATE meli_leads SET status = 'skipped' WHERE id = '{{ $('Loop leads').item.json.id }}'",
+          "options": {}
+        },
+        "id": "fc03ce3c-d216-4b5c-bc71-2ff24ad34222",
+        "name": "💾 Marcar skipped",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          2208,
+          320
+        ],
+        "credentials": {
+          "mySql": {
+            "id": "FezTcDnLo3SqPHvd",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "parameters": {},
+        "id": "a01ec0ae-7a30-45b5-8d8d-83a5ee013523",
+        "name": "✅ Volver al loop",
+        "type": "n8n-nodes-base.noOp",
+        "typeVersion": 1,
+        "position": [
+          2400,
+          320
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const data = $input.item.json;\n\nconst pilotLeadId = data.pilot_lead_id ? `'${data.pilot_lead_id}'` : 'NULL';\nconst pilotResponse = (data.pilot_response || '').replace(/'/g, \"''\");\n\nreturn {\n  json: {\n    query: `UPDATE meli_leads SET status = '${data.new_status}', pilot_lead_id = ${pilotLeadId}, sf_response = '${pilotResponse}' WHERE id = '${data.lead_id}'`\n  }\n};"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2608,
+          112
+        ],
+        "id": "39781493-09f8-4583-962f-1cb45e6006d4",
+        "name": "⚙️ Preparar query update"
+      },
+      {
+        "parameters": {
+          "options": {}
+        },
+        "id": "a6c95b8d-fe2e-400b-a792-50a9e5c74ddb",
+        "name": "Loop leads",
+        "type": "n8n-nodes-base.splitInBatches",
+        "typeVersion": 3,
+        "position": [
+          512,
+          112
+        ]
+      },
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "2b1801c4-ad27-42dc-aaff-56dc49ed3b33",
+          "responseMode": "responseNode",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.1,
+        "position": [
+          -144,
+          -64
+        ],
+        "id": "f74e826f-5727-4ecb-ba8a-f804b943cd9c",
+        "name": "Webhook",
+        "webhookId": "2b1801c4-ad27-42dc-aaff-56dc49ed3b33",
+        "disabled": true
+      },
+      {
+        "parameters": {
+          "jsCode": "const body = $input.item.json.body;\nconst { tel_sufijo, updates } = body;\n\nif (!tel_sufijo || !updates || Object.keys(updates).length === 0) {\n  throw new Error('Faltan parámetros');\n}\n\nconst setClauses = Object.entries(updates)\n  .map(([key, value]) => {\n    if (typeof value === 'number') return `${key} = ${value}`;\n    return `${key} = '${String(value).replace(/'/g, \"''\")}'`;\n  })\n  .join(', ');\n\nreturn {\n  json: {\n    query: `UPDATE meli_leads SET ${setClauses} WHERE RIGHT(REGEXP_REPLACE(buyer_phone, '[^0-9]', ''), 8) = '${tel_sufijo}' AND status IN ('active', 'sent')`\n  }\n};"
+        },
+        "id": "2cf949f8-ece1-439b-a0fb-c8d2aec355ba",
+        "name": "⚙️ Preparar query",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          48,
+          -64
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "{{ $json.query }}",
+          "options": {}
+        },
+        "id": "c15a78c1-2148-40a3-8dad-d532a635681d",
+        "name": "💾 Update MySQL",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          256,
+          -64
+        ],
+        "credentials": {
+          "mySql": {
+            "id": "FezTcDnLo3SqPHvd",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={ \"success\": true }",
+          "options": {}
+        },
+        "id": "a640d15e-976a-46d8-bbb0-ff9bbeeaf7a7",
+        "name": "✅ Respuesta OK",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          512,
+          -64
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const lead = $('🔀 Resolver Asesor/Marca').item.json;\n\nconst APPKEY = 'F25E1040-1F7D-49D7-855F-7C6D70323742';\nconst CONTACT_TYPE_ID = 1;\n\nconst PHEV  = /\\bphev\\b/;\nconst HYB   = /\\b(hybrid|hibrido|hev|mhev|phev)\\b/;\nconst T4X4  = /\\b(4x4|4wd|awd)\\b/;\nconst T4X2  = /\\b(4x2|2wd|fwd)\\b/;\nconst EVCTX = /\\b(arcfox|ev|electrico)\\b/;\n\n// Todas las regex de \"match\" deben cumplirse. Orden = prioridad (más específico primero).\n// confianza 'baja' = versión elegida por default porque el título no la especifica.\nconst catalog = [\n  // CHERY\n  { code: 'Arrizo8Long',     id: 315, name: 'ARRIZO 8 HYBRID PHEV Comfort',             match: [/\\barrizo ?8\\b/] },\n  { code: 'Tiggo4Long',      id: 312, name: 'TIGGO 4 HYBRID HEV Premium',               match: [/\\btiggo ?4\\b/] },\n  { code: 'Tiggo7PHEVLong',  id: 494, name: 'TIGGO 7 PRO HYBRID PHEV Premium',          match: [/\\btiggo ?7\\b/, PHEV] },\n  { code: 'Tiggo7FullLong',  id: 311, name: 'TIGGO 7 PRO HYBRID MHEV Premium (c/ADAS)', match: [/\\btiggo ?7\\b/] },\n  { code: 'Tiggo8Long',      id: 314, name: 'TIGGO 8 PRO Luxury',                       match: [/\\btiggo ?8\\b/] },\n\n  // BAIC\n  { code: 'BJ304x4LONG',     id: 319, name: 'BJ30E Hybrid 4x4', match: [/\\bbj ?30 ?e?\\b/, T4X4] },\n  { code: 'BJ304x2LONG',     id: 318, name: 'BJ30E Hybrid 4x2', match: [/\\bbj ?30 ?e?\\b/, T4X2] },\n  { code: 'BJ304x2LONG',     id: 318, name: 'BJ30E Hybrid 4x2', match: [/\\bbj ?30 ?e?\\b/], confianza: 'baja' },\n  { code: 'BJ40ProLONG',     id: 317, name: 'BJ40 Pro',         match: [/\\bbj ?40\\b/] },\n  { code: 'BJ60LONG',        id: 320, name: 'BJ60 MHEV',        match: [/\\bbj ?60\\b/] },\n  { code: 'EU5Long',         id: 321, name: 'EU5 EV',           match: [/\\beu ?5\\b/] },\n  { code: 'U5PlusLONG',      id: 322, name: 'U5 Plus',          match: [/\\bu ?5\\b/] },\n  { code: 'X35LuxuryLONG',   id: 323, name: 'X35 Luxury',       match: [/\\bx ?35\\b/] },\n  { code: 'X55IIHybridLONG', id: 332, name: 'X55 II Hybrid',    match: [/\\bx ?55\\b/, HYB] },\n  { code: 'X55PlusLONG',     id: 324, name: 'X55 Plus',         match: [/\\bx ?55\\b/, /\\bplus\\b/] },\n  { code: 'X55IILONG',       id: 325, name: 'X55 II Luxury',    match: [/\\bx ?55 ?(ii|2)\\b/] },\n  { code: 'X55IILONG',       id: 325, name: 'X55 II Luxury',    match: [/\\bx ?55\\b/], confianza: 'baja' },\n\n  // ARCFOX\n  { code: 'KaolaLong',       id: 328, name: 'KAOLA EV',         match: [/\\bkaola\\b/] },\n  { code: 'T1Long',          id: 326, name: 'T1 EV',            match: [/\\bt ?1\\b/, EVCTX] },\n  { code: 'T5Long',          id: 327, name: 'T5 EV',            match: [/\\bt ?5\\b/, EVCTX] },\n  { code: 'S5Long',          id: 329, name: 'S5 EV',            match: [/\\bs ?5\\b/, EVCTX] },\n];\n\nconst normalize = (s) =>\n  (s || '')\n    .normalize('NFD').replace(/[\\u0300-\\u036f]/g, '')\n    .toLowerCase()\n    .replace(/[^a-z0-9]+/g, ' ')\n    .trim();\n\nconst findProduct = (text) => {\n  const t = normalize(text);\n  if (!t) return null;\n  return catalog.find(p => p.match.every(rx => rx.test(t))) || null;\n};\n\n// Slug del permalink: .../MLA-1987858437-baic-bj30-15t-bj30-4wd-hybrid-_JM\nconst slugFromPermalink = (url) => {\n  const m = (url || '').match(/MLA-?\\d+-(.+?)-_JM/i);\n  return m ? m[1] : '';\n};\n\nconst resolveProducto = (titulo, permalink) => {\n  // Título + slug juntos: si el título no dice versión/tracción, a veces el slug sí\n  const hit =\n    findProduct(`${titulo || ''} ${slugFromPermalink(permalink)}`) ||\n    findProduct(titulo);\n  if (hit) {\n    return { ...hit, match: true, confianza: hit.confianza || 'alta' };\n  }\n  return {\n    code: null,\n    id: null,\n    name: (titulo || '').replace(/\\s*asesor\\s+.+$/i, '').trim(),\n    match: false,\n    confianza: 'ninguna',\n  };\n};\n\nconst name = (lead.buyer_nombre || '').trim();\nconst cellphone = lead.buyer_phone || '';\nconst producto = resolveProducto(lead.item_titulo, lead.item_permalink);\n\nconst notes = [\n  `Publicación: ${lead.item_id}`,\n  `Precio: ${lead.item_precio}`,\n  `Link: ${lead.item_permalink || ''}`,\n  `Asesor: ${lead.asesor_nombre_match || ''}`,\n  `Teléfono asesor: ${lead.asesor_phone || ''}`,\n  producto.confianza !== 'alta' ? `Título original: ${lead.item_titulo || ''}` : null,\n].filter(Boolean).join(' | ');\n\nconst params = {\n  action: 'create',\n  appkey: APPKEY,\n  pilot_firstname: name,\n  pilot_cellphone: cellphone,\n  pilot_contact_type_id: CONTACT_TYPE_ID,\n  pilot_business_type_id: lead.pilot_business_type_id ?? '',\n  pilot_notes: notes,\n  pilot_suborigin_id: lead.pilot_origin || '',\n};\n\nif (producto.code) {\n  params.pilot_product_code = producto.code;\n} else {\n  // Sin match: no mandamos código inválido, dejamos el texto como referencia\n  params.pilot_product_of_interest = producto.name;\n}\nif (lead.pilot_assigned_user) params.pilot_assigned_user = lead.pilot_assigned_user;\n\nconst qs = Object.entries(params)\n  .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`)\n  .join('&');\n\nconst url = `https://api.pilotsolution.net/webhooks/welcome.php?${qs}`;\n\nreturn {\n  json: {\n    lead_id: lead.id,\n    user_id: lead.user_id,\n    destino: lead.destino,\n    url,\n    pilot_product_code: producto.code,\n    pilot_product_id: producto.id,\n    modelo_resuelto: producto.name,\n    modelo_match: producto.match,\n    modelo_confianza: producto.confianza,\n    item_titulo: lead.item_titulo,\n    pilot_origin: lead.pilot_origin,\n    pilot_business_type_id: lead.pilot_business_type_id,\n    pilot_assigned_user: lead.pilot_assigned_user,\n    asesor_fuente: lead.asesor_fuente,\n  },\n};"
+        },
+        "id": "973399a1-8701-4035-9de1-d0a824c31ae6",
+        "name": "PayloadPilot",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1744,
+          128
+        ]
+      },
+      {
+        "parameters": {
+          "url": "={{ $('PayloadPilot').item.json.url }}",
+          "options": {}
+        },
+        "id": "ac4eda45-a618-4b1c-a23e-5c147196f0dd",
+        "name": "🚀 POST Pilot",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2208,
+          112
+        ],
+        "alwaysOutputData": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "const lead = $input.item.json;\nconst normalizarTel = (tel) => {\n  if (!tel) return null;\n  const digits = tel.toString().replace(/\\D/g, '');\n  return digits.slice(-8);\n};\nconst normalizarBuyerPhone = (tel) => {\n  if (!tel) return null;\n  let digits = tel.toString().replace(/\\D/g, '');\n  if (digits.startsWith('549')) return '+' + digits;\n  if (digits.startsWith('54')) return '+549' + digits.slice(2);\n  if (digits.startsWith('9') && digits.length >= 10) return '+54' + digits;\n  return '+549' + digits;\n};\nconst sufijo1 = normalizarTel(lead.asesor_phone);\nconst sufijo2 = normalizarTel(lead.asesor_phone2);\nreturn {\n  json: {\n    ...lead,\n    buyer_phone: normalizarBuyerPhone(lead.buyer_phone),\n    asesor_sufijo1: sufijo1 || '',\n    asesor_sufijo2: sufijo2 || ''\n  }\n};"
+        },
+        "id": "843652b3-7c85-470c-ac5f-e028d2156bb9",
+        "name": "Normalizar teléfonos",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          704,
+          128
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const lead = $('Normalizar teléfonos').item.json;\n\nconst marcaConfig = {\n  'BAIC': { origin: 'BAICLONG_MELI1', business_type_id: 11 },\n  'CHERY': { origin: 'CHLONG_MELI_1', business_type_id: 14 },\n  'ARCFOX': { origin: 'ARCLONG_MELI1', business_type_id: 18 },\n};\n\n// Prioridad de búsqueda de asesor según marca de la publicación\nconst prioridadPorMarca = {\n  'CHERY': ['CHERY', 'BAIC'],\n  'BAIC': ['BAIC', 'CHERY'],\n  'ARCFOX': ['BAIC', 'CHERY'], // ajustá si Arcfox tiene su propio grupo\n};\n\nconst dominioPorMarca = { 'CHERY': 'cherylong', 'BAIC': 'baiclong' };\n\nconst getLast8 = (phone) => (phone || '').toString().replace(/\\D/g, '').slice(-8);\n\n// Normaliza a 549 + 10 dígitos (celular AR), sin \"+\"\nconst normalizePhone = (phone) => {\n  const d = (phone || '').toString().replace(/\\D/g, '');\n  return d.length >= 10 ? '549' + d.slice(-10) : null;\n};\n\nconst getUsers = (nodeName) => {\n  try {\n    return $(nodeName).all().flatMap(i => i.json?.data?.users || []);\n  } catch (e) {\n    console.warn(`No pude leer ${nodeName}: ${e.message}`);\n    return [];\n  }\n};\n\n// sufijo (últimos 8 dígitos) -> asesor. Si hay colisión, gana el que tenga el dominio de la marca.\nconst buildMap = (users, dominio) => {\n  const map = {};\n  for (const u of users) {\n    if (u.status !== 'active' || !u.email) continue;\n    const key = getLast8(u.phone);\n    if (key.length < 8) continue; // descarta teléfonos basura (ej: un email en el campo phone)\n    const pref = !!dominio && u.email.toLowerCase().includes(dominio);\n    if (!map[key] || (pref && !map[key]._pref)) {\n      map[key] = {\n        name: `${u.first_name || ''} ${u.last_name || ''}`.trim(),\n        pilot_user: u.email.trim().toLowerCase(),\n        phone: normalizePhone(u.phone),\n        _pref: pref,\n      };\n    }\n  }\n  return map;\n};\n\nconst maps = {\n  CHERY: buildMap(getUsers('obtenerAsesoresChery'), dominioPorMarca.CHERY),\n  BAIC: buildMap(getUsers('obtenerAsesoresBaic'), dominioPorMarca.BAIC),\n};\n\n// Marca se detecta del título de la publicación\nconst determineMarca = (lead) => {\n  const texto = (lead.item_titulo || '').toLowerCase();\n  if (texto.includes('chery')) return 'CHERY';\n  if (texto.includes('arcfox')) return 'ARCFOX';\n  if (texto.includes('baic')) return 'BAIC';\n  return null;\n};\n\nconst marca = determineMarca(lead);\nconst config = marca ? marcaConfig[marca] : null;\nif (!marca) {\n  console.warn(`No se pudo determinar la marca. Título: ${lead.item_titulo}, Link: ${lead.item_permalink}`);\n}\n\nconst sufijo = getLast8(lead.asesor_phone);\nconst orden = prioridadPorMarca[marca] || ['BAIC', 'CHERY'];\n\nlet asesorMatch = null;\nlet asesorFuente = null;\nfor (const b of orden) {\n  if (maps[b][sufijo]) {\n    asesorMatch = maps[b][sufijo];\n    asesorFuente = b;\n    break;\n  }\n}\n\nif (!asesorMatch) {\n  console.warn(`Asesor no encontrado: ${lead.asesor_phone} (sufijo: ${sufijo})`);\n}\n\nreturn {\n  json: {\n    ...lead,\n    pilot_assigned_user: asesorMatch?.pilot_user || null,\n    asesor_nombre_match: asesorMatch?.name || null,\n    asesor_telefono_normalizado: asesorMatch?.phone || normalizePhone(lead.asesor_phone),\n    asesor_fuente: asesorFuente,\n    marca_detectada: marca,\n    pilot_origin: config?.origin || null,\n    pilot_business_type_id: config?.business_type_id || null,\n  },\n};"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1584,
+          48
+        ],
+        "id": "7cb9bd2e-6323-483d-8219-1c5e223efb6d",
+        "name": "🔀 Resolver Asesor/Marca"
+      },
+      {
+        "parameters": {
+          "jsCode": "const pilotResponse = $input.item.json;\nconst prev = $('PayloadPilot').item.json;\n\nconst pilotLeadId = pilotResponse?.data?.welcome_id || null;\nconst success = pilotResponse.success && !pilotResponse.error && !pilotResponse.message?.toLowerCase().includes('error');\n\nreturn {\n  json: {\n    lead_id: prev.lead_id,\n    pilot_lead_id: pilotLeadId,\n    new_status: success ? 'sent' : 'error',\n    pilot_response: JSON.stringify(pilotResponse)\n  }\n};"
+        },
+        "id": "b87eab56-9014-449e-a0a2-c14910ef8fdf",
+        "name": "Procesar respuesta Pilot",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2400,
+          112
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.twilio.com/2010-04-01/Accounts/TWILIO_SID_OCULTO/Messages.json",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpBasicAuth",
+          "sendBody": true,
+          "contentType": "multipart-form-data",
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "MessagingServiceSid",
+                "value": "=MGd350ec36e86bce44fc2220483540ef86"
+              },
+              {
+                "name": "To",
+                "value": "=whatsapp:{{ (() => { const t = String($('🔀 Resolver Asesor/Marca').first().json.asesor_telefono_normalizado || ''); return t.startsWith('+') ? t : '+' + t; })() }}"
+              },
+              {
+                "name": "ContentSid",
+                "value": "=HXe9da278607893c264f3ee2e08f5214de"
+              },
+              {
+                "name": "ContentVariables",
+                "value": "={\"1\":\"{{ $('Loop leads').item.json.buyer_nombre }}\", \"2\":\"{{ $('Normalizar teléfonos').item.json.buyer_phone }}\", \"3\": \"{{ $('Loop leads').item.json.buyer_email }}\", \"4\": \"{{ $('Loop leads').item.json.item_titulo }}\"}"
+              },
+              {
+                "name": "From",
+                "value": "whatsapp:+5491166072860"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "00294268-22b3-4e79-be22-d3d2d649cd4b",
+        "name": "Twillio",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2976,
+          112
+        ],
+        "credentials": {
+          "httpBasicAuth": {
+            "id": "28oA1V1vc9yFwvul",
+            "name": "LONG TWILLIO"
+          }
+        }
+      },
+      {
+        "parameters": {},
+        "type": "n8n-nodes-base.manualTrigger",
+        "typeVersion": 1,
+        "position": [
+          1904,
+          -544
+        ],
+        "id": "027b9562-c1b6-4679-b878-6b866a75c953",
+        "name": "When clicking ‘Execute workflow’"
+      },
+      {
+        "parameters": {
+          "url": "=https://admin-api-suite.up.railway.app/api/v1/groups/742",
+          "options": {}
+        },
+        "id": "5aaf10c2-0e8d-4625-a575-8cdade92d83c",
+        "name": "obtenerAsesoresBaic",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1072,
+          -192
+        ],
+        "alwaysOutputData": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "url": "=https://leads.redooconect.com.ar/api/v1/assignment-rules?client_id=125",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "x-api-key",
+                "value": "9b09fde1-72ff-4d3c-bd2f-a08ac664c544"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "8426503c-cfea-40b2-9073-d2c58ecca85a",
+        "name": "obtenerReglasChery",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1248,
+          -96
+        ],
+        "alwaysOutputData": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "url": "=https://leads.redooconect.com.ar/api/v1/assignment-rules?client_id=50",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "x-api-key",
+                "value": "acead76c-d71d-4044-8e9f-e2cb809f3a0d"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "30662fd9-2e75-4c42-9163-d200788645fd",
+        "name": "obtenerReglasBaic",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1424,
+          0
+        ],
+        "alwaysOutputData": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "url": "=https://admin-api-suite.up.railway.app/api/v1/groups/495",
+          "options": {}
+        },
+        "id": "a10febca-6144-4ecf-a7c3-0beeaee04cc2",
+        "name": "obtenerAsesoresChery",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          896,
+          -288
+        ],
+        "alwaysOutputData": true,
+        "onError": "continueRegularOutput"
+      }
+    ],
+    "connections": {
+      "⏰ Schedule Trigger": {
+        "main": [
+          [
+            {
+              "node": "🗄️ Buscar leads pending",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🗄️ Buscar leads pending": {
+        "main": [
+          [
+            {
+              "node": "🔍 Hay leads?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🔍 Hay leads?": {
+        "main": [
+          [
+            {
+              "node": "Loop leads",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🗄️ Buscar asesor": {
+        "main": [
+          []
+        ]
+      },
+      "🔍 Destino?": {
+        "main": [
+          [
+            {
+              "node": "🚀 POST Pilot",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "💾 Marcar skipped",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "💾 Update status MySQL": {
+        "main": [
+          [
+            {
+              "node": "Twillio",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "💾 Marcar skipped": {
+        "main": [
+          [
+            {
+              "node": "✅ Volver al loop",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "✅ Volver al loop": {
+        "main": [
+          [
+            {
+              "node": "Loop leads",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "⚙️ Preparar query update": {
+        "main": [
+          [
+            {
+              "node": "💾 Update status MySQL",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Loop leads": {
+        "main": [
+          [],
+          [
+            {
+              "node": "Normalizar teléfonos",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "⚙️ Preparar query",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "⚙️ Preparar query": {
+        "main": [
+          [
+            {
+              "node": "💾 Update MySQL",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "💾 Update MySQL": {
+        "main": [
+          [
+            {
+              "node": "✅ Respuesta OK",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "PayloadPilot": {
+        "main": [
+          [
+            {
+              "node": "🔍 Destino?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🚀 POST Pilot": {
+        "main": [
+          [
+            {
+              "node": "Procesar respuesta Pilot",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Normalizar teléfonos": {
+        "main": [
+          [
+            {
+              "node": "obtenerAsesoresChery",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🔀 Resolver Asesor/Marca": {
+        "main": [
+          [
+            {
+              "node": "PayloadPilot",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Procesar respuesta Pilot": {
+        "main": [
+          [
+            {
+              "node": "⚙️ Preparar query update",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Twillio": {
+        "main": [
+          [
+            {
+              "node": "Loop leads",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "When clicking ‘Execute workflow’": {
+        "main": [
+          []
+        ]
+      },
+      "obtenerAsesoresBaic": {
+        "main": [
+          [
+            {
+              "node": "obtenerReglasChery",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "obtenerReglasChery": {
+        "main": [
+          [
+            {
+              "node": "obtenerReglasBaic",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "obtenerReglasBaic": {
+        "main": [
+          [
+            {
+              "node": "🔀 Resolver Asesor/Marca",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "obtenerAsesoresChery": {
+        "main": [
+          [
+            {
+              "node": "obtenerAsesoresBaic",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "system migration",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-10-26T17:05:09.982Z",
+    "updatedAt": "2026-10-26T17:05:09.982Z"
+  },
+  "activeVersionId": "defb5d2a-b3b2-41d0-8bd5-17116e3a3dc7",
+  "connections": {
+    "⏰ Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "🗄️ Buscar leads pending",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🗄️ Buscar leads pending": {
+      "main": [
+        [
+          {
+            "node": "🔍 Hay leads?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔍 Hay leads?": {
+      "main": [
+        [
+          {
+            "node": "Loop leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🗄️ Buscar asesor": {
+      "main": [
+        []
+      ]
+    },
+    "🔍 Destino?": {
+      "main": [
+        [
+          {
+            "node": "🚀 POST Pilot",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "💾 Marcar skipped",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "💾 Update status MySQL": {
+      "main": [
+        [
+          {
+            "node": "Twillio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "💾 Marcar skipped": {
+      "main": [
+        [
+          {
+            "node": "✅ Volver al loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "✅ Volver al loop": {
+      "main": [
+        [
+          {
+            "node": "Loop leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⚙️ Preparar query update": {
+      "main": [
+        [
+          {
+            "node": "💾 Update status MySQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop leads": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Normalizar teléfonos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "⚙️ Preparar query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⚙️ Preparar query": {
+      "main": [
+        [
+          {
+            "node": "💾 Update MySQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "💾 Update MySQL": {
+      "main": [
+        [
+          {
+            "node": "✅ Respuesta OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PayloadPilot": {
+      "main": [
+        [
+          {
+            "node": "🔍 Destino?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🚀 POST Pilot": {
+      "main": [
+        [
+          {
+            "node": "Procesar respuesta Pilot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar teléfonos": {
+      "main": [
+        [
+          {
+            "node": "obtenerAsesoresChery",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔀 Resolver Asesor/Marca": {
+      "main": [
+        [
+          {
+            "node": "PayloadPilot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Procesar respuesta Pilot": {
+      "main": [
+        [
+          {
+            "node": "⚙️ Preparar query update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Twillio": {
+      "main": [
+        [
+          {
+            "node": "Loop leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        []
+      ]
+    },
+    "obtenerAsesoresBaic": {
+      "main": [
+        [
+          {
+            "node": "obtenerReglasChery",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "obtenerReglasChery": {
+      "main": [
+        [
+          {
+            "node": "obtenerReglasBaic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "obtenerReglasBaic": {
+      "main": [
+        [
+          {
+            "node": "🔀 Resolver Asesor/Marca",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "obtenerAsesoresChery": {
+      "main": [
+        [
+          {
+            "node": "obtenerAsesoresBaic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-07-14T17:01:34.639Z",
+  "id": "jZ0LBnMYXiaAm8hE",
+  "isArchived": false,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "name": "LONG MELI PILOT",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 10
+            }
+          ]
+        }
+      },
+      "id": "16ee3b19-eef1-4d30-abcb-3b75d6235c88",
+      "name": "⏰ Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -144,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT l.*, t.access_token, i.destino, i.destino_config, i.origen_sf \nFROM meli_leads l \nJOIN meli_tokens t ON l.user_id = t.user_id \nJOIN meli_integraciones i ON l.user_id = i.user_id \nWHERE l.status = 'active' \nAND l.buyer_id IS NOT NULL \nAND l.buyer_id != 0\nAND l.buyer_nombre IS NOT NULL\nAND l.user_id IN (3328612086,310104776) \nAND l.bot_uploaded = 0\nAND l.received_at <= DATE_SUB(NOW(), INTERVAL 15 MINUTE)\nLIMIT 100",
+        "options": {}
+      },
+      "id": "06606808-988c-4af3-a5e4-5ecf01dc09fa",
+      "name": "🗄️ Buscar leads pending",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        32,
+        128
+      ],
+      "alwaysOutputData": false,
+      "credentials": {
+        "mySql": {
+          "id": "FezTcDnLo3SqPHvd",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $input.all().length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              },
+              "id": "704640a7-85b2-408f-9f5c-9d457aadd4fb"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "dae49a88-7bba-4062-ba45-1ff781827bff",
+      "name": "🔍 Hay leads?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        256,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM meli_asesores \nWHERE user_id = {{ $json.user_id }} \nAND (\n  RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo1 }}'\n  OR RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo2 }}'\n  OR telefono IS NULL\n  OR telefono = ''\n)\nORDER BY \n  CASE \n    WHEN RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo1 }}' THEN 0\n    WHEN RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo2 }}' THEN 1\n    ELSE 2 \n  END\nLIMIT 1",
+        "options": {}
+      },
+      "id": "c01eae1c-1ac2-4064-acfd-b1ce8aa3ca6a",
+      "name": "🗄️ Buscar asesor",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        544,
+        -608
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "mySql": {
+          "id": "FezTcDnLo3SqPHvd",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.destino }}",
+              "rightValue": "pilot",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "id": "bc74d2f0-c4d2-458c-9eba-f8482032f809"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "f7088599-698a-45f1-8bc8-2612a64cf33b",
+      "name": "🔍 Destino?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1952,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "{{ $json.query }}",
+        "options": {}
+      },
+      "id": "d446d23c-75c7-4b29-a571-c3c5c536874b",
+      "name": "💾 Update status MySQL",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        2800,
+        112
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "FezTcDnLo3SqPHvd",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE meli_leads SET status = 'skipped' WHERE id = '{{ $('Loop leads').item.json.id }}'",
+        "options": {}
+      },
+      "id": "fc03ce3c-d216-4b5c-bc71-2ff24ad34222",
+      "name": "💾 Marcar skipped",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        2208,
+        320
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "FezTcDnLo3SqPHvd",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "a01ec0ae-7a30-45b5-8d8d-83a5ee013523",
+      "name": "✅ Volver al loop",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        2400,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.item.json;\n\nconst pilotLeadId = data.pilot_lead_id ? `'${data.pilot_lead_id}'` : 'NULL';\nconst pilotResponse = (data.pilot_response || '').replace(/'/g, \"''\");\n\nreturn {\n  json: {\n    query: `UPDATE meli_leads SET status = '${data.new_status}', pilot_lead_id = ${pilotLeadId}, sf_response = '${pilotResponse}' WHERE id = '${data.lead_id}'`\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2608,
+        112
+      ],
+      "id": "39781493-09f8-4583-962f-1cb45e6006d4",
+      "name": "⚙️ Preparar query update"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "a6c95b8d-fe2e-400b-a792-50a9e5c74ddb",
+      "name": "Loop leads",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        512,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "2b1801c4-ad27-42dc-aaff-56dc49ed3b33",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -144,
+        -64
+      ],
+      "id": "f74e826f-5727-4ecb-ba8a-f804b943cd9c",
+      "name": "Webhook",
+      "webhookId": "2b1801c4-ad27-42dc-aaff-56dc49ed3b33",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.item.json.body;\nconst { tel_sufijo, updates } = body;\n\nif (!tel_sufijo || !updates || Object.keys(updates).length === 0) {\n  throw new Error('Faltan parámetros');\n}\n\nconst setClauses = Object.entries(updates)\n  .map(([key, value]) => {\n    if (typeof value === 'number') return `${key} = ${value}`;\n    return `${key} = '${String(value).replace(/'/g, \"''\")}'`;\n  })\n  .join(', ');\n\nreturn {\n  json: {\n    query: `UPDATE meli_leads SET ${setClauses} WHERE RIGHT(REGEXP_REPLACE(buyer_phone, '[^0-9]', ''), 8) = '${tel_sufijo}' AND status IN ('active', 'sent')`\n  }\n};"
+      },
+      "id": "2cf949f8-ece1-439b-a0fb-c8d2aec355ba",
+      "name": "⚙️ Preparar query",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        48,
+        -64
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "{{ $json.query }}",
+        "options": {}
+      },
+      "id": "c15a78c1-2148-40a3-8dad-d532a635681d",
+      "name": "💾 Update MySQL",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        256,
+        -64
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "FezTcDnLo3SqPHvd",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"success\": true }",
+        "options": {}
+      },
+      "id": "a640d15e-976a-46d8-bbb0-ff9bbeeaf7a7",
+      "name": "✅ Respuesta OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        512,
+        -64
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $('🔀 Resolver Asesor/Marca').item.json;\n\nconst APPKEY = 'F25E1040-1F7D-49D7-855F-7C6D70323742';\nconst CONTACT_TYPE_ID = 1;\n\nconst PHEV  = /\\bphev\\b/;\nconst HYB   = /\\b(hybrid|hibrido|hev|mhev|phev)\\b/;\nconst T4X4  = /\\b(4x4|4wd|awd)\\b/;\nconst T4X2  = /\\b(4x2|2wd|fwd)\\b/;\nconst EVCTX = /\\b(arcfox|ev|electrico)\\b/;\n\n// Todas las regex de \"match\" deben cumplirse. Orden = prioridad (más específico primero).\n// confianza 'baja' = versión elegida por default porque el título no la especifica.\nconst catalog = [\n  // CHERY\n  { code: 'Arrizo8Long',     id: 315, name: 'ARRIZO 8 HYBRID PHEV Comfort',             match: [/\\barrizo ?8\\b/] },\n  { code: 'Tiggo4Long',      id: 312, name: 'TIGGO 4 HYBRID HEV Premium',               match: [/\\btiggo ?4\\b/] },\n  { code: 'Tiggo7PHEVLong',  id: 494, name: 'TIGGO 7 PRO HYBRID PHEV Premium',          match: [/\\btiggo ?7\\b/, PHEV] },\n  { code: 'Tiggo7FullLong',  id: 311, name: 'TIGGO 7 PRO HYBRID MHEV Premium (c/ADAS)', match: [/\\btiggo ?7\\b/] },\n  { code: 'Tiggo8Long',      id: 314, name: 'TIGGO 8 PRO Luxury',                       match: [/\\btiggo ?8\\b/] },\n\n  // BAIC\n  { code: 'BJ304x4LONG',     id: 319, name: 'BJ30E Hybrid 4x4', match: [/\\bbj ?30 ?e?\\b/, T4X4] },\n  { code: 'BJ304x2LONG',     id: 318, name: 'BJ30E Hybrid 4x2', match: [/\\bbj ?30 ?e?\\b/, T4X2] },\n  { code: 'BJ304x2LONG',     id: 318, name: 'BJ30E Hybrid 4x2', match: [/\\bbj ?30 ?e?\\b/], confianza: 'baja' },\n  { code: 'BJ40ProLONG',     id: 317, name: 'BJ40 Pro',         match: [/\\bbj ?40\\b/] },\n  { code: 'BJ60LONG',        id: 320, name: 'BJ60 MHEV',        match: [/\\bbj ?60\\b/] },\n  { code: 'EU5Long',         id: 321, name: 'EU5 EV',           match: [/\\beu ?5\\b/] },\n  { code: 'U5PlusLONG',      id: 322, name: 'U5 Plus',          match: [/\\bu ?5\\b/] },\n  { code: 'X35LuxuryLONG',   id: 323, name: 'X35 Luxury',       match: [/\\bx ?35\\b/] },\n  { code: 'X55IIHybridLONG', id: 332, name: 'X55 II Hybrid',    match: [/\\bx ?55\\b/, HYB] },\n  { code: 'X55PlusLONG',     id: 324, name: 'X55 Plus',         match: [/\\bx ?55\\b/, /\\bplus\\b/] },\n  { code: 'X55IILONG',       id: 325, name: 'X55 II Luxury',    match: [/\\bx ?55 ?(ii|2)\\b/] },\n  { code: 'X55IILONG',       id: 325, name: 'X55 II Luxury',    match: [/\\bx ?55\\b/], confianza: 'baja' },\n\n  // ARCFOX\n  { code: 'KaolaLong',       id: 328, name: 'KAOLA EV',         match: [/\\bkaola\\b/] },\n  { code: 'T1Long',          id: 326, name: 'T1 EV',            match: [/\\bt ?1\\b/, EVCTX] },\n  { code: 'T5Long',          id: 327, name: 'T5 EV',            match: [/\\bt ?5\\b/, EVCTX] },\n  { code: 'S5Long',          id: 329, name: 'S5 EV',            match: [/\\bs ?5\\b/, EVCTX] },\n];\n\nconst normalize = (s) =>\n  (s || '')\n    .normalize('NFD').replace(/[\\u0300-\\u036f]/g, '')\n    .toLowerCase()\n    .replace(/[^a-z0-9]+/g, ' ')\n    .trim();\n\nconst findProduct = (text) => {\n  const t = normalize(text);\n  if (!t) return null;\n  return catalog.find(p => p.match.every(rx => rx.test(t))) || null;\n};\n\n// Slug del permalink: .../MLA-1987858437-baic-bj30-15t-bj30-4wd-hybrid-_JM\nconst slugFromPermalink = (url) => {\n  const m = (url || '').match(/MLA-?\\d+-(.+?)-_JM/i);\n  return m ? m[1] : '';\n};\n\nconst resolveProducto = (titulo, permalink) => {\n  // Título + slug juntos: si el título no dice versión/tracción, a veces el slug sí\n  const hit =\n    findProduct(`${titulo || ''} ${slugFromPermalink(permalink)}`) ||\n    findProduct(titulo);\n  if (hit) {\n    return { ...hit, match: true, confianza: hit.confianza || 'alta' };\n  }\n  return {\n    code: null,\n    id: null,\n    name: (titulo || '').replace(/\\s*asesor\\s+.+$/i, '').trim(),\n    match: false,\n    confianza: 'ninguna',\n  };\n};\n\nconst name = (lead.buyer_nombre || '').trim();\nconst cellphone = lead.buyer_phone || '';\nconst producto = resolveProducto(lead.item_titulo, lead.item_permalink);\n\nconst notes = [\n  `Publicación: ${lead.item_id}`,\n  `Precio: ${lead.item_precio}`,\n  `Link: ${lead.item_permalink || ''}`,\n  `Asesor: ${lead.asesor_nombre_match || ''}`,\n  `Teléfono asesor: ${lead.asesor_phone || ''}`,\n  producto.confianza !== 'alta' ? `Título original: ${lead.item_titulo || ''}` : null,\n].filter(Boolean).join(' | ');\n\nconst params = {\n  action: 'create',\n  appkey: APPKEY,\n  pilot_firstname: name,\n  pilot_cellphone: cellphone,\n  pilot_contact_type_id: CONTACT_TYPE_ID,\n  pilot_business_type_id: lead.pilot_business_type_id ?? '',\n  pilot_notes: notes,\n  pilot_suborigin_id: lead.pilot_origin || '',\n};\n\nif (producto.code) {\n  params.pilot_product_code = producto.code;\n} else {\n  // Sin match: no mandamos código inválido, dejamos el texto como referencia\n  params.pilot_product_of_interest = producto.name;\n}\nif (lead.pilot_assigned_user) params.pilot_assigned_user = lead.pilot_assigned_user;\n\nconst qs = Object.entries(params)\n  .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`)\n  .join('&');\n\nconst url = `https://api.pilotsolution.net/webhooks/welcome.php?${qs}`;\n\nreturn {\n  json: {\n    lead_id: lead.id,\n    user_id: lead.user_id,\n    destino: lead.destino,\n    url,\n    pilot_product_code: producto.code,\n    pilot_product_id: producto.id,\n    modelo_resuelto: producto.name,\n    modelo_match: producto.match,\n    modelo_confianza: producto.confianza,\n    item_titulo: lead.item_titulo,\n    pilot_origin: lead.pilot_origin,\n    pilot_business_type_id: lead.pilot_business_type_id,\n    pilot_assigned_user: lead.pilot_assigned_user,\n    asesor_fuente: lead.asesor_fuente,\n  },\n};"
+      },
+      "id": "973399a1-8701-4035-9de1-d0a824c31ae6",
+      "name": "PayloadPilot",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1744,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $('PayloadPilot').item.json.url }}",
+        "options": {}
+      },
+      "id": "ac4eda45-a618-4b1c-a23e-5c147196f0dd",
+      "name": "🚀 POST Pilot",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2208,
+        112
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $input.item.json;\nconst normalizarTel = (tel) => {\n  if (!tel) return null;\n  const digits = tel.toString().replace(/\\D/g, '');\n  return digits.slice(-8);\n};\nconst normalizarBuyerPhone = (tel) => {\n  if (!tel) return null;\n  let digits = tel.toString().replace(/\\D/g, '');\n  if (digits.startsWith('549')) return '+' + digits;\n  if (digits.startsWith('54')) return '+549' + digits.slice(2);\n  if (digits.startsWith('9') && digits.length >= 10) return '+54' + digits;\n  return '+549' + digits;\n};\nconst sufijo1 = normalizarTel(lead.asesor_phone);\nconst sufijo2 = normalizarTel(lead.asesor_phone2);\nreturn {\n  json: {\n    ...lead,\n    buyer_phone: normalizarBuyerPhone(lead.buyer_phone),\n    asesor_sufijo1: sufijo1 || '',\n    asesor_sufijo2: sufijo2 || ''\n  }\n};"
+      },
+      "id": "843652b3-7c85-470c-ac5f-e028d2156bb9",
+      "name": "Normalizar teléfonos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        704,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $('Normalizar teléfonos').item.json;\n\nconst marcaConfig = {\n  'BAIC': { origin: 'BAICLONG_MELI1', business_type_id: 11 },\n  'CHERY': { origin: 'CHLONG_MELI_1', business_type_id: 14 },\n  'ARCFOX': { origin: 'ARCLONG_MELI1', business_type_id: 18 },\n};\n\n// Prioridad de búsqueda de asesor según marca de la publicación\nconst prioridadPorMarca = {\n  'CHERY': ['CHERY', 'BAIC'],\n  'BAIC': ['BAIC', 'CHERY'],\n  'ARCFOX': ['BAIC', 'CHERY'], // ajustá si Arcfox tiene su propio grupo\n};\n\nconst dominioPorMarca = { 'CHERY': 'cherylong', 'BAIC': 'baiclong' };\n\nconst getLast8 = (phone) => (phone || '').toString().replace(/\\D/g, '').slice(-8);\n\n// Normaliza a 549 + 10 dígitos (celular AR), sin \"+\"\nconst normalizePhone = (phone) => {\n  const d = (phone || '').toString().replace(/\\D/g, '');\n  return d.length >= 10 ? '549' + d.slice(-10) : null;\n};\n\nconst getUsers = (nodeName) => {\n  try {\n    return $(nodeName).all().flatMap(i => i.json?.data?.users || []);\n  } catch (e) {\n    console.warn(`No pude leer ${nodeName}: ${e.message}`);\n    return [];\n  }\n};\n\n// sufijo (últimos 8 dígitos) -> asesor. Si hay colisión, gana el que tenga el dominio de la marca.\nconst buildMap = (users, dominio) => {\n  const map = {};\n  for (const u of users) {\n    if (u.status !== 'active' || !u.email) continue;\n    const key = getLast8(u.phone);\n    if (key.length < 8) continue; // descarta teléfonos basura (ej: un email en el campo phone)\n    const pref = !!dominio && u.email.toLowerCase().includes(dominio);\n    if (!map[key] || (pref && !map[key]._pref)) {\n      map[key] = {\n        name: `${u.first_name || ''} ${u.last_name || ''}`.trim(),\n        pilot_user: u.email.trim().toLowerCase(),\n        phone: normalizePhone(u.phone),\n        _pref: pref,\n      };\n    }\n  }\n  return map;\n};\n\nconst maps = {\n  CHERY: buildMap(getUsers('obtenerAsesoresChery'), dominioPorMarca.CHERY),\n  BAIC: buildMap(getUsers('obtenerAsesoresBaic'), dominioPorMarca.BAIC),\n};\n\n// Marca se detecta del título de la publicación\nconst determineMarca = (lead) => {\n  const texto = (lead.item_titulo || '').toLowerCase();\n  if (texto.includes('chery')) return 'CHERY';\n  if (texto.includes('arcfox')) return 'ARCFOX';\n  if (texto.includes('baic')) return 'BAIC';\n  return null;\n};\n\nconst marca = determineMarca(lead);\nconst config = marca ? marcaConfig[marca] : null;\nif (!marca) {\n  console.warn(`No se pudo determinar la marca. Título: ${lead.item_titulo}, Link: ${lead.item_permalink}`);\n}\n\nconst sufijo = getLast8(lead.asesor_phone);\nconst orden = prioridadPorMarca[marca] || ['BAIC', 'CHERY'];\n\nlet asesorMatch = null;\nlet asesorFuente = null;\nfor (const b of orden) {\n  if (maps[b][sufijo]) {\n    asesorMatch = maps[b][sufijo];\n    asesorFuente = b;\n    break;\n  }\n}\n\nif (!asesorMatch) {\n  console.warn(`Asesor no encontrado: ${lead.asesor_phone} (sufijo: ${sufijo})`);\n}\n\nreturn {\n  json: {\n    ...lead,\n    pilot_assigned_user: asesorMatch?.pilot_user || null,\n    asesor_nombre_match: asesorMatch?.name || null,\n    asesor_telefono_normalizado: asesorMatch?.phone || normalizePhone(lead.asesor_phone),\n    asesor_fuente: asesorFuente,\n    marca_detectada: marca,\n    pilot_origin: config?.origin || null,\n    pilot_business_type_id: config?.business_type_id || null,\n  },\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1584,
+        48
+      ],
+      "id": "7cb9bd2e-6323-483d-8219-1c5e223efb6d",
+      "name": "🔀 Resolver Asesor/Marca"
+    },
+    {
+      "parameters": {
+        "jsCode": "const pilotResponse = $input.item.json;\nconst prev = $('PayloadPilot').item.json;\n\nconst pilotLeadId = pilotResponse?.data?.welcome_id || null;\nconst success = pilotResponse.success && !pilotResponse.error && !pilotResponse.message?.toLowerCase().includes('error');\n\nreturn {\n  json: {\n    lead_id: prev.lead_id,\n    pilot_lead_id: pilotLeadId,\n    new_status: success ? 'sent' : 'error',\n    pilot_response: JSON.stringify(pilotResponse)\n  }\n};"
+      },
+      "id": "b87eab56-9014-449e-a0a2-c14910ef8fdf",
+      "name": "Procesar respuesta Pilot",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2400,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.twilio.com/2010-04-01/Accounts/TWILIO_SID_OCULTO/Messages.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "MessagingServiceSid",
+              "value": "=MGd350ec36e86bce44fc2220483540ef86"
+            },
+            {
+              "name": "To",
+              "value": "=whatsapp:{{ (() => { const t = String($('🔀 Resolver Asesor/Marca').first().json.asesor_telefono_normalizado || ''); return t.startsWith('+') ? t : '+' + t; })() }}"
+            },
+            {
+              "name": "ContentSid",
+              "value": "=HXe9da278607893c264f3ee2e08f5214de"
+            },
+            {
+              "name": "ContentVariables",
+              "value": "={\"1\":\"{{ $('Loop leads').item.json.buyer_nombre }}\", \"2\":\"{{ $('Normalizar teléfonos').item.json.buyer_phone }}\", \"3\": \"{{ $('Loop leads').item.json.buyer_email }}\", \"4\": \"{{ $('Loop leads').item.json.item_titulo }}\"}"
+            },
+            {
+              "name": "From",
+              "value": "whatsapp:+5491166072860"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "00294268-22b3-4e79-be22-d3d2d649cd4b",
+      "name": "Twillio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2976,
+        112
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "28oA1V1vc9yFwvul",
+          "name": "LONG TWILLIO"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        1904,
+        -544
+      ],
+      "id": "027b9562-c1b6-4679-b878-6b866a75c953",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "url": "=https://admin-api-suite.up.railway.app/api/v1/groups/742",
+        "options": {}
+      },
+      "id": "5aaf10c2-0e8d-4625-a575-8cdade92d83c",
+      "name": "obtenerAsesoresBaic",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1072,
+        -192
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "=https://leads.redooconect.com.ar/api/v1/assignment-rules?client_id=125",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "9b09fde1-72ff-4d3c-bd2f-a08ac664c544"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "8426503c-cfea-40b2-9073-d2c58ecca85a",
+      "name": "obtenerReglasChery",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1248,
+        -96
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "=https://leads.redooconect.com.ar/api/v1/assignment-rules?client_id=50",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "acead76c-d71d-4044-8e9f-e2cb809f3a0d"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "30662fd9-2e75-4c42-9163-d200788645fd",
+      "name": "obtenerReglasBaic",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1424,
+        0
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "=https://admin-api-suite.up.railway.app/api/v1/groups/495",
+        "options": {}
+      },
+      "id": "a10febca-6144-4ecf-a7c3-0beeaee04cc2",
+      "name": "obtenerAsesoresChery",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        896,
+        -288
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "headers": {
+            "host": "palermobike.redooconect.com.ar",
+            "content-type": "application/json",
+            "accept": "*/*",
+            "accept-language": "*",
+            "sec-fetch-mode": "cors",
+            "user-agent": "node",
+            "accept-encoding": "br, gzip, deflate",
+            "x-forwarded-for": "191.234.201.61",
+            "x-forwarded-host": "palermobike.redooconect.com.ar",
+            "x-forwarded-server": "palermobike.redooconect.com.ar",
+            "content-length": "54",
+            "connection": "Keep-Alive"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "tel_sufijo": "50997009",
+            "updates": {
+              "bot_uploaded": 1
+            }
+          },
+          "webhookUrl": "https://palermobike.redooconect.com.ar/webhook/2b1801c4-ad27-42dc-aaff-56dc49ed3b33",
+          "executionMode": "production"
+        }
+      }
+    ],
+    "🗄️ Buscar leads pending": [
+      {
+        "json": {
+          "id": "0f9d0e35-0c7b-447f-8ce6-fe1d298a84d9",
+          "user_id": 310104776,
+          "nombre_cuenta": null,
+          "item_id": "MLA1987856125",
+          "item_titulo": "Baic Bj30 1.5t Bj30 2wd Hybrid",
+          "item_precio": 30000,
+          "item_permalink": "https://auto.mercadolibre.com.ar/MLA-1987856125-baic-bj30-15t-bj30-2wd-hybrid-_JM",
+          "item_condition": "new",
+          "item_thumbnail": "http://http2.mlstatic.com/D_953969-MLA118065430727_092026-I.webp",
+          "item_currency": "USD",
+          "item_status": "active",
+          "buyer_id": 25712350,
+          "buyer_nombre": "David Roberto Patini",
+          "buyer_email": "david@patini.com.ar",
+          "buyer_phone": "+54 1153799884",
+          "buyer_cuit": "20263458851",
+          "asesor_phone": "91150107257",
+          "asesor_phone2": "1150107257",
+          "contact_type": "whatsapp",
+          "status": "active",
+          "seller_address": "av san martin 6635",
+          "seller_zip": "1419",
+          "seller_lat": "-34.592797",
+          "seller_lng": "-58.507646",
+          "received_at": "2026-10-22 14:41:05",
+          "created_at": "2026-10-22 14:41:08",
+          "sf_lead_id": null,
+          "pilot_lead_id": null,
+          "sf_response": null,
+          "bot_uploaded": 0,
+          "dealership": null,
+          "access_token": "APP_USR-5782358665537188-102208-4b0c48080544321ed9eeb7b6bbe959b6-310104776",
+          "destino": "pilot",
+          "destino_config": {},
+          "origen_sf": "G7UFEG023OJO3QXVK"
+        }
+      }
+    ]
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "jZ0LBnMYXiaAm8hE",
+      "projectId": "K8p6XEqA0L6D2uVt",
+      "createdAt": "2026-07-14T17:01:34.644Z",
+      "updatedAt": "2026-07-14T17:01:34.644Z"
+    }
+  ],
+  "staticData": {
+    "node:⏰ Schedule Trigger": {
+      "recurrenceRules": [
+        null
+      ],
+      "recurrenceRuleSignatures": [
+        null
+      ]
+    }
+  },
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2026-10-26T17:06:13.535Z",
+  "versionId": "defb5d2a-b3b2-41d0-8bd5-17116e3a3dc7"
+}
