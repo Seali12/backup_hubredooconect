@@ -1,0 +1,1629 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "b51ab99d-e447-44ce-85d3-df5280157510",
+    "workflowId": "WwrancDUhPcfqXBS",
+    "nodes": [
+      {
+        "parameters": {
+          "descriptionType": "manual",
+          "toolDescription": "llama a esta función cuando el usuario quiera conocer la financiación que puede realizar, como y cuanto es el valor. Si el cliente solicita de un modelo específico, muéstrale solo de ese modelo. ",
+          "documentId": {
+            "__rl": true,
+            "value": "1658hOvMlK2qFbDxaVsMKpYNMGB0bmPdqdjdGymTwyZo",
+            "mode": "list",
+            "cachedResultName": "Nissan_IA",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1658hOvMlK2qFbDxaVsMKpYNMGB0bmPdqdjdGymTwyZo/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": 406715035,
+            "mode": "list",
+            "cachedResultName": "Financiación",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1658hOvMlK2qFbDxaVsMKpYNMGB0bmPdqdjdGymTwyZo/edit#gid=406715035"
+          },
+          "options": {}
+        },
+        "id": "9e4a7cda-4e00-415b-b44d-5589af1217be",
+        "name": "Google_Sheet_Financiacion",
+        "type": "n8n-nodes-base.googleSheetsTool",
+        "typeVersion": 4.5,
+        "position": [
+          304,
+          224
+        ],
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "S3hB40930MFXLH4J",
+            "name": "Google Sheets Redoo"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "descriptionType": "manual",
+          "toolDescription": "llama a esta función para obtener un ejemplo del cálculo de una financiación y hazle al usuario/cliente el cálculo en base a lo que el usuario ingrese. ",
+          "documentId": {
+            "__rl": true,
+            "value": "1658hOvMlK2qFbDxaVsMKpYNMGB0bmPdqdjdGymTwyZo",
+            "mode": "list",
+            "cachedResultName": "Nissan_IA",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1658hOvMlK2qFbDxaVsMKpYNMGB0bmPdqdjdGymTwyZo/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": 989015564,
+            "mode": "list",
+            "cachedResultName": "Simulacion Fianciera",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1658hOvMlK2qFbDxaVsMKpYNMGB0bmPdqdjdGymTwyZo/edit#gid=989015564"
+          },
+          "options": {}
+        },
+        "id": "95f9c5ae-d972-4fc7-b0c0-ee7b79303347",
+        "name": "Google_Sheet_Ejemplo_Financiacion",
+        "type": "n8n-nodes-base.googleSheetsTool",
+        "typeVersion": 4.5,
+        "position": [
+          432,
+          224
+        ],
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "S3hB40930MFXLH4J",
+            "name": "Google Sheets Redoo"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "model": "gpt-4o",
+          "options": {
+            "temperature": 0.2
+          }
+        },
+        "id": "3f536d44-2e94-46b5-b41c-d3ec9faafd22",
+        "name": "OpenAI Chat Model",
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1,
+        "position": [
+          -160,
+          224
+        ],
+        "credentials": {
+          "openAiApi": {
+            "id": "qalg6fQHdCzN0Xjt",
+            "name": "OpenAi account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "sessionIdType": "customKey",
+          "sessionKey": "={{ $json.idConversation || $json.sessionId}}",
+          "contextWindowLength": 20
+        },
+        "id": "031295fc-7a6c-474c-9094-eb9a8ce77b13",
+        "name": "Window Buffer Memory",
+        "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+        "typeVersion": 1.2,
+        "position": [
+          176,
+          224
+        ]
+      },
+      {
+        "parameters": {
+          "promptType": "define",
+          "text": "={{ $json.chatInput === \"adios\"\n  ? `adios. mensaje del sistema-> CERRA LA CONVERSACION y ejecuta la función close_conversation YA `\n  : $json.chatInput\n}}",
+          "options": {
+            "systemMessage": "=# 🎯 Rol del Asistente\n\nEres un asistente comercial de Nissan que califica leads y facilita su derivación al concesionario. Tu objetivo es confirmar datos, detectar necesidades clave y coordinar el contacto con el asesor oficial.\nKAIT ES UN VEHICULO DE NISSAN. NO DIGAS QUE NO ES.\n⚠️ **CRÍTICO**: Máximo 1500 caracteres por respuesta. Sé conciso y directo.\n\n---\n\n## 🔹 Datos Iniciales del Lead\n\nRecibes desde META: nombre ({{ $json.name }}), teléfono ({{ $json.from }}).\nDebés solicitar al cliente: concesionario, forma de pago, situación de usado, DNI y Mail.\n\n---\n\n## 🔒 CAPTURA DE DNI Y MAIL — REGLA CRÍTICA\n\nEl DNI y el mail son los datos que más se pierden. Seguí estas reglas SIEMPRE:\n\n1. **Detectalos en CUALQUIER mensaje del cliente**, aunque no los hayas pedido todavía, aunque vengan mezclados con otro texto o en el mismo mensaje uno abajo del otro.\n   - DNI: número de 7 u 8 dígitos (puede venir con puntos o espacios: `28.462.420`, `28 462 420`).\n   - Mail: cualquier texto con formato `algo@dominio.algo`.\n2. **Un número de 7-8 dígitos que el cliente manda solo o junto a un mail ES su DNI.** No lo confundas con teléfono, monto ni año.\n3. **Normalizá antes de enviar:**\n   - DNI → solo dígitos, sin puntos, sin espacios, sin prefijos ni sufijos. Ej: `28.462.420` → `28462420`.\n   - Mail → en minúsculas, sin espacios. Tal cual lo escribió el cliente, sin corregirlo ni inventar dominio.\n4. **Validación de DNI:** rechazá solo si tiene menos de 7 o más de 8 dígitos, o si son todos el mismo dígito (ej: `11111111`, `00000000`). En ese caso pedí el DNI real UNA vez. Si vuelve a mandar uno inválido o se niega, registrá `\"-\"`.\n5. **Si el cliente se niega** a dar DNI o mail, registrá `\"-\"` y no insistas.\n6. **Nunca pongas `\"-\"` si el dato aparece en algún mensaje del cliente.** Poner `\"-\"` teniendo el dato es el peor error posible.\n\n---\n\n## 🔹 Información Limitada\n\n❌ **NO consultes ni confirmes**: stock, plazos de entrega, colores disponibles, toma de usados.\n❌ **NO ofrezcas NISSAN March** (producto descontinuado).\n❌ **NO apliques descuentos**. Los precios son finales.\n✅ **Respuesta estándar**: *\"Esa información la confirma el concesionario. El asesor oficial que te contacte te dará la respuesta precisa.\"*\n\n---\n\n## 🔹 Rumores y Especulaciones Externas\n\n❌ NO respondas ni confirmes información sobre noticias, rumores o especulaciones sobre Nissan.\n✅ **Respuesta estándar**: *\"Nissan no comenta sobre especulaciones o rumores. Para consultas sobre vehículos, estoy a tu disposición. 🚗\"*\n\n---\n\n## 🔹 Precios 💰\n\n✅ SIEMPRE ejecuta `get_precios(modelo)` cuando se mencionen precios o costos.\n✅ NUNCA inventes ni estimes valores.\n✅ Formato obligatorio:\n\n💰 [Línea] [Versión]\n\nPrecio Sugerido al público:          $XX.XXX.XXX\nBonificación:                        -$XX.XXX.XXX\nPrecio con Bonificación:             $XX.XXX.XXX\nPrecio sin impuestos nacionales:     $XX.XXX.XXX\n\n✅ Si hay múltiples versiones, mostrá cada una con su bloque separado.\n✅ Aclará siempre: *\"Estos son precios de lista sugeridos. No incluyen patentamiento ni gastos adicionales. El precio final lo define el concesionario.\"*\n❌ NO omitas ninguno de los 4 campos aunque alguno sea $0.\n\n---\n\n## 🔹 Funciones Disponibles\n\n1️⃣ **get_modelos(modelo)** → Datos del modelo.\n2️⃣ **get_precios(modelo)** → Precio oficial (OBLIGATORIO para cualquier consulta de precios).\n3️⃣ **close_conversation(datos_venta)** → Cierra y envía datos recopilados.\n\n---\n\n## 🔹 Flujo de Conversación\n\n### 1️⃣ Saludo inicial OBLIGATORIO\n*\"¡Hola [nombre]! 👋 Te cuento que tenemos el [modelo] disponible. Enseguida te conecto con el concesionario Nissan más cercano.\"*\n\nSi no viene modelo desde el CTA (`{{ $json.modelo }}` o `{{ $json.interes }}`), preguntá qué modelo le interesa antes de continuar.\n\n---\n\n### 2️⃣ Validación de Concesionario 🏢\n\nTrabajás con el siguiente JSON de sucursales:\n```json\n{{ JSON.stringify($json.sucursales) }}\n```\n\n⚠️ **Importante sobre distancia**: nunca tenés datos de geolocalización del cliente ni coordenadas de las sucursales. NO existe forma de calcular \"la más cercana\" real. Cuando haya más de una opción posible, tu trabajo es **listar y dejar elegir al cliente**, nunca elegir vos ni afirmar cercanía sin base.\n\n**Caso A — Una sola sucursal en todo el JSON:**\nInformá directamente: *\"El concesionario Nissan más cercano a vos es [concesionario] – [sucursal], ubicado en [dirección].\"*\nRegistrá ese concesionario y avanzá al paso siguiente.\n\n**Caso B — múltiples sucursales con `provincia: \"AMBA\"` (o `tipo: \"amba\"` si viene ese campo):**\nEl prefijo ya confirma que es AMBA. No preguntes la zona general, pero sí preguntá de qué zona de AMBA es:\n*\"Para darte el concesionario más cercano, ¿sos de CABA, Zona Norte, Zona Oeste o Zona Sur del GBA?\"*\n\nSegún la respuesta, filtrá las sucursales donde `zona_amba` coincida con la zona indicada.\n\n- Si queda **una sola** sucursal en esa zona: informala directamente como en el Caso A.\n- Si quedan **varias**: NUNCA elijas una por tu cuenta ni digas \"el más cercano es X\" — no tenés forma de calcular distancia real. Listá TODAS las sucursales de esa zona, **agrupadas por concesionario**, y pedí que elija.\n\n✅ Formato obligatorio para listar varias sucursales (agrupado por concesionario, no una lista plana):\n\n*\"En [zona] tenés estas opciones:*\n\n*🔹 [Concesionario 1]*\n*- [Sucursal] – [Dirección]*\n*- [Sucursal] – [Dirección]*\n\n*🔹 [Concesionario 2]*\n*- [Sucursal] – [Dirección]*\n\n*¿Cuál te queda más cómoda?\"*\n\n❌ PROHIBIDO decir \"el concesionario más cercano a vos es X\" cuando hay más de una sucursal en la zona filtrada — eso es inventar distancia. Reservá esa frase únicamente para cuando queda una sola opción (Caso A o zona ya filtrada a una sola sucursal).\n\n**Caso C — múltiples sucursales, `provincia` NO es AMBA:**\nEl prefijo/localidad ya determina la zona general, así que no hace falta preguntar zona. Pero igual podés tener varias sucursales de distintos concesionarios en esa misma zona.\n\n- Si queda **una sola** sucursal en esa localidad/zona: informala directamente.\n- Si quedan **varias**: listalas TODAS **agrupadas por concesionario**, con el mismo formato del Caso B, y pedí que elija la que le quede más cómoda.\n\n❌ PROHIBIDO decir \"la más cercana es X\" cuando hay más de una — mismo motivo que en el Caso B: no hay datos de distancia real.\n\n✅ Registrá el concesionario elegido/ofrecido para incluirlo en `close_conversation`.\n\nEste paso es vital. Si vos le dijiste una sucursal al cliente y no te dijo nada, es porque esta de acuerdo con eso. Esa misma sucursal incluila al cerrar la conversación. Es muy importante este paso.\n\n---\n\n### 3️⃣ Método de Pago 💳\n\nPreguntá de forma natural cómo piensa pagar, sin listar las opciones como un menú.\nEjemplo: *\"¿Ya tenés pensado cómo lo vas a pagar? Tenemos opciones de Financiacion Propia, Financiacion Credi Nissan o Plan de Ahorro.\"*\nSegún lo que responda, inferí la opción correspondiente: Financiacion Propia / Financiacion Credi Nissan / Plan de Ahorro / sin definir.\n\nSi elige financiación o pago mixto → preguntá: *\"¿Ya sabés cuánto te gustaría financiar?\"*\n\n✅ Mostrá opciones Credinissan solo si el cliente pregunta o eligió financiación.\n✅ Cierre financiación: *\"Estas son las opciones vigentes de Credinissan como referencia. El asesor oficial puede simular tu plan exacto.\"*\n\n#### 💳 Opciones Credinissan Vigentes (Tasa 0%)\n\n**FRONTIER:** Tasa 0% - LTV $22.000.000 - 24 meses - Versiones: XE, X-GEAR, Platinum, PRO-4X (MY2025)\n**X-TRAIL:** Tasa 0% - LTV $20.000.000 - 12 meses - Versiones: e-Power, Exclusive, Advance\n**SENTRA y VERSA:** Tasa 0% - LTV $18.000.000 - 12 meses - Todas las versiones\n**NUEVO KICKS:** Tasa 0% - LTV $20.000.000 - 24 meses - Todas las versiones\n\n---\n\n### 4️⃣ Vehículo Usado 🚙\n*\"¿Tenés un auto usado que pensás entregar o ya vendiste?\"*\n- Si tiene: solicitá marca, modelo y año aproximado.\n- Si no tiene: registrá \"no tiene usado\".\n- Si ya vendió: registrá \"ya vendió usado\".\n\n---\n\n### 5️⃣ DNI y Mail\n*\"Para poder cargarte en el sistema del concesionario, ¿me pasás tu DNI y tu mail?\"*\n\n- Aplicá la sección **🔒 CAPTURA DE DNI Y MAIL**.\n- Si el cliente ya los dio antes en la conversación, NO los vuelvas a pedir.\n- Si el cliente da solo uno de los dos, pedí el que falta UNA vez. Si no lo da, `\"-\"` y cerrá.\n\n---\n\n## 🚨🚨🚨 CIERRE — LA ACCIÓN MÁS IMPORTANTE DE TODA LA CONVERSACIÓN 🚨🚨🚨\n\n### 👋 DESPEDIDA = CIERRE INMEDIATO (PRIORIDAD MÁXIMA)\n\nSi el mensaje del cliente contiene una despedida (\"adiós\", \"adios\", \"chau\", \"chao\", \"nos vemos\", \"hasta luego\", \"bye\", \"listo gracias, chau\" o similar), **cerrá en ESE MISMO turno**, sin importar en qué paso del flujo estés ni cuántos datos tengas:\n\n1. Hacé el CHEQUEO OBLIGATORIO de DNI y mail (incluido el mensaje de despedida).\n2. Ejecutá `close_conversation` con lo que tengas; lo que falte va en `\"-\"`.\n3. Respondé ÚNICAMENTE con el `【alert:\"close_conversation\"】` (ver ACCIÓN 2).\n\n⛔ PROHIBIDO ante una despedida: pedir datos faltantes, hacer otra pregunta, responder sin el alert o no ejecutar la tool.\n\n---\n\nCuando ocurra CUALQUIERA de estas condiciones:\n- El cliente se despide (ver regla de arriba)\n- Tenés ≥4 datos confirmados\n- El cliente se niega a dar un dato\n\n### ✅ CHEQUEO OBLIGATORIO ANTES DE LLAMAR A LA TOOL\n\nAntes de armar el JSON, releé **TODOS los mensajes del cliente desde el primero hasta el último, incluido el mensaje actual**, y respondete:\n\n1. ¿Algún mensaje tiene un número de 7-8 dígitos (con o sin puntos)? → ese es el `dni`.\n2. ¿Algún mensaje tiene un `@`? → ese es el `email`.\n3. ¿El mensaje que disparó el cierre trae DNI y/o mail? → **incluilos sí o sí**. El caso más común de error es cerrar en el mismo turno en que el cliente manda sus datos y olvidarlos.\n\nSolo si la respuesta es \"no aparece en ningún mensaje\" podés poner `\"-\"`.\n\n**DEBÉS HACER ESTAS DOS COSAS. SI NO LAS HACÉS, FALLASTE COMPLETAMENTE:**\n\n### ACCIÓN 1 — OBLIGATORIA Y PRIMERO:\nLlamá a la tool `close_conversation` con este JSON exacto (case-sensitive, `\"-\"` si falta el dato):\n\n```json\n{\n  \"nombre\": \"[nombre]\",\n  \"telefono\": \"[telefono]\",\n  \"dni\": \"[solo dígitos del DNI, ej: 28462420, o -]\",\n  \"email\": \"[email en minúsculas o -]\",\n  \"productoInteres\": \"[modelo]\", //SIEMPRE ES EL MODELO INGRESADO EN EL PRIMER MENSAJE\n  \"sucursal\": \"[concesionario – sucursal]\",\n  \"pago\": \"[pago]\",\n  \"financiacion\": \"[monto o -]\",\n  \"usado\": \"[usado]\",\n  \"resumen\": \"[VARIABLE RESUMEN]\"\n}\n```\n\n⚠️ El `dni` y el `email` del JSON deben ser **idénticos** a los que ponés dentro de `resumen`. Si en el resumen hay un DNI o mail, en los campos también.\n\n### ACCIÓN 2 — OBLIGATORIA Y DESPUÉS:\nTu respuesta al cliente debe ser ÚNICAMENTE esto, sin ningún texto antes ni después:\n\n`【alert:\"close_conversation\"】¡Gracias, [nombre]! Un asesor de [concesionario] te contacta pronto. 🚘✨`\n\nO si se despidió sin datos completos o sin concesionario confirmado:\n\n`【alert:\"close_conversation\"】¡Gracias por tu tiempo, [nombre]! Un asesor Nissan te contacta pronto. 🚘`\n\n⛔ PROHIBIDO: escribir cualquier cosa antes del `【alert:\"close_conversation\"】`\n⛔ PROHIBIDO: decir \"voy a proceder\", \"he registrado\", \"voy a cerrar\" o similar\n⛔ PROHIBIDO: omitir la llamada a `close_conversation`\n⛔ PROHIBIDO: ejecutar `close_conversation` más de una vez\n⛔ PROHIBIDO: poner `\"-\"` en `dni` o `email` si el cliente los escribió en algún mensaje\n\n---\n\n## 🔹 VARIABLE RESUMEN\n\nMantené actualizada esta variable interna durante toda la conversación.\n\n**Formato:**\n```\nEl usuario [NOMBRE] (grado de interés: [Hot/Warm/Cold]), dni: [DNI solo dígitos], mail: [MAIL], concesionario: [CONCESIONARIO], comentarios: [COMENTARIOS]\n```\n\n---\n\n## 🔹 CALIFICACIÓN DE LEADS\n\n- **Cold** ❄️ → 1-2 respuestas relevantes\n- **Warm** 🟡 → 3-4 respuestas relevantes\n- **Hot** 🔥 → 5-6 respuestas relevantes\n\n**goodLead**: `\"true\"` si ≥4 datos confirmados, `\"false\"` si 3 o menos.\n\n---\n\n## 🔹 Reglas Clave\n\n✅ Respuestas cortas, naturales y directas.\n✅ SIEMPRE ejecutá `get_precios(modelo)` cuando se hable de precios. NUNCA inventes valores.\n✅ Mantené actualizada la VARIABLE RESUMEN durante toda la conversación.\n✅ Solo modelos disponibles en \"Tabla Nissan\". Si preguntan por otro: *\"Lo siento, solo puedo responder sobre modelos Nissan disponibles.\"*\n✅ No digas que estás \"buscando\" o \"procesando\". Respondé directamente.\n✅ Ficha técnica siempre OBLIGATORIAMENTE con formato: **【ficha:URL】** SINO EL CLIENTE NO LA PUEDE VER\n✅ NO menciones imágenes ni devuelvas imagen:url.\n✅ Si el cliente da su mail o DNI en cualquier momento, registralo de inmediato y no lo pierdas.\n✅ Si el cliente se niega a dar un dato, poné `\"-\"` y cerrá. Nunca te bloquees esperando un dato.\n✅ Nunca afirmes \"el concesionario más cercano\" cuando hay más de una sucursal posible en la zona filtrada — listá agrupado por concesionario y dejá elegir al cliente.\n🚨 Si el cliente se despide (\"adiós\", \"chau\", etc.) → chequeo DNI/mail + `close_conversation` + SOLO el `【alert:\"close_conversation\"】`. Sin excepciones, aunque falten datos.\n🚨 AL CERRAR: primero hacé el chequeo de DNI y mail, después ejecutá `close_conversation`, después escribí SOLO el `【alert:\"close_conversation\"】`. Nada más. Nunca texto previo.\n\n## Sucursales:\nAUTOFERRO CABA Libertador|Buenos Aires/Argentina\nAUTOFERRO Martínez|Buenos Aires/Argentina\nAUTOFERRO CABA Cabildo|Buenos Aires/Argentina\nAUTOGEN CABA Álvarez Thomas|Buenos Aires/Argentina\nAUTOGEN CABA Libertador|Buenos Aires/Argentina\nAUTOGEN CABA Monserrat|Buenos Aires/Argentina\nAUTOGEN CABA Av. La Plata|Buenos Aires/Argentina\nNISSAN CAPITAL CABA Rivadavia 6075|Buenos Aires/Argentina\nNISSAN CAPITAL Ciudadela|Buenos Aires/Argentina\nNISSAN CAPITAL CABA Leopardi|Buenos Aires/Argentina\nNISSCAR Campana|Buenos Aires/Argentina\nNISSCAR Pilar|Buenos Aires/Argentina\nSENDAI Lanús Ventas|Buenos Aires/Argentina\nAUTOSSAN Bahía Blanca Ventas|Buenos Aires/Argentina\nCITYSSAN Mar del Plata Ventas|Buenos Aires/Argentina\nCITYSSAN Olavarría|Buenos Aires/Argentina\nNISSCAR Mercedes|Buenos Aires/Argentina\nNOALE Pergamino Ventas|Buenos Aires/Argentina\nNOALE Junín|Buenos Aires/Argentina\nNOALE Trenque Lauquen|Buenos Aires/Argentina\nNOALE San Nicolás Ventas|Buenos Aires/Argentina\nSENDAI Lobos|Buenos Aires/Argentina\nKYOTO Roque Saenz Peña|Chaco/Argentina\nKYOTO Resistencia|Chaco/Argentina\nSURISAN Trelew Ventas|Chubut/Argentina\nSURISAN Comodoro Rivadavia|Chubut/Argentina\nSURISAN Puerto Madryn|Chubut/Argentina\nEGEO Córdoba Monseñor Cabrera|Córdoba/Argentina\nEGEO Villa María|Córdoba/Argentina\nEGEO San Francisco Ventas|Córdoba/Argentina\nKYOTO Corrientes Ventas|Corrientes/Argentina\nFOLMER Crespo Ventas|Entre Ríos/Argentina\nFOLMER Concordia|Entre Ríos/Argentina\nFOLMER Paraná|Entre Ríos/Argentina\nAUTOSSAN Santa Rosa|La Pampa/Argentina\nAUTOSSAN General Pico|La Pampa/Argentina\nYACOPINI Godoy Cruz|Mendoza/Argentina\nYACOPINI San Rafael|Mendoza/Argentina\nKYOTO Posadas Ventas|Misiones/Argentina\nAIKA Neuquén Ventas|Neuquén/Argentina\nYACOPINI San Juan|San Juan/Argentina\nAUCAM Santa Fe Ventas|Santa Fe/Argentina\nAUCAM Rafaela|Santa Fe/Argentina\nNEOSTAR Rosario|Santa Fe/Argentina\nSENTA Rosario Ventas|Santa Fe/Argentina\nSENTA Venado Tuerto Ventas|Santa Fe/Argentina\nTDF MOTORS Ushuaia Ventas|Tierra del Fuego/Argentina\nTDF MOTORS Río Grande|Tierra del Fuego/Argentina\nAG NOA Yerba Buena|Tucumán/Argentina",
+            "returnIntermediateSteps": true
+          }
+        },
+        "id": "d86ec2c7-178b-4e85-82a0-dd33aae3207d",
+        "name": "AI Agent1",
+        "type": "@n8n/n8n-nodes-langchain.agent",
+        "typeVersion": 1.7,
+        "position": [
+          432,
+          -16
+        ]
+      },
+      {
+        "parameters": {
+          "descriptionType": "manual",
+          "toolDescription": "llama a esta función cuando el usuario quiera conocer los modelos de vehículos que vende el asistente. ",
+          "documentId": {
+            "__rl": true,
+            "value": "1658hOvMlK2qFbDxaVsMKpYNMGB0bmPdqdjdGymTwyZo",
+            "mode": "list",
+            "cachedResultName": "Nissan_IA",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1658hOvMlK2qFbDxaVsMKpYNMGB0bmPdqdjdGymTwyZo/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "gid=0",
+            "mode": "list",
+            "cachedResultName": "Modelos",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1658hOvMlK2qFbDxaVsMKpYNMGB0bmPdqdjdGymTwyZo/edit#gid=0"
+          },
+          "options": {}
+        },
+        "id": "2a01c26a-dcc5-44a7-80c5-2d6f35e51282",
+        "name": "get_modelos",
+        "type": "n8n-nodes-base.googleSheetsTool",
+        "typeVersion": 4.5,
+        "position": [
+          560,
+          224
+        ],
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "S3hB40930MFXLH4J",
+            "name": "Google Sheets Redoo"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "value": "nW048ZVYNLrPomTR",
+            "mode": "list",
+            "cachedResultName": "close_conversation NISSAN ML"
+          },
+          "workflowInputs": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "goodLead": "={{ $fromAI('goodLead', ``, 'string', 'false') }}",
+              "idConversation": "={{ $json.idConversation }}",
+              "number": "={{ $json.from }}",
+              "name": "={{ $json.name }}",
+              "pago": "={{ $fromAI('pago', ``, 'string', 'No especifica') }}",
+              "usado": "={{ $fromAI('usado', ``, 'string', 'No tiene') }}",
+              "interes": "={{ $fromAI('interes', `por defecto \"cold\" es frio, \"warm\" tibio y \"hot\" Caliente. Tiene que ver con que tan interesado esta el cliente con la compra`, 'string', 'cold') }}",
+              "productoInteres": "={{ $fromAI('productoInteres', ``, 'string') }}",
+              "resumen": "={{$fromAI('Resumen')}}",
+              "dni": "={{ $fromAI('dni', ``, 'string', '-') }}",
+              "email": "={{ $fromAI('email', ``, 'string', '-') }}",
+              "sucursal": "={{ $fromAI('sucursal', ``, 'string', 'No especifica') }}"
+            },
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "goodLead",
+                "displayName": "goodLead",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "idConversation",
+                "displayName": "idConversation",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "number",
+                "displayName": "number",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "name",
+                "displayName": "name",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "pago",
+                "displayName": "pago",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "usado",
+                "displayName": "usado",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "interes",
+                "displayName": "interes",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "productoInteres",
+                "displayName": "productoInteres",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "resumen",
+                "displayName": "resumen",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "dni",
+                "displayName": "dni",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "apellido",
+                "displayName": "apellido",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": true
+              },
+              {
+                "id": "email",
+                "displayName": "email",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "sucursal",
+                "displayName": "sucursal",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": false
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+        "typeVersion": 2.2,
+        "position": [
+          800,
+          224
+        ],
+        "id": "e4dc3afc-1c28-47cf-8a43-16a7fed8b76d",
+        "name": "close_conversation"
+      },
+      {
+        "parameters": {
+          "documentId": {
+            "__rl": true,
+            "value": "1658hOvMlK2qFbDxaVsMKpYNMGB0bmPdqdjdGymTwyZo",
+            "mode": "list",
+            "cachedResultName": "Nissan_IA",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1658hOvMlK2qFbDxaVsMKpYNMGB0bmPdqdjdGymTwyZo/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": 770741149,
+            "mode": "list",
+            "cachedResultName": "Precios",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1658hOvMlK2qFbDxaVsMKpYNMGB0bmPdqdjdGymTwyZo/edit#gid=770741149"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleSheetsTool",
+        "typeVersion": 4.7,
+        "position": [
+          672,
+          224
+        ],
+        "id": "d9b7f170-669a-4d26-a7ec-c2d420545ab9",
+        "name": "get_precios",
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "S3hB40930MFXLH4J",
+            "name": "Google Sheets Redoo"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "public": true,
+          "options": {}
+        },
+        "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+        "typeVersion": 1.3,
+        "position": [
+          -80,
+          0
+        ],
+        "id": "337eb812-3a6d-4e78-ab38-9f97891865ee",
+        "name": "When chat message received",
+        "webhookId": "0ecafc8f-618b-4547-a9f6-a4340b0d7fe5"
+      },
+      {
+        "parameters": {
+          "jsCode": "// ============================================================\n// SAFETY NET - Verificación de close_conversation\n// ============================================================\nconst agentOutput = $input.first().json;\nconst outputText = agentOutput.output || '';\nconst steps = agentOutput.intermediateSteps || [];\n\n// ============================================================\n// CAPA 1: Regex de palabras clave de despedida\n// ============================================================\nconst FAREWELL_KEYWORDS = /asesor|contactar[áa]|nos comunicamos|te vamos a contactar|un representante|en breve|a la brevedad|hasta luego|hasta pronto|fue un placer|cualquier consulta|no dudes en|chau|bye|suerte|\\u3010alert:close_conversation\\u3011/i;\nconst hasFarewellKeyword = FAREWELL_KEYWORDS.test(outputText);\n\nif (!hasFarewellKeyword) {\n  return [{\n    json: {\n      action: 'passthrough',\n      output: outputText,\n      intermediateSteps: steps\n    }\n  }];\n}\n\n// ============================================================\n// CAPA 2: ¿Se ejecutó close_conversation?\n// ============================================================\nconst closeStep = steps.find(s =>\n  s.action?.tool?.toLowerCase().startsWith('close_conversation')\n);\nconst closeCalled = !!closeStep;\n\nconst hasAlertTag = outputText.includes('【alert:close_conversation】');\nif (hasAlertTag && !closeCalled) {\n  return [{\n    json: {\n      action: 'force_recovery',\n      reason: 'alert_tag_sin_tool',\n      output: outputText,\n      intermediateSteps: steps\n    }\n  }];\n}\n\nif (closeCalled) {\n  return [{\n    json: {\n      action: 'passthrough',\n      output: outputText,\n      intermediateSteps: steps\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    action: 'needs_llm_verification',\n    output: outputText,\n    intermediateSteps: steps\n  }\n}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          784,
+          -16
+        ],
+        "id": "c2ce51d3-09f0-4a1a-b89a-acff66e86124",
+        "name": "Regex"
+      },
+      {
+        "parameters": {
+          "rules": {
+            "values": [
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 2
+                  },
+                  "conditions": [
+                    {
+                      "leftValue": "={{ $json.action }}",
+                      "rightValue": "passthrough",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      },
+                      "id": "482db280-e941-4be8-bae3-cd8ce12b228f"
+                    }
+                  ],
+                  "combinator": "and"
+                }
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 2
+                  },
+                  "conditions": [
+                    {
+                      "id": "1b332802-5938-4dcb-a5e7-ac0326eb1dda",
+                      "leftValue": "={{ $json.action }}",
+                      "rightValue": "force_recovery",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals",
+                        "name": "filter.operator.equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                }
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 2
+                  },
+                  "conditions": [
+                    {
+                      "id": "37328225-cab1-4e4e-b4ff-8d57f1d823b6",
+                      "leftValue": "={{ $json.action }}",
+                      "rightValue": "needs_llm_verification",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals",
+                        "name": "filter.operator.equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                }
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.switch",
+        "typeVersion": 3.2,
+        "position": [
+          944,
+          -16
+        ],
+        "id": "9b600561-d36c-47c4-8cdf-b17db67928d9",
+        "name": "Switch"
+      },
+      {
+        "parameters": {
+          "promptType": "define",
+          "text": "=Mensaje:\n\"{{$json.output}}\"",
+          "hasOutputParser": true,
+          "options": {
+            "systemMessage": "Analizá el siguiente mensaje de un chatbot de ventas automotrices.\nDeterminá si hay una intención clara de despedida o cierre de conversación.\n\nRespondé ÚNICAMENTE con un JSON:\n{\"farewell\": true} o {\"farewell\": false}"
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.agent",
+        "typeVersion": 2.2,
+        "position": [
+          1168,
+          64
+        ],
+        "id": "a3641e5f-540b-46a0-b920-b84d1184e24d",
+        "name": "AI Agent"
+      },
+      {
+        "parameters": {
+          "model": "gpt-4o",
+          "options": {
+            "temperature": 0.2
+          }
+        },
+        "id": "3a772905-ab43-49c8-91ec-309dfe7c1c57",
+        "name": "OpenAI Chat Model1",
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1,
+        "position": [
+          1104,
+          240
+        ],
+        "credentials": {
+          "openAiApi": {
+            "id": "qalg6fQHdCzN0Xjt",
+            "name": "OpenAi account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsonSchemaExample": "{\n  \"farewell\": true\n}"
+        },
+        "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+        "typeVersion": 1.3,
+        "position": [
+          1312,
+          256
+        ],
+        "id": "a37d96c1-152d-4445-8462-22cd23962dff",
+        "name": "Structured Output Parser"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "45402932-608f-4d75-8c3a-f03924efa271",
+                "leftValue": "={{ $('AI Agent').first().json.output.farewell }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          1536,
+          64
+        ],
+        "id": "cdd48f4e-2a38-4a2b-8541-31ba2f15fd42",
+        "name": "If"
+      },
+      {
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "ba6f6dd7-f737-4a14-b110-6b74b25690b6",
+                "name": "output",
+                "value": "={{ $('AI Agent1').first().json.output }}",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [
+          2160,
+          112
+        ],
+        "id": "46b78fbd-a046-407e-940b-754d4a3f9096",
+        "name": "Edit Fields2"
+      },
+      {
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "ba6f6dd7-f737-4a14-b110-6b74b25690b6",
+                "name": "chatInput",
+                "value": "[SISTEMA - NO MOSTRAR AL USUARIO] En tu respuesta anterior te despediste pero NO ejecutaste la tool  close_conversation. Debés despedirte nuevamente del usuario y ejecutar  close_conversation correctamente antes de responder.",
+                "type": "string"
+              },
+              {
+                "id": "ad97e357-e83f-406a-a1f0-1f3586d79b9c",
+                "name": "sessionId",
+                "value": "={{ $('When chat message received').first().json.idConversation || $('When chat message received').first().json.sessionId }}",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [
+          1968,
+          -224
+        ],
+        "id": "8671faa8-d84a-45c6-be93-68905f887175",
+        "name": "Edit Fields3"
+      }
+    ],
+    "connections": {
+      "Google_Sheet_Financiacion": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent1",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Google_Sheet_Ejemplo_Financiacion": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent1",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "OpenAI Chat Model": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "AI Agent1",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Window Buffer Memory": {
+        "ai_memory": [
+          [
+            {
+              "node": "AI Agent1",
+              "type": "ai_memory",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "get_modelos": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent1",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "close_conversation": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent1",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "get_precios": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent1",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "When chat message received": {
+        "main": [
+          [
+            {
+              "node": "AI Agent1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Regex": {
+        "main": [
+          [
+            {
+              "node": "Switch",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Switch": {
+        "main": [
+          [],
+          [
+            {
+              "node": "Edit Fields3",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "AI Agent",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "AI Agent1": {
+        "main": [
+          [
+            {
+              "node": "Regex",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "OpenAI Chat Model1": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Structured Output Parser": {
+        "ai_outputParser": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_outputParser",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "AI Agent": {
+        "main": [
+          [
+            {
+              "node": "If",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "If": {
+        "main": [
+          [
+            {
+              "node": "Edit Fields3",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Edit Fields2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "system migration",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-10-26T17:05:09.982Z",
+    "updatedAt": "2026-10-26T17:05:09.982Z"
+  },
+  "activeVersionId": "b51ab99d-e447-44ce-85d3-df5280157510",
+  "connections": {
+    "Google_Sheet_Financiacion": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google_Sheet_Ejemplo_Financiacion": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Window Buffer Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_modelos": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "close_conversation": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_precios": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Regex": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Edit Fields3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent1": {
+      "main": [
+        [
+          {
+            "node": "Regex",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Edit Fields2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-04-08T16:43:10.528Z",
+  "id": "WwrancDUhPcfqXBS",
+  "isArchived": false,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "name": "NISSAN-AI-DEALER ML",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "llama a esta función cuando el usuario quiera conocer la financiación que puede realizar, como y cuanto es el valor. Si el cliente solicita de un modelo específico, muéstrale solo de ese modelo. ",
+        "documentId": {
+          "__rl": true,
+          "value": "1658hOvMlK2qFbDxaVsMKpYNMGB0bmPdqdjdGymTwyZo",
+          "mode": "list",
+          "cachedResultName": "Nissan_IA",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1658hOvMlK2qFbDxaVsMKpYNMGB0bmPdqdjdGymTwyZo/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 406715035,
+          "mode": "list",
+          "cachedResultName": "Financiación",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1658hOvMlK2qFbDxaVsMKpYNMGB0bmPdqdjdGymTwyZo/edit#gid=406715035"
+        },
+        "options": {}
+      },
+      "id": "9e4a7cda-4e00-415b-b44d-5589af1217be",
+      "name": "Google_Sheet_Financiacion",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.5,
+      "position": [
+        304,
+        224
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "S3hB40930MFXLH4J",
+          "name": "Google Sheets Redoo"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "llama a esta función para obtener un ejemplo del cálculo de una financiación y hazle al usuario/cliente el cálculo en base a lo que el usuario ingrese. ",
+        "documentId": {
+          "__rl": true,
+          "value": "1658hOvMlK2qFbDxaVsMKpYNMGB0bmPdqdjdGymTwyZo",
+          "mode": "list",
+          "cachedResultName": "Nissan_IA",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1658hOvMlK2qFbDxaVsMKpYNMGB0bmPdqdjdGymTwyZo/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 989015564,
+          "mode": "list",
+          "cachedResultName": "Simulacion Fianciera",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1658hOvMlK2qFbDxaVsMKpYNMGB0bmPdqdjdGymTwyZo/edit#gid=989015564"
+        },
+        "options": {}
+      },
+      "id": "95f9c5ae-d972-4fc7-b0c0-ee7b79303347",
+      "name": "Google_Sheet_Ejemplo_Financiacion",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.5,
+      "position": [
+        432,
+        224
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "S3hB40930MFXLH4J",
+          "name": "Google Sheets Redoo"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "id": "3f536d44-2e94-46b5-b41c-d3ec9faafd22",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [
+        -160,
+        224
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "qalg6fQHdCzN0Xjt",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.idConversation || $json.sessionId}}",
+        "contextWindowLength": 20
+      },
+      "id": "031295fc-7a6c-474c-9094-eb9a8ce77b13",
+      "name": "Window Buffer Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.2,
+      "position": [
+        176,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.chatInput === \"adios\"\n  ? `adios. mensaje del sistema-> CERRA LA CONVERSACION y ejecuta la función close_conversation YA `\n  : $json.chatInput\n}}",
+        "options": {
+          "systemMessage": "=# 🎯 Rol del Asistente\n\nEres un asistente comercial de Nissan que califica leads y facilita su derivación al concesionario. Tu objetivo es confirmar datos, detectar necesidades clave y coordinar el contacto con el asesor oficial.\nKAIT ES UN VEHICULO DE NISSAN. NO DIGAS QUE NO ES.\n⚠️ **CRÍTICO**: Máximo 1500 caracteres por respuesta. Sé conciso y directo.\n\n---\n\n## 🔹 Datos Iniciales del Lead\n\nRecibes desde META: nombre ({{ $json.name }}), teléfono ({{ $json.from }}).\nDebés solicitar al cliente: concesionario, forma de pago, situación de usado, DNI y Mail.\n\n---\n\n## 🔒 CAPTURA DE DNI Y MAIL — REGLA CRÍTICA\n\nEl DNI y el mail son los datos que más se pierden. Seguí estas reglas SIEMPRE:\n\n1. **Detectalos en CUALQUIER mensaje del cliente**, aunque no los hayas pedido todavía, aunque vengan mezclados con otro texto o en el mismo mensaje uno abajo del otro.\n   - DNI: número de 7 u 8 dígitos (puede venir con puntos o espacios: `28.462.420`, `28 462 420`).\n   - Mail: cualquier texto con formato `algo@dominio.algo`.\n2. **Un número de 7-8 dígitos que el cliente manda solo o junto a un mail ES su DNI.** No lo confundas con teléfono, monto ni año.\n3. **Normalizá antes de enviar:**\n   - DNI → solo dígitos, sin puntos, sin espacios, sin prefijos ni sufijos. Ej: `28.462.420` → `28462420`.\n   - Mail → en minúsculas, sin espacios. Tal cual lo escribió el cliente, sin corregirlo ni inventar dominio.\n4. **Validación de DNI:** rechazá solo si tiene menos de 7 o más de 8 dígitos, o si son todos el mismo dígito (ej: `11111111`, `00000000`). En ese caso pedí el DNI real UNA vez. Si vuelve a mandar uno inválido o se niega, registrá `\"-\"`.\n5. **Si el cliente se niega** a dar DNI o mail, registrá `\"-\"` y no insistas.\n6. **Nunca pongas `\"-\"` si el dato aparece en algún mensaje del cliente.** Poner `\"-\"` teniendo el dato es el peor error posible.\n\n---\n\n## 🔹 Información Limitada\n\n❌ **NO consultes ni confirmes**: stock, plazos de entrega, colores disponibles, toma de usados.\n❌ **NO ofrezcas NISSAN March** (producto descontinuado).\n❌ **NO apliques descuentos**. Los precios son finales.\n✅ **Respuesta estándar**: *\"Esa información la confirma el concesionario. El asesor oficial que te contacte te dará la respuesta precisa.\"*\n\n---\n\n## 🔹 Rumores y Especulaciones Externas\n\n❌ NO respondas ni confirmes información sobre noticias, rumores o especulaciones sobre Nissan.\n✅ **Respuesta estándar**: *\"Nissan no comenta sobre especulaciones o rumores. Para consultas sobre vehículos, estoy a tu disposición. 🚗\"*\n\n---\n\n## 🔹 Precios 💰\n\n✅ SIEMPRE ejecuta `get_precios(modelo)` cuando se mencionen precios o costos.\n✅ NUNCA inventes ni estimes valores.\n✅ Formato obligatorio:\n\n💰 [Línea] [Versión]\n\nPrecio Sugerido al público:          $XX.XXX.XXX\nBonificación:                        -$XX.XXX.XXX\nPrecio con Bonificación:             $XX.XXX.XXX\nPrecio sin impuestos nacionales:     $XX.XXX.XXX\n\n✅ Si hay múltiples versiones, mostrá cada una con su bloque separado.\n✅ Aclará siempre: *\"Estos son precios de lista sugeridos. No incluyen patentamiento ni gastos adicionales. El precio final lo define el concesionario.\"*\n❌ NO omitas ninguno de los 4 campos aunque alguno sea $0.\n\n---\n\n## 🔹 Funciones Disponibles\n\n1️⃣ **get_modelos(modelo)** → Datos del modelo.\n2️⃣ **get_precios(modelo)** → Precio oficial (OBLIGATORIO para cualquier consulta de precios).\n3️⃣ **close_conversation(datos_venta)** → Cierra y envía datos recopilados.\n\n---\n\n## 🔹 Flujo de Conversación\n\n### 1️⃣ Saludo inicial OBLIGATORIO\n*\"¡Hola [nombre]! 👋 Te cuento que tenemos el [modelo] disponible. Enseguida te conecto con el concesionario Nissan más cercano.\"*\n\nSi no viene modelo desde el CTA (`{{ $json.modelo }}` o `{{ $json.interes }}`), preguntá qué modelo le interesa antes de continuar.\n\n---\n\n### 2️⃣ Validación de Concesionario 🏢\n\nTrabajás con el siguiente JSON de sucursales:\n```json\n{{ JSON.stringify($json.sucursales) }}\n```\n\n⚠️ **Importante sobre distancia**: nunca tenés datos de geolocalización del cliente ni coordenadas de las sucursales. NO existe forma de calcular \"la más cercana\" real. Cuando haya más de una opción posible, tu trabajo es **listar y dejar elegir al cliente**, nunca elegir vos ni afirmar cercanía sin base.\n\n**Caso A — Una sola sucursal en todo el JSON:**\nInformá directamente: *\"El concesionario Nissan más cercano a vos es [concesionario] – [sucursal], ubicado en [dirección].\"*\nRegistrá ese concesionario y avanzá al paso siguiente.\n\n**Caso B — múltiples sucursales con `provincia: \"AMBA\"` (o `tipo: \"amba\"` si viene ese campo):**\nEl prefijo ya confirma que es AMBA. No preguntes la zona general, pero sí preguntá de qué zona de AMBA es:\n*\"Para darte el concesionario más cercano, ¿sos de CABA, Zona Norte, Zona Oeste o Zona Sur del GBA?\"*\n\nSegún la respuesta, filtrá las sucursales donde `zona_amba` coincida con la zona indicada.\n\n- Si queda **una sola** sucursal en esa zona: informala directamente como en el Caso A.\n- Si quedan **varias**: NUNCA elijas una por tu cuenta ni digas \"el más cercano es X\" — no tenés forma de calcular distancia real. Listá TODAS las sucursales de esa zona, **agrupadas por concesionario**, y pedí que elija.\n\n✅ Formato obligatorio para listar varias sucursales (agrupado por concesionario, no una lista plana):\n\n*\"En [zona] tenés estas opciones:*\n\n*🔹 [Concesionario 1]*\n*- [Sucursal] – [Dirección]*\n*- [Sucursal] – [Dirección]*\n\n*🔹 [Concesionario 2]*\n*- [Sucursal] – [Dirección]*\n\n*¿Cuál te queda más cómoda?\"*\n\n❌ PROHIBIDO decir \"el concesionario más cercano a vos es X\" cuando hay más de una sucursal en la zona filtrada — eso es inventar distancia. Reservá esa frase únicamente para cuando queda una sola opción (Caso A o zona ya filtrada a una sola sucursal).\n\n**Caso C — múltiples sucursales, `provincia` NO es AMBA:**\nEl prefijo/localidad ya determina la zona general, así que no hace falta preguntar zona. Pero igual podés tener varias sucursales de distintos concesionarios en esa misma zona.\n\n- Si queda **una sola** sucursal en esa localidad/zona: informala directamente.\n- Si quedan **varias**: listalas TODAS **agrupadas por concesionario**, con el mismo formato del Caso B, y pedí que elija la que le quede más cómoda.\n\n❌ PROHIBIDO decir \"la más cercana es X\" cuando hay más de una — mismo motivo que en el Caso B: no hay datos de distancia real.\n\n✅ Registrá el concesionario elegido/ofrecido para incluirlo en `close_conversation`.\n\nEste paso es vital. Si vos le dijiste una sucursal al cliente y no te dijo nada, es porque esta de acuerdo con eso. Esa misma sucursal incluila al cerrar la conversación. Es muy importante este paso.\n\n---\n\n### 3️⃣ Método de Pago 💳\n\nPreguntá de forma natural cómo piensa pagar, sin listar las opciones como un menú.\nEjemplo: *\"¿Ya tenés pensado cómo lo vas a pagar? Tenemos opciones de Financiacion Propia, Financiacion Credi Nissan o Plan de Ahorro.\"*\nSegún lo que responda, inferí la opción correspondiente: Financiacion Propia / Financiacion Credi Nissan / Plan de Ahorro / sin definir.\n\nSi elige financiación o pago mixto → preguntá: *\"¿Ya sabés cuánto te gustaría financiar?\"*\n\n✅ Mostrá opciones Credinissan solo si el cliente pregunta o eligió financiación.\n✅ Cierre financiación: *\"Estas son las opciones vigentes de Credinissan como referencia. El asesor oficial puede simular tu plan exacto.\"*\n\n#### 💳 Opciones Credinissan Vigentes (Tasa 0%)\n\n**FRONTIER:** Tasa 0% - LTV $22.000.000 - 24 meses - Versiones: XE, X-GEAR, Platinum, PRO-4X (MY2025)\n**X-TRAIL:** Tasa 0% - LTV $20.000.000 - 12 meses - Versiones: e-Power, Exclusive, Advance\n**SENTRA y VERSA:** Tasa 0% - LTV $18.000.000 - 12 meses - Todas las versiones\n**NUEVO KICKS:** Tasa 0% - LTV $20.000.000 - 24 meses - Todas las versiones\n\n---\n\n### 4️⃣ Vehículo Usado 🚙\n*\"¿Tenés un auto usado que pensás entregar o ya vendiste?\"*\n- Si tiene: solicitá marca, modelo y año aproximado.\n- Si no tiene: registrá \"no tiene usado\".\n- Si ya vendió: registrá \"ya vendió usado\".\n\n---\n\n### 5️⃣ DNI y Mail\n*\"Para poder cargarte en el sistema del concesionario, ¿me pasás tu DNI y tu mail?\"*\n\n- Aplicá la sección **🔒 CAPTURA DE DNI Y MAIL**.\n- Si el cliente ya los dio antes en la conversación, NO los vuelvas a pedir.\n- Si el cliente da solo uno de los dos, pedí el que falta UNA vez. Si no lo da, `\"-\"` y cerrá.\n\n---\n\n## 🚨🚨🚨 CIERRE — LA ACCIÓN MÁS IMPORTANTE DE TODA LA CONVERSACIÓN 🚨🚨🚨\n\n### 👋 DESPEDIDA = CIERRE INMEDIATO (PRIORIDAD MÁXIMA)\n\nSi el mensaje del cliente contiene una despedida (\"adiós\", \"adios\", \"chau\", \"chao\", \"nos vemos\", \"hasta luego\", \"bye\", \"listo gracias, chau\" o similar), **cerrá en ESE MISMO turno**, sin importar en qué paso del flujo estés ni cuántos datos tengas:\n\n1. Hacé el CHEQUEO OBLIGATORIO de DNI y mail (incluido el mensaje de despedida).\n2. Ejecutá `close_conversation` con lo que tengas; lo que falte va en `\"-\"`.\n3. Respondé ÚNICAMENTE con el `【alert:\"close_conversation\"】` (ver ACCIÓN 2).\n\n⛔ PROHIBIDO ante una despedida: pedir datos faltantes, hacer otra pregunta, responder sin el alert o no ejecutar la tool.\n\n---\n\nCuando ocurra CUALQUIERA de estas condiciones:\n- El cliente se despide (ver regla de arriba)\n- Tenés ≥4 datos confirmados\n- El cliente se niega a dar un dato\n\n### ✅ CHEQUEO OBLIGATORIO ANTES DE LLAMAR A LA TOOL\n\nAntes de armar el JSON, releé **TODOS los mensajes del cliente desde el primero hasta el último, incluido el mensaje actual**, y respondete:\n\n1. ¿Algún mensaje tiene un número de 7-8 dígitos (con o sin puntos)? → ese es el `dni`.\n2. ¿Algún mensaje tiene un `@`? → ese es el `email`.\n3. ¿El mensaje que disparó el cierre trae DNI y/o mail? → **incluilos sí o sí**. El caso más común de error es cerrar en el mismo turno en que el cliente manda sus datos y olvidarlos.\n\nSolo si la respuesta es \"no aparece en ningún mensaje\" podés poner `\"-\"`.\n\n**DEBÉS HACER ESTAS DOS COSAS. SI NO LAS HACÉS, FALLASTE COMPLETAMENTE:**\n\n### ACCIÓN 1 — OBLIGATORIA Y PRIMERO:\nLlamá a la tool `close_conversation` con este JSON exacto (case-sensitive, `\"-\"` si falta el dato):\n\n```json\n{\n  \"nombre\": \"[nombre]\",\n  \"telefono\": \"[telefono]\",\n  \"dni\": \"[solo dígitos del DNI, ej: 28462420, o -]\",\n  \"email\": \"[email en minúsculas o -]\",\n  \"productoInteres\": \"[modelo]\", //SIEMPRE ES EL MODELO INGRESADO EN EL PRIMER MENSAJE\n  \"sucursal\": \"[concesionario – sucursal]\",\n  \"pago\": \"[pago]\",\n  \"financiacion\": \"[monto o -]\",\n  \"usado\": \"[usado]\",\n  \"resumen\": \"[VARIABLE RESUMEN]\"\n}\n```\n\n⚠️ El `dni` y el `email` del JSON deben ser **idénticos** a los que ponés dentro de `resumen`. Si en el resumen hay un DNI o mail, en los campos también.\n\n### ACCIÓN 2 — OBLIGATORIA Y DESPUÉS:\nTu respuesta al cliente debe ser ÚNICAMENTE esto, sin ningún texto antes ni después:\n\n`【alert:\"close_conversation\"】¡Gracias, [nombre]! Un asesor de [concesionario] te contacta pronto. 🚘✨`\n\nO si se despidió sin datos completos o sin concesionario confirmado:\n\n`【alert:\"close_conversation\"】¡Gracias por tu tiempo, [nombre]! Un asesor Nissan te contacta pronto. 🚘`\n\n⛔ PROHIBIDO: escribir cualquier cosa antes del `【alert:\"close_conversation\"】`\n⛔ PROHIBIDO: decir \"voy a proceder\", \"he registrado\", \"voy a cerrar\" o similar\n⛔ PROHIBIDO: omitir la llamada a `close_conversation`\n⛔ PROHIBIDO: ejecutar `close_conversation` más de una vez\n⛔ PROHIBIDO: poner `\"-\"` en `dni` o `email` si el cliente los escribió en algún mensaje\n\n---\n\n## 🔹 VARIABLE RESUMEN\n\nMantené actualizada esta variable interna durante toda la conversación.\n\n**Formato:**\n```\nEl usuario [NOMBRE] (grado de interés: [Hot/Warm/Cold]), dni: [DNI solo dígitos], mail: [MAIL], concesionario: [CONCESIONARIO], comentarios: [COMENTARIOS]\n```\n\n---\n\n## 🔹 CALIFICACIÓN DE LEADS\n\n- **Cold** ❄️ → 1-2 respuestas relevantes\n- **Warm** 🟡 → 3-4 respuestas relevantes\n- **Hot** 🔥 → 5-6 respuestas relevantes\n\n**goodLead**: `\"true\"` si ≥4 datos confirmados, `\"false\"` si 3 o menos.\n\n---\n\n## 🔹 Reglas Clave\n\n✅ Respuestas cortas, naturales y directas.\n✅ SIEMPRE ejecutá `get_precios(modelo)` cuando se hable de precios. NUNCA inventes valores.\n✅ Mantené actualizada la VARIABLE RESUMEN durante toda la conversación.\n✅ Solo modelos disponibles en \"Tabla Nissan\". Si preguntan por otro: *\"Lo siento, solo puedo responder sobre modelos Nissan disponibles.\"*\n✅ No digas que estás \"buscando\" o \"procesando\". Respondé directamente.\n✅ Ficha técnica siempre OBLIGATORIAMENTE con formato: **【ficha:URL】** SINO EL CLIENTE NO LA PUEDE VER\n✅ NO menciones imágenes ni devuelvas imagen:url.\n✅ Si el cliente da su mail o DNI en cualquier momento, registralo de inmediato y no lo pierdas.\n✅ Si el cliente se niega a dar un dato, poné `\"-\"` y cerrá. Nunca te bloquees esperando un dato.\n✅ Nunca afirmes \"el concesionario más cercano\" cuando hay más de una sucursal posible en la zona filtrada — listá agrupado por concesionario y dejá elegir al cliente.\n🚨 Si el cliente se despide (\"adiós\", \"chau\", etc.) → chequeo DNI/mail + `close_conversation` + SOLO el `【alert:\"close_conversation\"】`. Sin excepciones, aunque falten datos.\n🚨 AL CERRAR: primero hacé el chequeo de DNI y mail, después ejecutá `close_conversation`, después escribí SOLO el `【alert:\"close_conversation\"】`. Nada más. Nunca texto previo.\n\n## Sucursales:\nAUTOFERRO CABA Libertador|Buenos Aires/Argentina\nAUTOFERRO Martínez|Buenos Aires/Argentina\nAUTOFERRO CABA Cabildo|Buenos Aires/Argentina\nAUTOGEN CABA Álvarez Thomas|Buenos Aires/Argentina\nAUTOGEN CABA Libertador|Buenos Aires/Argentina\nAUTOGEN CABA Monserrat|Buenos Aires/Argentina\nAUTOGEN CABA Av. La Plata|Buenos Aires/Argentina\nNISSAN CAPITAL CABA Rivadavia 6075|Buenos Aires/Argentina\nNISSAN CAPITAL Ciudadela|Buenos Aires/Argentina\nNISSAN CAPITAL CABA Leopardi|Buenos Aires/Argentina\nNISSCAR Campana|Buenos Aires/Argentina\nNISSCAR Pilar|Buenos Aires/Argentina\nSENDAI Lanús Ventas|Buenos Aires/Argentina\nAUTOSSAN Bahía Blanca Ventas|Buenos Aires/Argentina\nCITYSSAN Mar del Plata Ventas|Buenos Aires/Argentina\nCITYSSAN Olavarría|Buenos Aires/Argentina\nNISSCAR Mercedes|Buenos Aires/Argentina\nNOALE Pergamino Ventas|Buenos Aires/Argentina\nNOALE Junín|Buenos Aires/Argentina\nNOALE Trenque Lauquen|Buenos Aires/Argentina\nNOALE San Nicolás Ventas|Buenos Aires/Argentina\nSENDAI Lobos|Buenos Aires/Argentina\nKYOTO Roque Saenz Peña|Chaco/Argentina\nKYOTO Resistencia|Chaco/Argentina\nSURISAN Trelew Ventas|Chubut/Argentina\nSURISAN Comodoro Rivadavia|Chubut/Argentina\nSURISAN Puerto Madryn|Chubut/Argentina\nEGEO Córdoba Monseñor Cabrera|Córdoba/Argentina\nEGEO Villa María|Córdoba/Argentina\nEGEO San Francisco Ventas|Córdoba/Argentina\nKYOTO Corrientes Ventas|Corrientes/Argentina\nFOLMER Crespo Ventas|Entre Ríos/Argentina\nFOLMER Concordia|Entre Ríos/Argentina\nFOLMER Paraná|Entre Ríos/Argentina\nAUTOSSAN Santa Rosa|La Pampa/Argentina\nAUTOSSAN General Pico|La Pampa/Argentina\nYACOPINI Godoy Cruz|Mendoza/Argentina\nYACOPINI San Rafael|Mendoza/Argentina\nKYOTO Posadas Ventas|Misiones/Argentina\nAIKA Neuquén Ventas|Neuquén/Argentina\nYACOPINI San Juan|San Juan/Argentina\nAUCAM Santa Fe Ventas|Santa Fe/Argentina\nAUCAM Rafaela|Santa Fe/Argentina\nNEOSTAR Rosario|Santa Fe/Argentina\nSENTA Rosario Ventas|Santa Fe/Argentina\nSENTA Venado Tuerto Ventas|Santa Fe/Argentina\nTDF MOTORS Ushuaia Ventas|Tierra del Fuego/Argentina\nTDF MOTORS Río Grande|Tierra del Fuego/Argentina\nAG NOA Yerba Buena|Tucumán/Argentina",
+          "returnIntermediateSteps": true
+        }
+      },
+      "id": "d86ec2c7-178b-4e85-82a0-dd33aae3207d",
+      "name": "AI Agent1",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        432,
+        -16
+      ]
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "llama a esta función cuando el usuario quiera conocer los modelos de vehículos que vende el asistente. ",
+        "documentId": {
+          "__rl": true,
+          "value": "1658hOvMlK2qFbDxaVsMKpYNMGB0bmPdqdjdGymTwyZo",
+          "mode": "list",
+          "cachedResultName": "Nissan_IA",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1658hOvMlK2qFbDxaVsMKpYNMGB0bmPdqdjdGymTwyZo/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Modelos",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1658hOvMlK2qFbDxaVsMKpYNMGB0bmPdqdjdGymTwyZo/edit#gid=0"
+        },
+        "options": {}
+      },
+      "id": "2a01c26a-dcc5-44a7-80c5-2d6f35e51282",
+      "name": "get_modelos",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.5,
+      "position": [
+        560,
+        224
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "S3hB40930MFXLH4J",
+          "name": "Google Sheets Redoo"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "nW048ZVYNLrPomTR",
+          "mode": "list",
+          "cachedResultName": "close_conversation NISSAN ML"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "goodLead": "={{ $fromAI('goodLead', ``, 'string', 'false') }}",
+            "idConversation": "={{ $json.idConversation }}",
+            "number": "={{ $json.from }}",
+            "name": "={{ $json.name }}",
+            "pago": "={{ $fromAI('pago', ``, 'string', 'No especifica') }}",
+            "usado": "={{ $fromAI('usado', ``, 'string', 'No tiene') }}",
+            "interes": "={{ $fromAI('interes', `por defecto \"cold\" es frio, \"warm\" tibio y \"hot\" Caliente. Tiene que ver con que tan interesado esta el cliente con la compra`, 'string', 'cold') }}",
+            "productoInteres": "={{ $fromAI('productoInteres', ``, 'string') }}",
+            "resumen": "={{$fromAI('Resumen')}}",
+            "dni": "={{ $fromAI('dni', ``, 'string', '-') }}",
+            "email": "={{ $fromAI('email', ``, 'string', '-') }}",
+            "sucursal": "={{ $fromAI('sucursal', ``, 'string', 'No especifica') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "goodLead",
+              "displayName": "goodLead",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "idConversation",
+              "displayName": "idConversation",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "number",
+              "displayName": "number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "pago",
+              "displayName": "pago",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "usado",
+              "displayName": "usado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "interes",
+              "displayName": "interes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "productoInteres",
+              "displayName": "productoInteres",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "resumen",
+              "displayName": "resumen",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "dni",
+              "displayName": "dni",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "apellido",
+              "displayName": "apellido",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "sucursal",
+              "displayName": "sucursal",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        800,
+        224
+      ],
+      "id": "e4dc3afc-1c28-47cf-8a43-16a7fed8b76d",
+      "name": "close_conversation"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1658hOvMlK2qFbDxaVsMKpYNMGB0bmPdqdjdGymTwyZo",
+          "mode": "list",
+          "cachedResultName": "Nissan_IA",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1658hOvMlK2qFbDxaVsMKpYNMGB0bmPdqdjdGymTwyZo/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 770741149,
+          "mode": "list",
+          "cachedResultName": "Precios",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1658hOvMlK2qFbDxaVsMKpYNMGB0bmPdqdjdGymTwyZo/edit#gid=770741149"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        672,
+        224
+      ],
+      "id": "d9b7f170-669a-4d26-a7ec-c2d420545ab9",
+      "name": "get_precios",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "S3hB40930MFXLH4J",
+          "name": "Google Sheets Redoo"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "public": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -80,
+        0
+      ],
+      "id": "337eb812-3a6d-4e78-ab38-9f97891865ee",
+      "name": "When chat message received",
+      "webhookId": "0ecafc8f-618b-4547-a9f6-a4340b0d7fe5"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// SAFETY NET - Verificación de close_conversation\n// ============================================================\nconst agentOutput = $input.first().json;\nconst outputText = agentOutput.output || '';\nconst steps = agentOutput.intermediateSteps || [];\n\n// ============================================================\n// CAPA 1: Regex de palabras clave de despedida\n// ============================================================\nconst FAREWELL_KEYWORDS = /asesor|contactar[áa]|nos comunicamos|te vamos a contactar|un representante|en breve|a la brevedad|hasta luego|hasta pronto|fue un placer|cualquier consulta|no dudes en|chau|bye|suerte|\\u3010alert:close_conversation\\u3011/i;\nconst hasFarewellKeyword = FAREWELL_KEYWORDS.test(outputText);\n\nif (!hasFarewellKeyword) {\n  return [{\n    json: {\n      action: 'passthrough',\n      output: outputText,\n      intermediateSteps: steps\n    }\n  }];\n}\n\n// ============================================================\n// CAPA 2: ¿Se ejecutó close_conversation?\n// ============================================================\nconst closeStep = steps.find(s =>\n  s.action?.tool?.toLowerCase().startsWith('close_conversation')\n);\nconst closeCalled = !!closeStep;\n\nconst hasAlertTag = outputText.includes('【alert:close_conversation】');\nif (hasAlertTag && !closeCalled) {\n  return [{\n    json: {\n      action: 'force_recovery',\n      reason: 'alert_tag_sin_tool',\n      output: outputText,\n      intermediateSteps: steps\n    }\n  }];\n}\n\nif (closeCalled) {\n  return [{\n    json: {\n      action: 'passthrough',\n      output: outputText,\n      intermediateSteps: steps\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    action: 'needs_llm_verification',\n    output: outputText,\n    intermediateSteps: steps\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        784,
+        -16
+      ],
+      "id": "c2ce51d3-09f0-4a1a-b89a-acff66e86124",
+      "name": "Regex"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "passthrough",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "482db280-e941-4be8-bae3-cd8ce12b228f"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "1b332802-5938-4dcb-a5e7-ac0326eb1dda",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "force_recovery",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "37328225-cab1-4e4e-b4ff-8d57f1d823b6",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "needs_llm_verification",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        944,
+        -16
+      ],
+      "id": "9b600561-d36c-47c4-8cdf-b17db67928d9",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Mensaje:\n\"{{$json.output}}\"",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "Analizá el siguiente mensaje de un chatbot de ventas automotrices.\nDeterminá si hay una intención clara de despedida o cierre de conversación.\n\nRespondé ÚNICAMENTE con un JSON:\n{\"farewell\": true} o {\"farewell\": false}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        1168,
+        64
+      ],
+      "id": "a3641e5f-540b-46a0-b920-b84d1184e24d",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "id": "3a772905-ab43-49c8-91ec-309dfe7c1c57",
+      "name": "OpenAI Chat Model1",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        240
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "qalg6fQHdCzN0Xjt",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"farewell\": true\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        1312,
+        256
+      ],
+      "id": "a37d96c1-152d-4445-8462-22cd23962dff",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "45402932-608f-4d75-8c3a-f03924efa271",
+              "leftValue": "={{ $('AI Agent').first().json.output.farewell }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1536,
+        64
+      ],
+      "id": "cdd48f4e-2a38-4a2b-8541-31ba2f15fd42",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ba6f6dd7-f737-4a14-b110-6b74b25690b6",
+              "name": "output",
+              "value": "={{ $('AI Agent1').first().json.output }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2160,
+        112
+      ],
+      "id": "46b78fbd-a046-407e-940b-754d4a3f9096",
+      "name": "Edit Fields2"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ba6f6dd7-f737-4a14-b110-6b74b25690b6",
+              "name": "chatInput",
+              "value": "[SISTEMA - NO MOSTRAR AL USUARIO] En tu respuesta anterior te despediste pero NO ejecutaste la tool  close_conversation. Debés despedirte nuevamente del usuario y ejecutar  close_conversation correctamente antes de responder.",
+              "type": "string"
+            },
+            {
+              "id": "ad97e357-e83f-406a-a1f0-1f3586d79b9c",
+              "name": "sessionId",
+              "value": "={{ $('When chat message received').first().json.idConversation || $('When chat message received').first().json.sessionId }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1968,
+        -224
+      ],
+      "id": "8671faa8-d84a-45c6-be93-68905f887175",
+      "name": "Edit Fields3"
+    }
+  ],
+  "pinData": {
+    "When chat message received": [
+      {
+        "json": {
+          "chatInput": "adios",
+          "from": "+5491135617446",
+          "name": "Luis Alberto Tenas",
+          "idConversation": "1308577",
+          "noResponse": true
+        }
+      }
+    ]
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "WwrancDUhPcfqXBS",
+      "projectId": "K8p6XEqA0L6D2uVt",
+      "createdAt": "2026-04-08T16:43:10.533Z",
+      "updatedAt": "2026-04-08T16:43:10.533Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [
+    {
+      "id": "o06GHXtTLtAfQDke",
+      "name": "HUB",
+      "createdAt": "2026-02-03T14:47:40.022Z",
+      "updatedAt": "2026-02-03T14:47:40.022Z"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-10-26T17:06:13.535Z",
+  "versionId": "b51ab99d-e447-44ce-85d3-df5280157510"
+}
