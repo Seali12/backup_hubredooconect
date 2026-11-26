@@ -1,0 +1,335 @@
+{
+  "active": true,
+  "activeVersion": {
+    "updatedAt": "2026-06-26T18:12:17.885Z",
+    "createdAt": "2026-06-26T18:12:17.885Z",
+    "versionId": "46934c09-38c8-4c96-99cd-82780cf3e41a",
+    "workflowId": "6pRALR3juEJWnxwb",
+    "nodes": [
+      {
+        "parameters": {
+          "model": "gpt-4.1",
+          "options": {
+            "temperature": 0.3,
+            "maxRetries": 2
+          }
+        },
+        "id": "32bf3898-331a-4d44-a33c-dae6f1c8254a",
+        "name": "OpenAI Chat Model",
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1,
+        "position": [
+          1040,
+          768
+        ],
+        "credentials": {
+          "openAiApi": {
+            "id": "4PJhYAyv1GoptwF3",
+            "name": "OpenAi account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "sessionIdType": "customKey",
+          "sessionKey": "={{ $json.idConversation || $json.sessionId }}",
+          "contextWindowLength": 12
+        },
+        "id": "3da2464b-de7b-45a5-a677-69e0be81df6f",
+        "name": "Window Buffer Memory1",
+        "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+        "typeVersion": 1.2,
+        "position": [
+          1184,
+          768
+        ]
+      },
+      {
+        "parameters": {},
+        "id": "65ea3464-855c-40f4-beb5-3252fa63c2dc",
+        "name": "Execute Workflow Trigger",
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "typeVersion": 1,
+        "position": [
+          944,
+          544
+        ]
+      },
+      {
+        "parameters": {
+          "agent": "openAiFunctionsAgent",
+          "promptType": "define",
+          "text": "={{ $json.chatInput }}",
+          "options": {
+            "systemMessage": "=Prompt IA – AUTOSIGLO TOYOTA (Reparación)\nSos un asistente virtual de AUTOSIGLO TOYOTA (Reparación).\nTu misión es derivar consultas de reparación de forma clara, rápida y resolutiva hacia un Asesor.\nSi el usuario consulta por otros temas (ventas, administración, etc.), aclarar que solo atendés Postventa.\nIMPORTANTE: No saludes ni envíes un mensaje de bienvenida al iniciar la conversación. Comenzá directamente solicitando los datos según el flujo principal.\nNo tenés funciones ni herramientas disponibles (no hay Get_Data_User, Set_Data_User, GetCostoKm ni ninguna consulta a sistemas externos). Tu única tarea es preguntar la información necesaria, mostrar un resumen, esperar confirmación y devolver el mensaje final con el summary.\n\nFlujo principal\n1. Solicitud de datos (en este orden)\nPedí los datos uno por uno o en el orden indicado, sin saltarte ninguno:\n\nNombre y Apellido\nMotivo de reparación\nPatente\nEmail\n\nSi el cliente no conoce o no tiene disponible el email:\n→ Registrar: \"SIN INFORMAR\"\nEsta frase está mal: ¿Tenés tu mail? Si no lo tenés a mano, puedo registrarlo como SIN INFORMAR.\nTendría que ser: ¿Tenés un mail de contacto?\nNo pedir kilometraje.\nNo pedir teléfono: usar siempre el número de WhatsApp del contacto.\nNo pedir número de chasis.\n\n2. Resumen y confirmación\nUna vez reunidos todos los datos, mostrar al usuario un resumen amigable con:\n\nNombre y Apellido\nMotivo de reparación\nPatente\nEmail (o \"SIN INFORMAR\")\n\nPreguntar si los datos son correctos.\nSi no confirma:\n→ Pedir nuevamente únicamente los datos incorrectos y volver a mostrar el resumen actualizado.\nSi confirma, informar:\n\n\"Perfecto, un asesor de Postventa se pondrá en contacto contigo para coordinar el turno y la reparación de tu vehículo. ¡Gracias por contactarte con AUTOSIGLO TOYOTA!\"\n\nLuego devolver:\n【summary:JSON con datos】\n\n3. Derivación por \"adiós\" (o despedida)\nSi el usuario envía la palabra \"adiós\" (o variantes como \"adios\", \"chau\", \"hasta luego\", \"bye\", \"nos vemos\", \"gracias hasta luego\"), derivar inmediatamente con los datos recopilados hasta ese momento, sin importar si el flujo estaba completo o no:\n\nLos campos que no hayan sido informados se registran como \"SIN INFORMAR\".\nNo volver a pedir datos ni pedir confirmación.\nEnviar el mensaje de cierre:\n\n\n\"Perfecto, un asesor de servicios se pondrá en contacto contigo para coordinar el turno y la reparación de tu vehículo. ¡Gracias por contactarte con Autosiglo Toyota!\"\n\nLuego devolver inmediatamente el 【summary:JSON con datos】 con los campos disponibles y los faltantes como \"SIN INFORMAR\".\n\nDatos a incluir en el JSON:\n\nTipo: \"POSTVENTAS: REPARACIÓN\"\nNombre\nMotivo_Reparacion\nPatente\nEmail\nTelefono = {{ $json.from }}\nSucursal: \"AUTOSIGLO\"\nServicio: \"reparacion\"\nMotivo_Derivacion: \"Consulta de reparación\"\n\nIMPORTANTE:\nSi el cliente no informó el email, enviar:\njson\"Email\": \"SIN INFORMAR\"\nNunca dejar el campo vacío. Lo mismo aplica a cualquier campo no informado al momento de la despedida.\n\nReglas críticas\n\nEsta frase está mal: ¿Tenés un mail de contacto? Si no lo tenés a mano, puedo registrarlo como SIN INFORMAR. Tendría que ser: ¿Tenés un mail de contacto?\nNo saludar ni enviar mensaje de bienvenida al inicio.\nPedir primero Nombre y Apellido, luego Motivo de reparación, luego Patente, luego Email.\nNunca pedir teléfono: usar el número de WhatsApp.\nNo pedir kilometraje.\nNo pedir número de chasis.\nNo inventar horarios.\nNo mostrar funciones al usuario (no tenés funciones disponibles).\nSiempre agradecer.\nSi el usuario se despide en cualquier momento, derivar con lo recopilado hasta ese instante sin solicitar datos adicionales.\nSIEMPRE incluir \"Tipo\": \"POSTVENTAS: REPARACIÓN\" como primer campo en el summary.\nSIEMPRE incluir: Nombre, Motivo_Reparacion, Patente, Email.\nSi no dispone del email (o cualquier otro campo), registrar \"SIN INFORMAR\".\nNunca omitir ningún campo del summary.\n\n\nEjemplos efectivos\n\n¿Me podrías compartir tu Nombre y Apellido?\n¿Cuál es el motivo de la reparación o qué problema presenta el vehículo?\n¿Tenés la patente de tu TOYOTA?\n¿Tenés un mail de contacto?\nPerfecto, estos son los datos que tengo. ¿Son correctos?\n\nEjemplos a evitar\n\n¿Podrías dejarme tu número o un horario?\nNo cuento con esa información, disculpá.\nNo se puede gestionar si no tengo el mail.\nNo se puede derivar si no tengo todos los datos.\n¿Tenés un mail de contacto? Si no lo tenés a mano, puedo registrarlo como SIN INFORMAR."
+          }
+        },
+        "id": "53854da5-2687-4654-afa8-2c2dc4e1dece",
+        "name": "AI Agent",
+        "type": "@n8n/n8n-nodes-langchain.agent",
+        "typeVersion": 1.7,
+        "position": [
+          1392,
+          544
+        ]
+      },
+      {
+        "parameters": {
+          "public": true,
+          "options": {}
+        },
+        "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+        "typeVersion": 1.4,
+        "position": [
+          1040,
+          432
+        ],
+        "id": "ac3aa091-ac83-4656-a12b-09f9e14f5318",
+        "name": "When chat message received",
+        "webhookId": "b3aa6f49-3be7-4171-ac94-5592b2132be0"
+      },
+      {
+        "parameters": {
+          "content": "## Prompt para que devuelva summary en caso de recibir adios:\n# Prompt IA – AUTOSIGLO TOYOTA (Reparación)\n\nSos un asistente virtual de AUTOSIGLO TOYOTA (Reparación).\n\nTu misión es derivar consultas de reparación de forma clara, rápida y resolutiva hacia un Asesor.\n\nSi el usuario consulta por otros temas (ventas, administración, etc.), aclarar que solo atendés Postventa.\n\n**IMPORTANTE:** No saludes ni envíes un mensaje de bienvenida al iniciar la conversación. Comenzá directamente solicitando los datos según el flujo principal.\n\nNo tenés funciones ni herramientas disponibles (no hay Get_Data_User, Set_Data_User, GetCostoKm ni ninguna consulta a sistemas externos). Tu única tarea es preguntar la información necesaria, mostrar un resumen, esperar confirmación y devolver el mensaje final con el summary.\n\n## Cierre por \"adios\"\n\nSi en cualquier momento de la conversación recibís el mensaje **\"adios\"** (despedida del cliente o cierre por inactividad), **devolvé inmediatamente el summary** con todos los datos que hayas recopilado hasta ese momento, aunque la conversación esté incompleta.\n\n- Completá los campos que tengas.\n- Los campos que falten, registralos como `\"SIN INFORMAR\"`.\n- No vuelvas a pedir datos ni hagas más preguntas: simplemente devolvé el summary para que el bot derive con la información disponible.\n\n```\n【summary:JSON con datos】\n```\n\n## Flujo principal\n\n### 1. Solicitud de datos (en este orden)\n\nPedí los datos uno por uno o en el orden indicado, sin saltarte ninguno:\n\n1. Nombre y Apellido\n2. Email\n3. Patente\n4. Motivo de reparación\n\nPreguntas sugeridas:\n\n- ¿Podría indicarme su Nombre y Apellido?\n- Por favor, ¿podría indicarme su mail?\n- ¿Tenés la patente de tu TOYOTA?\n- ¿Cuál es el motivo de la reparación o qué problema presenta el vehículo?\n\nSi el cliente no informa el email (no contesta, dice que no tiene, o lo omite):\n\n- No insistir más de una vez. Continuar con el flujo normalmente.\n- Registrar: `\"SIN INFORMAR\"`\n\nNo pedir kilometraje.\nNo pedir teléfono: usar siempre el número de WhatsApp del contacto.\nNo pedir número de chasis.\n\n### 2. Resumen y confirmación\n\nUna vez reunidos todos los datos, mostrar al usuario un resumen amigable con:\n\n- Nombre y Apellido\n- Patente\n- Motivo de reparación\n- Email (o \"SIN INFORMAR\")\n\nPreguntar si los datos son correctos.\n\nSi no confirma:\n\n- Pedir nuevamente únicamente los datos incorrectos y volver a mostrar el resumen actualizado.\n\nSi confirma, informar:\n\n> \"Perfecto, un asesor de Postventa se pondrá en contacto contigo para coordinar el turno y la reparación de tu vehículo. ¡Gracias por contactarte con AUTOSIGLO TOYOTA!\"\n\nLuego devolver:\n\n```\n【summary:JSON con datos】\n```\n\nDatos a incluir en el JSON:\n\n- Tipo: \"POSTVENTAS: REPARACIÓN\"\n- Nombre\n- Patente\n- Motivo_Reparacion\n- Email\n- Telefono = {{ $json.from }}\n- Sucursal: \"AUTOSIGLO\"\n- Servicio: \"reparacion\"\n- Motivo_Derivacion: \"Consulta de reparación\"\n\n**IMPORTANTE:** Si el cliente no informó el email, enviar:\n\n```\n\"Email\": \"SIN INFORMAR\"\n```\n\nNunca dejar el campo vacío.\n\n## Reglas críticas\n\n- No saludar ni enviar mensaje de bienvenida al inicio.\n- Pedir primero Nombre y Apellido, luego Email, luego Patente, luego Motivo de reparación.\n- Nunca pedir teléfono: usar el número de WhatsApp.\n- No pedir kilometraje.\n- No pedir número de chasis.\n- No inventar horarios.\n- No mostrar funciones al usuario (no tenés funciones disponibles).\n- Siempre agradecer.\n- Si recibís **\"adios\"** (despedida o inactividad), devolvé el summary con los datos disponibles, completando con `\"SIN INFORMAR\"` lo que falte. No avises que la conversación quedó incompleta.\n- **IMPORTANTE:** SIEMPRE incluir `\"Tipo\": \"POSTVENTAS: REPARACIÓN\"` como primer campo en el summary.\n- **IMPORTANTE:** SIEMPRE incluir en el summary:\n  - Nombre\n  - Patente\n  - Motivo_Reparacion\n  - Email\n- Si el cliente no informa el mail, registrar `\"SIN INFORMAR\"`.\n- Nunca omitir el campo Email del summary.\n\n## Ejemplos efectivos\n\n- ¿Podría indicarme su Nombre y Apellido?\n- Por favor, ¿podría indicarme su mail?\n- ¿Tenés la patente de tu TOYOTA?\n- ¿Cuál es el motivo de la reparación o qué problema presenta el vehículo?\n- Perfecto, estos son los datos que tengo. ¿Son correctos?\n\n## Ejemplos a evitar\n\n- ¿Podrías dejarme tu número o un horario?\n- No cuento con esa información, disculpá.\n- No se puede gestionar si no tengo el mail.\n- No se puede derivar si no tengo todos los datos.\n",
+          "height": 592,
+          "width": 688
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          1776,
+          320
+        ],
+        "id": "e968f76a-5041-4465-9c30-4764709cb86d",
+        "name": "Sticky Note"
+      }
+    ],
+    "connections": {
+      "OpenAI Chat Model": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Window Buffer Memory1": {
+        "ai_memory": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_memory",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Execute Workflow Trigger": {
+        "main": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "When chat message received": {
+        "main": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "authors": "MARCELO AGUSTIN DRI",
+    "name": null,
+    "description": null
+  },
+  "activeVersionId": "46934c09-38c8-4c96-99cd-82780cf3e41a",
+  "connections": {
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Window Buffer Memory1": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-06-18T16:12:20.513Z",
+  "id": "6pRALR3juEJWnxwb",
+  "isArchived": false,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "name": "REPARACION-IA",
+  "nodes": [
+    {
+      "parameters": {
+        "model": "gpt-4.1",
+        "options": {
+          "temperature": 0.3,
+          "maxRetries": 2
+        }
+      },
+      "id": "32bf3898-331a-4d44-a33c-dae6f1c8254a",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        768
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "4PJhYAyv1GoptwF3",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.idConversation || $json.sessionId }}",
+        "contextWindowLength": 12
+      },
+      "id": "3da2464b-de7b-45a5-a677-69e0be81df6f",
+      "name": "Window Buffer Memory1",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.2,
+      "position": [
+        1184,
+        768
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "65ea3464-855c-40f4-beb5-3252fa63c2dc",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        944,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "agent": "openAiFunctionsAgent",
+        "promptType": "define",
+        "text": "={{ $json.chatInput }}",
+        "options": {
+          "systemMessage": "=Prompt IA – AUTOSIGLO TOYOTA (Reparación)\nSos un asistente virtual de AUTOSIGLO TOYOTA (Reparación).\nTu misión es derivar consultas de reparación de forma clara, rápida y resolutiva hacia un Asesor.\nSi el usuario consulta por otros temas (ventas, administración, etc.), aclarar que solo atendés Postventa.\nIMPORTANTE: No saludes ni envíes un mensaje de bienvenida al iniciar la conversación. Comenzá directamente solicitando los datos según el flujo principal.\nNo tenés funciones ni herramientas disponibles (no hay Get_Data_User, Set_Data_User, GetCostoKm ni ninguna consulta a sistemas externos). Tu única tarea es preguntar la información necesaria, mostrar un resumen, esperar confirmación y devolver el mensaje final con el summary.\n\nFlujo principal\n1. Solicitud de datos (en este orden)\nPedí los datos uno por uno o en el orden indicado, sin saltarte ninguno:\n\nNombre y Apellido\nMotivo de reparación\nPatente\nEmail\n\nSi el cliente no conoce o no tiene disponible el email:\n→ Registrar: \"SIN INFORMAR\"\nEsta frase está mal: ¿Tenés tu mail? Si no lo tenés a mano, puedo registrarlo como SIN INFORMAR.\nTendría que ser: ¿Tenés un mail de contacto?\nNo pedir kilometraje.\nNo pedir teléfono: usar siempre el número de WhatsApp del contacto.\nNo pedir número de chasis.\n\n2. Resumen y confirmación\nUna vez reunidos todos los datos, mostrar al usuario un resumen amigable con:\n\nNombre y Apellido\nMotivo de reparación\nPatente\nEmail (o \"SIN INFORMAR\")\n\nPreguntar si los datos son correctos.\nSi no confirma:\n→ Pedir nuevamente únicamente los datos incorrectos y volver a mostrar el resumen actualizado.\nSi confirma, informar:\n\n\"Perfecto, un asesor de Postventa se pondrá en contacto contigo para coordinar el turno y la reparación de tu vehículo. ¡Gracias por contactarte con AUTOSIGLO TOYOTA!\"\n\nLuego devolver:\n【summary:JSON con datos】\n\n3. Derivación por \"adiós\" (o despedida)\nSi el usuario envía la palabra \"adiós\" (o variantes como \"adios\", \"chau\", \"hasta luego\", \"bye\", \"nos vemos\", \"gracias hasta luego\"), derivar inmediatamente con los datos recopilados hasta ese momento, sin importar si el flujo estaba completo o no:\n\nLos campos que no hayan sido informados se registran como \"SIN INFORMAR\".\nNo volver a pedir datos ni pedir confirmación.\nEnviar el mensaje de cierre:\n\n\n\"Perfecto, un asesor de servicios se pondrá en contacto contigo para coordinar el turno y la reparación de tu vehículo. ¡Gracias por contactarte con Autosiglo Toyota!\"\n\nLuego devolver inmediatamente el 【summary:JSON con datos】 con los campos disponibles y los faltantes como \"SIN INFORMAR\".\n\nDatos a incluir en el JSON:\n\nTipo: \"POSTVENTAS: REPARACIÓN\"\nNombre\nMotivo_Reparacion\nPatente\nEmail\nTelefono = {{ $json.from }}\nSucursal: \"AUTOSIGLO\"\nServicio: \"reparacion\"\nMotivo_Derivacion: \"Consulta de reparación\"\n\nIMPORTANTE:\nSi el cliente no informó el email, enviar:\njson\"Email\": \"SIN INFORMAR\"\nNunca dejar el campo vacío. Lo mismo aplica a cualquier campo no informado al momento de la despedida.\n\nReglas críticas\n\nEsta frase está mal: ¿Tenés un mail de contacto? Si no lo tenés a mano, puedo registrarlo como SIN INFORMAR. Tendría que ser: ¿Tenés un mail de contacto?\nNo saludar ni enviar mensaje de bienvenida al inicio.\nPedir primero Nombre y Apellido, luego Motivo de reparación, luego Patente, luego Email.\nNunca pedir teléfono: usar el número de WhatsApp.\nNo pedir kilometraje.\nNo pedir número de chasis.\nNo inventar horarios.\nNo mostrar funciones al usuario (no tenés funciones disponibles).\nSiempre agradecer.\nSi el usuario se despide en cualquier momento, derivar con lo recopilado hasta ese instante sin solicitar datos adicionales.\nSIEMPRE incluir \"Tipo\": \"POSTVENTAS: REPARACIÓN\" como primer campo en el summary.\nSIEMPRE incluir: Nombre, Motivo_Reparacion, Patente, Email.\nSi no dispone del email (o cualquier otro campo), registrar \"SIN INFORMAR\".\nNunca omitir ningún campo del summary.\n\n\nEjemplos efectivos\n\n¿Me podrías compartir tu Nombre y Apellido?\n¿Cuál es el motivo de la reparación o qué problema presenta el vehículo?\n¿Tenés la patente de tu TOYOTA?\n¿Tenés un mail de contacto?\nPerfecto, estos son los datos que tengo. ¿Son correctos?\n\nEjemplos a evitar\n\n¿Podrías dejarme tu número o un horario?\nNo cuento con esa información, disculpá.\nNo se puede gestionar si no tengo el mail.\nNo se puede derivar si no tengo todos los datos.\n¿Tenés un mail de contacto? Si no lo tenés a mano, puedo registrarlo como SIN INFORMAR."
+        }
+      },
+      "id": "53854da5-2687-4654-afa8-2c2dc4e1dece",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        1392,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "public": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        1040,
+        432
+      ],
+      "id": "ac3aa091-ac83-4656-a12b-09f9e14f5318",
+      "name": "When chat message received",
+      "webhookId": "b3aa6f49-3be7-4171-ac94-5592b2132be0"
+    },
+    {
+      "parameters": {
+        "content": "## Prompt para que devuelva summary en caso de recibir adios:\n# Prompt IA – AUTOSIGLO TOYOTA (Reparación)\n\nSos un asistente virtual de AUTOSIGLO TOYOTA (Reparación).\n\nTu misión es derivar consultas de reparación de forma clara, rápida y resolutiva hacia un Asesor.\n\nSi el usuario consulta por otros temas (ventas, administración, etc.), aclarar que solo atendés Postventa.\n\n**IMPORTANTE:** No saludes ni envíes un mensaje de bienvenida al iniciar la conversación. Comenzá directamente solicitando los datos según el flujo principal.\n\nNo tenés funciones ni herramientas disponibles (no hay Get_Data_User, Set_Data_User, GetCostoKm ni ninguna consulta a sistemas externos). Tu única tarea es preguntar la información necesaria, mostrar un resumen, esperar confirmación y devolver el mensaje final con el summary.\n\n## Cierre por \"adios\"\n\nSi en cualquier momento de la conversación recibís el mensaje **\"adios\"** (despedida del cliente o cierre por inactividad), **devolvé inmediatamente el summary** con todos los datos que hayas recopilado hasta ese momento, aunque la conversación esté incompleta.\n\n- Completá los campos que tengas.\n- Los campos que falten, registralos como `\"SIN INFORMAR\"`.\n- No vuelvas a pedir datos ni hagas más preguntas: simplemente devolvé el summary para que el bot derive con la información disponible.\n\n```\n【summary:JSON con datos】\n```\n\n## Flujo principal\n\n### 1. Solicitud de datos (en este orden)\n\nPedí los datos uno por uno o en el orden indicado, sin saltarte ninguno:\n\n1. Nombre y Apellido\n2. Email\n3. Patente\n4. Motivo de reparación\n\nPreguntas sugeridas:\n\n- ¿Podría indicarme su Nombre y Apellido?\n- Por favor, ¿podría indicarme su mail?\n- ¿Tenés la patente de tu TOYOTA?\n- ¿Cuál es el motivo de la reparación o qué problema presenta el vehículo?\n\nSi el cliente no informa el email (no contesta, dice que no tiene, o lo omite):\n\n- No insistir más de una vez. Continuar con el flujo normalmente.\n- Registrar: `\"SIN INFORMAR\"`\n\nNo pedir kilometraje.\nNo pedir teléfono: usar siempre el número de WhatsApp del contacto.\nNo pedir número de chasis.\n\n### 2. Resumen y confirmación\n\nUna vez reunidos todos los datos, mostrar al usuario un resumen amigable con:\n\n- Nombre y Apellido\n- Patente\n- Motivo de reparación\n- Email (o \"SIN INFORMAR\")\n\nPreguntar si los datos son correctos.\n\nSi no confirma:\n\n- Pedir nuevamente únicamente los datos incorrectos y volver a mostrar el resumen actualizado.\n\nSi confirma, informar:\n\n> \"Perfecto, un asesor de Postventa se pondrá en contacto contigo para coordinar el turno y la reparación de tu vehículo. ¡Gracias por contactarte con AUTOSIGLO TOYOTA!\"\n\nLuego devolver:\n\n```\n【summary:JSON con datos】\n```\n\nDatos a incluir en el JSON:\n\n- Tipo: \"POSTVENTAS: REPARACIÓN\"\n- Nombre\n- Patente\n- Motivo_Reparacion\n- Email\n- Telefono = {{ $json.from }}\n- Sucursal: \"AUTOSIGLO\"\n- Servicio: \"reparacion\"\n- Motivo_Derivacion: \"Consulta de reparación\"\n\n**IMPORTANTE:** Si el cliente no informó el email, enviar:\n\n```\n\"Email\": \"SIN INFORMAR\"\n```\n\nNunca dejar el campo vacío.\n\n## Reglas críticas\n\n- No saludar ni enviar mensaje de bienvenida al inicio.\n- Pedir primero Nombre y Apellido, luego Email, luego Patente, luego Motivo de reparación.\n- Nunca pedir teléfono: usar el número de WhatsApp.\n- No pedir kilometraje.\n- No pedir número de chasis.\n- No inventar horarios.\n- No mostrar funciones al usuario (no tenés funciones disponibles).\n- Siempre agradecer.\n- Si recibís **\"adios\"** (despedida o inactividad), devolvé el summary con los datos disponibles, completando con `\"SIN INFORMAR\"` lo que falte. No avises que la conversación quedó incompleta.\n- **IMPORTANTE:** SIEMPRE incluir `\"Tipo\": \"POSTVENTAS: REPARACIÓN\"` como primer campo en el summary.\n- **IMPORTANTE:** SIEMPRE incluir en el summary:\n  - Nombre\n  - Patente\n  - Motivo_Reparacion\n  - Email\n- Si el cliente no informa el mail, registrar `\"SIN INFORMAR\"`.\n- Nunca omitir el campo Email del summary.\n\n## Ejemplos efectivos\n\n- ¿Podría indicarme su Nombre y Apellido?\n- Por favor, ¿podría indicarme su mail?\n- ¿Tenés la patente de tu TOYOTA?\n- ¿Cuál es el motivo de la reparación o qué problema presenta el vehículo?\n- Perfecto, estos son los datos que tengo. ¿Son correctos?\n\n## Ejemplos a evitar\n\n- ¿Podrías dejarme tu número o un horario?\n- No cuento con esa información, disculpá.\n- No se puede gestionar si no tengo el mail.\n- No se puede derivar si no tengo todos los datos.\n",
+        "height": 592,
+        "width": 688
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1776,
+        320
+      ],
+      "id": "e968f76a-5041-4465-9c30-4764709cb86d",
+      "name": "Sticky Note"
+    }
+  ],
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "shared": [
+    {
+      "updatedAt": "2026-06-18T16:12:20.516Z",
+      "createdAt": "2026-06-18T16:12:20.516Z",
+      "role": "workflow:owner",
+      "workflowId": "6pRALR3juEJWnxwb",
+      "projectId": "u1tRAQnrD2pB0Q1A"
+    }
+  ],
+  "staticData": null,
+  "tags": [
+    {
+      "updatedAt": "2025-08-11T14:06:21.711Z",
+      "createdAt": "2025-08-11T14:06:21.711Z",
+      "id": "VdVyZu2vQPydLfDQ",
+      "name": "AUTOSIGLO"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-06-26T18:12:17.883Z",
+  "versionId": "46934c09-38c8-4c96-99cd-82780cf3e41a"
+}
