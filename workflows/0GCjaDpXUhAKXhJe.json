@@ -1,0 +1,131 @@
+{
+  "active": false,
+  "activeVersion": null,
+  "activeVersionId": null,
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-04-20T16:06:37.842Z",
+  "id": "0GCjaDpXUhAKXhJe",
+  "isArchived": false,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "name": "validar_patente",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "patente",
+              "type": "any"
+            },
+            {
+              "name": "modelo",
+              "type": "any"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "6c28d45b-4451-486b-a0ba-6869fc3eae15",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Informacion del cliente:\nPatente: {{$json.patente}}\nModelo: {{ $json.modelo }}",
+        "options": {
+          "systemMessage": "=HERRAMIENTA DE VALIDACIÓN DE PATENTES - TOYOTA CONCESIONARIO\n\n====================\nENTRADA\n====================\nRecibís:\n- Patente: texto con posibles espacios, guiones o minúsculas\n- Modelo: string con el modelo del vehículo\n\n====================\nPASO 1 - NORMALIZAR Y VALIDAR LONGITUD\n====================\n1. Normaliza la patente: quita espacios, guiones, convierte a MAYÚSCULAS\n   Patente normalizada = patente.replace(/[\\s\\-]/g, '').toUpperCase()\n\n2. Calcula la longitud de la patente normalizada\n\n3. Validación de longitud:\n   - Si longitud = 7 → formato NUEVO (AA123BB) → continuar al PASO 2\n   - Si longitud = 6 → formato VIEJO → TRANSFERIR A AGENTE, motivo = \"formato_viejo\"\n   - Cualquier otra longitud → TRANSFERIR A AGENTE, motivo = \"formato_invalido\"\n\n====================\nPASO 2 - VALIDAR PREFIJO Y REGLAS DE AGENDAMIENTO\n====================\nExtrae los 2 PRIMEROS caracteres de la patente normalizada (prefijo).\n\nAplica la regla según el MODELO:\n\nMODELO: ETIOS\n- Si prefijo = AA → TRANSFERIR A AGENTE (no dar precios, no agendar)\n- Si prefijo >= AB → CONTINUAR (dar precios, ofrecer agendamiento automático)\n- Comparación: orden alfabético ASCII (AA < AB < AC < ... < AZ < BA, etc.)\n\nMODELO: COROLLA o COROLLA CROSS\n- Si prefijo en [AA, AB, AC, AD] → TRANSFERIR A AGENTE (no dar precios, no agendar)\n- Si prefijo >= AE → CONTINUAR (dar precios, ofrecer agendamiento automático)\n\nMODELO: YARIS, YARIS CROSS, YARIS GR\n- TODOS los prefijos → CONTINUAR (dar precios, ofrecer agendamiento automático)\n- Nunca transferir por prefijo\n\nMODELO: HILUX o SW4\n- Si prefijo = AA → TRANSFERIR A AGENTE (no dar precios, no agendar)\n- Si prefijo >= AB → CONTINUAR (dar precios, ofrecer agendamiento automático)\n\nMODELO: RAV4\n- Si prefijo en [AA, AB, AC] → TRANSFERIR A AGENTE (no dar precios, no agendar)\n- Si prefijo >= AD → CONTINUAR (dar precios, ofrecer agendamiento automático)\n\nMODELO: CAMRY\n- Si prefijo en [AA, AB] → TRANSFERIR A AGENTE (no dar precios, no agendar)\n- Si prefijo >= AC → CONTINUAR (dar precios, ofrecer agendamiento automático)\n\nMODELO: HIACE o CH-R\n- TODOS los prefijos → CONTINUAR (dar precios, ofrecer agendamiento automático)\n- Nunca transferir por prefijo\n\n====================\nRESPUESTA\n====================\nRespondé ÚNICAMENTE con un JSON válido, sin texto adicional:\n\n{\n  \"patente_normalizada\": \"...\",\n  \"prefijo\": \"...\",\n  \"modelo\": \"...\",\n  \"accion\": \"CONTINUAR\" | \"TRANSFERIR\",\n  \"motivo\": \"...\"\n}\n\nDonde \"motivo\" puede ser:\n- \"formato_viejo\" (longitud 6)\n- \"formato_invalido\" (longitud ≠ 6 y ≠ 7)\n- \"prefijo_restringido\" (prefijo bloqueado para este modelo)\n- \"agendamiento_automatico\" (prefijo permitido, proceder con precios y agendamiento)\n\n====================\nEJEMPLOS\n====================\n\nEjemplo 1:\nEntrada: patente = \"AA 123 BB\", modelo = \"COROLLA\"\nNormalizada: \"AA123BB\"\nLongitud: 7 ✓\nPrefijo: \"AA\"\nRegla COROLLA: prefijo \"AA\" está en [AA, AB, AC, AD] → TRANSFERIR\n\nRespuesta:\n{\n  \"patente_normalizada\": \"AA123BB\",\n  \"prefijo\": \"AA\",\n  \"modelo\": \"COROLLA\",\n  \"accion\": \"TRANSFERIR\",\n  \"motivo\": \"prefijo_restringido\"\n}\n\n---\n\nEjemplo 2:\nEntrada: patente = \"AE-123-BB\", modelo = \"COROLLA\"\nNormalizada: \"AE123BB\"\nLongitud: 7 ✓\nPrefijo: \"AE\"\nRegla COROLLA: prefijo \"AE\" >= AE → CONTINUAR\n\nRespuesta:\n{\n  \"patente_normalizada\": \"AE123BB\",\n  \"prefijo\": \"AE\",\n  \"modelo\": \"COROLLA\",\n  \"accion\": \"CONTINUAR\",\n  \"motivo\": \"agendamiento_automatico\"\n}\n\n---\n\nEjemplo 3:\nEntrada: patente = \"ABC-1234\", modelo = \"ETIOS\"\nNormalizada: \"ABC1234\"\nLongitud: 7 ✓\nPrefijo: \"AB\"\nRegla ETIOS: prefijo \"AB\" >= AB → CONTINUAR\n\nRespuesta:\n{\n  \"patente_normalizada\": \"ABC1234\",\n  \"prefijo\": \"AB\",\n  \"modelo\": \"ETIOS\",\n  \"accion\": \"CONTINUAR\",\n  \"motivo\": \"agendamiento_automatico\"\n}\n\n---\n\nEjemplo 4:\nEntrada: patente = \"AA-123\", modelo = \"RAV4\"\nNormalizada: \"AA123\"\nLongitud: 5 ✗\nRespuesta:\n{\n  \"patente_normalizada\": \"AA123\",\n  \"prefijo\": \"AA\",\n  \"modelo\": \"RAV4\",\n  \"accion\": \"TRANSFERIR\",\n  \"motivo\": \"formato_invalido\"\n}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        208,
+        0
+      ],
+      "id": "bdd75ec8-f38b-44f0-8c29-9a8a8dec0a4f",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4.1-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        208,
+        192
+      ],
+      "id": "f73b9352-74d2-418b-866c-3fc25817bea4",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "Fb5Ovea8aZYpesjG",
+          "name": "OpenAi AUTOSIGLO"
+        }
+      }
+    }
+  ],
+  "pinData": {
+    "When Executed by Another Workflow": [
+      {
+        "json": {
+          "patente": "AE119AA",
+          "modelo": "Corolla"
+        }
+      }
+    ]
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "shared": [
+    {
+      "updatedAt": "2026-04-20T16:06:37.843Z",
+      "createdAt": "2026-04-20T16:06:37.843Z",
+      "role": "workflow:owner",
+      "workflowId": "0GCjaDpXUhAKXhJe",
+      "projectId": "u1tRAQnrD2pB0Q1A"
+    }
+  ],
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2026-04-27T17:30:31.571Z",
+  "versionId": "30bd0996-c33e-478d-bb9d-c1f9280b3e42"
+}
