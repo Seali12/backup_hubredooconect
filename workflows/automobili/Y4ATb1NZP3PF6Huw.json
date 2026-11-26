@@ -1,0 +1,2186 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "1078d90d-9ff1-4178-9ccb-64eebcd1974c",
+    "workflowId": "Y4ATb1NZP3PF6Huw",
+    "nodes": [
+      {
+        "parameters": {
+          "jsCode": "const input = $input.all()[0].json;\n\n// Función para parsear query cuando viene como string\nfunction parseQueryString(queryString) {\n  const result = {};\n  \n  const patterns = [\n    { key: 'origin', regex: /origin:\\s*([^,]+)/i },\n    { key: 'businesstypeid', regex: /businesstypeid:\\s*([^,]+)/i },\n    { key: 'grupoCaptura', regex: /grupoCaptura:\\s*([^,]+?)(?=,\\s*modelo:|$)/i },\n    { key: 'modelo', regex: /modelo:\\s*([^,]+?)(?=,\\s*pago:|$)/i },\n    { key: 'pago', regex: /pago:\\s*([^,]+?)(?=,\\s*usado:|$)/i },\n    { key: 'usado', regex: /usado:\\s*([^,]+?)(?=,\\s*interes:|$)/i },\n    { key: 'interes', regex: /interes:\\s*([^,]+)/i }\n  ];\n  \n  patterns.forEach(({ key, regex }) => {\n    const match = queryString.match(regex);\n    if (match) {\n      result[key] = match[1].trim();\n    }\n  });\n  \n  return result;\n}\n\n// Detectar si query es string u objeto\nlet parsedQuery = {};\nif (typeof input.query === 'string') {\n  // Caso 1: query es string \"origin: ..., modelo: ...\"\n  parsedQuery = parseQueryString(input.query);\n} else if (typeof input.query === 'object' && input.query !== null) {\n  // Caso 2: query es objeto { producto: \"X-TRAIL\", usado: \"...\", pago: \"...\" }\n  parsedQuery = {\n    modelo: input.query.producto || input.query.modelo,\n    pago: input.query.pago,\n    usado: input.query.usado,\n    interes: input.query.interes\n  };\n}\n\n// Extraer valores finales con fallbacks\nconst modelo = parsedQuery.modelo || \n              (input.producto !== 'undefined' ? input.producto : '') || '';\n              \nconst pago = parsedQuery.pago || \n            (input.pago !== 'undefined' ? input.pago : '') || '';\n            \nconst usado = parsedQuery.usado || \n             (input.usado !== 'undefined' ? input.usado : '') || '';\n             \nconst interes = parsedQuery.interes || \n               (modelo && pago && usado ? 'alto' : 'bajo');\n\n// Construir pilot_notes\nconst pilot_notes = `Modelo: ${modelo || 'No especificado'}\nPago: ${pago || 'No especificado'}\nUsado: ${usado || 'No especificado'}\nInterés: ${interes}`;\n\n// Output final\nconst output = {\n  name: input.name,\n  from: input.from,\n  idConversation: input.idConversation,\n  origin: parsedQuery.origin || input.origin || '',\n  \n  // Normalizar businesstypeid y grupoCaptura (con o sin espacio)\n  businesstypeid: parsedQuery.businesstypeid \n                   || input['businesstypeid ']?.trim() \n                   || input.businesstypeid?.trim() \n                   || '',\n                   \n  grupoCaptura: parsedQuery.grupoCaptura \n                   || input['grupoCaptura ']?.trim() \n                   || input.grupoCaptura?.trim() \n                   || '',\n\n  // 🔥 Agregados obligatorios al output:\n  producto: input.producto || parsedQuery.modelo || '',\n  usado: input.usado || parsedQuery.usado || '',\n  pago: input.pago || parsedQuery.pago || '',\n  ProductoInteres: input.ProductoInteres || input.producto || parsedQuery.modelo || '',\n\n  pilot_notes: pilot_notes\n};\n\nreturn { json: output };"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          0,
+          0
+        ],
+        "id": "58205f54-9296-4abb-ac66-17e286cb83fb",
+        "name": "Code"
+      },
+      {
+        "parameters": {
+          "workflowInputs": {
+            "values": [
+              {
+                "name": "goodLead",
+                "type": "any"
+              },
+              {
+                "name": "idConversation",
+                "type": "any"
+              },
+              {
+                "name": "number",
+                "type": "any"
+              },
+              {
+                "name": "name",
+                "type": "any"
+              },
+              {
+                "name": "businesstypeid",
+                "type": "any"
+              },
+              {
+                "name": "grupoCaptura",
+                "type": "any"
+              },
+              {
+                "name": "pago",
+                "type": "any"
+              },
+              {
+                "name": "ProductoInteres",
+                "type": "any"
+              },
+              {
+                "name": "interes",
+                "type": "any"
+              },
+              {
+                "name": "origin",
+                "type": "any"
+              },
+              {
+                "name": "resumen"
+              },
+              {
+                "name": "nombreDeclarado"
+              },
+              {
+                "name": "email"
+              },
+              {
+                "name": "firtsMessage"
+              },
+              {
+                "name": "url"
+              }
+            ]
+          }
+        },
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "typeVersion": 1.1,
+        "position": [
+          -864,
+          128
+        ],
+        "id": "f53a447f-ab45-41cc-a8aa-c84a42700c6e",
+        "name": "When Executed by Another Workflow"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Tomar el item de entrada\nconst item = $input.first().json;\n\n// -------------------------\n// TELEFONO\n// -------------------------\nconst d = (item.number || \"\").replace(/\\D/g, \"\");\nitem.number = d.length >= 10 ? \"+549\" + d.slice(-10) : \"\";\n\n// -------------------------\n// PAGO\n// -------------------------\nconst pago = (item.pago || \"\")\n  .toString()\n  .trim()\n  .toLowerCase();\n\nif (pago.includes(\"pda\")) {\n  item.pago_id = 69;\n} else if (pago.includes(\"financi\")) {\n  item.pago_id = 68;\n} else {\n  item.pago_id = 67;\n}\n\nif (item.url== \"-\"){\n  item.origin = \"G7OFNXYN7Q30NMOE9\";\n}\nif (item.url!= \"-\"){\n  item.origin = \"G7OFOLVR4JLHS5TTS\";\n}\n\n// -------------------------\n// ORIGIN SEGÚN FIRST MESSAGE\n// -------------------------\n\n// Solo actuar si firtsMessage existe\nif (item.firtsMessage !== undefined && item.firtsMessage !== null) {\n  const firstMessage = item.firtsMessage\n    .toString()\n    .trim();\n\n  // Si contiene \"Ref: -<\"\n  if (firstMessage.includes(\"Ref:\")) {\n    item.origin = \"G8HZUVJZVRX30WNI9\";\n  }\n}\n\n// -------------------------\n// PRODUCTO\n// -------------------------\nconst productoNormalizado = (item.ProductoInteres || \"\")\n  .toString()\n  .toLowerCase();\n\n// -------------------------\n// MARCAS\n// -------------------------\nconst marcasConfig = {\n  renault: { businesstypeid: \"4\", grupoCaptura: \"renault\" },\n  nissan: { businesstypeid: \"5\", grupoCaptura: \"nissan\" },\n  jmc: { businesstypeid: \"30\", grupoCaptura: \"jmc\" },\n  mitsubishi: { businesstypeid: \"21\", grupoCaptura: \"mitsubishi\" },\n  changan: { businesstypeid: \"31\", grupoCaptura: \"changan\" },\n  gwm: { businesstypeid: \"35\", grupoCaptura: \"gwm\" },\n  leapmotor: { businesstypeid: \"36\", grupoCaptura: \"leapmotor\" },\n  omoda: { businesstypeid: \"32\", grupoCaptura: \"omoda\" },\n  jaecoo: { businesstypeid: \"33\", grupoCaptura: \"jaecoo\" },\n  zeekr: { businesstypeid: \"38\", grupoCaptura: \"zeekr\" },\n  deepal: { businesstypeid: \"43\", grupoCaptura: \"deepal\" },\n  xpeng: { businesstypeid: \"39\", grupoCaptura: \"xpeng\" }\n};\n\n// Buscar marca dentro del producto\nlet marcaEncontrada = null;\n\nfor (const marca in marcasConfig) {\n  if (productoNormalizado.includes(marca)) {\n    marcaEncontrada = marca;\n    break;\n  }\n}\n\n// Actualizar datos de marca si corresponde\nif (marcaEncontrada) {\n  item.businesstypeid =\n    marcasConfig[marcaEncontrada].businesstypeid;\n\n  item.grupoCaptura =\n    marcasConfig[marcaEncontrada].grupoCaptura;\n}\n\n// -------------------------\n// DEVOLVER RESULTADO\n// -------------------------\nreturn [\n  {\n    json: item\n  }\n];\n\n"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -480,
+          128
+        ],
+        "id": "e4cada36-750c-44fc-ab65-4e30290f8604",
+        "name": "Code1"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://leads.redooconect.com.ar/api/v1/leads",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-API-KEY",
+                "value": "e1e678b7-900f-4e6d-a683-ecdf5b738d25"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={\n  \"first_name\": \"{{ $('When Executed by Another Workflow').item.json.name }}\",\n  \"phone\": \"{{ $('When Executed by Another Workflow').item.json.number }}\",\n  \"source\": \"IA Ventas\",\n  \"notes\": \"{{ $('When Executed by Another Workflow').item.json.resumen }}\",\n  \"assigned_to_user_email\": \"{{ $json.data.welcome_assigned_user_email }}\"\n}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1344,
+          272
+        ],
+        "id": "4178b39c-4426-43ad-b5a6-0b885d21e411",
+        "name": "SUITE",
+        "onError": "continueErrorOutput"
+      },
+      {
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "9937f4fd-647d-4129-b4e6-d232a90f75e2",
+                "name": "response",
+                "value": "Ya nos quedo tu consulta",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "59692647-0c39-445b-8e43-c00a49827d7f",
+        "name": "Edit Fields1",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [
+          2608,
+          480
+        ]
+      },
+      {
+        "parameters": {
+          "url": "https://api.pilotsolution.net/webhooks/welcome.php",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "appkey",
+                "value": "=BC7798A5-A25E-43B8-A2DE-6A0BDA7ACEDD"
+              },
+              {
+                "name": "pilot_firstname",
+                "value": "={{  $('Code1').first().json.nombreDeclarado || $('Code1').first().json.name || 'REDOO test'}}"
+              },
+              {
+                "name": "pilot_cellphone",
+                "value": "={{ $('Code1').first().json.number || '534344111235'}}"
+              },
+              {
+                "name": "pilot_contact_type_id",
+                "value": "1"
+              },
+              {
+                "name": "pilot_suborigin_id",
+                "value": "={{ $('Code1').first().json.origin || 'G7OFNXYN7Q30NMOE9' }}"
+              },
+              {
+                "name": "pilot_business_type_id",
+                "value": "=1"
+              },
+              {
+                "name": "pilot_notes",
+                "value": "={{ $('When Executed by Another Workflow').first().json.resumen }} link: {{$('When Executed by Another Workflow').first().json.url  }}"
+              },
+              {
+                "name": "pilot_product_of_interest",
+                "value": "=9160"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "ba7e0c5e-2772-454e-abe4-ae01698a7fbc",
+        "name": "HTTP Request1",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1024,
+          240
+        ],
+        "executeOnce": false
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "597e468b-8152-43a2-afa4-574b23a83d03",
+                "leftValue": "={{ $('When Executed by Another Workflow').first().json.goodLead }}",
+                "rightValue": "alto",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          1600,
+          32
+        ],
+        "id": "9530b1d8-4db3-4a5a-9abe-d5af7ccb5a9c",
+        "name": "If"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.pilotsolution.net/v1/welcomes/qualification/good.php",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={\n  \"data\": {\n    \"id\": \"{{ $('HTTP Request1').first().json.data.welcome_guid }}\"\n  },\n  \"header\": {\n    \"FlowName\": \"lead_good\",\n    \"SequenceId\": 1,\n\t\"TimeStamp\": 1248377,\n\t\"TrackingId\": \"FD1C4A1A-CAFB-467E-825B-7FFB86CC21E3\",\n\t\"access_token\":\"{{ $json.result.entitydata.session.identityToken }}\"\n  }\n}",
+          "options": {}
+        },
+        "id": "95bbf3a8-77ce-44b6-80c6-967333359a1e",
+        "name": "goodLead",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1824,
+          -32
+        ]
+      },
+      {
+        "parameters": {
+          "url": "=https://api.pilotsolution.net/v1/users/authentication.php",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpCustomAuth",
+          "options": {}
+        },
+        "id": "b773ab88-e9f4-4995-9996-a47ade43626e",
+        "name": "Login",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          928,
+          32
+        ],
+        "credentials": {
+          "httpCustomAuth": {
+            "id": "gDxhZNhQrrB9jfIR",
+            "name": "Custom Auth account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "url": "=https://api.pilotsolution.net/v1/users/authorization.php",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "identity_token",
+                "value": "={{ $json.token }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "7c45a9c9-be0d-497d-9ed5-2588bc2457f0",
+        "name": "Login1",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1376,
+          32
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.pilotsolution.net/v1/welcomes/update.php",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={\n  \"data\": {\n    \"id\": \"{{ $('HTTP Request1').item.json.data.welcome_guid }}\",\n    \"interest_level_code\": \"{{ $('When Executed by Another Workflow').first().json.interes }}\"\n  },\n  \"header\": {\n    \"FlowName\": \"update_prospect\",\n    \"SequenceId\": 1,\n    \"TimeStamp\": 1248377,\n    \"TrackingId\": \"FD1C4A1A-CAFB-467E-825B-7FFB86CC21E3\",\n    \"access_token\": \"{{ $('Login1').item.json.result.entitydata.session.identityToken }}\"\n  }\n}",
+          "options": {}
+        },
+        "id": "444b9360-356a-4483-b568-fd42e859e2f9",
+        "name": "updateLead",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2064,
+          32
+        ]
+      },
+      {
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "b223ceea-a793-41c8-8730-cce0790a5487",
+                "name": "token",
+                "value": "={{ $json.result.entitydata.accounts[0].token }}",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "ab6476f3-f896-42d6-845e-d4f0932e4d25",
+        "name": "Edit Fields2",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [
+          1152,
+          32
+        ]
+      },
+      {
+        "parameters": {
+          "content": "## Good Lead\n",
+          "height": 336,
+          "width": 1520,
+          "color": 2
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          880,
+          -96
+        ],
+        "typeVersion": 1,
+        "id": "c389a742-516d-4355-a42d-81bb42a1b33d",
+        "name": "Sticky Note1"
+      },
+      {
+        "parameters": {
+          "operation": "removeItemsSeenInPreviousExecutions",
+          "dedupeValue": "={{ $json.idConversation }}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.removeDuplicates",
+        "typeVersion": 2,
+        "position": [
+          -688,
+          144
+        ],
+        "id": "bb6e1800-979c-45fe-93f3-563b821a8c0a",
+        "name": "Remove Duplicates",
+        "disabled": true
+      },
+      {
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "b5bfe672-2ce7-494c-b994-77977dabf74b",
+                "name": "welcome_assigned_user_email",
+                "value": "={{ $('HTTP Request1').first().json.data.welcome_assigned_user_email || $json.result?.entitydata?.asigned?.user?.name || '' }}",
+                "type": "string"
+              },
+              {
+                "id": "5fa6cdbe-725f-42aa-bc67-16c2c5d3446f",
+                "name": "welcome_assigned_user_fullname",
+                "value": "={{ $('HTTP Request1').first().json.data.welcome_assigned_user_fullname || $json.result?.entitydata?.asigned?.user?.fullname || '' }}",
+                "type": "string"
+              },
+              {
+                "id": "3d8ece82-4b2c-437a-bdf1-bf328c3fe910",
+                "name": "response",
+                "value": "Lead registrado",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "73b63ca6-dcce-4fca-9ce1-9e0f7b158b76",
+        "name": "Return Lead",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [
+          2288,
+          32
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.pilotsolution.net/v1/welcomes/list.php",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={\n  \"data\": {\n    \"limit\": 100,\n    \"page\": 1,\n    \"filters\": [\n      {\n        \"field\": \"welcome_cellphone\",\n        \"operation\": \"LIKE\",\n        \"value\": \"{{ $('Code1').item.json.number.slice(-8) }}\"\n      }\n    ],\n    \"wildCard\": \"*\",\n    \"sorts\": [\n      {\n        \"field\": \"created\",\n        \"order\": \"DESC\"\n      }\n    ]\n  },\n  \"header\": {\n    \"FlowName\": \"List_Leads\",\n    \"SequenceId\": 1,\n    \"TimeStamp\": 1248377,\n    \"TrackingId\": \"FD1C4A1A-CAFB-467E-825B-7FFB86CC21E3\",\n    \"access_token\": \"{{ $json.result.entitydata.session.identityToken }}\"\n  }\n}",
+          "options": {}
+        },
+        "id": "6af4fc67-e34d-4f45-a331-0b8f5dc5550f",
+        "name": "searchLeadByPhone1",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          528,
+          240
+        ]
+      },
+      {
+        "parameters": {
+          "url": "=https://api.pilotsolution.net/v1/users/authentication.php",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpCustomAuth",
+          "options": {}
+        },
+        "id": "57498e15-844a-4e29-a662-b89f888655c3",
+        "name": "Login2",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          80,
+          240
+        ],
+        "credentials": {
+          "httpCustomAuth": {
+            "id": "gDxhZNhQrrB9jfIR",
+            "name": "Custom Auth account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "b223ceea-a793-41c8-8730-cce0790a5487",
+                "name": "token",
+                "value": "={{ $json.result.entitydata.accounts[0].token }}",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "a414333b-8a85-4426-a1b5-e49695718f40",
+        "name": "Edit Fields",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [
+          224,
+          240
+        ]
+      },
+      {
+        "parameters": {
+          "url": "=https://api.pilotsolution.net/v1/users/authorization.php",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "identity_token",
+                "value": "={{ $json.token }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "88e652b0-d20d-4668-b44c-8f9a505aa450",
+        "name": "Login3",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          384,
+          240
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "\nconst items = $input.all();\n\nconst ahora = Date.now();\nconst limite48Horas = ahora - (48 * 60 * 60 * 1000);\n\nlet hayLeadReciente = false;\n\nfor (const item of items) {\n  const entitydata = item.json?.result?.entitydata ?? [];\n\n  for (const lead of entitydata) {\n    const fechaCreacion = lead.created?.dt;\n\n    if (!fechaCreacion) continue;\n\n    const fecha = new Date(fechaCreacion).getTime();\n\n    if (Number.isNaN(fecha)) continue;\n\n    // Si fue creado dentro de las últimas 48 horas\n    if (fecha >= limite48Horas && fecha <= ahora) {\n      hayLeadReciente = true;\n      break;\n    }\n  }\n\n  if (hayLeadReciente) break;\n}\n\nreturn [\n  {\n    json: {\n      result: hayLeadReciente\n    }\n  }\n];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          704,
+          240
+        ],
+        "id": "69280dc3-b86a-4db3-84ab-a057821f4216",
+        "name": "Code in JavaScript"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "a42157e4-a84e-40e2-acbc-0c665e08f614",
+                "leftValue": "={{ $json.result }}",
+                "rightValue": false,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "false",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          832,
+          240
+        ],
+        "id": "3522d54c-0f55-49e3-ae9d-af2e58f29315",
+        "name": "If1"
+      },
+      {
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "9937f4fd-647d-4129-b4e6-d232a90f75e2",
+                "name": "response",
+                "value": "Lead Ya creado correctamente",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "f9760339-d2bc-45a8-89ae-c60f741b0799",
+        "name": "Edit Fields3",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [
+          2368,
+          736
+        ]
+      },
+      {
+        "parameters": {
+          "url": "https://api.pilotsolution.net/webhooks/welcome.php",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "appkey",
+                "value": "=855B2202-E756-4057-BB0D-BE4107F967A0"
+              },
+              {
+                "name": "pilot_firstname",
+                "value": "=redoo"
+              },
+              {
+                "name": "pilot_cellphone",
+                "value": "=1111"
+              },
+              {
+                "name": "pilot_suborigin_id",
+                "value": "=G8Y9LPW8LXE4P8CHS"
+              },
+              {
+                "name": "pilot_business_type_id",
+                "value": "=6"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "a93d7286-9477-47b9-96df-ef96b1182664",
+        "name": "HTTP Request",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          256,
+          544
+        ],
+        "executeOnce": false
+      },
+      {
+        "parameters": {
+          "jsCode": "// Mueve la conversación de la Suite al asesor que Pilot le asignó al lead.\n// Caminos:\n//  - ok:          SUITE (Redoo Leads) devolvió assigned_to_user.id (ID de usuario de la Suite).\n//  - suite_error: falló SUITE; el mail del asesor viene de Pilot (HTTP Request1) y el ID se busca por mail.\n//  - existing:    ya había un lead en las últimas 48h; Pilot lista el asesor como asigned.user.fullname (sin mail), se busca por nombre.\n// Solo se asigna a miembros activos del grupo 701 (Ventas, empresa 216). Si no hay asesor o no\n// es del grupo, no se hace nada y la derivación sigue como hasta ahora.\nconst GRUPO = '701';\n\n// [id, nombre, mail] — miembros activos del grupo 701. Actualizar cuando cambie el grupo.\nconst MIEMBROS_701 = [\n  [1669,'Abraham Vazquez','abrahamvazquezj7@gmail.com'],\n  [1686,'Adriana Chazarreta','chol.y20.ac@gmail.com'],\n  [1892,'Agustin Sosa','agustinasosa0401@gmail.com'],\n  [1704,'Alan Ruiz','alannruiz188@gmail.com'],\n  [1738,'Alan Dyke','dykealan679@gmail.com'],\n  [1689,'Alan Ferreyra','alannnferreyra@gmail.com'],\n  [1688,'Alan Diaz','diazalan874@gmail.com'],\n  [1673,'Aldana Ortiz','aldanaortiz591@gmail.com'],\n  [1992,'Andrés Cardozo','andacar6991@gmail.com'],\n  [1675,'Angel Olartes','angelolartes@hotmail.com'],\n  [1672,'Antonella Mombelli','antomombelli1234@gmail.com'],\n  [1666,'Ariana Campbell','arianaihcampbell@gmail.com'],\n  [1747,'Camila Castro','camila.castrook15@gmail.com'],\n  [1745,'Celeste Gomez','celegomez123g@gmail.com'],\n  [1694,'Daiana Monges','daimonges19@gmail.com'],\n  [1893,'Daniel Godoy','daniel1305godoy@gmail.com'],\n  [1842,'Daniela Moises','Danielanairmoises@gmail.com'],\n  [1687,'David Cuevas','normancuevas04@gmail.com'],\n  [1665,'Eduardo Brandan','edubrandan35@gmail.com'],\n  [1811,'Esteban Almeida','pato.almeidaok@gmail.com'],\n  [1700,'Facundo Perez Trevisan','facundopereztrevisan@gmail.com'],\n  [1702,'Franco Rodriguez','franconuevomail12@gmail.com'],\n  [1741,'Gaston Ruiz','gaston.ruizdeazua@gmail.com'],\n  [1698,'Guido Oyarzo','guido.foi88@gmail.com'],\n  [1990,'Ireneo Bacigalupo','Ireneo.baci39@gmail.com'],\n  [1682,'Jonatan Alvez','joninabel270@gmail.com'],\n  [1831,'Jose Medina','medina.josec99@gmail.com'],\n  [1772,'Juan Lopez','juanlopess1216@gmail.com'],\n  [1661,'Lautaro Martinelli','Martinellilautaro@gmail.com'],\n  [1664,'Lautaro Galvan','laugalvan71@gmail.com'],\n  [1742,'Leonardo Rodriguez','cuentadeuruguay@gmail.com'],\n  [1692,'Liz Gutierrez','marthsgut@gmail.com'],\n  [1696,'Lucas Orellana','lucasorellana973@gmail.com'],\n  [1690,'Luna Gisondi','lunaagisondi@gmail.com'],\n  [1667,'Marcela Ilardo','ilardomarcela@gmail.com'],\n  [1773,'Maria Celeste Nigro','celestennigro@gmail.com'],\n  [1776,'Martina Oviedo','Martuu234oviedo@gmail.com'],\n  [1701,'Matias Ramos','leo.horacio.r.n@gmail.com'],\n  [1705,'Mauro Sarso','maurosarso12@gmail.com'],\n  [1739,'Micaela Rogero','rogeromicaela4@gmail.com'],\n  [1674,'Milagros Nuñez','miilagrosn96@outlook.com'],\n  [1671,'Nicolas Senra','enriquenicolassenra@outlook.com'],\n  [1703,'Paula Rodriguez','paulabrodriguez89@gmail.com'],\n  [1743,'Pedro Zapata','zapatapedro662@gmail.com'],\n  [1978,'Rut Duarte','rut454547@gmail.com'],\n  [1770,'Santiago Yelitze','yelitzesaray1@gmail.com'],\n  [1684,'Tomas Castro','tomascastro100501@gmail.com'],\n  [1670,'Valentina Terrazzino','vterrazzino688@gmail.com'],\n];\nconst normalizar = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\\s+/g, ' ').trim().toLowerCase();\nconst porId = new Map(MIEMBROS_701.map(([id, nombre]) => [String(id), nombre]));\nconst porMail = new Map(MIEMBROS_701.map(([id, nombre, mail]) => [mail.toLowerCase(), { id: String(id), nombre }]));\nconst porNombre = new Map(MIEMBROS_701.map(([id, nombre]) => [normalizar(nombre), { id: String(id), nombre }]));\n\nconst item = $input.first().json;\nconst base = $('Code1').first().json;\nconst entrada = $('When Executed by Another Workflow').first().json;\n\nlet camino;\nlet id = '';\nlet nombre = '';\nlet mail = '';\nlet nombrePilot = '';\n\nif ($prevNode.name === 'SUITE') {\n  const u = item.data && item.data.assigned_to_user;\n  if (item.success === true && u && u.id) {\n    camino = 'ok';\n    id = String(u.id);\n    mail = String(u.email || '').trim();\n    nombre = [u.first_name, u.last_name].filter(Boolean).join(' ');\n  } else {\n    camino = 'suite_error';\n    const pilot = $('HTTP Request1').first().json.data || {};\n    mail = String(pilot.welcome_assigned_user_email || '').trim();\n    nombrePilot = String(pilot.welcome_assigned_user_fullname || '').trim();\n  }\n} else {\n  camino = 'existing';\n  const leads = ($('searchLeadByPhone1').first().json.result || {}).entitydata || [];\n  const limite = Date.now() - 48 * 60 * 60 * 1000;\n  const reciente = Array.isArray(leads)\n    ? leads.find(l => new Date(l && l.created && l.created.dt).getTime() >= limite)\n    : null;\n  const asesor = reciente && reciente.asigned && reciente.asigned.user;\n  // El listado de Pilot trae asigned.user.{id (GUID), fullname}; no trae mail.\n  mail = String((asesor && asesor.name) || (reciente && reciente.welcome_assigned_user_email) || '').trim();\n  nombrePilot = String((asesor && asesor.fullname) || '').trim();\n}\n\nif (!id && mail) {\n  const m = porMail.get(mail.toLowerCase());\n  if (m) { id = m.id; nombre = m.nombre; }\n}\nif (!id && nombrePilot) {\n  const m = porNombre.get(normalizar(nombrePilot));\n  if (m) { id = m.id; nombre = m.nombre; }\n}\nconst esMiembro = !!id && porId.has(id);\nif (esMiembro && !nombre) nombre = porId.get(id);\n\nreturn [{\n  json: {\n    camino,\n    asignar: esMiembro && !!base.number,\n    from: base.number || '',\n    username: entrada.nombreDeclarado || base.name || '',\n    group_id: GRUPO,\n    assigned_to: id,\n    assigned_to_name: nombre,\n    mail,\n  },\n}];\n"
+        },
+        "id": "b06e8389-8607-4cb1-b0b8-944818205d11",
+        "name": "Armar asignación Suite",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1520,
+          560
+        ],
+        "notes": "Decide a qué asesor mover la conversación de la Suite. Solo asigna a miembros activos del grupo 701 (lista MIEMBROS_701: si entra un asesor nuevo al grupo hay que agregarlo acá)."
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "asignar-suite-1",
+                "leftValue": "={{ $json.asignar }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "b0aac21e-f83e-469d-9c0f-de451a8a0428",
+        "name": "¿Asignar en la Suite?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          1728,
+          608
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://suite-conversations-production.up.railway.app/api/v1/conversations/ensure-and-redirect",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-API-KEY",
+                "value": "e1e678b7-900f-4e6d-a683-ecdf5b738d25"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ {\n  \"from\": $json.from,\n  \"username\": $json.username,\n  \"origin\": \"whatsapp\",\n  \"mode\": \"direct\",\n  \"group_id\": $json.group_id,\n  \"assigned_to\": $json.assigned_to,\n  \"assigned_to_name\": $json.assigned_to_name,\n  \"assigned_by_name\": \"Derivación automática\"\n} }}",
+          "options": {
+            "timeout": 8000
+          }
+        },
+        "id": "108adcef-11a3-4f54-a58e-173527120eac",
+        "name": "Asignar asesor en la Suite",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1904,
+          528
+        ],
+        "notes": "POST al endpoint existente ensure-and-redirect de suite-conversations. Falta asignar la credencial Header Auth con el X-API-Key de Automobili (empresa 216). Si falla, no corta el flujo."
+      },
+      {
+        "parameters": {
+          "rules": {
+            "values": [
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 2
+                  },
+                  "conditions": [
+                    {
+                      "id": "camino-ok",
+                      "leftValue": "={{ $('Armar asignación Suite').first().json.camino }}",
+                      "rightValue": "ok",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "ok"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 2
+                  },
+                  "conditions": [
+                    {
+                      "id": "camino-suite-error",
+                      "leftValue": "={{ $('Armar asignación Suite').first().json.camino }}",
+                      "rightValue": "suite_error",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "suite_error"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 2
+                  },
+                  "conditions": [
+                    {
+                      "id": "camino-existing",
+                      "leftValue": "={{ $('Armar asignación Suite').first().json.camino }}",
+                      "rightValue": "existing",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "existing"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "5cc99c52-4bb9-4143-a6d3-59abfb8db0b3",
+        "name": "Seguir según camino",
+        "type": "n8n-nodes-base.switch",
+        "typeVersion": 3.2,
+        "position": [
+          2080,
+          688
+        ]
+      }
+    ],
+    "connections": {
+      "When Executed by Another Workflow": {
+        "main": [
+          [
+            {
+              "node": "Remove Duplicates",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code1": {
+        "main": [
+          [
+            {
+              "node": "Login2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "If": {
+        "main": [
+          [
+            {
+              "node": "goodLead",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "updateLead",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "goodLead": {
+        "main": [
+          [
+            {
+              "node": "updateLead",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Login": {
+        "main": [
+          [
+            {
+              "node": "Edit Fields2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Login1": {
+        "main": [
+          [
+            {
+              "node": "If",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Edit Fields2": {
+        "main": [
+          [
+            {
+              "node": "Login1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "HTTP Request1": {
+        "main": [
+          [
+            {
+              "node": "SUITE",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Remove Duplicates": {
+        "main": [
+          [
+            {
+              "node": "Code1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "updateLead": {
+        "main": [
+          [
+            {
+              "node": "Return Lead",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Login2": {
+        "main": [
+          [
+            {
+              "node": "Edit Fields",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Edit Fields": {
+        "main": [
+          [
+            {
+              "node": "Login3",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Login3": {
+        "main": [
+          [
+            {
+              "node": "searchLeadByPhone1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "searchLeadByPhone1": {
+        "main": [
+          [
+            {
+              "node": "Code in JavaScript",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code in JavaScript": {
+        "main": [
+          [
+            {
+              "node": "If1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "If1": {
+        "main": [
+          [
+            {
+              "node": "HTTP Request1",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Armar asignación Suite",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "SUITE": {
+        "main": [
+          [
+            {
+              "node": "Armar asignación Suite",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Armar asignación Suite",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Armar asignación Suite": {
+        "main": [
+          [
+            {
+              "node": "¿Asignar en la Suite?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "¿Asignar en la Suite?": {
+        "main": [
+          [
+            {
+              "node": "Asignar asesor en la Suite",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Seguir según camino",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Asignar asesor en la Suite": {
+        "main": [
+          [
+            {
+              "node": "Seguir según camino",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Seguir según camino": {
+        "main": [
+          [
+            {
+              "node": "Login",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Edit Fields1",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Edit Fields3",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "Agente IA",
+    "name": "Version 1078d90d",
+    "description": "",
+    "autosaved": true,
+    "createdAt": "2026-10-27T14:18:55.691Z",
+    "updatedAt": "2026-10-27T14:23:10.000Z"
+  },
+  "activeVersionId": "1078d90d-9ff1-4178-9ccb-64eebcd1974c",
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Remove Duplicates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code1": {
+      "main": [
+        [
+          {
+            "node": "Login2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "goodLead",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "updateLead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "goodLead": {
+      "main": [
+        [
+          {
+            "node": "updateLead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Login": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Login1": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields2": {
+      "main": [
+        [
+          {
+            "node": "Login1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "SUITE",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remove Duplicates": {
+      "main": [
+        [
+          {
+            "node": "Code1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "updateLead": {
+      "main": [
+        [
+          {
+            "node": "Return Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Login2": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Login3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Login3": {
+      "main": [
+        [
+          {
+            "node": "searchLeadByPhone1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "searchLeadByPhone1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Armar asignación Suite",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SUITE": {
+      "main": [
+        [
+          {
+            "node": "Armar asignación Suite",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Armar asignación Suite",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Armar asignación Suite": {
+      "main": [
+        [
+          {
+            "node": "¿Asignar en la Suite?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Asignar en la Suite?": {
+      "main": [
+        [
+          {
+            "node": "Asignar asesor en la Suite",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Seguir según camino",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Asignar asesor en la Suite": {
+      "main": [
+        [
+          {
+            "node": "Seguir según camino",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Seguir según camino": {
+      "main": [
+        [
+          {
+            "node": "Login",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Edit Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Edit Fields3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-08-31T14:36:03.508Z",
+  "id": "Y4ATb1NZP3PF6Huw",
+  "isArchived": false,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp",
+    "templateCredsSetupCompleted": true
+  },
+  "name": "Yacopini - Enviar Lead",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "const input = $input.all()[0].json;\n\n// Función para parsear query cuando viene como string\nfunction parseQueryString(queryString) {\n  const result = {};\n  \n  const patterns = [\n    { key: 'origin', regex: /origin:\\s*([^,]+)/i },\n    { key: 'businesstypeid', regex: /businesstypeid:\\s*([^,]+)/i },\n    { key: 'grupoCaptura', regex: /grupoCaptura:\\s*([^,]+?)(?=,\\s*modelo:|$)/i },\n    { key: 'modelo', regex: /modelo:\\s*([^,]+?)(?=,\\s*pago:|$)/i },\n    { key: 'pago', regex: /pago:\\s*([^,]+?)(?=,\\s*usado:|$)/i },\n    { key: 'usado', regex: /usado:\\s*([^,]+?)(?=,\\s*interes:|$)/i },\n    { key: 'interes', regex: /interes:\\s*([^,]+)/i }\n  ];\n  \n  patterns.forEach(({ key, regex }) => {\n    const match = queryString.match(regex);\n    if (match) {\n      result[key] = match[1].trim();\n    }\n  });\n  \n  return result;\n}\n\n// Detectar si query es string u objeto\nlet parsedQuery = {};\nif (typeof input.query === 'string') {\n  // Caso 1: query es string \"origin: ..., modelo: ...\"\n  parsedQuery = parseQueryString(input.query);\n} else if (typeof input.query === 'object' && input.query !== null) {\n  // Caso 2: query es objeto { producto: \"X-TRAIL\", usado: \"...\", pago: \"...\" }\n  parsedQuery = {\n    modelo: input.query.producto || input.query.modelo,\n    pago: input.query.pago,\n    usado: input.query.usado,\n    interes: input.query.interes\n  };\n}\n\n// Extraer valores finales con fallbacks\nconst modelo = parsedQuery.modelo || \n              (input.producto !== 'undefined' ? input.producto : '') || '';\n              \nconst pago = parsedQuery.pago || \n            (input.pago !== 'undefined' ? input.pago : '') || '';\n            \nconst usado = parsedQuery.usado || \n             (input.usado !== 'undefined' ? input.usado : '') || '';\n             \nconst interes = parsedQuery.interes || \n               (modelo && pago && usado ? 'alto' : 'bajo');\n\n// Construir pilot_notes\nconst pilot_notes = `Modelo: ${modelo || 'No especificado'}\nPago: ${pago || 'No especificado'}\nUsado: ${usado || 'No especificado'}\nInterés: ${interes}`;\n\n// Output final\nconst output = {\n  name: input.name,\n  from: input.from,\n  idConversation: input.idConversation,\n  origin: parsedQuery.origin || input.origin || '',\n  \n  // Normalizar businesstypeid y grupoCaptura (con o sin espacio)\n  businesstypeid: parsedQuery.businesstypeid \n                   || input['businesstypeid ']?.trim() \n                   || input.businesstypeid?.trim() \n                   || '',\n                   \n  grupoCaptura: parsedQuery.grupoCaptura \n                   || input['grupoCaptura ']?.trim() \n                   || input.grupoCaptura?.trim() \n                   || '',\n\n  // 🔥 Agregados obligatorios al output:\n  producto: input.producto || parsedQuery.modelo || '',\n  usado: input.usado || parsedQuery.usado || '',\n  pago: input.pago || parsedQuery.pago || '',\n  ProductoInteres: input.ProductoInteres || input.producto || parsedQuery.modelo || '',\n\n  pilot_notes: pilot_notes\n};\n\nreturn { json: output };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "58205f54-9296-4abb-ac66-17e286cb83fb",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "goodLead",
+              "type": "any"
+            },
+            {
+              "name": "idConversation",
+              "type": "any"
+            },
+            {
+              "name": "number",
+              "type": "any"
+            },
+            {
+              "name": "name",
+              "type": "any"
+            },
+            {
+              "name": "businesstypeid",
+              "type": "any"
+            },
+            {
+              "name": "grupoCaptura",
+              "type": "any"
+            },
+            {
+              "name": "pago",
+              "type": "any"
+            },
+            {
+              "name": "ProductoInteres",
+              "type": "any"
+            },
+            {
+              "name": "interes",
+              "type": "any"
+            },
+            {
+              "name": "origin",
+              "type": "any"
+            },
+            {
+              "name": "resumen"
+            },
+            {
+              "name": "nombreDeclarado"
+            },
+            {
+              "name": "email"
+            },
+            {
+              "name": "firtsMessage"
+            },
+            {
+              "name": "url"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -864,
+        128
+      ],
+      "id": "f53a447f-ab45-41cc-a8aa-c84a42700c6e",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Tomar el item de entrada\nconst item = $input.first().json;\n\n// -------------------------\n// TELEFONO\n// -------------------------\nconst d = (item.number || \"\").replace(/\\D/g, \"\");\nitem.number = d.length >= 10 ? \"+549\" + d.slice(-10) : \"\";\n\n// -------------------------\n// PAGO\n// -------------------------\nconst pago = (item.pago || \"\")\n  .toString()\n  .trim()\n  .toLowerCase();\n\nif (pago.includes(\"pda\")) {\n  item.pago_id = 69;\n} else if (pago.includes(\"financi\")) {\n  item.pago_id = 68;\n} else {\n  item.pago_id = 67;\n}\n\nif (item.url== \"-\"){\n  item.origin = \"G7OFNXYN7Q30NMOE9\";\n}\nif (item.url!= \"-\"){\n  item.origin = \"G7OFOLVR4JLHS5TTS\";\n}\n\n// -------------------------\n// ORIGIN SEGÚN FIRST MESSAGE\n// -------------------------\n\n// Solo actuar si firtsMessage existe\nif (item.firtsMessage !== undefined && item.firtsMessage !== null) {\n  const firstMessage = item.firtsMessage\n    .toString()\n    .trim();\n\n  // Si contiene \"Ref: -<\"\n  if (firstMessage.includes(\"Ref:\")) {\n    item.origin = \"G8HZUVJZVRX30WNI9\";\n  }\n}\n\n// -------------------------\n// PRODUCTO\n// -------------------------\nconst productoNormalizado = (item.ProductoInteres || \"\")\n  .toString()\n  .toLowerCase();\n\n// -------------------------\n// MARCAS\n// -------------------------\nconst marcasConfig = {\n  renault: { businesstypeid: \"4\", grupoCaptura: \"renault\" },\n  nissan: { businesstypeid: \"5\", grupoCaptura: \"nissan\" },\n  jmc: { businesstypeid: \"30\", grupoCaptura: \"jmc\" },\n  mitsubishi: { businesstypeid: \"21\", grupoCaptura: \"mitsubishi\" },\n  changan: { businesstypeid: \"31\", grupoCaptura: \"changan\" },\n  gwm: { businesstypeid: \"35\", grupoCaptura: \"gwm\" },\n  leapmotor: { businesstypeid: \"36\", grupoCaptura: \"leapmotor\" },\n  omoda: { businesstypeid: \"32\", grupoCaptura: \"omoda\" },\n  jaecoo: { businesstypeid: \"33\", grupoCaptura: \"jaecoo\" },\n  zeekr: { businesstypeid: \"38\", grupoCaptura: \"zeekr\" },\n  deepal: { businesstypeid: \"43\", grupoCaptura: \"deepal\" },\n  xpeng: { businesstypeid: \"39\", grupoCaptura: \"xpeng\" }\n};\n\n// Buscar marca dentro del producto\nlet marcaEncontrada = null;\n\nfor (const marca in marcasConfig) {\n  if (productoNormalizado.includes(marca)) {\n    marcaEncontrada = marca;\n    break;\n  }\n}\n\n// Actualizar datos de marca si corresponde\nif (marcaEncontrada) {\n  item.businesstypeid =\n    marcasConfig[marcaEncontrada].businesstypeid;\n\n  item.grupoCaptura =\n    marcasConfig[marcaEncontrada].grupoCaptura;\n}\n\n// -------------------------\n// DEVOLVER RESULTADO\n// -------------------------\nreturn [\n  {\n    json: item\n  }\n];\n\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -480,
+        128
+      ],
+      "id": "e4cada36-750c-44fc-ab65-4e30290f8604",
+      "name": "Code1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://leads.redooconect.com.ar/api/v1/leads",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-KEY",
+              "value": "e1e678b7-900f-4e6d-a683-ecdf5b738d25"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"first_name\": \"{{ $('When Executed by Another Workflow').item.json.name }}\",\n  \"phone\": \"{{ $('When Executed by Another Workflow').item.json.number }}\",\n  \"source\": \"IA Ventas\",\n  \"notes\": \"{{ $('When Executed by Another Workflow').item.json.resumen }}\",\n  \"assigned_to_user_email\": \"{{ $json.data.welcome_assigned_user_email }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1344,
+        272
+      ],
+      "id": "4178b39c-4426-43ad-b5a6-0b885d21e411",
+      "name": "SUITE",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "9937f4fd-647d-4129-b4e6-d232a90f75e2",
+              "name": "response",
+              "value": "Ya nos quedo tu consulta",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "59692647-0c39-445b-8e43-c00a49827d7f",
+      "name": "Edit Fields1",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2608,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://api.pilotsolution.net/webhooks/welcome.php",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "appkey",
+              "value": "=BC7798A5-A25E-43B8-A2DE-6A0BDA7ACEDD"
+            },
+            {
+              "name": "pilot_firstname",
+              "value": "={{  $('Code1').first().json.nombreDeclarado || $('Code1').first().json.name || 'REDOO test'}}"
+            },
+            {
+              "name": "pilot_cellphone",
+              "value": "={{ $('Code1').first().json.number || '534344111235'}}"
+            },
+            {
+              "name": "pilot_contact_type_id",
+              "value": "1"
+            },
+            {
+              "name": "pilot_suborigin_id",
+              "value": "={{ $('Code1').first().json.origin || 'G7OFNXYN7Q30NMOE9' }}"
+            },
+            {
+              "name": "pilot_business_type_id",
+              "value": "=1"
+            },
+            {
+              "name": "pilot_notes",
+              "value": "={{ $('When Executed by Another Workflow').first().json.resumen }} link: {{$('When Executed by Another Workflow').first().json.url  }}"
+            },
+            {
+              "name": "pilot_product_of_interest",
+              "value": "=9160"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ba7e0c5e-2772-454e-abe4-ae01698a7fbc",
+      "name": "HTTP Request1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1024,
+        240
+      ],
+      "executeOnce": false
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "597e468b-8152-43a2-afa4-574b23a83d03",
+              "leftValue": "={{ $('When Executed by Another Workflow').first().json.goodLead }}",
+              "rightValue": "alto",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1600,
+        32
+      ],
+      "id": "9530b1d8-4db3-4a5a-9abe-d5af7ccb5a9c",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.pilotsolution.net/v1/welcomes/qualification/good.php",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"data\": {\n    \"id\": \"{{ $('HTTP Request1').first().json.data.welcome_guid }}\"\n  },\n  \"header\": {\n    \"FlowName\": \"lead_good\",\n    \"SequenceId\": 1,\n\t\"TimeStamp\": 1248377,\n\t\"TrackingId\": \"FD1C4A1A-CAFB-467E-825B-7FFB86CC21E3\",\n\t\"access_token\":\"{{ $json.result.entitydata.session.identityToken }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "95bbf3a8-77ce-44b6-80c6-967333359a1e",
+      "name": "goodLead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1824,
+        -32
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.pilotsolution.net/v1/users/authentication.php",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "options": {}
+      },
+      "id": "b773ab88-e9f4-4995-9996-a47ade43626e",
+      "name": "Login",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        928,
+        32
+      ],
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "gDxhZNhQrrB9jfIR",
+          "name": "Custom Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://api.pilotsolution.net/v1/users/authorization.php",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "identity_token",
+              "value": "={{ $json.token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "7c45a9c9-be0d-497d-9ed5-2588bc2457f0",
+      "name": "Login1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1376,
+        32
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.pilotsolution.net/v1/welcomes/update.php",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"data\": {\n    \"id\": \"{{ $('HTTP Request1').item.json.data.welcome_guid }}\",\n    \"interest_level_code\": \"{{ $('When Executed by Another Workflow').first().json.interes }}\"\n  },\n  \"header\": {\n    \"FlowName\": \"update_prospect\",\n    \"SequenceId\": 1,\n    \"TimeStamp\": 1248377,\n    \"TrackingId\": \"FD1C4A1A-CAFB-467E-825B-7FFB86CC21E3\",\n    \"access_token\": \"{{ $('Login1').item.json.result.entitydata.session.identityToken }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "444b9360-356a-4483-b568-fd42e859e2f9",
+      "name": "updateLead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2064,
+        32
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b223ceea-a793-41c8-8730-cce0790a5487",
+              "name": "token",
+              "value": "={{ $json.result.entitydata.accounts[0].token }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ab6476f3-f896-42d6-845e-d4f0932e4d25",
+      "name": "Edit Fields2",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1152,
+        32
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Good Lead\n",
+        "height": 336,
+        "width": 1520,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        880,
+        -96
+      ],
+      "typeVersion": 1,
+      "id": "c389a742-516d-4355-a42d-81bb42a1b33d",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "operation": "removeItemsSeenInPreviousExecutions",
+        "dedupeValue": "={{ $json.idConversation }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.removeDuplicates",
+      "typeVersion": 2,
+      "position": [
+        -688,
+        144
+      ],
+      "id": "bb6e1800-979c-45fe-93f3-563b821a8c0a",
+      "name": "Remove Duplicates",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b5bfe672-2ce7-494c-b994-77977dabf74b",
+              "name": "welcome_assigned_user_email",
+              "value": "={{ $('HTTP Request1').first().json.data.welcome_assigned_user_email || $json.result?.entitydata?.asigned?.user?.name || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "5fa6cdbe-725f-42aa-bc67-16c2c5d3446f",
+              "name": "welcome_assigned_user_fullname",
+              "value": "={{ $('HTTP Request1').first().json.data.welcome_assigned_user_fullname || $json.result?.entitydata?.asigned?.user?.fullname || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "3d8ece82-4b2c-437a-bdf1-bf328c3fe910",
+              "name": "response",
+              "value": "Lead registrado",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "73b63ca6-dcce-4fca-9ce1-9e0f7b158b76",
+      "name": "Return Lead",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2288,
+        32
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.pilotsolution.net/v1/welcomes/list.php",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"data\": {\n    \"limit\": 100,\n    \"page\": 1,\n    \"filters\": [\n      {\n        \"field\": \"welcome_cellphone\",\n        \"operation\": \"LIKE\",\n        \"value\": \"{{ $('Code1').item.json.number.slice(-8) }}\"\n      }\n    ],\n    \"wildCard\": \"*\",\n    \"sorts\": [\n      {\n        \"field\": \"created\",\n        \"order\": \"DESC\"\n      }\n    ]\n  },\n  \"header\": {\n    \"FlowName\": \"List_Leads\",\n    \"SequenceId\": 1,\n    \"TimeStamp\": 1248377,\n    \"TrackingId\": \"FD1C4A1A-CAFB-467E-825B-7FFB86CC21E3\",\n    \"access_token\": \"{{ $json.result.entitydata.session.identityToken }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "6af4fc67-e34d-4f45-a331-0b8f5dc5550f",
+      "name": "searchLeadByPhone1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        528,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.pilotsolution.net/v1/users/authentication.php",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "options": {}
+      },
+      "id": "57498e15-844a-4e29-a662-b89f888655c3",
+      "name": "Login2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        80,
+        240
+      ],
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "gDxhZNhQrrB9jfIR",
+          "name": "Custom Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b223ceea-a793-41c8-8730-cce0790a5487",
+              "name": "token",
+              "value": "={{ $json.result.entitydata.accounts[0].token }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a414333b-8a85-4426-a1b5-e49695718f40",
+      "name": "Edit Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        224,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.pilotsolution.net/v1/users/authorization.php",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "identity_token",
+              "value": "={{ $json.token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "88e652b0-d20d-4668-b44c-8f9a505aa450",
+      "name": "Login3",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        384,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst items = $input.all();\n\nconst ahora = Date.now();\nconst limite48Horas = ahora - (48 * 60 * 60 * 1000);\n\nlet hayLeadReciente = false;\n\nfor (const item of items) {\n  const entitydata = item.json?.result?.entitydata ?? [];\n\n  for (const lead of entitydata) {\n    const fechaCreacion = lead.created?.dt;\n\n    if (!fechaCreacion) continue;\n\n    const fecha = new Date(fechaCreacion).getTime();\n\n    if (Number.isNaN(fecha)) continue;\n\n    // Si fue creado dentro de las últimas 48 horas\n    if (fecha >= limite48Horas && fecha <= ahora) {\n      hayLeadReciente = true;\n      break;\n    }\n  }\n\n  if (hayLeadReciente) break;\n}\n\nreturn [\n  {\n    json: {\n      result: hayLeadReciente\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        704,
+        240
+      ],
+      "id": "69280dc3-b86a-4db3-84ab-a057821f4216",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "a42157e4-a84e-40e2-acbc-0c665e08f614",
+              "leftValue": "={{ $json.result }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        832,
+        240
+      ],
+      "id": "3522d54c-0f55-49e3-ae9d-af2e58f29315",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "9937f4fd-647d-4129-b4e6-d232a90f75e2",
+              "name": "response",
+              "value": "Lead Ya creado correctamente",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f9760339-d2bc-45a8-89ae-c60f741b0799",
+      "name": "Edit Fields3",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2368,
+        736
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://api.pilotsolution.net/webhooks/welcome.php",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "appkey",
+              "value": "=855B2202-E756-4057-BB0D-BE4107F967A0"
+            },
+            {
+              "name": "pilot_firstname",
+              "value": "=redoo"
+            },
+            {
+              "name": "pilot_cellphone",
+              "value": "=1111"
+            },
+            {
+              "name": "pilot_suborigin_id",
+              "value": "=G8Y9LPW8LXE4P8CHS"
+            },
+            {
+              "name": "pilot_business_type_id",
+              "value": "=6"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a93d7286-9477-47b9-96df-ef96b1182664",
+      "name": "HTTP Request",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        256,
+        544
+      ],
+      "executeOnce": false
+    },
+    {
+      "parameters": {
+        "jsCode": "// Mueve la conversación de la Suite al asesor que Pilot le asignó al lead.\n// Caminos:\n//  - ok:          SUITE (Redoo Leads) devolvió assigned_to_user.id (ID de usuario de la Suite).\n//  - suite_error: falló SUITE; el mail del asesor viene de Pilot (HTTP Request1) y el ID se busca por mail.\n//  - existing:    ya había un lead en las últimas 48h; Pilot lista el asesor como asigned.user.fullname (sin mail), se busca por nombre.\n// Solo se asigna a miembros activos del grupo 701 (Ventas, empresa 216). Si no hay asesor o no\n// es del grupo, no se hace nada y la derivación sigue como hasta ahora.\nconst GRUPO = '701';\n\n// [id, nombre, mail] — miembros activos del grupo 701. Actualizar cuando cambie el grupo.\nconst MIEMBROS_701 = [\n  [1669,'Abraham Vazquez','abrahamvazquezj7@gmail.com'],\n  [1686,'Adriana Chazarreta','chol.y20.ac@gmail.com'],\n  [1892,'Agustin Sosa','agustinasosa0401@gmail.com'],\n  [1704,'Alan Ruiz','alannruiz188@gmail.com'],\n  [1738,'Alan Dyke','dykealan679@gmail.com'],\n  [1689,'Alan Ferreyra','alannnferreyra@gmail.com'],\n  [1688,'Alan Diaz','diazalan874@gmail.com'],\n  [1673,'Aldana Ortiz','aldanaortiz591@gmail.com'],\n  [1992,'Andrés Cardozo','andacar6991@gmail.com'],\n  [1675,'Angel Olartes','angelolartes@hotmail.com'],\n  [1672,'Antonella Mombelli','antomombelli1234@gmail.com'],\n  [1666,'Ariana Campbell','arianaihcampbell@gmail.com'],\n  [1747,'Camila Castro','camila.castrook15@gmail.com'],\n  [1745,'Celeste Gomez','celegomez123g@gmail.com'],\n  [1694,'Daiana Monges','daimonges19@gmail.com'],\n  [1893,'Daniel Godoy','daniel1305godoy@gmail.com'],\n  [1842,'Daniela Moises','Danielanairmoises@gmail.com'],\n  [1687,'David Cuevas','normancuevas04@gmail.com'],\n  [1665,'Eduardo Brandan','edubrandan35@gmail.com'],\n  [1811,'Esteban Almeida','pato.almeidaok@gmail.com'],\n  [1700,'Facundo Perez Trevisan','facundopereztrevisan@gmail.com'],\n  [1702,'Franco Rodriguez','franconuevomail12@gmail.com'],\n  [1741,'Gaston Ruiz','gaston.ruizdeazua@gmail.com'],\n  [1698,'Guido Oyarzo','guido.foi88@gmail.com'],\n  [1990,'Ireneo Bacigalupo','Ireneo.baci39@gmail.com'],\n  [1682,'Jonatan Alvez','joninabel270@gmail.com'],\n  [1831,'Jose Medina','medina.josec99@gmail.com'],\n  [1772,'Juan Lopez','juanlopess1216@gmail.com'],\n  [1661,'Lautaro Martinelli','Martinellilautaro@gmail.com'],\n  [1664,'Lautaro Galvan','laugalvan71@gmail.com'],\n  [1742,'Leonardo Rodriguez','cuentadeuruguay@gmail.com'],\n  [1692,'Liz Gutierrez','marthsgut@gmail.com'],\n  [1696,'Lucas Orellana','lucasorellana973@gmail.com'],\n  [1690,'Luna Gisondi','lunaagisondi@gmail.com'],\n  [1667,'Marcela Ilardo','ilardomarcela@gmail.com'],\n  [1773,'Maria Celeste Nigro','celestennigro@gmail.com'],\n  [1776,'Martina Oviedo','Martuu234oviedo@gmail.com'],\n  [1701,'Matias Ramos','leo.horacio.r.n@gmail.com'],\n  [1705,'Mauro Sarso','maurosarso12@gmail.com'],\n  [1739,'Micaela Rogero','rogeromicaela4@gmail.com'],\n  [1674,'Milagros Nuñez','miilagrosn96@outlook.com'],\n  [1671,'Nicolas Senra','enriquenicolassenra@outlook.com'],\n  [1703,'Paula Rodriguez','paulabrodriguez89@gmail.com'],\n  [1743,'Pedro Zapata','zapatapedro662@gmail.com'],\n  [1978,'Rut Duarte','rut454547@gmail.com'],\n  [1770,'Santiago Yelitze','yelitzesaray1@gmail.com'],\n  [1684,'Tomas Castro','tomascastro100501@gmail.com'],\n  [1670,'Valentina Terrazzino','vterrazzino688@gmail.com'],\n];\nconst normalizar = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\\s+/g, ' ').trim().toLowerCase();\nconst porId = new Map(MIEMBROS_701.map(([id, nombre]) => [String(id), nombre]));\nconst porMail = new Map(MIEMBROS_701.map(([id, nombre, mail]) => [mail.toLowerCase(), { id: String(id), nombre }]));\nconst porNombre = new Map(MIEMBROS_701.map(([id, nombre]) => [normalizar(nombre), { id: String(id), nombre }]));\n\nconst item = $input.first().json;\nconst base = $('Code1').first().json;\nconst entrada = $('When Executed by Another Workflow').first().json;\n\nlet camino;\nlet id = '';\nlet nombre = '';\nlet mail = '';\nlet nombrePilot = '';\n\nif ($prevNode.name === 'SUITE') {\n  const u = item.data && item.data.assigned_to_user;\n  if (item.success === true && u && u.id) {\n    camino = 'ok';\n    id = String(u.id);\n    mail = String(u.email || '').trim();\n    nombre = [u.first_name, u.last_name].filter(Boolean).join(' ');\n  } else {\n    camino = 'suite_error';\n    const pilot = $('HTTP Request1').first().json.data || {};\n    mail = String(pilot.welcome_assigned_user_email || '').trim();\n    nombrePilot = String(pilot.welcome_assigned_user_fullname || '').trim();\n  }\n} else {\n  camino = 'existing';\n  const leads = ($('searchLeadByPhone1').first().json.result || {}).entitydata || [];\n  const limite = Date.now() - 48 * 60 * 60 * 1000;\n  const reciente = Array.isArray(leads)\n    ? leads.find(l => new Date(l && l.created && l.created.dt).getTime() >= limite)\n    : null;\n  const asesor = reciente && reciente.asigned && reciente.asigned.user;\n  // El listado de Pilot trae asigned.user.{id (GUID), fullname}; no trae mail.\n  mail = String((asesor && asesor.name) || (reciente && reciente.welcome_assigned_user_email) || '').trim();\n  nombrePilot = String((asesor && asesor.fullname) || '').trim();\n}\n\nif (!id && mail) {\n  const m = porMail.get(mail.toLowerCase());\n  if (m) { id = m.id; nombre = m.nombre; }\n}\nif (!id && nombrePilot) {\n  const m = porNombre.get(normalizar(nombrePilot));\n  if (m) { id = m.id; nombre = m.nombre; }\n}\nconst esMiembro = !!id && porId.has(id);\nif (esMiembro && !nombre) nombre = porId.get(id);\n\nreturn [{\n  json: {\n    camino,\n    asignar: esMiembro && !!base.number,\n    from: base.number || '',\n    username: entrada.nombreDeclarado || base.name || '',\n    group_id: GRUPO,\n    assigned_to: id,\n    assigned_to_name: nombre,\n    mail,\n  },\n}];\n"
+      },
+      "id": "b06e8389-8607-4cb1-b0b8-944818205d11",
+      "name": "Armar asignación Suite",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1520,
+        560
+      ],
+      "notes": "Decide a qué asesor mover la conversación de la Suite. Solo asigna a miembros activos del grupo 701 (lista MIEMBROS_701: si entra un asesor nuevo al grupo hay que agregarlo acá)."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "asignar-suite-1",
+              "leftValue": "={{ $json.asignar }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b0aac21e-f83e-469d-9c0f-de451a8a0428",
+      "name": "¿Asignar en la Suite?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1728,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://suite-conversations-production.up.railway.app/api/v1/conversations/ensure-and-redirect",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-KEY",
+              "value": "e1e678b7-900f-4e6d-a683-ecdf5b738d25"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  \"from\": $json.from,\n  \"username\": $json.username,\n  \"origin\": \"whatsapp\",\n  \"mode\": \"direct\",\n  \"group_id\": $json.group_id,\n  \"assigned_to\": $json.assigned_to,\n  \"assigned_to_name\": $json.assigned_to_name,\n  \"assigned_by_name\": \"Derivación automática\"\n} }}",
+        "options": {
+          "timeout": 8000
+        }
+      },
+      "id": "108adcef-11a3-4f54-a58e-173527120eac",
+      "name": "Asignar asesor en la Suite",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1904,
+        528
+      ],
+      "notes": "POST al endpoint existente ensure-and-redirect de suite-conversations. Falta asignar la credencial Header Auth con el X-API-Key de Automobili (empresa 216). Si falla, no corta el flujo."
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "camino-ok",
+                    "leftValue": "={{ $('Armar asignación Suite').first().json.camino }}",
+                    "rightValue": "ok",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "ok"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "camino-suite-error",
+                    "leftValue": "={{ $('Armar asignación Suite').first().json.camino }}",
+                    "rightValue": "suite_error",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "suite_error"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "camino-existing",
+                    "leftValue": "={{ $('Armar asignación Suite').first().json.camino }}",
+                    "rightValue": "existing",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "existing"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5cc99c52-4bb9-4143-a6d3-59abfb8db0b3",
+      "name": "Seguir según camino",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        2080,
+        688
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.pilotsolution.net/v1/users/authentication.php",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "options": {}
+      },
+      "id": "f9ebd9d7-35d3-471f-ba55-2935d2f10d01",
+      "name": "Login4",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        48,
+        480
+      ],
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "pWWEiXjQyjr467t3",
+          "name": "PRUEBAS"
+        }
+      }
+    }
+  ],
+  "pinData": {
+    "When Executed by Another Workflow": [
+      {
+        "json": {
+          "goodLead": false,
+          "idConversation": "374b093d-1285-440b-bd44-27e5cb0093ab",
+          "number": "+5491155860469",
+          "name": "Diosnel Ramon",
+          "businesstypeid": "1",
+          "grupoCaptura": "9160",
+          "pago": "",
+          "ProductoInteres": "Consulta general",
+          "interes": "3",
+          "origin": "G7OFNXYN7Q30NMOE9",
+          "resumen": "Cliente enojado por la falta de atención y respuesta. Solicita que lo contacten urgentemente. No se proporcionó el nombre del asesor que lo atendió.",
+          "nombreDeclarado": "no proporcionado",
+          "email": "",
+          "firtsMessage": "Buen día",
+          "url": "-"
+        }
+      }
+    ]
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "Y4ATb1NZP3PF6Huw",
+      "projectId": "1M47WfzV5mBwjMQ5",
+      "createdAt": "2026-08-31T14:36:03.522Z",
+      "updatedAt": "2026-08-31T14:36:03.522Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [
+    {
+      "id": "GtkTpVxczFjg8tBg",
+      "name": "lincoln",
+      "createdAt": "2026-08-31T14:22:31.061Z",
+      "updatedAt": "2026-08-31T14:22:31.061Z"
+    }
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2026-11-03T19:26:54.097Z",
+  "versionId": "80c53c68-c598-4a4e-9120-884dd46fc5c0"
+}
