@@ -1,0 +1,4255 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "7268a5c7-28fe-49bd-b778-f52586daed7f",
+    "workflowId": "PpkjKHl3vFEHrmio",
+    "nodes": [
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "f1dc333f-f212-4ea2-8280-2e551ab1bc83",
+                "leftValue": "={{ $json.data.welcome_guid }}",
+                "rightValue": "=true",
+                "operator": {
+                  "type": "string",
+                  "operation": "exists",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "71bf8e17-244c-41e5-b67b-6ad19206d30d",
+        "name": "If2",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          -224,
+          96
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "update",
+          "table": {
+            "__rl": true,
+            "value": "conversations",
+            "mode": "list",
+            "cachedResultName": "conversations"
+          },
+          "dataMode": "defineBelow",
+          "columnToMatchOn": "id",
+          "valueToMatchOn": "={{$json.idConversation}}",
+          "valuesToSend": {
+            "values": [
+              {
+                "column": "crm_name",
+                "value": "pilot"
+              },
+              {
+                "column": "crm_lead",
+                "value": "={{ $json.data.welcome_guid }}"
+              },
+              {
+                "column": "status",
+                "value": "closed"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "7d29454b-78c8-4668-b57f-ac12a1d0440d",
+        "name": "MySQL",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          0,
+          0
+        ],
+        "disabled": true
+      },
+      {
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "9937f4fd-647d-4129-b4e6-d232a90f75e2",
+                "name": "response",
+                "value": "Lead creado correctamente!",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "06cb7075-fbb0-45a6-ab39-ed0c41dcd305",
+        "name": "Edit Fields",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [
+          224,
+          0
+        ],
+        "disabled": true
+      },
+      {
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "9937f4fd-647d-4129-b4e6-d232a90f75e2",
+                "name": "response",
+                "value": "Problemas al crear el lead. Intentar nuevamente. ",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "2a4bf1e2-e7cf-4553-b3d2-7d4bea7d6831",
+        "name": "Edit Fields1",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [
+          0,
+          192
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const input = $input.all()[0].json;\n\n// Función para parsear query cuando viene como string\nfunction parseQueryString(queryString) {\n  const result = {};\n  \n  const patterns = [\n    { key: 'origin', regex: /origin:\\s*([^,]+)/i },\n    { key: 'businesstypeid', regex: /businesstypeid:\\s*([^,]+)/i },\n    { key: 'grupoCaptura', regex: /grupoCaptura:\\s*([^,]+?)(?=,\\s*modelo:|$)/i },\n    { key: 'modelo', regex: /modelo:\\s*([^,]+?)(?=,\\s*pago:|$)/i },\n    { key: 'pago', regex: /pago:\\s*([^,]+?)(?=,\\s*usado:|$)/i },\n    { key: 'usado', regex: /usado:\\s*([^,]+?)(?=,\\s*interes:|$)/i },\n    { key: 'interes', regex: /interes:\\s*([^,]+)/i }\n  ];\n  \n  patterns.forEach(({ key, regex }) => {\n    const match = queryString.match(regex);\n    if (match) {\n      result[key] = match[1].trim();\n    }\n  });\n  \n  return result;\n}\n\n// Detectar si query es string u objeto\nlet parsedQuery = {};\nif (typeof input.query === 'string') {\n  // Caso 1: query es string \"origin: ..., modelo: ...\"\n  parsedQuery = parseQueryString(input.query);\n} else if (typeof input.query === 'object' && input.query !== null) {\n  // Caso 2: query es objeto { producto: \"X-TRAIL\", usado: \"...\", pago: \"...\" }\n  parsedQuery = {\n    modelo: input.query.producto || input.query.modelo,\n    pago: input.query.pago,\n    usado: input.query.usado,\n    interes: input.query.interes\n  };\n}\n\n// Extraer valores finales con fallbacks\nconst modelo = parsedQuery.modelo || \n              (input.producto !== 'undefined' ? input.producto : '') || '';\n              \nconst pago = parsedQuery.pago || \n            (input.pago !== 'undefined' ? input.pago : '') || '';\n            \nconst usado = parsedQuery.usado || \n             (input.usado !== 'undefined' ? input.usado : '') || '';\n             \nconst interes = parsedQuery.interes || \n               (modelo && pago && usado ? 'alto' : 'bajo');\n\n// Construir pilot_notes\nconst pilot_notes = `Modelo: ${modelo || 'No especificado'}\nPago: ${pago || 'No especificado'}\nUsado: ${usado || 'No especificado'}\nInterés: ${interes}`;\n\n// Output final\nconst output = {\n  name: input.name,\n  from: input.from,\n  idConversation: input.idConversation,\n  origin: parsedQuery.origin || input.origin || '',\n  \n  // Normalizar businesstypeid y grupoCaptura (con o sin espacio)\n  businesstypeid: parsedQuery.businesstypeid \n                   || input['businesstypeid ']?.trim() \n                   || input.businesstypeid?.trim() \n                   || '',\n                   \n  grupoCaptura: parsedQuery.grupoCaptura \n                   || input['grupoCaptura ']?.trim() \n                   || input.grupoCaptura?.trim() \n                   || '',\n\n  // 🔥 Agregados obligatorios al output:\n  producto: input.producto || parsedQuery.modelo || '',\n  usado: input.usado || parsedQuery.usado || '',\n  pago: input.pago || parsedQuery.pago || '',\n  ProductoInteres: input.ProductoInteres || input.producto || parsedQuery.modelo || '',\n\n  pilot_notes: pilot_notes\n};\n\nreturn { json: output };"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -416,
+          320
+        ],
+        "id": "1cb36154-c244-47d4-9bf5-1f85d49e2992",
+        "name": "Code"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.pilotsolution.net/webhooks/welcome.php",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "appkey",
+                "value": "=3D12593B-F8F5-4585-AEFC-D17768A3D9E5"
+              },
+              {
+                "name": "pilot_firstname",
+                "value": "={{ $('When Executed by Another Workflow').item.json.nombreDeclarado || $('When Executed by Another Workflow').item.json.name.normalize('NFKC') || 'PRUEBA' }}"
+              },
+              {
+                "name": "pilot_cellphone",
+                "value": "={{$('When Executed by Another Workflow').item.json.number || 549113133333}}"
+              },
+              {
+                "name": "pilot_contact_type_id",
+                "value": "2"
+              },
+              {
+                "name": "pilot_suborigin_id",
+                "value": "={{ $('When Executed by Another Workflow').item.json.origin || \"G5E0N2T63JEPQS4R5\" }}"
+              },
+              {
+                "name": "pilot_notes",
+                "value": "={{ $('When Executed by Another Workflow').item.json.resumen }}"
+              },
+              {
+                "name": "pilot_business_type_id",
+                "value": "=1"
+              },
+              {
+                "name": "pilot_product_code",
+                "value": "={{ $('metodo de pago').first().json[\"Codigo Terminal\"] }}"
+              },
+              {
+                "name": "pilot_contact_type_id",
+                "value": "1"
+              },
+              {
+                "name": "pilot_assigned_user",
+                "value": "={{ $json.data.assigned_to_user.email }}"
+              },
+              {
+                "name": "pilot_email",
+                "value": "={{ $('When Executed by Another Workflow').item.json.mail || \"no proporcioanado\" }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "4ac5ee70-d707-4712-8600-600c3a37de60",
+        "name": "HTTP Request1",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          688,
+          1088
+        ],
+        "executeOnce": true
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "597e468b-8152-43a2-afa4-574b23a83d03",
+                "leftValue": "=",
+                "rightValue": "alto",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          1712,
+          1104
+        ],
+        "id": "6c573b99-1b3a-4f73-99a6-95feec3ef2b9",
+        "name": "If",
+        "disabled": true
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.pilotsolution.net/v1/welcomes/qualification/good.php",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={\n  \"data\": {\n    \"id\": \"{{ $('HTTP Request1').item.json.data.welcome_guid }}\"\n  },\n  \"header\": {\n    \"FlowName\": \"lead_good\",\n    \"SequenceId\": 1,\n\t\"TimeStamp\": 1248377,\n\t\"TrackingId\": \"FD1C4A1A-CAFB-467E-825B-7FFB86CC21E3\",\n\t\"access_token\":\"{{ $json.result.entitydata.session.identityToken }}\"\n  }\n}",
+          "options": {}
+        },
+        "id": "54ba8144-6aa2-4028-b122-0cfbe1c39813",
+        "name": "goodLead",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1936,
+          1040
+        ],
+        "disabled": true
+      },
+      {
+        "parameters": {
+          "url": "=https://api.pilotsolution.net/v1/users/authentication.php",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpCustomAuth",
+          "options": {}
+        },
+        "id": "fd31b43c-fc61-4b41-948e-f95a48164212",
+        "name": "Login",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1040,
+          1104
+        ],
+        "credentials": {
+          "httpCustomAuth": {
+            "id": "XbIPUcWKdSWgyumH",
+            "name": "Custom Auth account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "url": "=https://api.pilotsolution.net/v1/users/authorization.php",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "identity_token",
+                "value": "={{ $json.token }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "9c80d0ef-59e0-4201-9393-6cfdde5cf837",
+        "name": "Login1",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1488,
+          1104
+        ]
+      },
+      {
+        "parameters": {
+          "workflowInputs": {
+            "values": [
+              {
+                "name": "goodLead",
+                "type": "any"
+              },
+              {
+                "name": "idConversation",
+                "type": "any"
+              },
+              {
+                "name": "number",
+                "type": "any"
+              },
+              {
+                "name": "name",
+                "type": "any"
+              },
+              {
+                "name": "businesstypeid",
+                "type": "any"
+              },
+              {
+                "name": "grupoCaptura",
+                "type": "any"
+              },
+              {
+                "name": "pago",
+                "type": "any"
+              },
+              {
+                "name": "ProductoInteres",
+                "type": "any"
+              },
+              {
+                "name": "usado",
+                "type": "any"
+              },
+              {
+                "name": "interes",
+                "type": "any"
+              },
+              {
+                "name": "origin",
+                "type": "any"
+              },
+              {
+                "name": "resumen"
+              },
+              {
+                "name": "testDrive"
+              },
+              {
+                "name": "comentarioTestDrive"
+              },
+              {
+                "name": "ReunionAsesor"
+              },
+              {
+                "name": "nombreDeclarado"
+              },
+              {
+                "name": "sucursal"
+              },
+              {
+                "name": "precioMencionado"
+              },
+              {
+                "name": "montoFinanciado"
+              },
+              {
+                "name": "quiereFinanciado",
+                "type": "boolean"
+              },
+              {
+                "name": "bancoFinanciacion"
+              },
+              {
+                "name": "tipoCompra"
+              },
+              {
+                "name": "mail"
+              }
+            ]
+          }
+        },
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "typeVersion": 1.1,
+        "position": [
+          -1296,
+          1136
+        ],
+        "id": "a114b009-c845-4126-8e60-b254c709091c",
+        "name": "When Executed by Another Workflow"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.pilotsolution.net/v1/welcomes/update.php",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={\n  \"data\": {\n    \"id\": \"{{ $('HTTP Request1').item.json.data.welcome_guid }}\",\n    \"interest_level_code\": \"{{ $('When Executed by Another Workflow').item.json.interes }}\"\n  },\n  \"header\": {\n    \"FlowName\": \"update_prospect\",\n    \"SequenceId\": 1,\n    \"TimeStamp\": 1248377,\n    \"TrackingId\": \"FD1C4A1A-CAFB-467E-825B-7FFB86CC21E3\",\n    \"access_token\": \"{{ $('Login1').item.json.result.entitydata.session.identityToken }}\"\n  }\n}",
+          "options": {}
+        },
+        "id": "ca04dc3f-2f33-4997-9479-7ec9b597a059",
+        "name": "updateLead",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2176,
+          1104
+        ],
+        "disabled": true
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "ec7f6c63-0a28-4c38-b63c-c924473d36d6",
+                "leftValue": "={{ $('When Executed by Another Workflow').item.json.testDrive }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          1040,
+          1424
+        ],
+        "id": "8ea2037c-7516-4b01-834c-97c5cc777836",
+        "name": "If1"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.pilotsolution.net/v1/welcomes/events/create.php",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={\n  \"data\": {\n    \"id\": \"{{ $('HTTP Request1').item.json.data.welcome_guid }}\",\n    \"event_type_code\": \"49\",\n    \"comment\": \"{{$('When Executed by Another Workflow').item.json.comentarioTestDrive }}\"\n  },\n  \"header\": {\n    \"FlowName\": \"event_create\",\n    \"SequenceId\": 1,\n    \"TimeStamp\": 1706880000,\n    \"TrackingId\": \"2B50DDB4-14C5-4249-82AB-049E6E735AA1\",\n    \"access_token\": \"{{ $json.result.entitydata.session.identityToken }}\"\n  }\n}\n",
+          "options": {}
+        },
+        "id": "5b53ebab-57bb-46f8-9642-2bf8da57083c",
+        "name": "HTTP/testDrive",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1936,
+          1328
+        ],
+        "executeOnce": true
+      },
+      {
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "b223ceea-a793-41c8-8730-cce0790a5487",
+                "name": "token",
+                "value": "={{ $json.result.entitydata.accounts[0].token }}",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "a6cf0be3-e89f-4537-9dff-f8e0b487f72b",
+        "name": "Edit Fields3",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [
+          1488,
+          1424
+        ]
+      },
+      {
+        "parameters": {
+          "url": "=https://api.pilotsolution.net/v1/users/authentication.php",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpCustomAuth",
+          "options": {}
+        },
+        "id": "3d7069e0-af4d-4c6d-b44e-f24ca4415fcf",
+        "name": "Login2",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1264,
+          1424
+        ],
+        "credentials": {
+          "httpCustomAuth": {
+            "id": "XbIPUcWKdSWgyumH",
+            "name": "Custom Auth account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "url": "=https://api.pilotsolution.net/v1/users/authorization.php",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "identity_token",
+                "value": "={{ $json.token }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "e0b78115-e615-4088-8cf5-0fe81b931518",
+        "name": "Login3",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1712,
+          1424
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.pilotsolution.net/v1/welcomes/events/create.php",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={\n  \"data\": {\n    \"id\": \"{{ $('HTTP Request1').item.json.data.welcome_guid }}\",\n    \"event_type_code\": \"47\",\n    \"comment\": \"{{$('When Executed by Another Workflow').item.json.resumen }}\"\n  },\n  \"header\": {\n    \"FlowName\": \"event_create\",\n    \"SequenceId\": 1,\n    \"TimeStamp\": 1706880000,\n    \"TrackingId\": \"2B50DDB4-14C5-4249-82AB-049E6E735AA1\",\n    \"access_token\": \"{{ $json.result.entitydata.session.identityToken }}\"\n  }\n}\n",
+          "options": {}
+        },
+        "id": "fbece0b5-e880-427f-9b69-498ba50f66cf",
+        "name": "HTTP/testDrive1",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2160,
+          1520
+        ],
+        "executeOnce": true
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "ec7f6c63-0a28-4c38-b63c-c924473d36d6",
+                "leftValue": "={{ $('When Executed by Another Workflow').item.json.ReunionAsesor }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          1936,
+          1520
+        ],
+        "id": "de6be8ab-54b0-407d-9f68-1094f89a26a6",
+        "name": "If3"
+      },
+      {
+        "parameters": {
+          "promptType": "define",
+          "text": "= A vos te llega el producto de interes del cliente {{ $json.output[0].ProductoInteres }}",
+          "hasOutputParser": true,
+          "options": {
+            "systemMessage": "=Tu objetivo es ejecutar SIEMPRE la tool interes y devolver los campos que coincidan con el modelo requerido por el cliente: \"ID PRODUCTO PILOT\",\"Codigo Terminal\",\"CODIGO MODELO\", \"Template\": \n,tenes que devolver:\n\n\n{\n\"goodLead\": {{ $json.output[0].goodLead }},\n\"idConversation\": {{ $json.output[0].idConversation}},\n\"number\": \"{{$json.output[0].number }}\",\n\"name\": \"{{$json.output[0].name }}\",\n\"businesstypeid\": \"{{ $json.output[0].businesstypeid }}\",\n\"grupoCaptura\": \"{{$json.output[0].grupoCaptura}}\",\n\"pago\": \"{{ $json.output[0].pago }}\",\n\"ProductoInteres\": \"{{ $json.output[0].ProductoInteres }}\",\n\"usado\": \"{{ $json.output[0].usado}}\",\n\"interes\": \"{{$json.output[0].interes  }}\",\n\"resumen\": \"{{ $json.output[0].resumen }}\",\n\"testDrive\": {{ $json.output[0].testDrive }},\n\"comentarioTestDrive\": \"{{$json.output[0].comentarioTestDrive }}\",\n\"ReunionAsesor\": {{ $json.output[0].ReunionAsesor }},\n\"nombreDeclarado\": \"{{ $json.output[0].nombreDeclarado }}\",\n\"sucursal\": \"{{ $json.output[0].sucursal }}\",\n\"ID PRODUCTO PILOT\": \"XXXX\",\n\"Codigo Terminal\": \"XXXXXXX\",\n\"CODIGO MODELO\": \"XXXXXX\",\n\"Template\": \"XXXXXX\",\n\"precioMencionado\": \"{{ $json.output[0].precioMencionado }}\",\n\"precioEncontrado\":\"{{ $json.output[0].precioEncontrado }}\",\n\"precioFinanciado\":\"{{ $json.output[0].precioFinanciado }}\",\n\"bancoFinanciacion\":\"{{ $json.output[0].bancoFinanciacion }}\"\n}\n\nNo inventes nigun dato",
+            "maxIterations": 4
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.agent",
+        "typeVersion": 2.2,
+        "position": [
+          -496,
+          1136
+        ],
+        "id": "69edcb5f-2bf3-4770-b15c-d3f6afe8617b",
+        "name": "AI Agent"
+      },
+      {
+        "parameters": {
+          "model": {
+            "__rl": true,
+            "mode": "list",
+            "value": "gpt-4.1-mini"
+          },
+          "options": {
+            "temperature": 0.2
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1.2,
+        "position": [
+          -560,
+          1360
+        ],
+        "id": "991f8d2d-559d-4500-99a0-abfcad5e961c",
+        "name": "OpenAI Chat Model",
+        "credentials": {
+          "openAiApi": {
+            "id": "TOIrmcOlayuwA9Lg",
+            "name": "OpenAi account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsonSchemaExample": "\n[\n{\n\"goodLead\": true,\n\"idConversation\": 550279,\n\"number\": \"+5491131438902\",\n\"name\": \"Lisandro Bachur\",\n\"businesstypeid\": \"1\",\n\"grupoCaptura\": \"STRIANESE\",\n\"pago\": \"Contado\",\n\"ProductoInteres\": \"Mustang Dark Horse\",\n\"usado\": \"no\",\n\"interes\": \"986E9A20\",\n\"resumen\": \"Raúl consultó por el Mustang tradicional (naftero), eligiendo la versión Dark Horse. Confirmó pago al contado, sucursal Lomas, y no desea test drive ni reunión con asesor. Stock disponible al momento de la consulta.\",\n\"testDrive\": false,\n\"comentarioTestDrive\": \"No desea test drive.\",\n\"ReunionAsesor\": false,\n\"nombreDeclarado\": \"Raúl\",\n\"sucursal\": \"Lomas\",\n\"ID PRODUCTO PILOT\": \"XXXX\",\n\"Codigo Terminal\": \"XXXXXXX\",\n\"CODIGO MODELO\": \"MUSTANG\",\n\"Template\":\"XXXXX\",\n\"precioMencionado\": \"57.000.000\",\n\"precioEncontrado\":\"10.000.000\",\n\"precioFinanciado\":\"500.000\",\n\"bancoFinanciacion\":\"BBVA\"\n}\n]"
+        },
+        "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+        "typeVersion": 1.3,
+        "position": [
+          -272,
+          1328
+        ],
+        "id": "3f98985c-28db-4b8e-868b-9bc0365b3849",
+        "name": "Structured Output Parser"
+      },
+      {
+        "parameters": {
+          "documentId": {
+            "__rl": true,
+            "value": "1TVJd-jgvfZYiOrHWk0blSlqjsbJnWyJ42BSy2dwVZIs",
+            "mode": "list",
+            "cachedResultName": "MVP FORD-STRIANESE",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1TVJd-jgvfZYiOrHWk0blSlqjsbJnWyJ42BSy2dwVZIs/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": 403123869,
+            "mode": "list",
+            "cachedResultName": "ProdInterews",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1TVJd-jgvfZYiOrHWk0blSlqjsbJnWyJ42BSy2dwVZIs/edit#gid=403123869"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleSheetsTool",
+        "typeVersion": 4.7,
+        "position": [
+          -432,
+          1360
+        ],
+        "id": "c621652c-7697-4180-9754-f99b5591ec56",
+        "name": "interes",
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "EH6Znx0VMlau3ozj",
+            "name": "Google Sheets account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "content": "## Test Drive y Asesor\n",
+          "height": 416,
+          "width": 1520
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          896,
+          1264
+        ],
+        "typeVersion": 1,
+        "id": "f83925a2-dd21-4b77-96d2-8897c3e2096c",
+        "name": "Sticky Note"
+      },
+      {
+        "parameters": {
+          "content": "## Good Lead\n",
+          "height": 336,
+          "width": 1520,
+          "color": 2
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          896,
+          928
+        ],
+        "typeVersion": 1,
+        "id": "ddff3462-53ca-4669-85e6-4c9e215771cf",
+        "name": "Sticky Note1"
+      },
+      {
+        "parameters": {
+          "content": "## Presupuesto",
+          "height": 320,
+          "width": 544,
+          "color": 3
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          1872,
+          608
+        ],
+        "typeVersion": 1,
+        "id": "48f97ddb-fe09-4162-b002-109d038fb51e",
+        "name": "Sticky Note2"
+      },
+      {
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "b223ceea-a793-41c8-8730-cce0790a5487",
+                "name": "token",
+                "value": "={{ $json.result.entitydata.accounts[0].token }}",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "4e6c9d45-6a7c-4515-ad17-ebdce5539f3d",
+        "name": "Edit Fields2",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [
+          1264,
+          1104
+        ]
+      },
+      {
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "b223ceea-a793-41c8-8730-cce0790a5487",
+                "name": "token",
+                "value": "={{ $json.result.entitydata.accounts[0].token }}",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "831b52a9-7b95-4115-adaa-35eca9b00477",
+        "name": "Edit Fields5",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [
+          1248,
+          720
+        ]
+      },
+      {
+        "parameters": {
+          "url": "=https://api.pilotsolution.net/v1/users/authentication.php",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpCustomAuth",
+          "options": {}
+        },
+        "id": "5ded783e-cd53-41da-ae1f-16067ef6e28e",
+        "name": "Login6",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1024,
+          720
+        ],
+        "credentials": {
+          "httpCustomAuth": {
+            "id": "XbIPUcWKdSWgyumH",
+            "name": "Custom Auth account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "url": "=https://api.pilotsolution.net/v1/users/authorization.php",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "identity_token",
+                "value": "={{ $json.token }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "cfc1008e-0820-4dd4-a6f3-b315d5dec807",
+        "name": "Login7",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1472,
+          720
+        ]
+      },
+      {
+        "parameters": {
+          "content": "## Creo oferta",
+          "height": 320,
+          "width": 976
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          896,
+          608
+        ],
+        "typeVersion": 1,
+        "id": "2d562f26-b731-4f3f-be93-1c625454b9a7",
+        "name": "Sticky Note3"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.pilotsolution.net/v1/opportunities/create.php",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={\n  \"data\": {\n    \"lead_id\": \"{{ $('HTTP Request1').item.json.data.welcome_guid }}\",\n    \"business_type_code\": \"{{ $('HTTP Request1').item.json.data.welcome_business_type_code }}\",\n    \"product_code\":\"{{ $('AI Agent').item.json.output[0]['Codigo Terminal'] }}\",\n    \"cash_amt\": \"{{ $('AI Agent1').item.json.output[0].precioEncontrado }}\",\n    \"credit_amt\":\"{{ $('AI Agent1').item.json.output[0].precioFinanciado }}\",\n    \"credit_bank\": \"{{ $('AI Agent1').item.json.output[0].bancoFinanciacion }}\"\n  },\n  \"header\": {\n    \"FlowName\": \"OPPORTUNITY_CREATE_PILOT\",\n    \"SequenceId\": 1,\n    \"TimeStamp\": 1706880000,\n    \"access_token\": \"{{ $json.result.entitydata.session.identityToken }}\"\n  }\n}\n",
+          "options": {}
+        },
+        "id": "1cb89323-70b8-4588-83c5-1b46a9abb498",
+        "name": "crearOferta",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1680,
+          720
+        ],
+        "executeOnce": true
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.pilotsolution.net/v1/electronicquotations/create.php",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={\n  \"data\": {\n    \"opportunity_id\": \"{{ $json.result.entitydata.id }}\",\n    \"template_code\": \"{{ $('AI Agent').item.json.output[0]['Template'] }}\"\n  },\n  \"header\": {\n    \"FlowName\": \"electronicquotation_create\",\n    \"SequenceId\": 1,\n    \"TimeStamp\": 1706880000,\n    \"access_token\": \"{{ $('Login7').item.json.result.entitydata.session.identityToken }}\"\n  }\n}\n",
+          "options": {}
+        },
+        "id": "5b39d5ef-fe91-404d-9c6a-dcb576cda086",
+        "name": "crearPresupuesto",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2096,
+          720
+        ],
+        "executeOnce": true
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.pilotsolution.net/v1/electronicquotations/list.php",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={\n\t\"data\": {\n\t\t\"_filters\": [\n\n\t\t],\n\t\t\"limit\": 1,\n\t\t\"page\": 1\n\t},\n\t\"header\": {\n\t\t\"FlowName\": \"list_electronic_quotation\",\n\t\t\"SequenceId\": \"1\",\n\t\t\"TimeStamp\": \"1513352637\",\n\t\t\"access_token\": \"{{ $('Login10').item.json.result.entitydata.session.identityToken }}\"\n\t}\n}",
+          "options": {}
+        },
+        "id": "248a93d0-bac9-4ca2-9ec1-532c187d20d1",
+        "name": "crearPresupuesto1",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1680,
+          128
+        ],
+        "executeOnce": true
+      },
+      {
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "b223ceea-a793-41c8-8730-cce0790a5487",
+                "name": "token",
+                "value": "={{ $json.result.entitydata.accounts[0].token }}",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "a4690eee-5bfa-4a51-8127-21817e72380d",
+        "name": "Edit Fields6",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [
+          1136,
+          128
+        ]
+      },
+      {
+        "parameters": {
+          "url": "=https://api.pilotsolution.net/v1/users/authentication.php",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpCustomAuth",
+          "options": {}
+        },
+        "id": "848c3118-02ff-4aa7-bc81-c6993c0f403c",
+        "name": "Login9",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          912,
+          128
+        ]
+      },
+      {
+        "parameters": {
+          "url": "=https://api.pilotsolution.net/v1/users/authorization.php",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "identity_token",
+                "value": "={{ $json.token }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "20bc9452-9a3e-4a65-8950-0afffd7fd1a5",
+        "name": "Login10",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1360,
+          128
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.pilotsolution.net/v1/analysis/list.php",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={\n  \"data\": {},\n  \"header\": {\n    \"FlowName\": \"list_prospect\",\n    \"SequenceId\": \"1\",\n    \"TimeStamp\": \"1513352637\",\n    \"access_token\": \"{{$json.result.entitydata.session.identityToken}}\"\n  }\n}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1728,
+          432
+        ],
+        "id": "c187a80a-8c4f-4612-ac64-6f0e46609ca1",
+        "name": "HTTP Request"
+      },
+      {
+        "parameters": {
+          "content": "Analisis de necesidades\n",
+          "height": 208,
+          "width": 1520,
+          "color": 4
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          896,
+          400
+        ],
+        "typeVersion": 1,
+        "id": "3e889d7f-fb52-4136-b83e-6eda2def8e8d",
+        "name": "Sticky Note4"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.pilotsolution.net/v1/analysis/create.php",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={\n  \"data\": {\n    \"welcome_guid\": \"{{ $('HTTP Request1').first().json.data.welcome_guid }}\",\n    \"form_code\": \"Homologación\"\n  },\n  \"header\": {\n    \"FlowName\": \"create_analysis\",\n    \"access_token\": \"{{ $('Login7').first().json.result.entitydata.session.identityToken }}\"\n  }\n}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1936,
+          432
+        ],
+        "id": "de8bee3f-6e78-4abb-96b5-18039db9b318",
+        "name": "HTTP Request2"
+      },
+      {
+        "parameters": {
+          "promptType": "define",
+          "text": "= A vos te llega el producto de interes del cleinte {{$json.ProductoInteres  }}",
+          "hasOutputParser": true,
+          "options": {
+            "systemMessage": "=Recibirás un objeto JSON con datos de un lead automotriz.\n\nTu tarea es determinar el precio correcto del modelo de interés:\n\n1. Toma el valor de \"ProductoInteres\"= {{ $json.ProductoInteres }} y búscalo en la tool get_precios.\n\n2. Compará el precio encontrado con el valor numérico de \"precioMencionado\" = {{ $json.precioMencionado }} (ignorá el texto, quedarte solo con el número).\n\n3. Aplicá esta lógica:\n   - Si encontrás el modelo y el precio coincide → usá el número de precioMencionado tal cual (sin texto) y en nuevo campo llamado precioEncontrado .\n\n   - Si encontrás el modelo y el precio es distinto → guarda el precio de get_precios en el campo precioEncontrado.\n\n   - Si no encontrás el modelo → usá el número de precioMencionado tal cual (sin texto) y copialo en precioEncontrado.\n\n4. Si {{ $json.montoFinanciado }} dice que monto quiere financiar o cuanto porcentaje o valor, hacer el calculo y ponerlo en el campo \"precioFinanciado\", si no lo menciona o no sabes pone 0 (no inventes, si no sabes pone 0 por default)\n\nDevolvé todo con esta estructura, sin explicaciones ni texto adicional:\n\n{\n\"goodLead\": {{ $json.goodLead }},\n\"idConversation\": {{ $json.idConversation }},\n\"number\": \"{{ $json.number }}\",\n\"name\": \"{{ $json.name }}\",\n\"businesstypeid\": \"{{ $json.businesstypeid }}\",\n\"grupoCaptura\": \"{{ $json.grupoCaptura }}\",\n\"pago\": \"{{ $json.pago }}\",\n\"ProductoInteres\": \"{{ $json.ProductoInteres }}\",\n\"usado\": \"{{ $json.usado }}\",\n\"interes\": \"{{ $json.interes }}\",\n\"resumen\": \"{{ $json.resumen }}\",\n\"testDrive\": {{ $json.testDrive }},\n\"comentarioTestDrive\": \"{{ $json.comentarioTestDrive }}\",\n\"ReunionAsesor\": {{ $json.ReunionAsesor }},\n\"nombreDeclarado\": \"{{ $json.nombreDeclarado }}\",\n\"sucursal\": \"{{ $json.sucursal }}\",\n\"precioMencionado\": \"XXXX\",\n\"precioEncontrado\":\"XXXX\",\n\"precioFinanciado\":\"XXXX\",\n\"bancoFinanciacion\":\"{{ $json.bancoFinanciacion }}\",\n\"tipoCompra\":\"{{ $json.tipoCompra }}\"\n\"origen\":\"{{ $json.origin }}\"\n}\n\nSi no menciona modelo, devolve los valores precioMencionado, precioEncontrado, precioFinanciado como 0\n\n",
+            "maxIterations": 4
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.agent",
+        "typeVersion": 2.2,
+        "position": [
+          -1024,
+          1136
+        ],
+        "id": "e67826fa-36e8-4b4e-bd50-28868b9a0ca6",
+        "name": "AI Agent1",
+        "alwaysOutputData": false
+      },
+      {
+        "parameters": {
+          "model": {
+            "__rl": true,
+            "value": "gpt-4.1",
+            "mode": "list",
+            "cachedResultName": "gpt-4.1"
+          },
+          "options": {
+            "temperature": 0.2
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1.2,
+        "position": [
+          -1184,
+          1424
+        ],
+        "id": "d799abdc-40ca-4be5-b48a-72a9d5334418",
+        "name": "OpenAI Chat Model1",
+        "credentials": {
+          "openAiApi": {
+            "id": "TOIrmcOlayuwA9Lg",
+            "name": "OpenAi account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "documentId": {
+            "__rl": true,
+            "value": "1TVJd-jgvfZYiOrHWk0blSlqjsbJnWyJ42BSy2dwVZIs",
+            "mode": "list",
+            "cachedResultName": "MVP FORD-STRIANESE",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1TVJd-jgvfZYiOrHWk0blSlqjsbJnWyJ42BSy2dwVZIs/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": 941436473,
+            "mode": "list",
+            "cachedResultName": "precios",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1TVJd-jgvfZYiOrHWk0blSlqjsbJnWyJ42BSy2dwVZIs/edit#gid=941436473"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleSheetsTool",
+        "typeVersion": 4.7,
+        "position": [
+          -960,
+          1424
+        ],
+        "id": "4bd067bb-72fc-4ffa-95bd-be630b0465e0",
+        "name": "get_precios",
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "EH6Znx0VMlau3ozj",
+            "name": "Google Sheets account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsonSchemaExample": "[\n  {\n    \"goodLead\": true,\n    \"idConversation\": 550279,\n    \"number\": \"+5491131438902\",\n    \"name\": \"Lisandro Bachur\",\n    \"businesstypeid\": \"1\",\n    \"grupoCaptura\": \"AYALA\",\n    \"pago\": \"Plan de Ahorro\",\n    \"ProductoInteres\": \"Mustang Dark Horse\",\n    \"usado\": \"VW Polo 2020, 50000 km\",\n    \"interes\": \"07B7AC5A\",\n    \"resumen\": \"Texto de resumen de ejemplo.\",\n    \"testDrive\": false,\n    \"comentarioTestDrive\": \"No desea test drive.\",\n    \"ReunionAsesor\": false,\n    \"nombreDeclarado\": \"Raúl\",\n    \"sucursal\": \"Lomas\",\n    \"precioMencionado\": \"57000000\",\n    \"precioEncontrado\": \"10000000\",\n    \"precioFinanciado\": \"500000\",\n    \"bancoFinanciacion\": \"BBVA\",\n    \"tipoCompra\":\"PDA\",\n    \"origen\": \"G5E0N2T63JEPQS4R5\"\n  }\n]",
+          "autoFix": true
+        },
+        "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+        "typeVersion": 1.3,
+        "position": [
+          -848,
+          1424
+        ],
+        "id": "ebd5b366-2f5c-4e2d-8020-76750b41df06",
+        "name": "Structured Output Parser1"
+      },
+      {
+        "parameters": {
+          "content": "## Sin numero de telefono no funciona, Tener cuidado al testear"
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          -1056,
+          960
+        ],
+        "typeVersion": 1,
+        "id": "58b27873-e85c-45ac-a8c1-62e2ff6b1330",
+        "name": "Sticky Note5"
+      },
+      {
+        "parameters": {
+          "model": {
+            "__rl": true,
+            "value": "gpt-4o",
+            "mode": "list",
+            "cachedResultName": "gpt-4o"
+          },
+          "builtInTools": {},
+          "options": {}
+        },
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1.3,
+        "position": [
+          -880,
+          1600
+        ],
+        "id": "dc7a4afb-8029-4411-aa5c-da391377a12e",
+        "name": "OpenAI Chat Model2",
+        "credentials": {
+          "openAiApi": {
+            "id": "TOIrmcOlayuwA9Lg",
+            "name": "OpenAi account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "9937f4fd-647d-4129-b4e6-d232a90f75e2",
+                "name": "response",
+                "value": "ya nos quedó tu consulta",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "441eae4b-5f38-4c39-b7b1-3ae482f08693",
+        "name": "Edit Fields4",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [
+          448,
+          1344
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://leads.redooconect.com.ar/api/v1/leads",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-API-KEY",
+                "value": "a0f84349-f978-49c7-88d4-66e7d94f0679"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={\n  \"first_name\": \"{{$('When Executed by Another Workflow').item.json.nombreDeclarado ||  $json.name || $json.nombre ||'No_ofrecido'}}\",\n  \"priority\": \"{{ $('When Executed by Another Workflow').item.json.nivel_Interes === 'alto' ? 'high' : $('When Executed by Another Workflow').item.json.nivel_Interes === 'bajo' ? 'low' : 'medium' }}\",\n  \"phone\": \"{{$json.number || $json.telefono}}\",\n  \"source\": \"IA Ventas\",\n  \"notes\": \"{{$json.resumen || $('When Executed by Another Workflow').item.json.resumen || ''}}\",\n  \"additional_data\": {\n    \"modelo\": \"{{$json.modelo || $json.ProductoInteres || ''}}\",\n    \"version\": \"{{$json.version || ''}}\",\n    \"pago\": \"{{$json.formaPago || $json.pago || ''}}\",\n    \"email\": \"{{$json.email || ''}}\"\n  },\n  \"assigned_to_group_id\": 618,\n  \"payment_method_id\":{{$json.payment_method_id}}\n}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          304,
+          1248
+        ],
+        "id": "1e389743-c4dd-480d-a12e-81242d72ad22",
+        "name": "LEADS convencional",
+        "retryOnFail": false,
+        "onError": "continueErrorOutput"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "1547965e-1637-4e45-bfca-103a5a342b0b",
+                "leftValue": "={{ ['plan de ahorro'].includes(($json.pago || '').toLowerCase().trim()) }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          96,
+          1120
+        ],
+        "id": "4b2aa31d-fd28-4947-bf61-7594ec6e5d8b",
+        "name": "If4"
+      },
+      {
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "9937f4fd-647d-4129-b4e6-d232a90f75e2",
+                "name": "response",
+                "value": "ya nos quedó tu consulta",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "96e43bd9-dea3-45bb-960b-9b3a88f62070",
+        "name": "Edit Fields7",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [
+          416,
+          1104
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://leads.redooconect.com.ar/api/v1/leads",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-API-KEY",
+                "value": "a0f84349-f978-49c7-88d4-66e7d94f0679"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={\n  \"first_name\": \"{{$('When Executed by Another Workflow').item.json.nombreDeclarado || $json.name || $json.nombre ||'No_ofrecido'}}\",\n  \"priority\": \"{{ $('When Executed by Another Workflow').item.json.nivel_Interes === 'alto' ? 'high' : $('When Executed by Another Workflow').item.json.nivel_Interes === 'bajo' ? 'low' : 'medium' }}\",\n  \"phone\": \"{{$json.number || $json.telefono}}\",\n  \"source\": \"IA Ventas\",\n  \"notes\": \"{{$json.resumen || $('When Executed by Another Workflow').item.json.resumen || ''}}\",\n  \"additional_data\": {\n    \"modelo\": \"{{$json.modelo || $json.ProductoInteres || ''}}\",\n    \"version\": \"{{$json.version || ''}}\",\n    \"pago\": \"{{$json.formaPago || $json.pago || ''}}\",\n    \"email\": \"{{$json.email || ''}}\"\n  },\n  \"assigned_to_group_id\": 658,\n  \"payment_method_id\":{{$json.payment_method_id}}\n}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          288,
+          976
+        ],
+        "id": "b3fa4139-4dea-47d4-a9d0-177382c3fef4",
+        "name": "LEADS PDA",
+        "retryOnFail": false,
+        "onError": "continueErrorOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "const item = $input.first().json;\n\nconst advisorPhones = {\n    \"aacevedo@ayalaautomotoressa.com.ar\": \"5493794223774\",\n    \"walterbenitez@ayalaautomotoressa.com.ar\": \"5493794076668\",\n    \"cesarblanco@ayalaautomotoressa.com.ar\": \"5493794048264\",\n    \"jorgeyardin@ayalaautomotoressa.com.ar\": \"5493794221704\",\n    \"rindeljorge@ayalaautomotoressa.com.ar\": \"5493794700214\",\n    \"gracieladiaz@ayalaautomotoressa.com.ar\": \"5493794144545\"\n};\n\nconst advisorEmail =\n    item.data?.welcome_assigned_user_email ||\n    item.data?.welcome_assigned_user_name ||\n    \"\";\n\nconst normalizedEmail = advisorEmail.trim().toLowerCase();\n\nitem.numero_vendedor = advisorPhones[normalizedEmail] || null;\nitem.asesor_nombre = item.data?.welcome_assigned_user_fullname || null;\nitem.asesor_email = advisorEmail;\nitem.sucursal = item.data?.welcome_asigned_branch || null;\nitem.lead_id = item.data?.welcome_guid || null;\n\nconsole.log(\"Asignación de vendedor tradicional:\", {\n    asesor: item.asesor_nombre,\n    emailOriginal: advisorEmail,\n    emailNormalizado: normalizedEmail,\n    telefonoEncontrado: item.numero_vendedor,\n    leadId: item.lead_id\n});\n\nreturn [\n    {\n        json: item\n    }\n];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1104,
+          1744
+        ],
+        "id": "83c214dc-53ec-4e01-8947-6efc9efa312d",
+        "name": "mapeo telefonos asesores"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://hub.redooconect.com.ar/webhook/08b27547-120b-4d6e-ab70-b19f761e509b",
+          "sendBody": true,
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "numero_vendedor",
+                "value": "={{ $json.numero_vendedor }}"
+              },
+              {
+                "name": "message",
+                "value": "={{\n`🚘 Nuevo lead asignado\n\n👤 Cliente: ${$('When Executed by Another Workflow').first().json.nombreDeclarado || $('When Executed by Another Workflow').first().json.name || 'No definido'}\n📞 Teléfono: ${$('When Executed by Another Workflow').first().json.number || 'No definido'}\n🛒 Tipo de compra: ${$('When Executed by Another Workflow').first().json.tipoCompra || 'No definido'}\n💳 Forma de pago: ${$('When Executed by Another Workflow').first().json.pago || 'No definida'}\n🔄 Entrega usado: ${$('When Executed by Another Workflow').first().json.usado || 'No informado'}\n🧪 Test Drive: ${$('When Executed by Another Workflow').first().json.testDrive ? 'Sí' : 'No'}\n🤝 Reunión con asesor: ${$('When Executed by Another Workflow').first().json.ReunionAsesor ? 'Sí' : 'No'}\n\n💬 Resumen de la conversación:\n${$('When Executed by Another Workflow').first().json.resumen || 'Sin detalle'}\n\nPor favor, contactá al cliente a la brevedad.`\n}}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1392,
+          1744
+        ],
+        "id": "7bc21b22-c98c-44f9-97a2-7a29a59dc673",
+        "name": "whatsapp",
+        "alwaysOutputData": true,
+        "executeOnce": true
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "f5cf5b5b-a667-4c86-850c-ba5aaf47f3d4",
+                "leftValue": "={{ $json.numero_vendedor }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "string",
+                  "operation": "notEmpty",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          1248,
+          1744
+        ],
+        "id": "f2e5ab81-5c9b-4585-b148-5337dcf3622e",
+        "name": "If5"
+      },
+      {
+        "parameters": {
+          "content": "MENSAJERÍA Convencional",
+          "height": 224,
+          "width": 688,
+          "color": 6
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          896,
+          1680
+        ],
+        "id": "e6c35fc1-6149-4456-9df5-8bd5184016d0",
+        "name": "Sticky Note6"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "23214f78-9ad3-4daa-ba15-4a471a91513a",
+                "leftValue": "={{ String($('metodo de pago').item.json.businesstypeid || '') !== '3' && !!$json.data?.welcome_guid }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          752,
+          1840
+        ],
+        "id": "9dafdf83-334c-4a72-91cd-826b56a36241",
+        "name": "If Convencional"
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\nreturn items.map((item) => {\n    const data =\n        item.json.output?.[0] ||\n        item.json;\n\n    const pago = String(data.pago || \"\")\n        .trim()\n        .toLowerCase();\n\n    if (pago === \"plan de ahorro\") {\n        data.payment_method_id = 156;\n    } else {\n        // Contado, Convencional, Financiado o cualquier otro valor -> por defecto Convencional\n        data.payment_method_id = 155;\n    }\n\n    return {\n        json: data\n    };\n});"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -128,
+          1136
+        ],
+        "id": "0a18dc28-df5d-42bf-8612-8c71ea31be8d",
+        "name": "metodo de pago"
+      },
+      {
+        "parameters": {
+          "content": "MENSAJERÍA PDA",
+          "height": 224,
+          "width": 688,
+          "color": 6
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          896,
+          1904
+        ],
+        "id": "a4e13910-0299-46a8-85e3-42763de48bbd",
+        "name": "Sticky Note7"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://hub.redooconect.com.ar/webhook/08b27547-120b-4d6e-ab70-b19f761e509b",
+          "sendBody": true,
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "numero_vendedor",
+                "value": "={{ $json.numero_vendedor }}"
+              },
+              {
+                "name": "message",
+                "value": "={{\n`🚘 Nuevo lead asignado\n\n👤 Cliente: ${$('When Executed by Another Workflow').first().json.nombreDeclarado || $('When Executed by Another Workflow').first().json.name || 'No definido'}\n📞 Teléfono: ${$('When Executed by Another Workflow').first().json.number || 'No definido'}\n🛒 Tipo de compra: ${$('When Executed by Another Workflow').first().json.tipoCompra || 'No definido'}\n💳 Forma de pago: ${$('When Executed by Another Workflow').first().json.pago || 'No definida'}\n🔄 Entrega usado: ${$('When Executed by Another Workflow').first().json.usado || 'No informado'}\n🧪 Test Drive: ${$('When Executed by Another Workflow').first().json.testDrive ? 'Sí' : 'No'}\n🤝 Reunión con asesor: ${$('When Executed by Another Workflow').first().json.ReunionAsesor ? 'Sí' : 'No'}\n\n💬 Resumen de la conversación:\n${$('When Executed by Another Workflow').first().json.resumen || 'Sin detalle'}\n\nPor favor, contactá al cliente a la brevedad.`\n}}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1408,
+          1936
+        ],
+        "id": "61988e0f-7473-4076-a052-c84d03a9add0",
+        "name": "whatsapp1",
+        "alwaysOutputData": true,
+        "executeOnce": true
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "f5cf5b5b-a667-4c86-850c-ba5aaf47f3d4",
+                "leftValue": "={{ $json.numero_vendedor }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "string",
+                  "operation": "notEmpty",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          1248,
+          1936
+        ],
+        "id": "3e925533-ed5e-4a9b-a4f0-32fdf8727232",
+        "name": "If6"
+      },
+      {
+        "parameters": {
+          "jsCode": "const item = $input.first().json;\n\nitem.numero_vendedor = \"5493794674530\";\n\nreturn [\n    {\n        json: item\n    }\n];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1104,
+          1936
+        ],
+        "id": "f8711f3e-7a35-4cb7-ab22-375446105821",
+        "name": "mapeo telefonos asesores 2"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.pilotsolution.net/webhooks/welcome.php",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "appkey",
+                "value": "=92B22E07-5A95-42B2-9B87-A7336D0CF293"
+              },
+              {
+                "name": "pilot_firstname",
+                "value": "=TEST REDOO"
+              },
+              {
+                "name": "pilot_cellphone",
+                "value": "=54991111111111111"
+              },
+              {
+                "name": "pilot_contact_type_id",
+                "value": "1"
+              },
+              {
+                "name": "pilot_suborigin_id",
+                "value": "=G6V9M33DA0F9VMQRK"
+              },
+              {
+                "name": "pilot_notes",
+                "value": "=ES UN TEST DE REDOO"
+              },
+              {
+                "name": "pilot_business_type_id",
+                "value": "=1"
+              },
+              {
+                "name": "pilot_contact_type_id",
+                "value": "1"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "7f7e4b88-4c8a-4b97-b6a0-21e392fe51d8",
+        "name": "HTTP Request3",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -144,
+          1600
+        ],
+        "executeOnce": true
+      },
+      {
+        "parameters": {
+          "content": "## Se deja de calificar good lead ticket #3939\n",
+          "height": 336,
+          "width": 400,
+          "color": 2
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          1136,
+          928
+        ],
+        "typeVersion": 1,
+        "id": "376beaa1-d8f7-4636-a0a5-3973bee4cdc0",
+        "name": "Sticky Note8"
+      },
+      {
+        "parameters": {
+          "content": "## Se deja de Crear oferta ticket #3939\n",
+          "height": 320,
+          "width": 400,
+          "color": 2
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          1136,
+          608
+        ],
+        "typeVersion": 1,
+        "id": "3067ee58-c1b8-485e-a260-666d171816b6",
+        "name": "Sticky Note9"
+      }
+    ],
+    "connections": {
+      "If2": {
+        "main": [
+          [
+            {
+              "node": "MySQL",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Edit Fields1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "MySQL": {
+        "main": [
+          [
+            {
+              "node": "Edit Fields",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "HTTP Request1": {
+        "main": [
+          [
+            {
+              "node": "If1",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "If Convencional",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "If": {
+        "main": [
+          [
+            {
+              "node": "goodLead",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "updateLead",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "goodLead": {
+        "main": [
+          [
+            {
+              "node": "updateLead",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Login": {
+        "main": [
+          [
+            {
+              "node": "Edit Fields2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Login1": {
+        "main": [
+          [
+            {
+              "node": "If",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "When Executed by Another Workflow": {
+        "main": [
+          [
+            {
+              "node": "AI Agent1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "If1": {
+        "main": [
+          [
+            {
+              "node": "Login2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Edit Fields3": {
+        "main": [
+          [
+            {
+              "node": "Login3",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Login2": {
+        "main": [
+          [
+            {
+              "node": "Edit Fields3",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Login3": {
+        "main": [
+          [
+            {
+              "node": "HTTP/testDrive",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "If3",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "If3": {
+        "main": [
+          [
+            {
+              "node": "HTTP/testDrive1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "AI Agent": {
+        "main": [
+          [
+            {
+              "node": "metodo de pago",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "OpenAI Chat Model": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Structured Output Parser": {
+        "ai_outputParser": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_outputParser",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "interes": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Edit Fields2": {
+        "main": [
+          [
+            {
+              "node": "Login1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Edit Fields5": {
+        "main": [
+          [
+            {
+              "node": "Login7",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Login6": {
+        "main": [
+          [
+            {
+              "node": "Edit Fields5",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Login7": {
+        "main": [
+          [
+            {
+              "node": "crearOferta",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "crearOferta": {
+        "main": [
+          [
+            {
+              "node": "crearPresupuesto",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Edit Fields6": {
+        "main": [
+          [
+            {
+              "node": "Login10",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Login9": {
+        "main": [
+          [
+            {
+              "node": "Edit Fields6",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Login10": {
+        "main": [
+          [
+            {
+              "node": "crearPresupuesto1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "HTTP Request": {
+        "main": [
+          [
+            {
+              "node": "HTTP Request2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "AI Agent1": {
+        "main": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "OpenAI Chat Model1": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "AI Agent1",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "get_precios": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent1",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Structured Output Parser1": {
+        "ai_outputParser": [
+          [
+            {
+              "node": "AI Agent1",
+              "type": "ai_outputParser",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "OpenAI Chat Model2": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "Structured Output Parser1",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "LEADS convencional": {
+        "main": [
+          [
+            {
+              "node": "HTTP Request1",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Edit Fields4",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "If4": {
+        "main": [
+          [
+            {
+              "node": "LEADS PDA",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "LEADS convencional",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "LEADS PDA": {
+        "main": [
+          [
+            {
+              "node": "HTTP Request1",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Edit Fields7",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "mapeo telefonos asesores": {
+        "main": [
+          [
+            {
+              "node": "If5",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "If5": {
+        "main": [
+          [
+            {
+              "node": "whatsapp",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "If Convencional": {
+        "main": [
+          [
+            {
+              "node": "mapeo telefonos asesores",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "mapeo telefonos asesores 2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "metodo de pago": {
+        "main": [
+          [
+            {
+              "node": "If4",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "If6": {
+        "main": [
+          [
+            {
+              "node": "whatsapp1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "mapeo telefonos asesores 2": {
+        "main": [
+          [
+            {
+              "node": "If6",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "Agente Agente",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-11-24T15:53:44.919Z",
+    "updatedAt": "2026-11-24T15:53:44.919Z"
+  },
+  "activeVersionId": "7268a5c7-28fe-49bd-b778-f52586daed7f",
+  "connections": {
+    "If2": {
+      "main": [
+        [
+          {
+            "node": "MySQL",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Edit Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MySQL": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "If Convencional",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "goodLead",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "updateLead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "goodLead": {
+      "main": [
+        [
+          {
+            "node": "updateLead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Login": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Login1": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Login2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields3": {
+      "main": [
+        [
+          {
+            "node": "Login3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Login2": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Login3": {
+      "main": [
+        [
+          {
+            "node": "HTTP/testDrive",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "If3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If3": {
+      "main": [
+        [
+          {
+            "node": "HTTP/testDrive1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "metodo de pago",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "interes": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields2": {
+      "main": [
+        [
+          {
+            "node": "Login1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields5": {
+      "main": [
+        [
+          {
+            "node": "Login7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Login6": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Login7": {
+      "main": [
+        [
+          {
+            "node": "crearOferta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "crearOferta": {
+      "main": [
+        [
+          {
+            "node": "crearPresupuesto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields6": {
+      "main": [
+        [
+          {
+            "node": "Login10",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Login9": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Login10": {
+      "main": [
+        [
+          {
+            "node": "crearPresupuesto1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent1": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_precios": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser1": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Structured Output Parser1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LEADS convencional": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Edit Fields4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If4": {
+      "main": [
+        [
+          {
+            "node": "LEADS PDA",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "LEADS convencional",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LEADS PDA": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Edit Fields7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "mapeo telefonos asesores": {
+      "main": [
+        [
+          {
+            "node": "If5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If5": {
+      "main": [
+        [
+          {
+            "node": "whatsapp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Convencional": {
+      "main": [
+        [
+          {
+            "node": "mapeo telefonos asesores",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "mapeo telefonos asesores 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "metodo de pago": {
+      "main": [
+        [
+          {
+            "node": "If4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If6": {
+      "main": [
+        [
+          {
+            "node": "whatsapp1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "mapeo telefonos asesores 2": {
+      "main": [
+        [
+          {
+            "node": "If6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-06-16T18:57:45.416Z",
+  "id": "PpkjKHl3vFEHrmio",
+  "isArchived": false,
+  "meta": null,
+  "name": "CLOSE-CONVERSATION-AYALA",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "f1dc333f-f212-4ea2-8280-2e551ab1bc83",
+              "leftValue": "={{ $json.data.welcome_guid }}",
+              "rightValue": "=true",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "71bf8e17-244c-41e5-b67b-6ad19206d30d",
+      "name": "If2",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -224,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "table": {
+          "__rl": true,
+          "value": "conversations",
+          "mode": "list",
+          "cachedResultName": "conversations"
+        },
+        "dataMode": "defineBelow",
+        "columnToMatchOn": "id",
+        "valueToMatchOn": "={{$json.idConversation}}",
+        "valuesToSend": {
+          "values": [
+            {
+              "column": "crm_name",
+              "value": "pilot"
+            },
+            {
+              "column": "crm_lead",
+              "value": "={{ $json.data.welcome_guid }}"
+            },
+            {
+              "column": "status",
+              "value": "closed"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "7d29454b-78c8-4668-b57f-ac12a1d0440d",
+      "name": "MySQL",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        0,
+        0
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "9937f4fd-647d-4129-b4e6-d232a90f75e2",
+              "name": "response",
+              "value": "Lead creado correctamente!",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "06cb7075-fbb0-45a6-ab39-ed0c41dcd305",
+      "name": "Edit Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        224,
+        0
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "9937f4fd-647d-4129-b4e6-d232a90f75e2",
+              "name": "response",
+              "value": "Problemas al crear el lead. Intentar nuevamente. ",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "2a4bf1e2-e7cf-4553-b3d2-7d4bea7d6831",
+      "name": "Edit Fields1",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        0,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.all()[0].json;\n\n// Función para parsear query cuando viene como string\nfunction parseQueryString(queryString) {\n  const result = {};\n  \n  const patterns = [\n    { key: 'origin', regex: /origin:\\s*([^,]+)/i },\n    { key: 'businesstypeid', regex: /businesstypeid:\\s*([^,]+)/i },\n    { key: 'grupoCaptura', regex: /grupoCaptura:\\s*([^,]+?)(?=,\\s*modelo:|$)/i },\n    { key: 'modelo', regex: /modelo:\\s*([^,]+?)(?=,\\s*pago:|$)/i },\n    { key: 'pago', regex: /pago:\\s*([^,]+?)(?=,\\s*usado:|$)/i },\n    { key: 'usado', regex: /usado:\\s*([^,]+?)(?=,\\s*interes:|$)/i },\n    { key: 'interes', regex: /interes:\\s*([^,]+)/i }\n  ];\n  \n  patterns.forEach(({ key, regex }) => {\n    const match = queryString.match(regex);\n    if (match) {\n      result[key] = match[1].trim();\n    }\n  });\n  \n  return result;\n}\n\n// Detectar si query es string u objeto\nlet parsedQuery = {};\nif (typeof input.query === 'string') {\n  // Caso 1: query es string \"origin: ..., modelo: ...\"\n  parsedQuery = parseQueryString(input.query);\n} else if (typeof input.query === 'object' && input.query !== null) {\n  // Caso 2: query es objeto { producto: \"X-TRAIL\", usado: \"...\", pago: \"...\" }\n  parsedQuery = {\n    modelo: input.query.producto || input.query.modelo,\n    pago: input.query.pago,\n    usado: input.query.usado,\n    interes: input.query.interes\n  };\n}\n\n// Extraer valores finales con fallbacks\nconst modelo = parsedQuery.modelo || \n              (input.producto !== 'undefined' ? input.producto : '') || '';\n              \nconst pago = parsedQuery.pago || \n            (input.pago !== 'undefined' ? input.pago : '') || '';\n            \nconst usado = parsedQuery.usado || \n             (input.usado !== 'undefined' ? input.usado : '') || '';\n             \nconst interes = parsedQuery.interes || \n               (modelo && pago && usado ? 'alto' : 'bajo');\n\n// Construir pilot_notes\nconst pilot_notes = `Modelo: ${modelo || 'No especificado'}\nPago: ${pago || 'No especificado'}\nUsado: ${usado || 'No especificado'}\nInterés: ${interes}`;\n\n// Output final\nconst output = {\n  name: input.name,\n  from: input.from,\n  idConversation: input.idConversation,\n  origin: parsedQuery.origin || input.origin || '',\n  \n  // Normalizar businesstypeid y grupoCaptura (con o sin espacio)\n  businesstypeid: parsedQuery.businesstypeid \n                   || input['businesstypeid ']?.trim() \n                   || input.businesstypeid?.trim() \n                   || '',\n                   \n  grupoCaptura: parsedQuery.grupoCaptura \n                   || input['grupoCaptura ']?.trim() \n                   || input.grupoCaptura?.trim() \n                   || '',\n\n  // 🔥 Agregados obligatorios al output:\n  producto: input.producto || parsedQuery.modelo || '',\n  usado: input.usado || parsedQuery.usado || '',\n  pago: input.pago || parsedQuery.pago || '',\n  ProductoInteres: input.ProductoInteres || input.producto || parsedQuery.modelo || '',\n\n  pilot_notes: pilot_notes\n};\n\nreturn { json: output };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -416,
+        320
+      ],
+      "id": "1cb36154-c244-47d4-9bf5-1f85d49e2992",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.pilotsolution.net/webhooks/welcome.php",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "appkey",
+              "value": "=3D12593B-F8F5-4585-AEFC-D17768A3D9E5"
+            },
+            {
+              "name": "pilot_firstname",
+              "value": "={{ $('When Executed by Another Workflow').item.json.nombreDeclarado || $('When Executed by Another Workflow').item.json.name.normalize('NFKC') || 'PRUEBA' }}"
+            },
+            {
+              "name": "pilot_cellphone",
+              "value": "={{$('When Executed by Another Workflow').item.json.number || 549113133333}}"
+            },
+            {
+              "name": "pilot_contact_type_id",
+              "value": "2"
+            },
+            {
+              "name": "pilot_suborigin_id",
+              "value": "={{ $('When Executed by Another Workflow').item.json.origin || \"G5E0N2T63JEPQS4R5\" }}"
+            },
+            {
+              "name": "pilot_notes",
+              "value": "={{ $('When Executed by Another Workflow').item.json.resumen }}"
+            },
+            {
+              "name": "pilot_business_type_id",
+              "value": "=1"
+            },
+            {
+              "name": "pilot_product_code",
+              "value": "={{ $('metodo de pago').first().json[\"Codigo Terminal\"] }}"
+            },
+            {
+              "name": "pilot_contact_type_id",
+              "value": "1"
+            },
+            {
+              "name": "pilot_assigned_user",
+              "value": "={{ $json.data.assigned_to_user.email }}"
+            },
+            {
+              "name": "pilot_email",
+              "value": "={{ $('When Executed by Another Workflow').item.json.mail || \"no proporcioanado\" }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "4ac5ee70-d707-4712-8600-600c3a37de60",
+      "name": "HTTP Request1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        688,
+        1088
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "597e468b-8152-43a2-afa4-574b23a83d03",
+              "leftValue": "=",
+              "rightValue": "alto",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1712,
+        1104
+      ],
+      "id": "6c573b99-1b3a-4f73-99a6-95feec3ef2b9",
+      "name": "If",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.pilotsolution.net/v1/welcomes/qualification/good.php",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"data\": {\n    \"id\": \"{{ $('HTTP Request1').item.json.data.welcome_guid }}\"\n  },\n  \"header\": {\n    \"FlowName\": \"lead_good\",\n    \"SequenceId\": 1,\n\t\"TimeStamp\": 1248377,\n\t\"TrackingId\": \"FD1C4A1A-CAFB-467E-825B-7FFB86CC21E3\",\n\t\"access_token\":\"{{ $json.result.entitydata.session.identityToken }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "54ba8144-6aa2-4028-b122-0cfbe1c39813",
+      "name": "goodLead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1936,
+        1040
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "url": "=https://api.pilotsolution.net/v1/users/authentication.php",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "options": {}
+      },
+      "id": "fd31b43c-fc61-4b41-948e-f95a48164212",
+      "name": "Login",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1040,
+        1104
+      ],
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "XbIPUcWKdSWgyumH",
+          "name": "Custom Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://api.pilotsolution.net/v1/users/authorization.php",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "identity_token",
+              "value": "={{ $json.token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "9c80d0ef-59e0-4201-9393-6cfdde5cf837",
+      "name": "Login1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1488,
+        1104
+      ]
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "goodLead",
+              "type": "any"
+            },
+            {
+              "name": "idConversation",
+              "type": "any"
+            },
+            {
+              "name": "number",
+              "type": "any"
+            },
+            {
+              "name": "name",
+              "type": "any"
+            },
+            {
+              "name": "businesstypeid",
+              "type": "any"
+            },
+            {
+              "name": "grupoCaptura",
+              "type": "any"
+            },
+            {
+              "name": "pago",
+              "type": "any"
+            },
+            {
+              "name": "ProductoInteres",
+              "type": "any"
+            },
+            {
+              "name": "usado",
+              "type": "any"
+            },
+            {
+              "name": "interes",
+              "type": "any"
+            },
+            {
+              "name": "origin",
+              "type": "any"
+            },
+            {
+              "name": "resumen"
+            },
+            {
+              "name": "testDrive"
+            },
+            {
+              "name": "comentarioTestDrive"
+            },
+            {
+              "name": "ReunionAsesor"
+            },
+            {
+              "name": "nombreDeclarado"
+            },
+            {
+              "name": "sucursal"
+            },
+            {
+              "name": "precioMencionado"
+            },
+            {
+              "name": "montoFinanciado"
+            },
+            {
+              "name": "quiereFinanciado",
+              "type": "boolean"
+            },
+            {
+              "name": "bancoFinanciacion"
+            },
+            {
+              "name": "tipoCompra"
+            },
+            {
+              "name": "mail"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1296,
+        1136
+      ],
+      "id": "a114b009-c845-4126-8e60-b254c709091c",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.pilotsolution.net/v1/welcomes/update.php",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"data\": {\n    \"id\": \"{{ $('HTTP Request1').item.json.data.welcome_guid }}\",\n    \"interest_level_code\": \"{{ $('When Executed by Another Workflow').item.json.interes }}\"\n  },\n  \"header\": {\n    \"FlowName\": \"update_prospect\",\n    \"SequenceId\": 1,\n    \"TimeStamp\": 1248377,\n    \"TrackingId\": \"FD1C4A1A-CAFB-467E-825B-7FFB86CC21E3\",\n    \"access_token\": \"{{ $('Login1').item.json.result.entitydata.session.identityToken }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "ca04dc3f-2f33-4997-9479-7ec9b597a059",
+      "name": "updateLead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2176,
+        1104
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "ec7f6c63-0a28-4c38-b63c-c924473d36d6",
+              "leftValue": "={{ $('When Executed by Another Workflow').item.json.testDrive }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1040,
+        1424
+      ],
+      "id": "8ea2037c-7516-4b01-834c-97c5cc777836",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.pilotsolution.net/v1/welcomes/events/create.php",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"data\": {\n    \"id\": \"{{ $('HTTP Request1').item.json.data.welcome_guid }}\",\n    \"event_type_code\": \"49\",\n    \"comment\": \"{{$('When Executed by Another Workflow').item.json.comentarioTestDrive }}\"\n  },\n  \"header\": {\n    \"FlowName\": \"event_create\",\n    \"SequenceId\": 1,\n    \"TimeStamp\": 1706880000,\n    \"TrackingId\": \"2B50DDB4-14C5-4249-82AB-049E6E735AA1\",\n    \"access_token\": \"{{ $json.result.entitydata.session.identityToken }}\"\n  }\n}\n",
+        "options": {}
+      },
+      "id": "5b53ebab-57bb-46f8-9642-2bf8da57083c",
+      "name": "HTTP/testDrive",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1936,
+        1328
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b223ceea-a793-41c8-8730-cce0790a5487",
+              "name": "token",
+              "value": "={{ $json.result.entitydata.accounts[0].token }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a6cf0be3-e89f-4537-9dff-f8e0b487f72b",
+      "name": "Edit Fields3",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1488,
+        1424
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.pilotsolution.net/v1/users/authentication.php",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "options": {}
+      },
+      "id": "3d7069e0-af4d-4c6d-b44e-f24ca4415fcf",
+      "name": "Login2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1264,
+        1424
+      ],
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "XbIPUcWKdSWgyumH",
+          "name": "Custom Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://api.pilotsolution.net/v1/users/authorization.php",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "identity_token",
+              "value": "={{ $json.token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e0b78115-e615-4088-8cf5-0fe81b931518",
+      "name": "Login3",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1712,
+        1424
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.pilotsolution.net/v1/welcomes/events/create.php",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"data\": {\n    \"id\": \"{{ $('HTTP Request1').item.json.data.welcome_guid }}\",\n    \"event_type_code\": \"47\",\n    \"comment\": \"{{$('When Executed by Another Workflow').item.json.resumen }}\"\n  },\n  \"header\": {\n    \"FlowName\": \"event_create\",\n    \"SequenceId\": 1,\n    \"TimeStamp\": 1706880000,\n    \"TrackingId\": \"2B50DDB4-14C5-4249-82AB-049E6E735AA1\",\n    \"access_token\": \"{{ $json.result.entitydata.session.identityToken }}\"\n  }\n}\n",
+        "options": {}
+      },
+      "id": "fbece0b5-e880-427f-9b69-498ba50f66cf",
+      "name": "HTTP/testDrive1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2160,
+        1520
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "ec7f6c63-0a28-4c38-b63c-c924473d36d6",
+              "leftValue": "={{ $('When Executed by Another Workflow').item.json.ReunionAsesor }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1936,
+        1520
+      ],
+      "id": "de6be8ab-54b0-407d-9f68-1094f89a26a6",
+      "name": "If3"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "= A vos te llega el producto de interes del cliente {{ $json.output[0].ProductoInteres }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "=Tu objetivo es ejecutar SIEMPRE la tool interes y devolver los campos que coincidan con el modelo requerido por el cliente: \"ID PRODUCTO PILOT\",\"Codigo Terminal\",\"CODIGO MODELO\", \"Template\": \n,tenes que devolver:\n\n\n{\n\"goodLead\": {{ $json.output[0].goodLead }},\n\"idConversation\": {{ $json.output[0].idConversation}},\n\"number\": \"{{$json.output[0].number }}\",\n\"name\": \"{{$json.output[0].name }}\",\n\"businesstypeid\": \"{{ $json.output[0].businesstypeid }}\",\n\"grupoCaptura\": \"{{$json.output[0].grupoCaptura}}\",\n\"pago\": \"{{ $json.output[0].pago }}\",\n\"ProductoInteres\": \"{{ $json.output[0].ProductoInteres }}\",\n\"usado\": \"{{ $json.output[0].usado}}\",\n\"interes\": \"{{$json.output[0].interes  }}\",\n\"resumen\": \"{{ $json.output[0].resumen }}\",\n\"testDrive\": {{ $json.output[0].testDrive }},\n\"comentarioTestDrive\": \"{{$json.output[0].comentarioTestDrive }}\",\n\"ReunionAsesor\": {{ $json.output[0].ReunionAsesor }},\n\"nombreDeclarado\": \"{{ $json.output[0].nombreDeclarado }}\",\n\"sucursal\": \"{{ $json.output[0].sucursal }}\",\n\"ID PRODUCTO PILOT\": \"XXXX\",\n\"Codigo Terminal\": \"XXXXXXX\",\n\"CODIGO MODELO\": \"XXXXXX\",\n\"Template\": \"XXXXXX\",\n\"precioMencionado\": \"{{ $json.output[0].precioMencionado }}\",\n\"precioEncontrado\":\"{{ $json.output[0].precioEncontrado }}\",\n\"precioFinanciado\":\"{{ $json.output[0].precioFinanciado }}\",\n\"bancoFinanciacion\":\"{{ $json.output[0].bancoFinanciacion }}\"\n}\n\nNo inventes nigun dato",
+          "maxIterations": 4
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        -496,
+        1136
+      ],
+      "id": "69edcb5f-2bf3-4770-b15c-d3f6afe8617b",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4.1-mini"
+        },
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -560,
+        1360
+      ],
+      "id": "991f8d2d-559d-4500-99a0-abfcad5e961c",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "TOIrmcOlayuwA9Lg",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "\n[\n{\n\"goodLead\": true,\n\"idConversation\": 550279,\n\"number\": \"+5491131438902\",\n\"name\": \"Lisandro Bachur\",\n\"businesstypeid\": \"1\",\n\"grupoCaptura\": \"STRIANESE\",\n\"pago\": \"Contado\",\n\"ProductoInteres\": \"Mustang Dark Horse\",\n\"usado\": \"no\",\n\"interes\": \"986E9A20\",\n\"resumen\": \"Raúl consultó por el Mustang tradicional (naftero), eligiendo la versión Dark Horse. Confirmó pago al contado, sucursal Lomas, y no desea test drive ni reunión con asesor. Stock disponible al momento de la consulta.\",\n\"testDrive\": false,\n\"comentarioTestDrive\": \"No desea test drive.\",\n\"ReunionAsesor\": false,\n\"nombreDeclarado\": \"Raúl\",\n\"sucursal\": \"Lomas\",\n\"ID PRODUCTO PILOT\": \"XXXX\",\n\"Codigo Terminal\": \"XXXXXXX\",\n\"CODIGO MODELO\": \"MUSTANG\",\n\"Template\":\"XXXXX\",\n\"precioMencionado\": \"57.000.000\",\n\"precioEncontrado\":\"10.000.000\",\n\"precioFinanciado\":\"500.000\",\n\"bancoFinanciacion\":\"BBVA\"\n}\n]"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        -272,
+        1328
+      ],
+      "id": "3f98985c-28db-4b8e-868b-9bc0365b3849",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1TVJd-jgvfZYiOrHWk0blSlqjsbJnWyJ42BSy2dwVZIs",
+          "mode": "list",
+          "cachedResultName": "MVP FORD-STRIANESE",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1TVJd-jgvfZYiOrHWk0blSlqjsbJnWyJ42BSy2dwVZIs/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 403123869,
+          "mode": "list",
+          "cachedResultName": "ProdInterews",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1TVJd-jgvfZYiOrHWk0blSlqjsbJnWyJ42BSy2dwVZIs/edit#gid=403123869"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        -432,
+        1360
+      ],
+      "id": "c621652c-7697-4180-9754-f99b5591ec56",
+      "name": "interes",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "EH6Znx0VMlau3ozj",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## Test Drive y Asesor\n",
+        "height": 416,
+        "width": 1520
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        896,
+        1264
+      ],
+      "typeVersion": 1,
+      "id": "f83925a2-dd21-4b77-96d2-8897c3e2096c",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "## Good Lead\n",
+        "height": 336,
+        "width": 1520,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        896,
+        928
+      ],
+      "typeVersion": 1,
+      "id": "ddff3462-53ca-4669-85e6-4c9e215771cf",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "## Presupuesto",
+        "height": 320,
+        "width": 544,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1872,
+        608
+      ],
+      "typeVersion": 1,
+      "id": "48f97ddb-fe09-4162-b002-109d038fb51e",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b223ceea-a793-41c8-8730-cce0790a5487",
+              "name": "token",
+              "value": "={{ $json.result.entitydata.accounts[0].token }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "4e6c9d45-6a7c-4515-ad17-ebdce5539f3d",
+      "name": "Edit Fields2",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1264,
+        1104
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b223ceea-a793-41c8-8730-cce0790a5487",
+              "name": "token",
+              "value": "={{ $json.result.entitydata.accounts[0].token }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "831b52a9-7b95-4115-adaa-35eca9b00477",
+      "name": "Edit Fields5",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1248,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.pilotsolution.net/v1/users/authentication.php",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "options": {}
+      },
+      "id": "5ded783e-cd53-41da-ae1f-16067ef6e28e",
+      "name": "Login6",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1024,
+        720
+      ],
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "XbIPUcWKdSWgyumH",
+          "name": "Custom Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://api.pilotsolution.net/v1/users/authorization.php",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "identity_token",
+              "value": "={{ $json.token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cfc1008e-0820-4dd4-a6f3-b315d5dec807",
+      "name": "Login7",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1472,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Creo oferta",
+        "height": 320,
+        "width": 976
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        896,
+        608
+      ],
+      "typeVersion": 1,
+      "id": "2d562f26-b731-4f3f-be93-1c625454b9a7",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.pilotsolution.net/v1/opportunities/create.php",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"data\": {\n    \"lead_id\": \"{{ $('HTTP Request1').item.json.data.welcome_guid }}\",\n    \"business_type_code\": \"{{ $('HTTP Request1').item.json.data.welcome_business_type_code }}\",\n    \"product_code\":\"{{ $('AI Agent').item.json.output[0]['Codigo Terminal'] }}\",\n    \"cash_amt\": \"{{ $('AI Agent1').item.json.output[0].precioEncontrado }}\",\n    \"credit_amt\":\"{{ $('AI Agent1').item.json.output[0].precioFinanciado }}\",\n    \"credit_bank\": \"{{ $('AI Agent1').item.json.output[0].bancoFinanciacion }}\"\n  },\n  \"header\": {\n    \"FlowName\": \"OPPORTUNITY_CREATE_PILOT\",\n    \"SequenceId\": 1,\n    \"TimeStamp\": 1706880000,\n    \"access_token\": \"{{ $json.result.entitydata.session.identityToken }}\"\n  }\n}\n",
+        "options": {}
+      },
+      "id": "1cb89323-70b8-4588-83c5-1b46a9abb498",
+      "name": "crearOferta",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1680,
+        720
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.pilotsolution.net/v1/electronicquotations/create.php",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"data\": {\n    \"opportunity_id\": \"{{ $json.result.entitydata.id }}\",\n    \"template_code\": \"{{ $('AI Agent').item.json.output[0]['Template'] }}\"\n  },\n  \"header\": {\n    \"FlowName\": \"electronicquotation_create\",\n    \"SequenceId\": 1,\n    \"TimeStamp\": 1706880000,\n    \"access_token\": \"{{ $('Login7').item.json.result.entitydata.session.identityToken }}\"\n  }\n}\n",
+        "options": {}
+      },
+      "id": "5b39d5ef-fe91-404d-9c6a-dcb576cda086",
+      "name": "crearPresupuesto",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2096,
+        720
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.pilotsolution.net/v1/electronicquotations/list.php",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n\t\"data\": {\n\t\t\"_filters\": [\n\n\t\t],\n\t\t\"limit\": 1,\n\t\t\"page\": 1\n\t},\n\t\"header\": {\n\t\t\"FlowName\": \"list_electronic_quotation\",\n\t\t\"SequenceId\": \"1\",\n\t\t\"TimeStamp\": \"1513352637\",\n\t\t\"access_token\": \"{{ $('Login10').item.json.result.entitydata.session.identityToken }}\"\n\t}\n}",
+        "options": {}
+      },
+      "id": "248a93d0-bac9-4ca2-9ec1-532c187d20d1",
+      "name": "crearPresupuesto1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1680,
+        128
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b223ceea-a793-41c8-8730-cce0790a5487",
+              "name": "token",
+              "value": "={{ $json.result.entitydata.accounts[0].token }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a4690eee-5bfa-4a51-8127-21817e72380d",
+      "name": "Edit Fields6",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1136,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.pilotsolution.net/v1/users/authentication.php",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "options": {}
+      },
+      "id": "848c3118-02ff-4aa7-bc81-c6993c0f403c",
+      "name": "Login9",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        912,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.pilotsolution.net/v1/users/authorization.php",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "identity_token",
+              "value": "={{ $json.token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "20bc9452-9a3e-4a65-8950-0afffd7fd1a5",
+      "name": "Login10",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1360,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.pilotsolution.net/v1/analysis/list.php",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"data\": {},\n  \"header\": {\n    \"FlowName\": \"list_prospect\",\n    \"SequenceId\": \"1\",\n    \"TimeStamp\": \"1513352637\",\n    \"access_token\": \"{{$json.result.entitydata.session.identityToken}}\"\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1728,
+        432
+      ],
+      "id": "c187a80a-8c4f-4612-ac64-6f0e46609ca1",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "content": "Analisis de necesidades\n",
+        "height": 208,
+        "width": 1520,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        896,
+        400
+      ],
+      "typeVersion": 1,
+      "id": "3e889d7f-fb52-4136-b83e-6eda2def8e8d",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.pilotsolution.net/v1/analysis/create.php",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"data\": {\n    \"welcome_guid\": \"{{ $('HTTP Request1').first().json.data.welcome_guid }}\",\n    \"form_code\": \"Homologación\"\n  },\n  \"header\": {\n    \"FlowName\": \"create_analysis\",\n    \"access_token\": \"{{ $('Login7').first().json.result.entitydata.session.identityToken }}\"\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1936,
+        432
+      ],
+      "id": "de8bee3f-6e78-4abb-96b5-18039db9b318",
+      "name": "HTTP Request2"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "= A vos te llega el producto de interes del cleinte {{$json.ProductoInteres  }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "=Recibirás un objeto JSON con datos de un lead automotriz.\n\nTu tarea es determinar el precio correcto del modelo de interés:\n\n1. Toma el valor de \"ProductoInteres\"= {{ $json.ProductoInteres }} y búscalo en la tool get_precios.\n\n2. Compará el precio encontrado con el valor numérico de \"precioMencionado\" = {{ $json.precioMencionado }} (ignorá el texto, quedarte solo con el número).\n\n3. Aplicá esta lógica:\n   - Si encontrás el modelo y el precio coincide → usá el número de precioMencionado tal cual (sin texto) y en nuevo campo llamado precioEncontrado .\n\n   - Si encontrás el modelo y el precio es distinto → guarda el precio de get_precios en el campo precioEncontrado.\n\n   - Si no encontrás el modelo → usá el número de precioMencionado tal cual (sin texto) y copialo en precioEncontrado.\n\n4. Si {{ $json.montoFinanciado }} dice que monto quiere financiar o cuanto porcentaje o valor, hacer el calculo y ponerlo en el campo \"precioFinanciado\", si no lo menciona o no sabes pone 0 (no inventes, si no sabes pone 0 por default)\n\nDevolvé todo con esta estructura, sin explicaciones ni texto adicional:\n\n{\n\"goodLead\": {{ $json.goodLead }},\n\"idConversation\": {{ $json.idConversation }},\n\"number\": \"{{ $json.number }}\",\n\"name\": \"{{ $json.name }}\",\n\"businesstypeid\": \"{{ $json.businesstypeid }}\",\n\"grupoCaptura\": \"{{ $json.grupoCaptura }}\",\n\"pago\": \"{{ $json.pago }}\",\n\"ProductoInteres\": \"{{ $json.ProductoInteres }}\",\n\"usado\": \"{{ $json.usado }}\",\n\"interes\": \"{{ $json.interes }}\",\n\"resumen\": \"{{ $json.resumen }}\",\n\"testDrive\": {{ $json.testDrive }},\n\"comentarioTestDrive\": \"{{ $json.comentarioTestDrive }}\",\n\"ReunionAsesor\": {{ $json.ReunionAsesor }},\n\"nombreDeclarado\": \"{{ $json.nombreDeclarado }}\",\n\"sucursal\": \"{{ $json.sucursal }}\",\n\"precioMencionado\": \"XXXX\",\n\"precioEncontrado\":\"XXXX\",\n\"precioFinanciado\":\"XXXX\",\n\"bancoFinanciacion\":\"{{ $json.bancoFinanciacion }}\",\n\"tipoCompra\":\"{{ $json.tipoCompra }}\"\n\"origen\":\"{{ $json.origin }}\"\n}\n\nSi no menciona modelo, devolve los valores precioMencionado, precioEncontrado, precioFinanciado como 0\n\n",
+          "maxIterations": 4
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        -1024,
+        1136
+      ],
+      "id": "e67826fa-36e8-4b4e-bd50-28868b9a0ca6",
+      "name": "AI Agent1",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4.1",
+          "mode": "list",
+          "cachedResultName": "gpt-4.1"
+        },
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -1184,
+        1424
+      ],
+      "id": "d799abdc-40ca-4be5-b48a-72a9d5334418",
+      "name": "OpenAI Chat Model1",
+      "credentials": {
+        "openAiApi": {
+          "id": "TOIrmcOlayuwA9Lg",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1TVJd-jgvfZYiOrHWk0blSlqjsbJnWyJ42BSy2dwVZIs",
+          "mode": "list",
+          "cachedResultName": "MVP FORD-STRIANESE",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1TVJd-jgvfZYiOrHWk0blSlqjsbJnWyJ42BSy2dwVZIs/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 941436473,
+          "mode": "list",
+          "cachedResultName": "precios",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1TVJd-jgvfZYiOrHWk0blSlqjsbJnWyJ42BSy2dwVZIs/edit#gid=941436473"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        -960,
+        1424
+      ],
+      "id": "4bd067bb-72fc-4ffa-95bd-be630b0465e0",
+      "name": "get_precios",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "EH6Znx0VMlau3ozj",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "[\n  {\n    \"goodLead\": true,\n    \"idConversation\": 550279,\n    \"number\": \"+5491131438902\",\n    \"name\": \"Lisandro Bachur\",\n    \"businesstypeid\": \"1\",\n    \"grupoCaptura\": \"AYALA\",\n    \"pago\": \"Plan de Ahorro\",\n    \"ProductoInteres\": \"Mustang Dark Horse\",\n    \"usado\": \"VW Polo 2020, 50000 km\",\n    \"interes\": \"07B7AC5A\",\n    \"resumen\": \"Texto de resumen de ejemplo.\",\n    \"testDrive\": false,\n    \"comentarioTestDrive\": \"No desea test drive.\",\n    \"ReunionAsesor\": false,\n    \"nombreDeclarado\": \"Raúl\",\n    \"sucursal\": \"Lomas\",\n    \"precioMencionado\": \"57000000\",\n    \"precioEncontrado\": \"10000000\",\n    \"precioFinanciado\": \"500000\",\n    \"bancoFinanciacion\": \"BBVA\",\n    \"tipoCompra\":\"PDA\",\n    \"origen\": \"G5E0N2T63JEPQS4R5\"\n  }\n]",
+        "autoFix": true
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        -848,
+        1424
+      ],
+      "id": "ebd5b366-2f5c-4e2d-8020-76750b41df06",
+      "name": "Structured Output Parser1"
+    },
+    {
+      "parameters": {
+        "content": "## Sin numero de telefono no funciona, Tener cuidado al testear"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1056,
+        960
+      ],
+      "typeVersion": 1,
+      "id": "58b27873-e85c-45ac-a8c1-62e2ff6b1330",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "gpt-4o"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        -880,
+        1600
+      ],
+      "id": "dc7a4afb-8029-4411-aa5c-da391377a12e",
+      "name": "OpenAI Chat Model2",
+      "credentials": {
+        "openAiApi": {
+          "id": "TOIrmcOlayuwA9Lg",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "9937f4fd-647d-4129-b4e6-d232a90f75e2",
+              "name": "response",
+              "value": "ya nos quedó tu consulta",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "441eae4b-5f38-4c39-b7b1-3ae482f08693",
+      "name": "Edit Fields4",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        448,
+        1344
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://leads.redooconect.com.ar/api/v1/leads",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-KEY",
+              "value": "a0f84349-f978-49c7-88d4-66e7d94f0679"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"first_name\": \"{{$('When Executed by Another Workflow').item.json.nombreDeclarado ||  $json.name || $json.nombre ||'No_ofrecido'}}\",\n  \"priority\": \"{{ $('When Executed by Another Workflow').item.json.nivel_Interes === 'alto' ? 'high' : $('When Executed by Another Workflow').item.json.nivel_Interes === 'bajo' ? 'low' : 'medium' }}\",\n  \"phone\": \"{{$json.number || $json.telefono}}\",\n  \"source\": \"IA Ventas\",\n  \"notes\": \"{{$json.resumen || $('When Executed by Another Workflow').item.json.resumen || ''}}\",\n  \"additional_data\": {\n    \"modelo\": \"{{$json.modelo || $json.ProductoInteres || ''}}\",\n    \"version\": \"{{$json.version || ''}}\",\n    \"pago\": \"{{$json.formaPago || $json.pago || ''}}\",\n    \"email\": \"{{$json.email || ''}}\"\n  },\n  \"assigned_to_group_id\": 618,\n  \"payment_method_id\":{{$json.payment_method_id}}\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        304,
+        1248
+      ],
+      "id": "1e389743-c4dd-480d-a12e-81242d72ad22",
+      "name": "LEADS convencional",
+      "retryOnFail": false,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "1547965e-1637-4e45-bfca-103a5a342b0b",
+              "leftValue": "={{ ['plan de ahorro'].includes(($json.pago || '').toLowerCase().trim()) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        96,
+        1120
+      ],
+      "id": "4b2aa31d-fd28-4947-bf61-7594ec6e5d8b",
+      "name": "If4"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "9937f4fd-647d-4129-b4e6-d232a90f75e2",
+              "name": "response",
+              "value": "ya nos quedó tu consulta",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "96e43bd9-dea3-45bb-960b-9b3a88f62070",
+      "name": "Edit Fields7",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        416,
+        1104
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://leads.redooconect.com.ar/api/v1/leads",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-KEY",
+              "value": "a0f84349-f978-49c7-88d4-66e7d94f0679"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"first_name\": \"{{$('When Executed by Another Workflow').item.json.nombreDeclarado || $json.name || $json.nombre ||'No_ofrecido'}}\",\n  \"priority\": \"{{ $('When Executed by Another Workflow').item.json.nivel_Interes === 'alto' ? 'high' : $('When Executed by Another Workflow').item.json.nivel_Interes === 'bajo' ? 'low' : 'medium' }}\",\n  \"phone\": \"{{$json.number || $json.telefono}}\",\n  \"source\": \"IA Ventas\",\n  \"notes\": \"{{$json.resumen || $('When Executed by Another Workflow').item.json.resumen || ''}}\",\n  \"additional_data\": {\n    \"modelo\": \"{{$json.modelo || $json.ProductoInteres || ''}}\",\n    \"version\": \"{{$json.version || ''}}\",\n    \"pago\": \"{{$json.formaPago || $json.pago || ''}}\",\n    \"email\": \"{{$json.email || ''}}\"\n  },\n  \"assigned_to_group_id\": 658,\n  \"payment_method_id\":{{$json.payment_method_id}}\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        288,
+        976
+      ],
+      "id": "b3fa4139-4dea-47d4-a9d0-177382c3fef4",
+      "name": "LEADS PDA",
+      "retryOnFail": false,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\n\nconst advisorPhones = {\n    \"aacevedo@ayalaautomotoressa.com.ar\": \"5493794223774\",\n    \"walterbenitez@ayalaautomotoressa.com.ar\": \"5493794076668\",\n    \"cesarblanco@ayalaautomotoressa.com.ar\": \"5493794048264\",\n    \"jorgeyardin@ayalaautomotoressa.com.ar\": \"5493794221704\",\n    \"rindeljorge@ayalaautomotoressa.com.ar\": \"5493794700214\",\n    \"gracieladiaz@ayalaautomotoressa.com.ar\": \"5493794144545\"\n};\n\nconst advisorEmail =\n    item.data?.welcome_assigned_user_email ||\n    item.data?.welcome_assigned_user_name ||\n    \"\";\n\nconst normalizedEmail = advisorEmail.trim().toLowerCase();\n\nitem.numero_vendedor = advisorPhones[normalizedEmail] || null;\nitem.asesor_nombre = item.data?.welcome_assigned_user_fullname || null;\nitem.asesor_email = advisorEmail;\nitem.sucursal = item.data?.welcome_asigned_branch || null;\nitem.lead_id = item.data?.welcome_guid || null;\n\nconsole.log(\"Asignación de vendedor tradicional:\", {\n    asesor: item.asesor_nombre,\n    emailOriginal: advisorEmail,\n    emailNormalizado: normalizedEmail,\n    telefonoEncontrado: item.numero_vendedor,\n    leadId: item.lead_id\n});\n\nreturn [\n    {\n        json: item\n    }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        1744
+      ],
+      "id": "83c214dc-53ec-4e01-8947-6efc9efa312d",
+      "name": "mapeo telefonos asesores"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://hub.redooconect.com.ar/webhook/08b27547-120b-4d6e-ab70-b19f761e509b",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "numero_vendedor",
+              "value": "={{ $json.numero_vendedor }}"
+            },
+            {
+              "name": "message",
+              "value": "={{\n`🚘 Nuevo lead asignado\n\n👤 Cliente: ${$('When Executed by Another Workflow').first().json.nombreDeclarado || $('When Executed by Another Workflow').first().json.name || 'No definido'}\n📞 Teléfono: ${$('When Executed by Another Workflow').first().json.number || 'No definido'}\n🛒 Tipo de compra: ${$('When Executed by Another Workflow').first().json.tipoCompra || 'No definido'}\n💳 Forma de pago: ${$('When Executed by Another Workflow').first().json.pago || 'No definida'}\n🔄 Entrega usado: ${$('When Executed by Another Workflow').first().json.usado || 'No informado'}\n🧪 Test Drive: ${$('When Executed by Another Workflow').first().json.testDrive ? 'Sí' : 'No'}\n🤝 Reunión con asesor: ${$('When Executed by Another Workflow').first().json.ReunionAsesor ? 'Sí' : 'No'}\n\n💬 Resumen de la conversación:\n${$('When Executed by Another Workflow').first().json.resumen || 'Sin detalle'}\n\nPor favor, contactá al cliente a la brevedad.`\n}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1392,
+        1744
+      ],
+      "id": "7bc21b22-c98c-44f9-97a2-7a29a59dc673",
+      "name": "whatsapp",
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "f5cf5b5b-a667-4c86-850c-ba5aaf47f3d4",
+              "leftValue": "={{ $json.numero_vendedor }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1248,
+        1744
+      ],
+      "id": "f2e5ab81-5c9b-4585-b148-5337dcf3622e",
+      "name": "If5"
+    },
+    {
+      "parameters": {
+        "content": "MENSAJERÍA Convencional",
+        "height": 224,
+        "width": 688,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        896,
+        1680
+      ],
+      "id": "e6c35fc1-6149-4456-9df5-8bd5184016d0",
+      "name": "Sticky Note6"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "23214f78-9ad3-4daa-ba15-4a471a91513a",
+              "leftValue": "={{ String($('metodo de pago').item.json.businesstypeid || '') !== '3' && !!$json.data?.welcome_guid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        752,
+        1840
+      ],
+      "id": "9dafdf83-334c-4a72-91cd-826b56a36241",
+      "name": "If Convencional"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nreturn items.map((item) => {\n    const data =\n        item.json.output?.[0] ||\n        item.json;\n\n    const pago = String(data.pago || \"\")\n        .trim()\n        .toLowerCase();\n\n    if (pago === \"plan de ahorro\") {\n        data.payment_method_id = 156;\n    } else {\n        // Contado, Convencional, Financiado o cualquier otro valor -> por defecto Convencional\n        data.payment_method_id = 155;\n    }\n\n    return {\n        json: data\n    };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -128,
+        1136
+      ],
+      "id": "0a18dc28-df5d-42bf-8612-8c71ea31be8d",
+      "name": "metodo de pago"
+    },
+    {
+      "parameters": {
+        "content": "MENSAJERÍA PDA",
+        "height": 224,
+        "width": 688,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        896,
+        1904
+      ],
+      "id": "a4e13910-0299-46a8-85e3-42763de48bbd",
+      "name": "Sticky Note7"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://hub.redooconect.com.ar/webhook/08b27547-120b-4d6e-ab70-b19f761e509b",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "numero_vendedor",
+              "value": "={{ $json.numero_vendedor }}"
+            },
+            {
+              "name": "message",
+              "value": "={{\n`🚘 Nuevo lead asignado\n\n👤 Cliente: ${$('When Executed by Another Workflow').first().json.nombreDeclarado || $('When Executed by Another Workflow').first().json.name || 'No definido'}\n📞 Teléfono: ${$('When Executed by Another Workflow').first().json.number || 'No definido'}\n🛒 Tipo de compra: ${$('When Executed by Another Workflow').first().json.tipoCompra || 'No definido'}\n💳 Forma de pago: ${$('When Executed by Another Workflow').first().json.pago || 'No definida'}\n🔄 Entrega usado: ${$('When Executed by Another Workflow').first().json.usado || 'No informado'}\n🧪 Test Drive: ${$('When Executed by Another Workflow').first().json.testDrive ? 'Sí' : 'No'}\n🤝 Reunión con asesor: ${$('When Executed by Another Workflow').first().json.ReunionAsesor ? 'Sí' : 'No'}\n\n💬 Resumen de la conversación:\n${$('When Executed by Another Workflow').first().json.resumen || 'Sin detalle'}\n\nPor favor, contactá al cliente a la brevedad.`\n}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1408,
+        1936
+      ],
+      "id": "61988e0f-7473-4076-a052-c84d03a9add0",
+      "name": "whatsapp1",
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "f5cf5b5b-a667-4c86-850c-ba5aaf47f3d4",
+              "leftValue": "={{ $json.numero_vendedor }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1248,
+        1936
+      ],
+      "id": "3e925533-ed5e-4a9b-a4f0-32fdf8727232",
+      "name": "If6"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\n\nitem.numero_vendedor = \"5493794674530\";\n\nreturn [\n    {\n        json: item\n    }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        1936
+      ],
+      "id": "f8711f3e-7a35-4cb7-ab22-375446105821",
+      "name": "mapeo telefonos asesores 2"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.pilotsolution.net/webhooks/welcome.php",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "appkey",
+              "value": "=92B22E07-5A95-42B2-9B87-A7336D0CF293"
+            },
+            {
+              "name": "pilot_firstname",
+              "value": "=TEST REDOO"
+            },
+            {
+              "name": "pilot_cellphone",
+              "value": "=54991111111111111"
+            },
+            {
+              "name": "pilot_contact_type_id",
+              "value": "1"
+            },
+            {
+              "name": "pilot_suborigin_id",
+              "value": "=G6V9M33DA0F9VMQRK"
+            },
+            {
+              "name": "pilot_notes",
+              "value": "=ES UN TEST DE REDOO"
+            },
+            {
+              "name": "pilot_business_type_id",
+              "value": "=1"
+            },
+            {
+              "name": "pilot_contact_type_id",
+              "value": "1"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "7f7e4b88-4c8a-4b97-b6a0-21e392fe51d8",
+      "name": "HTTP Request3",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -144,
+        1600
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "content": "## Se deja de calificar good lead ticket #3939\n",
+        "height": 336,
+        "width": 400,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1136,
+        928
+      ],
+      "typeVersion": 1,
+      "id": "376beaa1-d8f7-4636-a0a5-3973bee4cdc0",
+      "name": "Sticky Note8"
+    },
+    {
+      "parameters": {
+        "content": "## Se deja de Crear oferta ticket #3939\n",
+        "height": 320,
+        "width": 400,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1136,
+        608
+      ],
+      "typeVersion": 1,
+      "id": "3067ee58-c1b8-485e-a260-666d171816b6",
+      "name": "Sticky Note9"
+    }
+  ],
+  "pinData": {
+    "When Executed by Another Workflow": [
+      {
+        "json": {
+          "goodLead": true,
+          "idConversation": "1252597",
+          "number": "+5491126983037",
+          "name": "Euge",
+          "businesstypeid": "1",
+          "grupoCaptura": "AYALA",
+          "pago": "Financiado",
+          "ProductoInteres": "Ranger",
+          "usado": "no",
+          "interes": "07B7AC5A",
+          "origin": "G5E0N2T63JEPQS4R5",
+          "resumen": "Eugenia Peralta consultó por la Ford Ranger XLT 4x4 0KM, stock disponible. Se envió ficha técnica y descripción del modelo. Eligió financiación con Banco ICBC, monto a financiar: 15 millones. No tiene usado para entregar. Solicitó test drive (horario a confirmar) y reunión con asesor por WhatsApp de forma inmediata. Tipo de cliente: Persona Física. El cliente pidió hablar directamente con un asesor y fue derivado de inmediato con los datos disponibles hasta ese momento.",
+          "testDrive": true,
+          "comentarioTestDrive": "Horario a confirmar por la clienta.",
+          "ReunionAsesor": true,
+          "nombreDeclarado": "Eugenia Peralta",
+          "sucursal": null,
+          "precioMencionado": "",
+          "montoFinanciado": "15000000",
+          "quiereFinanciado": true,
+          "bancoFinanciacion": null,
+          "tipoCompra": "0KM",
+          "mail": ""
+        }
+      }
+    ]
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "PpkjKHl3vFEHrmio",
+      "projectId": "pydFAB8KkMQFZ937",
+      "createdAt": "2026-06-16T18:57:45.420Z",
+      "updatedAt": "2026-06-16T18:57:45.420Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [
+    {
+      "id": "A4bjtCXYt2sYrTqG",
+      "name": "strianese",
+      "createdAt": "2026-06-16T18:57:44.035Z",
+      "updatedAt": "2026-06-16T18:57:44.035Z"
+    }
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2026-11-24T15:53:44.916Z",
+  "versionId": "7268a5c7-28fe-49bd-b778-f52586daed7f"
+}
