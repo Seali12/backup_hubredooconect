@@ -1,0 +1,489 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "ca1e18dd-5572-4bd1-a9c5-bc2e091db75d",
+    "workflowId": "rhRK73ROw3ShVJf1",
+    "nodes": [
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\nconst returnItems = [];\n\n// Verificar si hay items\nif (!items || items.length === 0) {\n  return [];\n}\n\nfor (const item of items) {\n  // Verificar que el item tenga la estructura correcta\n  if (!item || !item.json || !item.json.start || !item.json.start.dateTime) {\n    continue; // Saltar este item si no tiene la estructura correcta\n  }\n  \n  let data = item.json;\n  \n  const dia = data.start.dateTime.split('T')[0];\n  const inicio = data.start.dateTime.split('T')[1].substring(0, 5);\n  const final = data.end.dateTime.split('T')[1].substring(0, 5);\n  \n  returnItems.push({\n    json: {\n      dia: dia,\n      inicio: inicio, \n      final: final\n    }\n  });\n}\n\nreturn returnItems;"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          336,
+          -48
+        ],
+        "id": "ca00f0e4-ade8-499b-b890-1fc85fd5ae37",
+        "name": "Code",
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "inputSource": "passthrough"
+        },
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "typeVersion": 1.1,
+        "position": [
+          -416,
+          -48
+        ],
+        "id": "e3115833-aea0-424e-b98c-a50f2af5f2ac",
+        "name": "When Executed by Another Workflow"
+      },
+      {
+        "parameters": {
+          "documentId": {
+            "__rl": true,
+            "value": "1eyskisSR3eCYLDfIxicAF605LrlwKBu8D8iweqnSt00",
+            "mode": "list",
+            "cachedResultName": "CHEXA MANTENIMIENTO",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1eyskisSR3eCYLDfIxicAF605LrlwKBu8D8iweqnSt00/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": 323427792,
+            "mode": "list",
+            "cachedResultName": "Tabla Horarios Taller",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1eyskisSR3eCYLDfIxicAF605LrlwKBu8D8iweqnSt00/edit#gid=323427792"
+          },
+          "filtersUI": {
+            "values": [
+              {
+                "lookupColumn": "Taller",
+                "lookupValue": "Córdoba_2"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.7,
+        "position": [
+          48,
+          -48
+        ],
+        "id": "b9ab448d-e146-411a-bf21-0b374efba849",
+        "name": "Get row(s) in sheet",
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "mydWwvSbUgk78Yn0",
+            "name": "Google Sheets account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "getAll",
+          "calendar": {
+            "__rl": true,
+            "value": "={{ $json.Id_Calendario }}",
+            "mode": "id"
+          },
+          "returnAll": true,
+          "timeMax": "={{ $now.plus({ month: 1}) }}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleCalendar",
+        "typeVersion": 1.3,
+        "position": [
+          192,
+          -48
+        ],
+        "id": "b1e2af1c-279b-4754-97ff-dec76c612a6d",
+        "name": "Get many events1",
+        "alwaysOutputData": true,
+        "credentials": {
+          "googleCalendarOAuth2Api": {
+            "id": "VFsyOELtxOoaAxpu",
+            "name": "Google Calendar account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "getAll",
+          "calendar": {
+            "__rl": true,
+            "value": "es-419.ar#holiday@group.v.calendar.google.com",
+            "mode": "list",
+            "cachedResultName": "Días feriados en Argentina"
+          },
+          "returnAll": true,
+          "timeMax": "={{ $now.plus({ month: 4 }) }}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleCalendar",
+        "typeVersion": 1.3,
+        "position": [
+          -256,
+          -48
+        ],
+        "id": "7d82ee41-ef36-48de-9d85-0abddfd96c5d",
+        "name": "Get many events2",
+        "credentials": {
+          "googleCalendarOAuth2Api": {
+            "id": "VFsyOELtxOoaAxpu",
+            "name": "Google Calendar account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "function calcularTurnosDisponibles() {\n  const tiempoDataRaw = $('When Executed by Another Workflow').first().json;\n  let tiempoMantenimiento = 30;\n  \n  if (tiempoDataRaw && tiempoDataRaw.query) {\n    let queryValue = tiempoDataRaw.query;\n    \n    // Si query es un string JSON, parsearlo recursivamente\n    while (typeof queryValue === 'string' && (queryValue.startsWith('{') || queryValue.startsWith('['))) {\n      try {\n        const parsed = JSON.parse(queryValue);\n        // Si es un array, tomar el primer elemento\n        if (Array.isArray(parsed)) {\n          queryValue = parsed[0]?.query || parsed[0];\n        } else if (parsed.query) {\n          queryValue = parsed.query;\n        } else {\n          break;\n        }\n      } catch (e) {\n        break;\n      }\n    }\n    \n    // Ahora procesar queryValue (puede ser \"01:30:00\", \"2:00:00\", \"90\", etc)\n    if (typeof queryValue === 'string' && queryValue.includes(':')) {\n      const parts = queryValue.split(':').map(Number);\n      const hours = parts[0] || 0;\n      const minutes = parts[1] || 0;\n      tiempoMantenimiento = (hours * 60) + minutes;\n    } else if (queryValue) {\n      tiempoMantenimiento = parseInt(queryValue) || 30;\n    }\n  }\n  \n  const feriadosData = $('feriados').first().json.feriadosEncontrados || [];\n  const tallerData = $('Get row(s) in sheet').first().json;\n  const turnosOcupadosRaw = $('Code').all();\n  \n  const turnosOcupados = [];\n  turnosOcupadosRaw.forEach(item => {\n    if (item.json && Array.isArray(item.json)) {\n      turnosOcupados.push(...item.json);\n    } else if (item.json && item.json.dia) {\n      turnosOcupados.push(item.json);\n    }\n  });\n  \n  function timeToMinutes(timeStr) {\n    const [hours, minutes] = timeStr.split(':').map(Number);\n    return hours * 60 + minutes;\n  }\n  \n  function minutesToTime(minutes) {\n    const hours = Math.floor(minutes / 60);\n    const mins = minutes % 60;\n    return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;\n  }\n\n  // ➕ NUEVO: función para crear fechaFormato\n  function crearFechaFormato(fechaStr) {\n    const fecha = new Date(fechaStr + \"T00:00:00\");\n    const dias = [\"Domingo\",\"Lunes\",\"Martes\",\"Miércoles\",\"Jueves\",\"Viernes\",\"Sábado\"];\n    return `${dias[fecha.getDay()]} ${fecha.getDate()}/${fecha.getMonth()+1}/${fecha.getFullYear()}`;\n  }\n  \n  const apertura = timeToMinutes(tallerData.Apertura);\n  const cierre = timeToMinutes(tallerData.Cierre);\n  \n  const fechasHorariosOcupados = new Set();\n  turnosOcupados.forEach(turno => {\n    if (turno.dia && turno.inicio && turno.final) {\n      const inicioOcupado = timeToMinutes(turno.inicio);\n      const finOcupado = timeToMinutes(turno.final);\n      \n      for (let minuto = inicioOcupado; minuto < finOcupado; minuto += 15) {\n        const key = `${turno.dia}_${minutesToTime(minuto)}`;\n        fechasHorariosOcupados.add(key);\n      }\n    }\n  });\n  \n  const feriados = new Set(feriadosData);\n  const turnosDisponibles = [];\n  const hoy = new Date();\n  let diasBuscados = 0;\n  const maxDias = 60;\n  \n  let fechaActual = new Date(hoy);\n  fechaActual.setDate(fechaActual.getDate() + 1);\n  \n  while (turnosDisponibles.length < 12 && diasBuscados < maxDias) {\n    const fechaStr = fechaActual.toISOString().split('T')[0];\n    const diaSemana = fechaActual.getDay();\n    \n    if (diaSemana >= 1 && diaSemana <= 5 && !feriados.has(fechaStr)) {\n      const turnosDia = [];\n      \n      function estaDisponible(horaInicio, duracion) {\n        const horaFin = horaInicio + duracion;\n        \n        for (let minuto = horaInicio; minuto < horaFin; minuto += 15) {\n          const key = `${fechaStr}_${minutesToTime(minuto)}`;\n          if (fechasHorariosOcupados.has(key)) {\n            return false;\n          }\n        }\n        return true;\n      }\n      \n      for (let horaActual = apertura; horaActual + tiempoMantenimiento <= cierre; horaActual += 15) {\n        if (estaDisponible(horaActual, tiempoMantenimiento)) {\n          turnosDia.push({\n            dia: fechaStr,\n            inicio: minutesToTime(horaActual),\n            final: minutesToTime(horaActual + tiempoMantenimiento),\n            Id_Calendario: tallerData.Id_Calendario,\n            fechaFormato: crearFechaFormato(fechaStr) // ➕ AGREGADO\n          });\n        }\n      }\n      \n      if (turnosDia.length > 0) {\n        const indiceAleatorio = Math.floor(Math.random() * turnosDia.length);\n        turnosDisponibles.push(turnosDia[indiceAleatorio]);\n      }\n    }\n    \n    fechaActual.setDate(fechaActual.getDate() + 1);\n    diasBuscados++;\n  }\n  \n  turnosDisponibles.sort((a, b) => {\n    if (a.dia !== b.dia) return a.dia < b.dia ? -1 : 1;\n    return a.inicio < b.inicio ? -1 : 1;\n  });\n  \n  return {\n    turnosDisponibles: turnosDisponibles.slice(0, 12),\n    tiempoMantenimientoCalculado: tiempoMantenimiento\n  };\n}\n\nconst resultado = calcularTurnosDisponibles();\n\nreturn [{\n  json: {\n    turnosDisponibles: resultado.turnosDisponibles,\n    tiempoTotalCalculado: resultado.tiempoMantenimientoCalculado,\n    cantidadTurnos: resultado.turnosDisponibles.length\n  }\n}];\n"
+        },
+        "id": "93d89f6f-21d9-4e9d-968e-b3a25462691d",
+        "name": "turnosDisponibles1",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          496,
+          -48
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "function obtenerFeriados() {\n  // Obtener los feriados del nodo anterior\n  const feriadosData = $input.all(); // Obtiene todos los items del nodo anterior\n  const feriados = [];\n  \n  // Extraer las fechas de los feriados del formato que recibes\n  feriadosData.forEach(item => {\n    if (item.json && item.json.start && item.json.start.date) {\n      feriados.push(item.json.start.date);\n    }\n    // Si el feriado dura más de un día, también agregar las fechas intermedias\n    if (item.json && item.json.end && item.json.end.date && item.json.start.date !== item.json.end.date) {\n      const fechaInicio = new Date(item.json.start.date);\n      const fechaFin = new Date(item.json.end.date);\n      \n      // Agregar todas las fechas entre inicio y fin\n      const fechaActual = new Date(fechaInicio);\n      while (fechaActual < fechaFin) {\n        feriados.push(fechaActual.toISOString().split('T')[0]);\n        fechaActual.setDate(fechaActual.getDate() + 1);\n      }\n    }\n  });\n  \n  // Eliminar duplicados de la lista de feriados\n  const feriadosUnicos = [...new Set(feriados)];\n  \n  return feriadosUnicos;\n}\n\nconst feriadosEncontrados = obtenerFeriados();\n\nreturn [{\n  json: {\n    feriadosEncontrados: feriadosEncontrados\n  }\n}];"
+        },
+        "id": "18c2d31f-ec5b-46cc-8b4a-0391a16279d1",
+        "name": "feriados",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -112,
+          -48
+        ]
+      }
+    ],
+    "connections": {
+      "Code": {
+        "main": [
+          [
+            {
+              "node": "turnosDisponibles1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "When Executed by Another Workflow": {
+        "main": [
+          [
+            {
+              "node": "Get many events2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get row(s) in sheet": {
+        "main": [
+          [
+            {
+              "node": "Get many events1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get many events1": {
+        "main": [
+          [
+            {
+              "node": "Code",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get many events2": {
+        "main": [
+          [
+            {
+              "node": "feriados",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "feriados": {
+        "main": [
+          [
+            {
+              "node": "Get row(s) in sheet",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "system migration",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-11-04T19:34:56.292Z",
+    "updatedAt": "2026-11-04T19:34:56.292Z"
+  },
+  "activeVersionId": "ca1e18dd-5572-4bd1-a9c5-bc2e091db75d",
+  "connections": {
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "turnosDisponibles1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Get many events2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "Get many events1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many events1": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many events2": {
+      "main": [
+        [
+          {
+            "node": "feriados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "feriados": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2025-09-29T14:06:05.388Z",
+  "id": "rhRK73ROw3ShVJf1",
+  "isArchived": false,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "name": "GET_TURNOS_CORDOBA_2",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst returnItems = [];\n\n// Verificar si hay items\nif (!items || items.length === 0) {\n  return [];\n}\n\nfor (const item of items) {\n  // Verificar que el item tenga la estructura correcta\n  if (!item || !item.json || !item.json.start || !item.json.start.dateTime) {\n    continue; // Saltar este item si no tiene la estructura correcta\n  }\n  \n  let data = item.json;\n  \n  const dia = data.start.dateTime.split('T')[0];\n  const inicio = data.start.dateTime.split('T')[1].substring(0, 5);\n  const final = data.end.dateTime.split('T')[1].substring(0, 5);\n  \n  returnItems.push({\n    json: {\n      dia: dia,\n      inicio: inicio, \n      final: final\n    }\n  });\n}\n\nreturn returnItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        336,
+        -48
+      ],
+      "id": "ca00f0e4-ade8-499b-b890-1fc85fd5ae37",
+      "name": "Code",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -416,
+        -48
+      ],
+      "id": "e3115833-aea0-424e-b98c-a50f2af5f2ac",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1eyskisSR3eCYLDfIxicAF605LrlwKBu8D8iweqnSt00",
+          "mode": "list",
+          "cachedResultName": "CHEXA MANTENIMIENTO",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1eyskisSR3eCYLDfIxicAF605LrlwKBu8D8iweqnSt00/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 323427792,
+          "mode": "list",
+          "cachedResultName": "Tabla Horarios Taller",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1eyskisSR3eCYLDfIxicAF605LrlwKBu8D8iweqnSt00/edit#gid=323427792"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Taller",
+              "lookupValue": "Córdoba_2"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        48,
+        -48
+      ],
+      "id": "b9ab448d-e146-411a-bf21-0b374efba849",
+      "name": "Get row(s) in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "mydWwvSbUgk78Yn0",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "={{ $json.Id_Calendario }}",
+          "mode": "id"
+        },
+        "returnAll": true,
+        "timeMax": "={{ $now.plus({ month: 1}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        192,
+        -48
+      ],
+      "id": "b1e2af1c-279b-4754-97ff-dec76c612a6d",
+      "name": "Get many events1",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "VFsyOELtxOoaAxpu",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "es-419.ar#holiday@group.v.calendar.google.com",
+          "mode": "list",
+          "cachedResultName": "Días feriados en Argentina"
+        },
+        "returnAll": true,
+        "timeMax": "={{ $now.plus({ month: 4 }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        -256,
+        -48
+      ],
+      "id": "7d82ee41-ef36-48de-9d85-0abddfd96c5d",
+      "name": "Get many events2",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "VFsyOELtxOoaAxpu",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "function calcularTurnosDisponibles() {\n  const tiempoDataRaw = $('When Executed by Another Workflow').first().json;\n  let tiempoMantenimiento = 30;\n  \n  if (tiempoDataRaw && tiempoDataRaw.query) {\n    let queryValue = tiempoDataRaw.query;\n    \n    // Si query es un string JSON, parsearlo recursivamente\n    while (typeof queryValue === 'string' && (queryValue.startsWith('{') || queryValue.startsWith('['))) {\n      try {\n        const parsed = JSON.parse(queryValue);\n        // Si es un array, tomar el primer elemento\n        if (Array.isArray(parsed)) {\n          queryValue = parsed[0]?.query || parsed[0];\n        } else if (parsed.query) {\n          queryValue = parsed.query;\n        } else {\n          break;\n        }\n      } catch (e) {\n        break;\n      }\n    }\n    \n    // Ahora procesar queryValue (puede ser \"01:30:00\", \"2:00:00\", \"90\", etc)\n    if (typeof queryValue === 'string' && queryValue.includes(':')) {\n      const parts = queryValue.split(':').map(Number);\n      const hours = parts[0] || 0;\n      const minutes = parts[1] || 0;\n      tiempoMantenimiento = (hours * 60) + minutes;\n    } else if (queryValue) {\n      tiempoMantenimiento = parseInt(queryValue) || 30;\n    }\n  }\n  \n  const feriadosData = $('feriados').first().json.feriadosEncontrados || [];\n  const tallerData = $('Get row(s) in sheet').first().json;\n  const turnosOcupadosRaw = $('Code').all();\n  \n  const turnosOcupados = [];\n  turnosOcupadosRaw.forEach(item => {\n    if (item.json && Array.isArray(item.json)) {\n      turnosOcupados.push(...item.json);\n    } else if (item.json && item.json.dia) {\n      turnosOcupados.push(item.json);\n    }\n  });\n  \n  function timeToMinutes(timeStr) {\n    const [hours, minutes] = timeStr.split(':').map(Number);\n    return hours * 60 + minutes;\n  }\n  \n  function minutesToTime(minutes) {\n    const hours = Math.floor(minutes / 60);\n    const mins = minutes % 60;\n    return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;\n  }\n\n  // ➕ NUEVO: función para crear fechaFormato\n  function crearFechaFormato(fechaStr) {\n    const fecha = new Date(fechaStr + \"T00:00:00\");\n    const dias = [\"Domingo\",\"Lunes\",\"Martes\",\"Miércoles\",\"Jueves\",\"Viernes\",\"Sábado\"];\n    return `${dias[fecha.getDay()]} ${fecha.getDate()}/${fecha.getMonth()+1}/${fecha.getFullYear()}`;\n  }\n  \n  const apertura = timeToMinutes(tallerData.Apertura);\n  const cierre = timeToMinutes(tallerData.Cierre);\n  \n  const fechasHorariosOcupados = new Set();\n  turnosOcupados.forEach(turno => {\n    if (turno.dia && turno.inicio && turno.final) {\n      const inicioOcupado = timeToMinutes(turno.inicio);\n      const finOcupado = timeToMinutes(turno.final);\n      \n      for (let minuto = inicioOcupado; minuto < finOcupado; minuto += 15) {\n        const key = `${turno.dia}_${minutesToTime(minuto)}`;\n        fechasHorariosOcupados.add(key);\n      }\n    }\n  });\n  \n  const feriados = new Set(feriadosData);\n  const turnosDisponibles = [];\n  const hoy = new Date();\n  let diasBuscados = 0;\n  const maxDias = 60;\n  \n  let fechaActual = new Date(hoy);\n  fechaActual.setDate(fechaActual.getDate() + 1);\n  \n  while (turnosDisponibles.length < 12 && diasBuscados < maxDias) {\n    const fechaStr = fechaActual.toISOString().split('T')[0];\n    const diaSemana = fechaActual.getDay();\n    \n    if (diaSemana >= 1 && diaSemana <= 5 && !feriados.has(fechaStr)) {\n      const turnosDia = [];\n      \n      function estaDisponible(horaInicio, duracion) {\n        const horaFin = horaInicio + duracion;\n        \n        for (let minuto = horaInicio; minuto < horaFin; minuto += 15) {\n          const key = `${fechaStr}_${minutesToTime(minuto)}`;\n          if (fechasHorariosOcupados.has(key)) {\n            return false;\n          }\n        }\n        return true;\n      }\n      \n      for (let horaActual = apertura; horaActual + tiempoMantenimiento <= cierre; horaActual += 15) {\n        if (estaDisponible(horaActual, tiempoMantenimiento)) {\n          turnosDia.push({\n            dia: fechaStr,\n            inicio: minutesToTime(horaActual),\n            final: minutesToTime(horaActual + tiempoMantenimiento),\n            Id_Calendario: tallerData.Id_Calendario,\n            fechaFormato: crearFechaFormato(fechaStr) // ➕ AGREGADO\n          });\n        }\n      }\n      \n      if (turnosDia.length > 0) {\n        const indiceAleatorio = Math.floor(Math.random() * turnosDia.length);\n        turnosDisponibles.push(turnosDia[indiceAleatorio]);\n      }\n    }\n    \n    fechaActual.setDate(fechaActual.getDate() + 1);\n    diasBuscados++;\n  }\n  \n  turnosDisponibles.sort((a, b) => {\n    if (a.dia !== b.dia) return a.dia < b.dia ? -1 : 1;\n    return a.inicio < b.inicio ? -1 : 1;\n  });\n  \n  return {\n    turnosDisponibles: turnosDisponibles.slice(0, 12),\n    tiempoMantenimientoCalculado: tiempoMantenimiento\n  };\n}\n\nconst resultado = calcularTurnosDisponibles();\n\nreturn [{\n  json: {\n    turnosDisponibles: resultado.turnosDisponibles,\n    tiempoTotalCalculado: resultado.tiempoMantenimientoCalculado,\n    cantidadTurnos: resultado.turnosDisponibles.length\n  }\n}];\n"
+      },
+      "id": "93d89f6f-21d9-4e9d-968e-b3a25462691d",
+      "name": "turnosDisponibles1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        496,
+        -48
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "function obtenerFeriados() {\n  // Obtener los feriados del nodo anterior\n  const feriadosData = $input.all(); // Obtiene todos los items del nodo anterior\n  const feriados = [];\n  \n  // Extraer las fechas de los feriados del formato que recibes\n  feriadosData.forEach(item => {\n    if (item.json && item.json.start && item.json.start.date) {\n      feriados.push(item.json.start.date);\n    }\n    // Si el feriado dura más de un día, también agregar las fechas intermedias\n    if (item.json && item.json.end && item.json.end.date && item.json.start.date !== item.json.end.date) {\n      const fechaInicio = new Date(item.json.start.date);\n      const fechaFin = new Date(item.json.end.date);\n      \n      // Agregar todas las fechas entre inicio y fin\n      const fechaActual = new Date(fechaInicio);\n      while (fechaActual < fechaFin) {\n        feriados.push(fechaActual.toISOString().split('T')[0]);\n        fechaActual.setDate(fechaActual.getDate() + 1);\n      }\n    }\n  });\n  \n  // Eliminar duplicados de la lista de feriados\n  const feriadosUnicos = [...new Set(feriados)];\n  \n  return feriadosUnicos;\n}\n\nconst feriadosEncontrados = obtenerFeriados();\n\nreturn [{\n  json: {\n    feriadosEncontrados: feriadosEncontrados\n  }\n}];"
+      },
+      "id": "18c2d31f-ec5b-46cc-8b4a-0391a16279d1",
+      "name": "feriados",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -112,
+        -48
+      ]
+    }
+  ],
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "rhRK73ROw3ShVJf1",
+      "projectId": "ZjcvWAM7NzgUDQT2",
+      "createdAt": "2025-09-29T14:06:05.393Z",
+      "updatedAt": "2025-09-29T14:06:05.393Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [
+    {
+      "id": "gWPya5QbcohaweQK",
+      "name": "Chexa",
+      "createdAt": "2025-09-05T03:09:59.791Z",
+      "updatedAt": "2026-02-27T20:35:35.652Z"
+    }
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2026-11-04T20:06:09.429Z",
+  "versionId": "ca1e18dd-5572-4bd1-a9c5-bc2e091db75d"
+}
