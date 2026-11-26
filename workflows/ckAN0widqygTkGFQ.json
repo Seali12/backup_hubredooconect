@@ -1,0 +1,996 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "a552c578-3b74-4f1c-9450-6a191c169e49",
+    "workflowId": "ckAN0widqygTkGFQ",
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "21c4b6b7-fcf2-4599-8a1b-b34cceb3f987",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.1,
+        "position": [
+          0,
+          0
+        ],
+        "id": "c4069bde-03eb-4ac7-a72f-1abf545a79fa",
+        "name": "Webhook",
+        "webhookId": "21c4b6b7-fcf2-4599-8a1b-b34cceb3f987"
+      },
+      {
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "cfg1",
+                "name": "campana_madre",
+                "value": "={{ ({ PreAtencion_leads: 6121 })[$json.body.id] ?? 0 }}",
+                "type": "number"
+              },
+              {
+                "id": "cfg2",
+                "name": "sender_phone",
+                "value": "5491161180266",
+                "type": "string"
+              },
+              {
+                "id": "f1",
+                "name": "flujo",
+                "value": "={{ $json.body.id }}",
+                "type": "string"
+              },
+              {
+                "id": "f2",
+                "name": "fecha",
+                "value": "={{ $now.setZone('America/Argentina/Buenos_Aires').toFormat('yyyy-MM-dd') }}",
+                "type": "string"
+              },
+              {
+                "id": "f3",
+                "name": "telefono",
+                "value": "={{ String($json.body.cliente_cel || $json.body.cliente_tel || '').replace(/[^0-9]/g, '') }}",
+                "type": "string"
+              },
+              {
+                "id": "f4",
+                "name": "nombre",
+                "value": "={{ String($json.body.cliente_nombre ?? '').trim() }}",
+                "type": "string"
+              },
+              {
+                "id": "f5",
+                "name": "modelo",
+                "value": "={{ String($json.body.Producto_de_interes ?? '').trim().replace(/[_-]+/g, ' ').replace(/\\s+/g, ' ').toLowerCase().replace(/\\b[a-z]/g, c => c.toUpperCase()) || 'una de nuestras motos' }}",
+                "type": "string"
+              },
+              {
+                "id": "f6",
+                "name": "guid",
+                "value": "={{ String($json.body.id_lead ?? '').trim() }}",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "82d88148-56ae-4a3c-8185-2f523d7b567b",
+        "name": "Preparar datos",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [
+          144,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "c1",
+                "leftValue": "={{ $json.campana_madre }}",
+                "rightValue": 0,
+                "operator": {
+                  "type": "number",
+                  "operation": "gt"
+                }
+              },
+              {
+                "id": "c2",
+                "leftValue": "={{ $json.telefono }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "string",
+                  "operation": "notEmpty",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "2d969fcc-3bd7-4579-89dc-9bec45101e65",
+        "name": "Flujo configurado",
+        "type": "n8n-nodes-base.filter",
+        "typeVersion": 2.2,
+        "position": [
+          288,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://campaigns.redooconect.com.ar/api/v1/campaigns/{{ $('Preparar datos').item.json.campana_madre }}/send-single",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-API-Key",
+                "value": "f33f1e68-cd0a-4205-a27c-196eeb887b1b"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ phone_number: $('Preparar datos').item.json.telefono, sender_phone: $('Preparar datos').item.json.sender_phone, destination_country: 'AR', enqueue_if_no_credit: true, daily_envio: true, crm_lead_guid: $('Preparar datos').item.json.guid, variables: { '1': $('Preparar datos').item.json.nombre, '2': $('Preparar datos').item.json.modelo, '3': 'Captura-de-pantalla-2026-10-29-150230_20261029_150308.png' } }) }}",
+          "options": {}
+        },
+        "id": "19a0dc61-a8e3-4ea1-8434-9dbd17c4d61a",
+        "name": "Enviar a la campaña",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1552,
+          -16
+        ],
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "table": {
+            "__rl": true,
+            "mode": "name",
+            "value": "integracion_leads"
+          },
+          "dataMode": "defineBelow",
+          "valuesToSend": {
+            "values": [
+              {
+                "column": "company_id",
+                "value": "199"
+              },
+              {
+                "column": "integracion",
+                "value": "megamoto_webhook"
+              },
+              {
+                "column": "flujo",
+                "value": "={{ $('Preparar datos').item.json.flujo }}"
+              },
+              {
+                "column": "external_id",
+                "value": "={{ $('Preparar datos').item.json.guid || null }}"
+              },
+              {
+                "column": "nombre",
+                "value": "={{ $('Preparar datos').item.json.nombre || null }}"
+              },
+              {
+                "column": "telefono",
+                "value": "={{ $('Preparar datos').item.json.telefono }}"
+              },
+              {
+                "column": "modelo",
+                "value": "={{ $('Preparar datos').item.json.modelo || null }}"
+              },
+              {
+                "column": "campaign_id",
+                "value": "={{ $json.campaign_id || null }}"
+              },
+              {
+                "column": "campaign_contact_id",
+                "value": "={{ $json.campaign_contact_id || null }}"
+              },
+              {
+                "column": "envio",
+                "value": "={{ !!$json.campaign_contact_id ? 1 : 0 }}"
+              },
+              {
+                "column": "envio_status",
+                "value": "={{ $json.status || 'failed' }}"
+              },
+              {
+                "column": "envio_reason",
+                "value": "={{ $json.campaign_contact_id ? null : (m => (m.includes('HTTP ') ? m.split('HTTP ')[1].split(': ').slice(1).join(': ').split(String.fromCharCode(92))[0] : m).slice(0, 255))(String($json.error?.message ?? $json.message ?? 'Error al enviar')) }}"
+              },
+              {
+                "column": "enviado_at",
+                "value": "={{ !!$json.campaign_contact_id ? $now.toUTC().toFormat('yyyy-MM-dd HH:mm:ss') : null }}"
+              },
+              {
+                "column": "derivado_a",
+                "value": "ia_ventas"
+              },
+              {
+                "column": "crm",
+                "value": "pilot"
+              },
+              {
+                "column": "status",
+                "value": "={{ !!$json.campaign_contact_id ? 'enviado' : 'failed' }}"
+              },
+              {
+                "column": "status_changed_at",
+                "value": "={{ $now.toUTC().toFormat('yyyy-MM-dd HH:mm:ss') }}"
+              },
+              {
+                "column": "extra",
+                "value": "={{ JSON.stringify($('Webhook').item.json.body) }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "e118d641-eff1-4463-a8dd-cbea813d2bd4",
+        "name": "Guardar en SUITE",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          1760,
+          -16
+        ],
+        "credentials": {
+          "mySql": {
+            "id": "HZXcTU4GLNSSF2EL",
+            "name": "MySQL account SUITE"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT COUNT(*) AS n, MAX(id) AS fila_original FROM integracion_leads WHERE integracion = 'megamoto_webhook' AND status = 'enviado' AND created_at >= NOW() - INTERVAL 24 HOUR AND ((external_id = '{{ $json.guid.replace(/[^A-Za-z0-9-]/g, '') }}' AND external_id <> '') OR (CHAR_LENGTH('{{ $json.telefono.replace(/[^0-9]/g, '') }}') >= 10 AND RIGHT(telefono, 10) = RIGHT('{{ $json.telefono.replace(/[^0-9]/g, '') }}', 10)))",
+          "options": {}
+        },
+        "id": "d804c6eb-2bb7-4187-bd8d-1c3f8b441e15",
+        "name": "¿Ya enviado?",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          480,
+          0
+        ],
+        "credentials": {
+          "mySql": {
+            "id": "HZXcTU4GLNSSF2EL",
+            "name": "MySQL account SUITE"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 1
+            },
+            "combinator": "and",
+            "conditions": [
+              {
+                "id": "r1",
+                "leftValue": "={{ $json.n }}",
+                "rightValue": 0,
+                "operator": {
+                  "type": "number",
+                  "operation": "gt"
+                }
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "333abd6b-65bb-44ef-bb3f-8c8d43922bbe",
+        "name": "¿Repetido?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          672,
+          -160
+        ]
+      },
+      {
+        "parameters": {
+          "table": {
+            "__rl": true,
+            "mode": "name",
+            "value": "integracion_leads"
+          },
+          "dataMode": "defineBelow",
+          "valuesToSend": {
+            "values": [
+              {
+                "column": "company_id",
+                "value": "199"
+              },
+              {
+                "column": "integracion",
+                "value": "megamoto_webhook"
+              },
+              {
+                "column": "flujo",
+                "value": "={{ $('Preparar datos').item.json.flujo }}"
+              },
+              {
+                "column": "external_id",
+                "value": "={{ $('Preparar datos').item.json.guid || null }}"
+              },
+              {
+                "column": "nombre",
+                "value": "={{ $('Preparar datos').item.json.nombre || null }}"
+              },
+              {
+                "column": "telefono",
+                "value": "={{ $('Preparar datos').item.json.telefono }}"
+              },
+              {
+                "column": "modelo",
+                "value": "={{ $('Preparar datos').item.json.modelo || null }}"
+              },
+              {
+                "column": "envio",
+                "value": "0"
+              },
+              {
+                "column": "envio_status",
+                "value": "skipped"
+              },
+              {
+                "column": "envio_reason",
+                "value": "={{ 'Lead repetido: ya se le envio en las ultimas 24 h (fila ' + $json.fila_original + ')' }}"
+              },
+              {
+                "column": "crm",
+                "value": "pilot"
+              },
+              {
+                "column": "status",
+                "value": "duplicado"
+              },
+              {
+                "column": "status_changed_at",
+                "value": "={{ $now.toUTC().toFormat('yyyy-MM-dd HH:mm:ss') }}"
+              },
+              {
+                "column": "reason",
+                "value": "={{ 'Duplicado de la fila ' + $json.fila_original }}"
+              },
+              {
+                "column": "extra",
+                "value": "={{ JSON.stringify($('Webhook').item.json.body) }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "8beb4ef4-1223-4798-be05-904a4475f38e",
+        "name": "Guardar repetido",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          880,
+          -320
+        ],
+        "credentials": {
+          "mySql": {
+            "id": "HZXcTU4GLNSSF2EL",
+            "name": "MySQL account SUITE"
+          }
+        }
+      }
+    ],
+    "connections": {
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "Preparar datos",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Preparar datos": {
+        "main": [
+          [
+            {
+              "node": "Flujo configurado",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Enviar a la campaña": {
+        "main": [
+          [
+            {
+              "node": "Guardar en SUITE",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Flujo configurado": {
+        "main": [
+          [
+            {
+              "node": "¿Ya enviado?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "¿Ya enviado?": {
+        "main": [
+          [
+            {
+              "node": "¿Repetido?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "¿Repetido?": {
+        "main": [
+          [
+            {
+              "node": "Guardar repetido",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Enviar a la campaña",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "MARCELO AGUSTIN DRI (via MCP)",
+    "name": "Envío diario vía daily_envio (aparece en Envíos)",
+    "description": "send-single directo a la campaña madre 6121 con daily_envio:true; campaigns-api crea el envío del día y aparece en Campañas > Envíos. Se quitan los nodos que duplicaban la madre cada día.",
+    "autosaved": false,
+    "createdAt": "2026-11-12T18:32:37.924Z",
+    "updatedAt": "2026-11-12T18:32:37.924Z"
+  },
+  "activeVersionId": "a552c578-3b74-4f1c-9450-6a191c169e49",
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Preparar datos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar datos": {
+      "main": [
+        [
+          {
+            "node": "Flujo configurado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar a la campaña": {
+      "main": [
+        [
+          {
+            "node": "Guardar en SUITE",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Flujo configurado": {
+      "main": [
+        [
+          {
+            "node": "¿Ya enviado?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Ya enviado?": {
+      "main": [
+        [
+          {
+            "node": "¿Repetido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Repetido?": {
+      "main": [
+        [
+          {
+            "node": "Guardar repetido",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Enviar a la campaña",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-10-07T19:20:20.246Z",
+  "id": "ckAN0widqygTkGFQ",
+  "isArchived": false,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "name": "MEGAMOTO",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "21c4b6b7-fcf2-4599-8a1b-b34cceb3f987",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "c4069bde-03eb-4ac7-a72f-1abf545a79fa",
+      "name": "Webhook",
+      "webhookId": "21c4b6b7-fcf2-4599-8a1b-b34cceb3f987"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "cfg1",
+              "name": "campana_madre",
+              "value": "={{ ({ PreAtencion_leads: 6121 })[$json.body.id] ?? 0 }}",
+              "type": "number"
+            },
+            {
+              "id": "cfg2",
+              "name": "sender_phone",
+              "value": "5491161180266",
+              "type": "string"
+            },
+            {
+              "id": "f1",
+              "name": "flujo",
+              "value": "={{ $json.body.id }}",
+              "type": "string"
+            },
+            {
+              "id": "f2",
+              "name": "fecha",
+              "value": "={{ $now.setZone('America/Argentina/Buenos_Aires').toFormat('yyyy-MM-dd') }}",
+              "type": "string"
+            },
+            {
+              "id": "f3",
+              "name": "telefono",
+              "value": "={{ String($json.body.cliente_cel || $json.body.cliente_tel || '').replace(/[^0-9]/g, '') }}",
+              "type": "string"
+            },
+            {
+              "id": "f4",
+              "name": "nombre",
+              "value": "={{ String($json.body.cliente_nombre ?? '').trim() }}",
+              "type": "string"
+            },
+            {
+              "id": "f5",
+              "name": "modelo",
+              "value": "={{ String($json.body.Producto_de_interes ?? '').trim().replace(/[_-]+/g, ' ').replace(/\\s+/g, ' ').toLowerCase().replace(/\\b[a-z]/g, c => c.toUpperCase()) || 'una de nuestras motos' }}",
+              "type": "string"
+            },
+            {
+              "id": "f6",
+              "name": "guid",
+              "value": "={{ String($json.body.id_lead ?? '').trim() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "82d88148-56ae-4a3c-8185-2f523d7b567b",
+      "name": "Preparar datos",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        144,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.campana_madre }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            },
+            {
+              "id": "c2",
+              "leftValue": "={{ $json.telefono }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "2d969fcc-3bd7-4579-89dc-9bec45101e65",
+      "name": "Flujo configurado",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        288,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://campaigns.redooconect.com.ar/api/v1/campaigns/{{ $('Preparar datos').item.json.campana_madre }}/send-single",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "f33f1e68-cd0a-4205-a27c-196eeb887b1b"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ phone_number: $('Preparar datos').item.json.telefono, sender_phone: $('Preparar datos').item.json.sender_phone, destination_country: 'AR', enqueue_if_no_credit: true, daily_envio: true, crm_lead_guid: $('Preparar datos').item.json.guid, variables: { '1': $('Preparar datos').item.json.nombre, '2': $('Preparar datos').item.json.modelo, '3': 'Captura-de-pantalla-2026-10-29-150230_20261029_150308.png' } }) }}",
+        "options": {}
+      },
+      "id": "19a0dc61-a8e3-4ea1-8434-9dbd17c4d61a",
+      "name": "Enviar a la campaña",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1552,
+        -16
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "table": {
+          "__rl": true,
+          "mode": "name",
+          "value": "integracion_leads"
+        },
+        "dataMode": "defineBelow",
+        "valuesToSend": {
+          "values": [
+            {
+              "column": "company_id",
+              "value": "199"
+            },
+            {
+              "column": "integracion",
+              "value": "megamoto_webhook"
+            },
+            {
+              "column": "flujo",
+              "value": "={{ $('Preparar datos').item.json.flujo }}"
+            },
+            {
+              "column": "external_id",
+              "value": "={{ $('Preparar datos').item.json.guid || null }}"
+            },
+            {
+              "column": "nombre",
+              "value": "={{ $('Preparar datos').item.json.nombre || null }}"
+            },
+            {
+              "column": "telefono",
+              "value": "={{ $('Preparar datos').item.json.telefono }}"
+            },
+            {
+              "column": "modelo",
+              "value": "={{ $('Preparar datos').item.json.modelo || null }}"
+            },
+            {
+              "column": "campaign_id",
+              "value": "={{ $json.campaign_id || null }}"
+            },
+            {
+              "column": "campaign_contact_id",
+              "value": "={{ $json.campaign_contact_id || null }}"
+            },
+            {
+              "column": "envio",
+              "value": "={{ !!$json.campaign_contact_id ? 1 : 0 }}"
+            },
+            {
+              "column": "envio_status",
+              "value": "={{ $json.status || 'failed' }}"
+            },
+            {
+              "column": "envio_reason",
+              "value": "={{ $json.campaign_contact_id ? null : (m => (m.includes('HTTP ') ? m.split('HTTP ')[1].split(': ').slice(1).join(': ').split(String.fromCharCode(92))[0] : m).slice(0, 255))(String($json.error?.message ?? $json.message ?? 'Error al enviar')) }}"
+            },
+            {
+              "column": "enviado_at",
+              "value": "={{ !!$json.campaign_contact_id ? $now.toUTC().toFormat('yyyy-MM-dd HH:mm:ss') : null }}"
+            },
+            {
+              "column": "derivado_a",
+              "value": "ia_ventas"
+            },
+            {
+              "column": "crm",
+              "value": "pilot"
+            },
+            {
+              "column": "status",
+              "value": "={{ !!$json.campaign_contact_id ? 'enviado' : 'failed' }}"
+            },
+            {
+              "column": "status_changed_at",
+              "value": "={{ $now.toUTC().toFormat('yyyy-MM-dd HH:mm:ss') }}"
+            },
+            {
+              "column": "extra",
+              "value": "={{ JSON.stringify($('Webhook').item.json.body) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e118d641-eff1-4463-a8dd-cbea813d2bd4",
+      "name": "Guardar en SUITE",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        1760,
+        -16
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "HZXcTU4GLNSSF2EL",
+          "name": "MySQL account SUITE"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT COUNT(*) AS n, MAX(id) AS fila_original FROM integracion_leads WHERE integracion = 'megamoto_webhook' AND status = 'enviado' AND created_at >= NOW() - INTERVAL 24 HOUR AND ((external_id = '{{ $json.guid.replace(/[^A-Za-z0-9-]/g, '') }}' AND external_id <> '') OR (CHAR_LENGTH('{{ $json.telefono.replace(/[^0-9]/g, '') }}') >= 10 AND RIGHT(telefono, 10) = RIGHT('{{ $json.telefono.replace(/[^0-9]/g, '') }}', 10)))",
+        "options": {}
+      },
+      "id": "d804c6eb-2bb7-4187-bd8d-1c3f8b441e15",
+      "name": "¿Ya enviado?",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        480,
+        0
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "HZXcTU4GLNSSF2EL",
+          "name": "MySQL account SUITE"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "r1",
+              "leftValue": "={{ $json.n }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "333abd6b-65bb-44ef-bb3f-8c8d43922bbe",
+      "name": "¿Repetido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        672,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "table": {
+          "__rl": true,
+          "mode": "name",
+          "value": "integracion_leads"
+        },
+        "dataMode": "defineBelow",
+        "valuesToSend": {
+          "values": [
+            {
+              "column": "company_id",
+              "value": "199"
+            },
+            {
+              "column": "integracion",
+              "value": "megamoto_webhook"
+            },
+            {
+              "column": "flujo",
+              "value": "={{ $('Preparar datos').item.json.flujo }}"
+            },
+            {
+              "column": "external_id",
+              "value": "={{ $('Preparar datos').item.json.guid || null }}"
+            },
+            {
+              "column": "nombre",
+              "value": "={{ $('Preparar datos').item.json.nombre || null }}"
+            },
+            {
+              "column": "telefono",
+              "value": "={{ $('Preparar datos').item.json.telefono }}"
+            },
+            {
+              "column": "modelo",
+              "value": "={{ $('Preparar datos').item.json.modelo || null }}"
+            },
+            {
+              "column": "envio",
+              "value": "0"
+            },
+            {
+              "column": "envio_status",
+              "value": "skipped"
+            },
+            {
+              "column": "envio_reason",
+              "value": "={{ 'Lead repetido: ya se le envio en las ultimas 24 h (fila ' + $json.fila_original + ')' }}"
+            },
+            {
+              "column": "crm",
+              "value": "pilot"
+            },
+            {
+              "column": "status",
+              "value": "duplicado"
+            },
+            {
+              "column": "status_changed_at",
+              "value": "={{ $now.toUTC().toFormat('yyyy-MM-dd HH:mm:ss') }}"
+            },
+            {
+              "column": "reason",
+              "value": "={{ 'Duplicado de la fila ' + $json.fila_original }}"
+            },
+            {
+              "column": "extra",
+              "value": "={{ JSON.stringify($('Webhook').item.json.body) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "8beb4ef4-1223-4798-be05-904a4475f38e",
+      "name": "Guardar repetido",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        880,
+        -320
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "HZXcTU4GLNSSF2EL",
+          "name": "MySQL account SUITE"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate"
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "ckAN0widqygTkGFQ",
+      "projectId": "K8p6XEqA0L6D2uVt",
+      "createdAt": "2026-10-07T19:20:20.251Z",
+      "updatedAt": "2026-10-07T19:20:20.251Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2026-11-12T18:32:37.921Z",
+  "versionId": "a552c578-3b74-4f1c-9450-6a191c169e49"
+}
