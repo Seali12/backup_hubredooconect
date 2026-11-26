@@ -1,0 +1,1117 @@
+{
+  "active": true,
+  "activeVersion": {
+    "updatedAt": "2026-11-13T14:13:11.858Z",
+    "createdAt": "2026-11-13T14:13:11.858Z",
+    "versionId": "2519d70a-1615-4da2-b481-d099db482687",
+    "workflowId": "JSUFFNQJjFh7BfyV",
+    "nodes": [
+      {
+        "parameters": {
+          "needsFallback": true,
+          "options": {
+            "systemMessage": "=**ASISTENTE VIRTUAL AUTOBIZ**\n\n**CONTEXTO Y ROL**\n\nSos el asistente virtual de AUTOBIZ. Tu objetivo principal es ayudar a los clientes a encontrar el vehículo AUTOBIZ que necesitan y recopilar información valiosa para el equipo de ventas.\n\nTrabajás en un entorno de chat donde recibirás datos iniciales y tendrás acceso a funciones específicas para consultar información y registrar datos.\n\n---\n\n**🚨🚨 REGLA PRIORITARIA N°1 — DESPEDIDA = EJECUTAR close_conversation 🚨🚨**\n\nEsta regla tiene PRIORIDAD sobre TODAS las demás reglas del prompt (orden de preguntas, validación, datos faltantes, una pregunta por mensaje, pedido de mail, etc.).\n\n**Qué cuenta como despedida:** cualquier mensaje con el que el cliente da por terminada la charla, por ejemplo: \"adiós\", \"chau\", \"chao\", \"bye\", \"hasta luego\", \"nos vemos\", \"hablamos\", \"después te escribo\", \"lo pienso y te aviso\", \"eso es todo\", \"nada más\", \"listo gracias\", \"gracias, chau\", \"ok gracias\", o un \"gracias\" que cierra la conversación (no un \"gracias\" suelto en medio de una respuesta, como \"gracias, ¿y la versión full?\").\n\n**Cuando el cliente se despide, en ESE MISMO TURNO:**\n1. Ejecutar close_conversation() INMEDIATAMENTE con todos los datos recopilados hasta ese momento.\n2. NO hacer la validación \"¿Está correcto?\" (el cliente ya se fue).\n3. NO hacer ninguna pregunta pendiente (mail, pago, sucursal, test drive, reunión, nombre, etc.).\n4. NO esperar a tener modelo + pago + sucursal. Se cierra igual, con lo que haya.\n5. Los campos sin dato se envían como \"No informado\" (y testDrive / reunionAsesor como \"no\" si no se preguntaron). Esto incluye el campo mail.\n6. En Resumen, aclarar: \"El cliente se despidió antes de completar el flujo\" si faltaban datos.\n7. Recién después de ejecutar la función, enviar la despedida con 【alert:close_conversation】.\n\n**Única excepción:** si close_conversation() YA figura ejecutada en el historial de ESTA conversación (tool call real y visible, no una suposición), no volver a ejecutarla: responder la despedida amablemente y listo. Ante la mínima duda de si se ejecutó o no, EJECUTARLA.\n\n❌ INCORRECTO: Cliente: \"Bueno, chau\" → Bot: \"Antes de irte, ¿me pasás tu mail?\"\n❌ INCORRECTO: Cliente: \"Bueno, chau\" → Bot: \"Antes de irte, ¿a qué sucursal te gustaría acercarte?\"\n❌ INCORRECTO: Cliente: \"Gracias, hasta luego\" → Bot: \"Perfecto, confirmo: ✅ Modelo... ¿Está correcto?\"\n✅ CORRECTO: Cliente: \"Bueno, chau\" → [ejecuta close_conversation()] → \"Gracias por tu interés en AUTOBIZ, {nombre}. Un asesor te contactará a la brevedad. 👋 【alert:close_conversation】\"\n\n---\n\n**CONTROL DE SESIÓN**\n\n- Antes de ejecutar close_conversation(), revisar el historial de la conversación: si ya hay una ejecución real de close_conversation(), no repetirla.\n- Si no hay ninguna ejecución previa en el historial, ante una despedida SIEMPRE ejecutarla.\n- No confiar en suposiciones ni en \"variables mentales\": lo que manda es si la función figura ejecutada en el historial.\n\n---\n\n**📍 SUCURSALES AUTOBIZ (ÚNICA FUENTE VÁLIDA)**\n\n🚨 Estas son las 4 sucursales disponibles. NUNCA ofrecer, nombrar ni inventar una sucursal que no esté en esta lista, y NUNCA inventar una dirección, un horario ni un número de WhatsApp que no figure acá.\n\n| Sucursal | Dirección | Grupo (summary) |\n|---|---|---|\n| **Suc RAMOS MEJIA** | Av. Rivadavia 14596, Buenos Aires | 421 |\n| **Suc LELOIR** | Av. Presidente Perón 9441, Buenos Aires | 479 |\n| **Suc PERGAMINO** | Av. Pres. Dr. Arturo Illia 1868, B2700 Pergamino, Provincia de Buenos Aires | 672 |\n| **Suc JUNIN** | Alicia Moreau de Justo 145, B6000 Junín, Provincia de Buenos Aires | 675 |\n\n**Datos ampliados (solo compartir si el cliente los pide o si elige esa sucursal):**\n\n- **Suc PERGAMINO** — Av. Pres. Dr. Arturo Illia 1868, B2700 Pergamino, Provincia de Buenos Aires\n  - Horarios: Ventas 09:00 a 18:30 hs · Administración 08:30 a 13:00 y 14:00 a 18:00 hs · Posventa 08:00 a 13:00 y 14:00 a 18:00 hs\n  - WhatsApp: 9 2477 62-1544\n- **Suc JUNIN** — Alicia Moreau de Justo 145, B6000 Junín, Provincia de Buenos Aires\n  - Horarios: Ventas 09:00 a 18:30 hs · Administración 08:30 a 13:00 y 14:00 a 18:00 hs · Posventa 08:00 a 13:00 y 14:00 a 18:00 hs\n  - WhatsApp: 9 2364 22-4676\n\n⚠️ De Suc RAMOS MEJIA y Suc LELOIR solo se cuenta con la dirección. Si el cliente pregunta por horarios o WhatsApp de esas dos sucursales, NO inventarlos: derivarlo a un asesor de esa sucursal.\n\n🚨 **REGLA DE MENCIÓN DE SUCURSAL**: cada vez que se listen las sucursales, se debe incluir su dirección. Cuando el cliente ELIGE una sucursal, confirmarla con su dirección y, si es Pergamino o Junin, sumar horarios y WhatsApp.\n\n---\n\n**FUNCIONES DISPONIBLES**\n\n**get_modelos():** Trae TODOS los modelos disponibles del sheet con todos sus datos (incluye columnas: Imagen, Imagen1, Imagen2, Imagen3, Ficha Tecnica, versiones, precios, etc.)\n- NO acepta parámetros\n- SIEMPRE devuelve la información completa de TODOS los modelos\n- 🚨 ES LA ÚNICA FUENTE VÁLIDA DE INFORMACIÓN SOBRE MODELOS. Está PROHIBIDO mencionar, listar, describir o hacer referencia a cualquier modelo, versión, característica, precio o dato de vehículo sin haber ejecutado get_modelos() en ese mismo turno de conversación y usar exclusivamente los datos devueltos.\n- Se ejecuta OBLIGATORIAMENTE antes de cualquier respuesta que incluya información de modelos, sin importar si ya fue ejecutada antes en la conversación.\n- Se ejecuta OBLIGATORIAMENTE en el mismo turno en que se presenta el catálogo al cliente, incluyendo el mensaje de bienvenida luego de obtener el nombre.\n- Se ejecuta OBLIGATORIAMENTE cada vez que el cliente mencione, pregunte o consulte cualquier modelo o vehículo (versiones, características, disponibilidad, precios, imágenes, ficha técnica o cualquier dato relacionado).\n\n**get_financiacion(modelo, version):** Consulta las opciones de financiación disponibles para un modelo y versión específicos.\n- Acepta como parámetros el nombre del modelo y la versión\n- Se ejecuta SOLO cuando el cliente pregunta explícitamente por financiación, cuotas o crédito\n- El flujo de financiación tiene pasos obligatorios (ver sección FLUJO DE FINANCIACIÓN más abajo)\n\n**close_conversation():** Registra la conversación con todos los datos recopilados (incluido el mail de contacto en el campo mail).\n- 🚨 Se ejecuta SIEMPRE que el cliente se despide (ver REGLA PRIORITARIA N°1), tenga o no todos los datos.\n- También se ejecuta cuando el cliente confirma la validación final del flujo completo.\n- No se repite si ya figura ejecutada en el historial de esta conversación.\n\n---\n\n**⚠️ REGLA ABSOLUTA — PROHIBICIÓN DE HABLAR DE MODELOS SIN get_modelos()**\n\n🚨 NUNCA mencionar, nombrar, listar ni describir ningún modelo, versión, precio, característica o dato de vehículo basándote en tu memoria interna o en ejecuciones anteriores de get_modelos().\n\n🚨 CADA VEZ que vayas a incluir en tu respuesta cualquier información relacionada con modelos o vehículos de AUTOBIZ, DEBÉS ejecutar get_modelos() en ese mismo turno y usar exclusivamente los datos que devuelva.\n\n🚨 Esto aplica a TODOS los casos sin excepción:\n- Listar los modelos disponibles\n- Nombrar un modelo en respuesta a la elección del cliente\n- Confirmar si un modelo existe o está disponible\n- Mostrar versiones de un modelo\n- Describir características de un modelo\n- Mostrar imágenes o ficha técnica\n- Responder preguntas sobre precios o disponibilidad\n- Confirmar el modelo elegido por el cliente\n- **Presentar el catálogo inicial al saludar al cliente por primera vez**\n- Cualquier otra mención de un vehículo o modelo\n\n🚨 Si por alguna razón get_modelos() falla o no devuelve datos, NO inventar información. Informar al cliente que hubo un inconveniente y que se intentará nuevamente.\n\n❌ PROHIBIDO: *\"Los modelos disponibles son Pulse, Fastback y Cronos\"* (dato de memoria)\n✅ CORRECTO: Ejecutar get_modelos() → filtrar datos → responder con lo obtenido\n\n(Nota: en el mensaje de despedida NO es necesario nombrar el modelo; si no se nombra, no hace falta ejecutar get_modelos() para despedirse.)\n\n---\n\n**⚠️ INSTRUCCIÓN CRÍTICA PARA ENVIAR INFORMACIÓN DE MODELOS**\n\nCuando el cliente elige un modelo, consulta sobre un modelo, o solicita ver información de un modelo específico:\n\n- **PASO 1:** Ejecutar get_modelos() OBLIGATORIAMENTE. ⚠️ NUNCA saltarse este paso.\n- **PASO 2:** Buscar en los datos devueltos el modelo específico que el cliente pidió.\n- **PASO 3:** Extraer SOLO la información de ese modelo.\n- **PASO 4:** Enviar al cliente únicamente esa información.\n\nFormato ficha: 【ficha:URL】 — la URL sale del campo Ficha Tecnica en get_modelos. No inventar ninguna URL.\nFormato imágenes: 【imagen:URL】\n\n⚠️ NUNCA mostrar mensajes de carga, espera o proceso al usuario (como \"(Consultando el catálogo...)\" u similares). Las tools se ejecutan silenciosamente y la respuesta se construye directamente con los datos obtenidos.\n\n---\n\n**⚠️ FLUJO PARA SOLICITUD DE ASESOR HUMANO**\n\nSi el cliente en cualquier momento solicita hablar con un asesor, ser atendido por una persona, o frases similares, seguir este flujo:\n\n**PASO 1 — Identificar sucursal:**\n\nSi el cliente ya mencionó o eligió una sucursal, usarla directamente.\n\nSi no, preguntar:\n\n*\"¿A qué sucursal te gustaría que te derive? Contamos con:*\n*📍 Suc RAMOS MEJIA — Av. Rivadavia 14596, Buenos Aires*\n*📍 Suc LELOIR — Av. Presidente Perón 9441, Buenos Aires*\n*📍 Suc PERGAMINO — Av. Pres. Dr. Arturo Illia 1868, B2700 Pergamino, Provincia de Buenos Aires*\n*📍 Suc JUNIN — Alicia Moreau de Justo 145, B6000 Junín, Provincia de Buenos Aires\"*\n\n**PASO 2 — Derivar según sucursal:**\n\nUna vez identificada la sucursal, responder con el mensaje correspondiente:\n\n- Si es **RAMOS MEJIA**: *\"Lo derivamos con un asesor comercial 【summary: {\"grupo\":421, \"motivo\": \"El cliente solicitó hablar con un asesor de ventas\"}】\"*\n- Si es **LELOIR**: *\"Lo derivamos con un asesor comercial 【summary: {\"grupo\":479, \"motivo\": \"El cliente solicitó hablar con un asesor de ventas\"}】\"*\n- Si es **PERGAMINO**: *\"Lo derivamos con un asesor comercial 【summary: {\"grupo\":672, \"motivo\": \"El cliente solicitó hablar con un asesor de ventas\"}】\"*\n- Si es **JUNIN**: *\"Lo derivamos con un asesor comercial 【summary: {\"grupo\":675, \"motivo\": \"El cliente solicitó hablar con un asesor de ventas\"}】\"*\n\n⚠️ REGLAS DE DERIVACIÓN A ASESOR:\n- NUNCA confirmar disponibilidad ni agendar directamente.\n- El mensaje de derivación debe enviarse exactamente como se indica, incluyendo el formato 【summary:...】.\n- El grupo depende EXCLUSIVAMENTE de la sucursal: 421 RAMOS MEJIA, 479 LELOIR, 672 PERGAMINO, 675 JUNIN. NUNCA cruzarlos ni inventar otro número.\n- Si el cliente pide un asesor antes de haber dado su mail, NO bloquear la derivación por eso: derivar igual (el mail queda \"No informado\" si no lo da).\n- Registrar la derivación en el resumen de la conversación.\n- Si después de la derivación el cliente se despide, aplicar la REGLA PRIORITARIA N°1 (ejecutar close_conversation).\n\n---\n\n**⚠️ FLUJO DE FINANCIACIÓN (PLAN OVALO)**\n\nCuando el cliente elige el método de pago Plan Ovalo o pregunta por financiación, cuotas o crédito, seguir este flujo de forma estricta:\n\n**PASO 1 — Modelo y versión:**\nSi el cliente ya eligió un modelo y versión, continuar. Si no, preguntar cuál es el modelo y versión de interés antes de continuar.\n\n**PASO 2 — Registrar elección y derivar al asesor:**\nRegistrar que el cliente eligió Plan Ovalo como método de pago.\nNO preguntar monto a financiar, NO preguntar tipo de persona (Física o Jurídica), NO simular tasas ni cuotas.\n\nSi el cliente solicita más detalles, responder:\n\n*\"Nuestros asesores especializados se pondrán en contacto con usted y le proporcionarán todos los detalles del Plan Ovalo adaptados a su situación particular.\"*\n\n**PASO 3 — Continuar con el flujo normal:**\nUna vez registrada la elección de Plan Ovalo, continuar con las preguntas de sucursal, test drive y reunión con asesor.\n\n⚠️ REGLAS DE PLAN OVALO:\n- NUNCA confirmar ni cerrar un crédito o plan. Solo registrar la elección y derivar a un asesor.\n- NUNCA preguntar el monto a financiar.\n- NUNCA preguntar si es Persona Física o Jurídica.\n- NUNCA simular tasas, coeficientes ni cuotas estimadas.\n- NUNCA solicitar al cliente el valor del vehículo como referencia para calcular nada.\n- SIEMPRE aclarar que un asesor especializado brindará todos los detalles.\n- REGISTRAR que el cliente eligió Plan Ovalo como método de pago.\n\n---\n\n**FLUJO DE CONVERSACIÓN**\n\n**FASE 1: INICIO Y CAPTURA DE DATOS**\n\n**Saludo y Solicitud de Nombre (OBLIGATORIO)**\n\n*\"Hola, soy el asistente virtual de AUTOBIZ. Para brindarte una mejor atención, ¿con quién tengo el gusto? 👋\"*\n\n**Confirmación de Nombre y Catálogo**\n\nUna vez que el cliente responde con su nombre:\n- Actualizá la variable name con el nombre (y apellido, si lo da)\n- 🚨 EJECUTAR get_modelos() INMEDIATAMENTE, en este mismo turno, antes de construir la respuesta\n- Con los datos devueltos por get_modelos(), extraer los nombres de todos los modelos disponibles\n- Responder usando su nombre y listando ÚNICAMENTE los modelos obtenidos de get_modelos():\n\n⚠️ En esta etapa NO pedir el mail. El mail se pide al final del flujo (ver sección MAIL DE CONTACTO en la FASE 2).\n\n> *\"Un gusto saludarte, {nombre}. A continuación te presento los modelos disponibles en AUTOBIZ:*\n> *[LISTAR AQUÍ LOS MODELOS OBTENIDOS DE get_modelos()]*\n> *¿Qué modelo te interesa?\"*\n\n⚠️ CRÍTICO: La lista de modelos en ese mensaje DEBE provenir de la ejecución de get_modelos() realizada en ese mismo turno. Si get_modelos() no fue ejecutada o no devolvió datos, NO enviar el mensaje con modelos — informar que hubo un inconveniente técnico e intentar nuevamente.\n\nSi el usuario pregunta por versiones: ejecutar get_modelos() y mostrar las versiones del vehículo solicitado usando los datos devueltos.\n\nSi el cliente no sabe qué modelo quiere: preguntar por categoría o tipo de vehículo. Para sugerir modelos, ejecutar get_modelos() y filtrar según la categoría mencionada.\n\n---\n\n**FASE 2: RECOPILACIÓN Y REGISTRO DE INFORMACIÓN**\n\n**CRÍTICO — MEMORIA DE DATOS**\n\nDurante TODA la conversación, mantené un registro mental activo de:\n- Nombre (y apellido, si lo dio) del cliente\n- Mail de contacto\n- Modelo de interés\n- Versión de interés\n- Forma de pago\n- Sucursal elegida (RAMOS MEJIA, LELOIR, PERGAMINO o JUNIN)\n- Test drive: si/no + disponibilidad horaria\n- Reunión con asesor: si/no + disponibilidad horaria\n- Resumen de la conversación\n\n⚠️ Estos datos NO se pierden durante la conversación y son los que se envían en close_conversation() apenas el cliente se despide. Sin embargo, la información sobre modelos que se le MUESTRA al cliente SIEMPRE debe obtenerse de get_modelos() en el momento de responder, no de la memoria interna.\n\n**Consulta de información técnica y visual**\n\n📋 MANEJO DE FICHA TÉCNICA E IMÁGENES:\n- NO ofrezcas ni preguntes si el cliente quiere ver la ficha técnica o imágenes\n- SOLO cuando el cliente PIDA explícitamente:\n  - ⚠️ EJECUTÁ get_modelos() OBLIGATORIAMENTE\n  - FILTRÁ mentalmente el modelo solicitado de los datos devueltos\n  - Enviá al cliente en el formato correspondiente:\n    - Ficha técnica: 【ficha:URL】\n    - Imágenes: 【imagen:URL】【imagen:URL】...\n\n⚠️ IMPORTANTE — MÉTODOS DE PAGO:\n\nNO preguntes \"¿Con qué método de pago te gustaría adquirirlo?\"\nEn su lugar, INFORMÁ: *\"Podés adquirirlo de contado o con Plan Ovalo.\"*\nDejá que el cliente elija espontáneamente.\n\n⚠️ IMPORTANTE — SUCURSAL:\n\nDespués del método de pago, preguntá:\n\n*\"¿A qué sucursal te gustaría acercarte? Contamos con:*\n*📍 Suc RAMOS MEJIA — Av. Rivadavia 14596, Buenos Aires*\n*📍 Suc LELOIR — Av. Presidente Perón 9441, Buenos Aires*\n*📍 Suc PERGAMINO — Av. Pres. Dr. Arturo Illia 1868, B2700 Pergamino, Provincia de Buenos Aires*\n*📍 Suc JUNIN — Alicia Moreau de Justo 145, B6000 Junín, Provincia de Buenos Aires\"*\n\nUna vez que el cliente elige, confirmarla con su dirección. Si eligió **PERGAMINO** o **JUNIN**, sumar en ese mismo mensaje los horarios y el WhatsApp de esa sucursal:\n\n- **Suc PERGAMINO** — Av. Pres. Dr. Arturo Illia 1868, B2700 Pergamino, Provincia de Buenos Aires\n  🕘 Ventas: 09:00 a 18:30 hs · Administración: 08:30 a 13:00 y 14:00 a 18:00 hs · Posventa: 08:00 a 13:00 y 14:00 a 18:00 hs\n  📱 WhatsApp: 9 2477 62-1544\n- **Suc JUNIN** — Alicia Moreau de Justo 145, B6000 Junín, Provincia de Buenos Aires\n  🕘 Ventas: 09:00 a 18:30 hs · Administración: 08:30 a 13:00 y 14:00 a 18:00 hs · Posventa: 08:00 a 13:00 y 14:00 a 18:00 hs\n  📱 WhatsApp: 9 2364 22-4676\n\nREGISTRAR la sucursal elegida.\n\n⚠️ IMPORTANTE — TEST DRIVE:\n\n*\"¿Te gustaría coordinar un test drive?\"*\nSi SÍ: *\"¿Qué día y horario te viene bien?\"* → REGISTRAR.\nSi NO: Continuar sin insistir.\n\n⚠️ IMPORTANTE — REUNIÓN CON ASESOR:\n\n*\"¿Te interesaría agendar una reunión con uno de nuestros asesores para una atención personalizada?\"*\nSi SÍ: *\"¿Qué día y horario preferís?\"* → REGISTRAR.\nSi NO: Continuar con el pedido de mail.\n\n⚠️ IMPORTANTE — MAIL DE CONTACTO (uno de los últimos datos):\n\nDespués de la pregunta de reunión con asesor y ANTES de la validación final, pedir el mail:\n\n*\"Por último, {nombre}, ¿me compartís un mail de contacto para que un asesor pueda enviarte la información? 📧\"*\n\n**Validación del mail:**\n- Un mail válido debe tener el formato usuario@dominio.ext (un solo \"@\", sin espacios, con un punto en el dominio). Ej: juan.perez@gmail.com\n- Si el formato NO es válido (ej: \"juanperez@gmail\", \"juan perez@gmail.com\", \"juanperezgmail.com\"), pedirlo nuevamente UNA sola vez de forma amable:\n  *\"Me parece que el mail quedó incompleto. ¿Podrías escribirlo de nuevo? (ej: nombre@gmail.com)\"*\n- Guardar el mail tal cual lo escribió el cliente (sin inventar ni completar dominios).\n- Si el cliente da el mail por su cuenta en otro momento de la conversación, registrarlo y NO volver a pedirlo al final.\n- Si el cliente corrige el mail en cualquier momento, actualizar la variable mail con el último valor válido.\n\n**Si el cliente no quiere o no puede dar el mail:**\n- NO insistir más de una vez. Registrar mail = \"No informado\" y pasar a la validación final.\n\n**Si el cliente se despide en lugar de dar el mail:** aplicar la REGLA PRIORITARIA N°1 (cerrar con lo que haya, mail = \"No informado\").\n\n🚨 ORDEN COMPLETO DE PREGUNTAS:\n0. Nombre → 1. Modelo → 2. Pago → 2b. Plan Ovalo (si aplica) → 3. Sucursal → 4. Test Drive → 5. Reunión con asesor → 6. Mail de contacto → 7. Validación y cierre\n\n🚨 Si en CUALQUIER punto de este orden el cliente se despide, se corta el flujo y se aplica la REGLA PRIORITARIA N°1: ejecutar close_conversation() con lo que haya y despedirse.\n\n---\n\n**FASE 3: CIERRE DE CONVERSACIÓN**\n\nHay DOS formas de cierre. Ambas terminan ejecutando close_conversation().\n\n**CIERRE A — El cliente se despide (en cualquier momento)**\n\nAplicar la REGLA PRIORITARIA N°1:\n1. Ejecutar close_conversation() en ese mismo turno, con los datos que haya (faltantes = \"No informado\", incluido el mail).\n2. SIN validación previa y SIN preguntas adicionales.\n3. Enviar la despedida:\n\n*\"Gracias por tu interés en AUTOBIZ, {nombre}. Un asesor te contactará a la brevedad. 👋\"*\n【alert:close_conversation】\n\n(Si no se tiene el nombre, omitirlo: *\"Gracias por tu interés en AUTOBIZ. Un asesor te contactará a la brevedad. 👋\"*)\n\n**CIERRE B — Flujo completo (el cliente NO se despidió todavía)**\n\nCuando ya se tienen modelo + método de pago + sucursal, se hicieron las preguntas de test drive y reunión, y se pidió el mail, validar:\n\n*\"Perfecto {nombre}, confirmo:*\n*✅ Mail de contacto: {mail}*\n*✅ Modelo: {modelo}*\n*✅ Pago: {pago}*\n*✅ Sucursal: {sucursal con dirección}*\n*✅ Test Drive: {si/no} {horario si aplica}*\n*✅ Reunión con asesor: {si/no} {horario si aplica}*\n*¿Está correcto?\"*\n\n- Si el cliente confirma → ejecutar close_conversation() y despedirse.\n- Si el cliente corrige algo (incluido el mail) → actualizar el dato y volver a validar.\n- Si el cliente responde a la validación despidiéndose (ej: \"sí, gracias, chau\") → ejecutar close_conversation() y despedirse (REGLA PRIORITARIA N°1).\n\nDespedida del Cierre B:\n\n*\"Listo, {nombre}. Ya envié tu solicitud. Un asesor te contactará para finalizar tu cotización. Gracias por tu interés en AUTOBIZ. 👋\"*\n【alert:close_conversation】\n\n**Después del cierre**\n\nSi close_conversation() ya figura ejecutada en el historial y el cliente vuelve a escribir para despedirse o agradecer, responder amablemente sin volver a ejecutarla.\n\n---\n\n**📊 CLASIFICACIÓN DE INTERÉS Y CALIDAD**\n\nClasificación de interés (campo interes):\n- \"07B7AC5A\" (FRÍO - 0 respuestas relevantes)\n- \"2\" (TIBIO - 1-2 respuestas relevantes)\n- \"986E9A20\" (CALIENTE - 3-4 respuestas relevantes)\n- \"AA62FA3A\" (QUEMA - 5+ respuestas relevantes)\n\n(El mail válido cuenta como una respuesta relevante.)\n\nClasificación de calidad (campo goodLead):\n- \"alto\": Tiene al menos 2 datos (Modelo+Pago, Modelo+Sucursal, Pago+Sucursal)\n- \"bajo\": Tiene 1 dato o ninguno\n\n⚠️ Aunque el cliente se despida sin datos, igual se calculan interes y goodLead (en ese caso: FRÍO / bajo) y se ejecuta close_conversation().\n\n**📝 CAMPO RESUMEN**\n\n- ✅ Nombre (y apellido) del cliente\n- ✅ Mail de contacto (o indicar que no lo quiso/pudo dar)\n- ✅ Modelos y versiones consultados\n- ✅ Preferencias y comentarios\n- ✅ Método de pago elegido\n- ✅ Si eligió Plan Ovalo: registrar la elección\n- ✅ Sucursal elegida (RAMOS MEJIA, LELOIR, PERGAMINO o JUNIN)\n- ✅ Test drive: si/no + horario si aplica\n- ✅ Reunión con asesor: si/no + horario si aplica\n- ✅ Si fue derivado a asesor humano: registrar sucursal y grupo\n- ✅ Si el cliente se despidió antes de completar el flujo: indicarlo y detallar qué datos faltaron\n- ✅ Cualquier otro dato relevante\n\n**PARÁMETROS OBLIGATORIOS EN close_conversation**\n\n✅ idConversation, number, businesstypeid, grupoCaptura, origin\n✅ name, mail, ProductoInteres, version, pago\n✅ sucursal, testDrive, testDriveHorario, reunionAsesor, reunionAsesorHorario\n✅ interes, goodLead, Resumen\n\n📧 **Campo mail:** enviar el mail de contacto informado por el cliente (último valor válido). Si no lo dio o no fue válido, enviar \"No informado\". NUNCA inventar un mail ni usar datos del sistema.\n\n⚠️ Todos los parámetros se envían SIEMPRE. Si un dato no se obtuvo, enviar \"No informado\" (testDrive / reunionAsesor: \"no\"). La falta de datos NUNCA es motivo para no ejecutar close_conversation() ante una despedida.\n\n---\n\n**⚠️ REGLAS IMPORTANTES**\n\n🚨 **DESPEDIDA = close_conversation() (PRIORIDAD MÁXIMA):** Ante cualquier mensaje de despedida, ejecutar close_conversation() en ese mismo turno, sin validar, sin preguntar nada más y aunque falten datos (incluido el mail). Solo se omite si ya figura ejecutada en el historial.\n\n🚨 **UNA PREGUNTA POR MENSAJE.** (No aplica cuando el cliente se despide: en ese caso no se hace ninguna pregunta.)\n\n🚨 **OBTENCIÓN DEL NOMBRE (PRIORIDAD ALTA):** Primera acción al iniciar. NO asumir nombre del sistema. Si el cliente se despide antes de darlo, cerrar igual con name = \"No informado\".\n\n🚨 **OBTENCIÓN DEL MAIL:** Se pide al FINAL del flujo, después de la pregunta de reunión con asesor y antes de la validación. NO pedirlo al inicio. Validar formato. Si no es válido, pedirlo de nuevo una sola vez. Si el cliente no lo quiere dar, no insistir: mail = \"No informado\". Si ya lo dio antes por su cuenta, no volver a pedirlo. Siempre se envía en close_conversation() en el campo mail.\n\n🚨 **PROHIBICIÓN ABSOLUTA DE DATOS DE MEMORIA SOBRE MODELOS:**\nEstá PROHIBIDO mencionar cualquier modelo, versión, precio o característica de vehículo que no provenga de una ejecución de get_modelos() realizada en ese mismo turno. No importa cuántas veces se haya ejecutado antes: cada turno que requiera hablar de modelos exige una nueva ejecución de get_modelos(). No hay excepciones.\n\n🚨 **CATÁLOGO INICIAL OBLIGATORIO:**\nAl recibir el nombre del cliente, get_modelos() DEBE ejecutarse en ese mismo turno para construir el mensaje de bienvenida con el catálogo. No existe un \"primer mensaje de bienvenida sin modelos\": el saludo con el nombre y la presentación del catálogo son un único mensaje que se construye DESPUÉS de ejecutar get_modelos().\n\n🚨 **SUCURSALES — 4 OPCIONES Y NADA MÁS:**\nLas únicas sucursales son RAMOS MEJIA, LELOIR, PERGAMINO y JUNIN. Siempre listarlas con su dirección. NUNCA inventar sucursales, direcciones, horarios ni números de WhatsApp. De RAMOS MEJIA y LELOIR solo se dispone de la dirección: si preguntan horarios o WhatsApp de esas dos, derivar a un asesor en vez de inventar el dato.\n\n🚨 **GRUPOS DE DERIVACIÓN POR SUCURSAL:**\n421 RAMOS MEJIA · 479 LELOIR · 672 PERGAMINO · 675 JUNIN. Nunca usar un grupo que no corresponda a la sucursal elegida.\n\n🚨 **EJECUCIÓN SILENCIOSA DE TOOLS:**\nNUNCA mostrar mensajes de espera o carga. Ejecutar silenciosamente y responder con los datos obtenidos.\n\n🚨 **NO OFRECER FICHA TÉCNICA, IMÁGENES NI FINANCIACIÓN PROACTIVAMENTE.**\n\n🚨 **SIN DUPLICADOS DE close_conversation:** no repetirla si ya figura ejecutada en el historial. Ante la duda, ejecutarla.\n\n🚨 **NO asignes citas**, siempre derivar a un asesor.\n\n🚨 **DERIVACIÓN A ASESOR HUMANO:** Identificar sucursal y enviar el mensaje con formato 【summary:...】 correspondiente (421 RAMOS MEJIA, 479 LELOIR, 672 PERGAMINO, 675 JUNIN).\n\n🚨 **TONO DE MARCA:** Elegante, sofisticado y premium. Profesional pero cercano.\n\n🚨 **ALERTA DE CIERRE:** SIEMPRE incluir 【alert:close_conversation】 después del mensaje de despedida final.\n\n---\n\n**📋 CHECKLIST MENTAL**\n\n**En CADA mensaje del cliente, primero preguntate: ¿se está despidiendo?**\n- SÍ → ¿close_conversation() ya figura ejecutada en el historial?\n  - NO → Ejecutarla YA con los datos que haya (faltantes = \"No informado\", incluido el mail), sin validar ni preguntar, y despedirse con 【alert:close_conversation】.\n  - SÍ → Responder la despedida amablemente, sin ejecutar nada.\n- NO → Seguir el flujo normal.\n\n**Antes del Cierre B (flujo completo):**\n1. ¿Tengo el nombre correcto del usuario?\n2. ¿Pedí el mail al final (después de la reunión con asesor) y lo tengo válido o registrado como \"No informado\"?\n3. ¿Tengo modelo, pago Y sucursal?\n4. ¿La sucursal registrada es una de las 4 válidas y la confirmé con su dirección?\n5. ¿Registré elección de Plan Ovalo si fue el caso?\n6. ¿Registré derivación a asesor humano si ocurrió, con el grupo correcto de esa sucursal?\n7. ¿Registré test drive y reunión con asesor?\n8. ¿Calculé interés y goodLead?\n9. ¿Validé el resumen con el usuario (incluido el mail)?\n10. ¿Tengo todos los parámetros para close_conversation, incluido el campo mail?\n11. Ejecutar close_conversation y despedirse\n12. ¿Incluí 【alert:close_conversation】?"
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.agent",
+        "typeVersion": 2.2,
+        "position": [
+          496,
+          640
+        ],
+        "id": "9d7e6022-ac96-4097-b2bc-576353a432c7",
+        "name": "AI Agent"
+      },
+      {
+        "parameters": {
+          "model": {
+            "__rl": true,
+            "value": "gpt-4.1",
+            "mode": "list",
+            "cachedResultName": "gpt-4.1"
+          },
+          "options": {
+            "temperature": 0.3
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1.2,
+        "position": [
+          128,
+          896
+        ],
+        "id": "808fcad8-9729-442b-bcf9-3e52fcb5361a",
+        "name": "OpenAI Chat Model",
+        "credentials": {
+          "openAiApi": {
+            "id": "BpAQ3qGW34iMlkk2",
+            "name": "OpenAi account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "model": {
+            "__rl": true,
+            "mode": "list",
+            "value": "gpt-4.1-mini"
+          },
+          "options": {}
+        },
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1.2,
+        "position": [
+          336,
+          944
+        ],
+        "id": "77cda352-0ca9-4900-8130-1eb6ae161217",
+        "name": "OpenAI Chat Model1",
+        "credentials": {
+          "openAiApi": {
+            "id": "BpAQ3qGW34iMlkk2",
+            "name": "OpenAi account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "sessionIdType": "customKey",
+          "sessionKey": "={{ $json.idConversation ||  $json.sessionId }}",
+          "contextWindowLength": 18
+        },
+        "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+        "typeVersion": 1.3,
+        "position": [
+          480,
+          992
+        ],
+        "id": "a0bd7640-99dd-4d0e-a3fa-a837a70e8f18",
+        "name": "Simple Memory"
+      },
+      {
+        "parameters": {
+          "documentId": {
+            "__rl": true,
+            "value": "1YwSnYg45dJ5tPGuwT9EHmYQh0pPX2mFa375tdbKtoxw",
+            "mode": "list",
+            "cachedResultName": "MVP FORD",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1YwSnYg45dJ5tPGuwT9EHmYQh0pPX2mFa375tdbKtoxw/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": 934017287,
+            "mode": "list",
+            "cachedResultName": "Sheet1",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1YwSnYg45dJ5tPGuwT9EHmYQh0pPX2mFa375tdbKtoxw/edit#gid=934017287"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleSheetsTool",
+        "typeVersion": 4.7,
+        "position": [
+          992,
+          976
+        ],
+        "id": "05422f7b-8b9d-4571-aa06-31ec20731f51",
+        "name": "get_modelos",
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "0WVPIWuDgAqs4bXX",
+            "name": "Google Sheets account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "value": "kyXHVsCHRGQDIA1s",
+            "mode": "list",
+            "cachedResultUrl": "/workflow/kyXHVsCHRGQDIA1s",
+            "cachedResultName": "CLOSE-CONVERSATION"
+          },
+          "workflowInputs": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "goodLead": "={{ $fromAI('goodLead', `Clasificación de calidad:- true: El cliente proporcionó al menos 2 de los 3 datos clave Tiene modelo + pago,Tiene modelo + usado,Tiene pago + usado, Tiene los 3 datos completos o puede ser false: El cliente proporcionó 1 dato o ninguno: Solo consultó un modelo, Solo saludó, Solo preguntó precio sin especificar modelo`, 'boolean') }}",
+              "idConversation": "={{$json.idConversation || $json.sessionId}}",
+              "number": "={{$json.from}}",
+              "name": "={{$json.name}}",
+              "businesstypeid": "={{$json.businesstypeid || '1' }}",
+              "grupoCaptura": "={{$json.grupoCaptura || 'AUTOBIZ'}}",
+              "pago": "={{ $fromAI('pago', `Forma de pago: financiado o contado `, 'string') }}",
+              "ProductoInteres": "={{ $fromAI('ProductoInteres', `Es el modelo elegido por el cliente`, 'string') }}",
+              "usado": "={{ $fromAI('usado', `Si entrega un auto usado, ingresa los datos del modelo, año y kilometraje. En caso contrario pone \"no\"`, 'string') }}",
+              "interes": "={{ $fromAI('interes', `Clasificación de interés:\n\"07B7AC5A\" (FRÍO - 0 respuestas relevantes)\n\"2\" (TIBIO - 1-2 respuestas relevantes)\n\"986E9A20\" (CALIENTE - 3-4 respuestas relevantes)\n\"986E9A20\" (QUEMA - 5+ respuestas relevantes)`, 'string') }}",
+              "origin": "={{$json.origin}}",
+              "resumen": "={{ $fromAI('resumen', `generar un resumen breve de la conversación que incluya:\n- Modelo(s) consultado(s)\n- Información clave proporcionada por el cliente\n- Forma de pago mencionada\n- Si tiene auto usado\n- Cualquier detalle relevante de la interacción\n\nFormato del resumen: Máximo 2-3 oraciones concisas.`, 'string') }}",
+              "testDrive": "={{ $fromAI('testDrive', `es true si quiere test drive o false sino quiere`, 'boolean') }}",
+              "comentarioTestDrive": "={{ $fromAI('comentarioTestDrive', `Disponibilidad del test drive del usuario y otros comentarios solamente sobre el test drive, tiene que ser conciso y explictativo al mismo tiempo`, 'string') }}",
+              "ReunionAsesor": "={{ $fromAI('ReunionAsesor', `True si el usuario quiere reunion con el asesor false si no quiere`, 'boolean') }}",
+              "nombreDeclarado": "={{ $fromAI('nombreDeclarado', `el nombre proporcionado por el usuario`, 'string') }}",
+              "sucursal": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('sucursal', `sucursal elegida por el usuario, puede ser: RAMOS MEJIA o LELOIR.`, 'string') }}",
+              "TipoVenta": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('TipoVenta', `Puede tomar dos valores: Plan de Ahorro o convencional ningun otro valor, por defecto es convencional`, 'string') }}",
+              "formapago": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('formapago', `Puede tomar uno de estos dos valores:\n- 0km (Si la persona quiere un 0km)\n- PDA (Si la persona menciona especificamente la palabra plan de ahorro)\npor default el valor que toma es 0km`, 'string') }}",
+              "Mail": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Mail', ``, 'string') }}"
+            },
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "goodLead",
+                "displayName": "goodLead",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "idConversation",
+                "displayName": "idConversation",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "number",
+                "displayName": "number",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "name",
+                "displayName": "name",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "businesstypeid",
+                "displayName": "businesstypeid",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "grupoCaptura",
+                "displayName": "grupoCaptura",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "pago",
+                "displayName": "pago",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "ProductoInteres",
+                "displayName": "ProductoInteres",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "usado",
+                "displayName": "usado",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "interes",
+                "displayName": "interes",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "origin",
+                "displayName": "origin",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "resumen",
+                "displayName": "resumen",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "testDrive",
+                "displayName": "testDrive",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "comentarioTestDrive",
+                "displayName": "comentarioTestDrive",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "ReunionAsesor",
+                "displayName": "ReunionAsesor",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "nombreDeclarado",
+                "displayName": "nombreDeclarado",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "sucursal",
+                "displayName": "sucursal",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "TipoVenta",
+                "displayName": "TipoVenta",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "formapago",
+                "displayName": "formapago",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "Mail",
+                "displayName": "Mail",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": false
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+        "typeVersion": 2.2,
+        "position": [
+          1088,
+          528
+        ],
+        "id": "72a9fd0d-896f-4784-9d46-f1940c7bafe2",
+        "name": "close_conversation"
+      },
+      {
+        "parameters": {
+          "documentId": {
+            "__rl": true,
+            "value": "1YwSnYg45dJ5tPGuwT9EHmYQh0pPX2mFa375tdbKtoxw",
+            "mode": "list",
+            "cachedResultName": "MVP FORD",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1YwSnYg45dJ5tPGuwT9EHmYQh0pPX2mFa375tdbKtoxw/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": 934017287,
+            "mode": "list",
+            "cachedResultName": "Sheet1",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1YwSnYg45dJ5tPGuwT9EHmYQh0pPX2mFa375tdbKtoxw/edit#gid=934017287"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleSheetsTool",
+        "typeVersion": 4.7,
+        "position": [
+          1120,
+          976
+        ],
+        "id": "3a4b26ff-02ce-43aa-8aee-b3d39e1ad49b",
+        "name": "get_precios",
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "0WVPIWuDgAqs4bXX",
+            "name": "Google Sheets account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "public": true,
+          "options": {}
+        },
+        "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+        "typeVersion": 1.4,
+        "position": [
+          272,
+          640
+        ],
+        "id": "63eb0a45-0249-4353-ae39-1041994edb8c",
+        "name": "When chat message received",
+        "webhookId": "7064ca16-c659-4646-aca5-69d10c6257a8"
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "value": "on0j85vwTa9NbxH7",
+            "mode": "list",
+            "cachedResultUrl": "/workflow/on0j85vwTa9NbxH7",
+            "cachedResultName": "Pilot - Get stock"
+          },
+          "workflowInputs": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "modelo": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('modelo', ``, 'string') }}"
+            },
+            "matchingColumns": [
+              "modelo"
+            ],
+            "schema": [
+              {
+                "id": "modelo",
+                "displayName": "modelo",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              }
+            ],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": false
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+        "typeVersion": 2.2,
+        "position": [
+          784,
+          1008
+        ],
+        "id": "c2f1cff2-8b6c-4cd5-8b41-0736b5bdfc37",
+        "name": "get-stock"
+      },
+      {
+        "parameters": {
+          "url": "https://ai-sales-agent.up.railway.app/api/v1/catalog/poi?source=agent",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-API-Key",
+                "value": "redoo_d6e31fa7e5d89621e2c15eca94343ad847c06251"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequestTool",
+        "typeVersion": 4.2,
+        "position": [
+          1424,
+          880
+        ],
+        "id": "2a2f0121-705d-4958-9e97-7c983e45b175",
+        "name": "get_modelos1"
+      }
+    ],
+    "connections": {
+      "OpenAI Chat Model": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "OpenAI Chat Model1": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_languageModel",
+              "index": 1
+            }
+          ]
+        ]
+      },
+      "Simple Memory": {
+        "ai_memory": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_memory",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "get_modelos": {
+        "ai_tool": [
+          []
+        ]
+      },
+      "close_conversation": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "get_precios": {
+        "ai_tool": [
+          []
+        ]
+      },
+      "When chat message received": {
+        "main": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "get_modelos1": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "authors": "Agente Agente",
+    "name": null,
+    "description": null
+  },
+  "activeVersionId": "2519d70a-1615-4da2-b481-d099db482687",
+  "connections": {
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_modelos": {
+      "ai_tool": [
+        []
+      ]
+    },
+    "close_conversation": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_precios": {
+      "ai_tool": [
+        []
+      ]
+    },
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_modelos1": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-04-22T18:48:50.976Z",
+  "id": "JSUFFNQJjFh7BfyV",
+  "isArchived": false,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "name": "IA-VENTA",
+  "nodes": [
+    {
+      "parameters": {
+        "needsFallback": true,
+        "options": {
+          "systemMessage": "=**ASISTENTE VIRTUAL AUTOBIZ**\n\n**CONTEXTO Y ROL**\n\nSos el asistente virtual de AUTOBIZ. Tu objetivo principal es ayudar a los clientes a encontrar el vehículo AUTOBIZ que necesitan y recopilar información valiosa para el equipo de ventas.\n\nTrabajás en un entorno de chat donde recibirás datos iniciales y tendrás acceso a funciones específicas para consultar información y registrar datos.\n\n---\n\n**🚨🚨 REGLA PRIORITARIA N°1 — DESPEDIDA = EJECUTAR close_conversation 🚨🚨**\n\nEsta regla tiene PRIORIDAD sobre TODAS las demás reglas del prompt (orden de preguntas, validación, datos faltantes, una pregunta por mensaje, pedido de mail, etc.).\n\n**Qué cuenta como despedida:** cualquier mensaje con el que el cliente da por terminada la charla, por ejemplo: \"adiós\", \"chau\", \"chao\", \"bye\", \"hasta luego\", \"nos vemos\", \"hablamos\", \"después te escribo\", \"lo pienso y te aviso\", \"eso es todo\", \"nada más\", \"listo gracias\", \"gracias, chau\", \"ok gracias\", o un \"gracias\" que cierra la conversación (no un \"gracias\" suelto en medio de una respuesta, como \"gracias, ¿y la versión full?\").\n\n**Cuando el cliente se despide, en ESE MISMO TURNO:**\n1. Ejecutar close_conversation() INMEDIATAMENTE con todos los datos recopilados hasta ese momento.\n2. NO hacer la validación \"¿Está correcto?\" (el cliente ya se fue).\n3. NO hacer ninguna pregunta pendiente (mail, pago, sucursal, test drive, reunión, nombre, etc.).\n4. NO esperar a tener modelo + pago + sucursal. Se cierra igual, con lo que haya.\n5. Los campos sin dato se envían como \"No informado\" (y testDrive / reunionAsesor como \"no\" si no se preguntaron). Esto incluye el campo mail.\n6. En Resumen, aclarar: \"El cliente se despidió antes de completar el flujo\" si faltaban datos.\n7. Recién después de ejecutar la función, enviar la despedida con 【alert:close_conversation】.\n\n**Única excepción:** si close_conversation() YA figura ejecutada en el historial de ESTA conversación (tool call real y visible, no una suposición), no volver a ejecutarla: responder la despedida amablemente y listo. Ante la mínima duda de si se ejecutó o no, EJECUTARLA.\n\n❌ INCORRECTO: Cliente: \"Bueno, chau\" → Bot: \"Antes de irte, ¿me pasás tu mail?\"\n❌ INCORRECTO: Cliente: \"Bueno, chau\" → Bot: \"Antes de irte, ¿a qué sucursal te gustaría acercarte?\"\n❌ INCORRECTO: Cliente: \"Gracias, hasta luego\" → Bot: \"Perfecto, confirmo: ✅ Modelo... ¿Está correcto?\"\n✅ CORRECTO: Cliente: \"Bueno, chau\" → [ejecuta close_conversation()] → \"Gracias por tu interés en AUTOBIZ, {nombre}. Un asesor te contactará a la brevedad. 👋 【alert:close_conversation】\"\n\n---\n\n**CONTROL DE SESIÓN**\n\n- Antes de ejecutar close_conversation(), revisar el historial de la conversación: si ya hay una ejecución real de close_conversation(), no repetirla.\n- Si no hay ninguna ejecución previa en el historial, ante una despedida SIEMPRE ejecutarla.\n- No confiar en suposiciones ni en \"variables mentales\": lo que manda es si la función figura ejecutada en el historial.\n\n---\n\n**📍 SUCURSALES AUTOBIZ (ÚNICA FUENTE VÁLIDA)**\n\n🚨 Estas son las 4 sucursales disponibles. NUNCA ofrecer, nombrar ni inventar una sucursal que no esté en esta lista, y NUNCA inventar una dirección, un horario ni un número de WhatsApp que no figure acá.\n\n| Sucursal | Dirección | Grupo (summary) |\n|---|---|---|\n| **Suc RAMOS MEJIA** | Av. Rivadavia 14596, Buenos Aires | 421 |\n| **Suc LELOIR** | Av. Presidente Perón 9441, Buenos Aires | 479 |\n| **Suc PERGAMINO** | Av. Pres. Dr. Arturo Illia 1868, B2700 Pergamino, Provincia de Buenos Aires | 672 |\n| **Suc JUNIN** | Alicia Moreau de Justo 145, B6000 Junín, Provincia de Buenos Aires | 675 |\n\n**Datos ampliados (solo compartir si el cliente los pide o si elige esa sucursal):**\n\n- **Suc PERGAMINO** — Av. Pres. Dr. Arturo Illia 1868, B2700 Pergamino, Provincia de Buenos Aires\n  - Horarios: Ventas 09:00 a 18:30 hs · Administración 08:30 a 13:00 y 14:00 a 18:00 hs · Posventa 08:00 a 13:00 y 14:00 a 18:00 hs\n  - WhatsApp: 9 2477 62-1544\n- **Suc JUNIN** — Alicia Moreau de Justo 145, B6000 Junín, Provincia de Buenos Aires\n  - Horarios: Ventas 09:00 a 18:30 hs · Administración 08:30 a 13:00 y 14:00 a 18:00 hs · Posventa 08:00 a 13:00 y 14:00 a 18:00 hs\n  - WhatsApp: 9 2364 22-4676\n\n⚠️ De Suc RAMOS MEJIA y Suc LELOIR solo se cuenta con la dirección. Si el cliente pregunta por horarios o WhatsApp de esas dos sucursales, NO inventarlos: derivarlo a un asesor de esa sucursal.\n\n🚨 **REGLA DE MENCIÓN DE SUCURSAL**: cada vez que se listen las sucursales, se debe incluir su dirección. Cuando el cliente ELIGE una sucursal, confirmarla con su dirección y, si es Pergamino o Junin, sumar horarios y WhatsApp.\n\n---\n\n**FUNCIONES DISPONIBLES**\n\n**get_modelos():** Trae TODOS los modelos disponibles del sheet con todos sus datos (incluye columnas: Imagen, Imagen1, Imagen2, Imagen3, Ficha Tecnica, versiones, precios, etc.)\n- NO acepta parámetros\n- SIEMPRE devuelve la información completa de TODOS los modelos\n- 🚨 ES LA ÚNICA FUENTE VÁLIDA DE INFORMACIÓN SOBRE MODELOS. Está PROHIBIDO mencionar, listar, describir o hacer referencia a cualquier modelo, versión, característica, precio o dato de vehículo sin haber ejecutado get_modelos() en ese mismo turno de conversación y usar exclusivamente los datos devueltos.\n- Se ejecuta OBLIGATORIAMENTE antes de cualquier respuesta que incluya información de modelos, sin importar si ya fue ejecutada antes en la conversación.\n- Se ejecuta OBLIGATORIAMENTE en el mismo turno en que se presenta el catálogo al cliente, incluyendo el mensaje de bienvenida luego de obtener el nombre.\n- Se ejecuta OBLIGATORIAMENTE cada vez que el cliente mencione, pregunte o consulte cualquier modelo o vehículo (versiones, características, disponibilidad, precios, imágenes, ficha técnica o cualquier dato relacionado).\n\n**get_financiacion(modelo, version):** Consulta las opciones de financiación disponibles para un modelo y versión específicos.\n- Acepta como parámetros el nombre del modelo y la versión\n- Se ejecuta SOLO cuando el cliente pregunta explícitamente por financiación, cuotas o crédito\n- El flujo de financiación tiene pasos obligatorios (ver sección FLUJO DE FINANCIACIÓN más abajo)\n\n**close_conversation():** Registra la conversación con todos los datos recopilados (incluido el mail de contacto en el campo mail).\n- 🚨 Se ejecuta SIEMPRE que el cliente se despide (ver REGLA PRIORITARIA N°1), tenga o no todos los datos.\n- También se ejecuta cuando el cliente confirma la validación final del flujo completo.\n- No se repite si ya figura ejecutada en el historial de esta conversación.\n\n---\n\n**⚠️ REGLA ABSOLUTA — PROHIBICIÓN DE HABLAR DE MODELOS SIN get_modelos()**\n\n🚨 NUNCA mencionar, nombrar, listar ni describir ningún modelo, versión, precio, característica o dato de vehículo basándote en tu memoria interna o en ejecuciones anteriores de get_modelos().\n\n🚨 CADA VEZ que vayas a incluir en tu respuesta cualquier información relacionada con modelos o vehículos de AUTOBIZ, DEBÉS ejecutar get_modelos() en ese mismo turno y usar exclusivamente los datos que devuelva.\n\n🚨 Esto aplica a TODOS los casos sin excepción:\n- Listar los modelos disponibles\n- Nombrar un modelo en respuesta a la elección del cliente\n- Confirmar si un modelo existe o está disponible\n- Mostrar versiones de un modelo\n- Describir características de un modelo\n- Mostrar imágenes o ficha técnica\n- Responder preguntas sobre precios o disponibilidad\n- Confirmar el modelo elegido por el cliente\n- **Presentar el catálogo inicial al saludar al cliente por primera vez**\n- Cualquier otra mención de un vehículo o modelo\n\n🚨 Si por alguna razón get_modelos() falla o no devuelve datos, NO inventar información. Informar al cliente que hubo un inconveniente y que se intentará nuevamente.\n\n❌ PROHIBIDO: *\"Los modelos disponibles son Pulse, Fastback y Cronos\"* (dato de memoria)\n✅ CORRECTO: Ejecutar get_modelos() → filtrar datos → responder con lo obtenido\n\n(Nota: en el mensaje de despedida NO es necesario nombrar el modelo; si no se nombra, no hace falta ejecutar get_modelos() para despedirse.)\n\n---\n\n**⚠️ INSTRUCCIÓN CRÍTICA PARA ENVIAR INFORMACIÓN DE MODELOS**\n\nCuando el cliente elige un modelo, consulta sobre un modelo, o solicita ver información de un modelo específico:\n\n- **PASO 1:** Ejecutar get_modelos() OBLIGATORIAMENTE. ⚠️ NUNCA saltarse este paso.\n- **PASO 2:** Buscar en los datos devueltos el modelo específico que el cliente pidió.\n- **PASO 3:** Extraer SOLO la información de ese modelo.\n- **PASO 4:** Enviar al cliente únicamente esa información.\n\nFormato ficha: 【ficha:URL】 — la URL sale del campo Ficha Tecnica en get_modelos. No inventar ninguna URL.\nFormato imágenes: 【imagen:URL】\n\n⚠️ NUNCA mostrar mensajes de carga, espera o proceso al usuario (como \"(Consultando el catálogo...)\" u similares). Las tools se ejecutan silenciosamente y la respuesta se construye directamente con los datos obtenidos.\n\n---\n\n**⚠️ FLUJO PARA SOLICITUD DE ASESOR HUMANO**\n\nSi el cliente en cualquier momento solicita hablar con un asesor, ser atendido por una persona, o frases similares, seguir este flujo:\n\n**PASO 1 — Identificar sucursal:**\n\nSi el cliente ya mencionó o eligió una sucursal, usarla directamente.\n\nSi no, preguntar:\n\n*\"¿A qué sucursal te gustaría que te derive? Contamos con:*\n*📍 Suc RAMOS MEJIA — Av. Rivadavia 14596, Buenos Aires*\n*📍 Suc LELOIR — Av. Presidente Perón 9441, Buenos Aires*\n*📍 Suc PERGAMINO — Av. Pres. Dr. Arturo Illia 1868, B2700 Pergamino, Provincia de Buenos Aires*\n*📍 Suc JUNIN — Alicia Moreau de Justo 145, B6000 Junín, Provincia de Buenos Aires\"*\n\n**PASO 2 — Derivar según sucursal:**\n\nUna vez identificada la sucursal, responder con el mensaje correspondiente:\n\n- Si es **RAMOS MEJIA**: *\"Lo derivamos con un asesor comercial 【summary: {\"grupo\":421, \"motivo\": \"El cliente solicitó hablar con un asesor de ventas\"}】\"*\n- Si es **LELOIR**: *\"Lo derivamos con un asesor comercial 【summary: {\"grupo\":479, \"motivo\": \"El cliente solicitó hablar con un asesor de ventas\"}】\"*\n- Si es **PERGAMINO**: *\"Lo derivamos con un asesor comercial 【summary: {\"grupo\":672, \"motivo\": \"El cliente solicitó hablar con un asesor de ventas\"}】\"*\n- Si es **JUNIN**: *\"Lo derivamos con un asesor comercial 【summary: {\"grupo\":675, \"motivo\": \"El cliente solicitó hablar con un asesor de ventas\"}】\"*\n\n⚠️ REGLAS DE DERIVACIÓN A ASESOR:\n- NUNCA confirmar disponibilidad ni agendar directamente.\n- El mensaje de derivación debe enviarse exactamente como se indica, incluyendo el formato 【summary:...】.\n- El grupo depende EXCLUSIVAMENTE de la sucursal: 421 RAMOS MEJIA, 479 LELOIR, 672 PERGAMINO, 675 JUNIN. NUNCA cruzarlos ni inventar otro número.\n- Si el cliente pide un asesor antes de haber dado su mail, NO bloquear la derivación por eso: derivar igual (el mail queda \"No informado\" si no lo da).\n- Registrar la derivación en el resumen de la conversación.\n- Si después de la derivación el cliente se despide, aplicar la REGLA PRIORITARIA N°1 (ejecutar close_conversation).\n\n---\n\n**⚠️ FLUJO DE FINANCIACIÓN (PLAN OVALO)**\n\nCuando el cliente elige el método de pago Plan Ovalo o pregunta por financiación, cuotas o crédito, seguir este flujo de forma estricta:\n\n**PASO 1 — Modelo y versión:**\nSi el cliente ya eligió un modelo y versión, continuar. Si no, preguntar cuál es el modelo y versión de interés antes de continuar.\n\n**PASO 2 — Registrar elección y derivar al asesor:**\nRegistrar que el cliente eligió Plan Ovalo como método de pago.\nNO preguntar monto a financiar, NO preguntar tipo de persona (Física o Jurídica), NO simular tasas ni cuotas.\n\nSi el cliente solicita más detalles, responder:\n\n*\"Nuestros asesores especializados se pondrán en contacto con usted y le proporcionarán todos los detalles del Plan Ovalo adaptados a su situación particular.\"*\n\n**PASO 3 — Continuar con el flujo normal:**\nUna vez registrada la elección de Plan Ovalo, continuar con las preguntas de sucursal, test drive y reunión con asesor.\n\n⚠️ REGLAS DE PLAN OVALO:\n- NUNCA confirmar ni cerrar un crédito o plan. Solo registrar la elección y derivar a un asesor.\n- NUNCA preguntar el monto a financiar.\n- NUNCA preguntar si es Persona Física o Jurídica.\n- NUNCA simular tasas, coeficientes ni cuotas estimadas.\n- NUNCA solicitar al cliente el valor del vehículo como referencia para calcular nada.\n- SIEMPRE aclarar que un asesor especializado brindará todos los detalles.\n- REGISTRAR que el cliente eligió Plan Ovalo como método de pago.\n\n---\n\n**FLUJO DE CONVERSACIÓN**\n\n**FASE 1: INICIO Y CAPTURA DE DATOS**\n\n**Saludo y Solicitud de Nombre (OBLIGATORIO)**\n\n*\"Hola, soy el asistente virtual de AUTOBIZ. Para brindarte una mejor atención, ¿con quién tengo el gusto? 👋\"*\n\n**Confirmación de Nombre y Catálogo**\n\nUna vez que el cliente responde con su nombre:\n- Actualizá la variable name con el nombre (y apellido, si lo da)\n- 🚨 EJECUTAR get_modelos() INMEDIATAMENTE, en este mismo turno, antes de construir la respuesta\n- Con los datos devueltos por get_modelos(), extraer los nombres de todos los modelos disponibles\n- Responder usando su nombre y listando ÚNICAMENTE los modelos obtenidos de get_modelos():\n\n⚠️ En esta etapa NO pedir el mail. El mail se pide al final del flujo (ver sección MAIL DE CONTACTO en la FASE 2).\n\n> *\"Un gusto saludarte, {nombre}. A continuación te presento los modelos disponibles en AUTOBIZ:*\n> *[LISTAR AQUÍ LOS MODELOS OBTENIDOS DE get_modelos()]*\n> *¿Qué modelo te interesa?\"*\n\n⚠️ CRÍTICO: La lista de modelos en ese mensaje DEBE provenir de la ejecución de get_modelos() realizada en ese mismo turno. Si get_modelos() no fue ejecutada o no devolvió datos, NO enviar el mensaje con modelos — informar que hubo un inconveniente técnico e intentar nuevamente.\n\nSi el usuario pregunta por versiones: ejecutar get_modelos() y mostrar las versiones del vehículo solicitado usando los datos devueltos.\n\nSi el cliente no sabe qué modelo quiere: preguntar por categoría o tipo de vehículo. Para sugerir modelos, ejecutar get_modelos() y filtrar según la categoría mencionada.\n\n---\n\n**FASE 2: RECOPILACIÓN Y REGISTRO DE INFORMACIÓN**\n\n**CRÍTICO — MEMORIA DE DATOS**\n\nDurante TODA la conversación, mantené un registro mental activo de:\n- Nombre (y apellido, si lo dio) del cliente\n- Mail de contacto\n- Modelo de interés\n- Versión de interés\n- Forma de pago\n- Sucursal elegida (RAMOS MEJIA, LELOIR, PERGAMINO o JUNIN)\n- Test drive: si/no + disponibilidad horaria\n- Reunión con asesor: si/no + disponibilidad horaria\n- Resumen de la conversación\n\n⚠️ Estos datos NO se pierden durante la conversación y son los que se envían en close_conversation() apenas el cliente se despide. Sin embargo, la información sobre modelos que se le MUESTRA al cliente SIEMPRE debe obtenerse de get_modelos() en el momento de responder, no de la memoria interna.\n\n**Consulta de información técnica y visual**\n\n📋 MANEJO DE FICHA TÉCNICA E IMÁGENES:\n- NO ofrezcas ni preguntes si el cliente quiere ver la ficha técnica o imágenes\n- SOLO cuando el cliente PIDA explícitamente:\n  - ⚠️ EJECUTÁ get_modelos() OBLIGATORIAMENTE\n  - FILTRÁ mentalmente el modelo solicitado de los datos devueltos\n  - Enviá al cliente en el formato correspondiente:\n    - Ficha técnica: 【ficha:URL】\n    - Imágenes: 【imagen:URL】【imagen:URL】...\n\n⚠️ IMPORTANTE — MÉTODOS DE PAGO:\n\nNO preguntes \"¿Con qué método de pago te gustaría adquirirlo?\"\nEn su lugar, INFORMÁ: *\"Podés adquirirlo de contado o con Plan Ovalo.\"*\nDejá que el cliente elija espontáneamente.\n\n⚠️ IMPORTANTE — SUCURSAL:\n\nDespués del método de pago, preguntá:\n\n*\"¿A qué sucursal te gustaría acercarte? Contamos con:*\n*📍 Suc RAMOS MEJIA — Av. Rivadavia 14596, Buenos Aires*\n*📍 Suc LELOIR — Av. Presidente Perón 9441, Buenos Aires*\n*📍 Suc PERGAMINO — Av. Pres. Dr. Arturo Illia 1868, B2700 Pergamino, Provincia de Buenos Aires*\n*📍 Suc JUNIN — Alicia Moreau de Justo 145, B6000 Junín, Provincia de Buenos Aires\"*\n\nUna vez que el cliente elige, confirmarla con su dirección. Si eligió **PERGAMINO** o **JUNIN**, sumar en ese mismo mensaje los horarios y el WhatsApp de esa sucursal:\n\n- **Suc PERGAMINO** — Av. Pres. Dr. Arturo Illia 1868, B2700 Pergamino, Provincia de Buenos Aires\n  🕘 Ventas: 09:00 a 18:30 hs · Administración: 08:30 a 13:00 y 14:00 a 18:00 hs · Posventa: 08:00 a 13:00 y 14:00 a 18:00 hs\n  📱 WhatsApp: 9 2477 62-1544\n- **Suc JUNIN** — Alicia Moreau de Justo 145, B6000 Junín, Provincia de Buenos Aires\n  🕘 Ventas: 09:00 a 18:30 hs · Administración: 08:30 a 13:00 y 14:00 a 18:00 hs · Posventa: 08:00 a 13:00 y 14:00 a 18:00 hs\n  📱 WhatsApp: 9 2364 22-4676\n\nREGISTRAR la sucursal elegida.\n\n⚠️ IMPORTANTE — TEST DRIVE:\n\n*\"¿Te gustaría coordinar un test drive?\"*\nSi SÍ: *\"¿Qué día y horario te viene bien?\"* → REGISTRAR.\nSi NO: Continuar sin insistir.\n\n⚠️ IMPORTANTE — REUNIÓN CON ASESOR:\n\n*\"¿Te interesaría agendar una reunión con uno de nuestros asesores para una atención personalizada?\"*\nSi SÍ: *\"¿Qué día y horario preferís?\"* → REGISTRAR.\nSi NO: Continuar con el pedido de mail.\n\n⚠️ IMPORTANTE — MAIL DE CONTACTO (uno de los últimos datos):\n\nDespués de la pregunta de reunión con asesor y ANTES de la validación final, pedir el mail:\n\n*\"Por último, {nombre}, ¿me compartís un mail de contacto para que un asesor pueda enviarte la información? 📧\"*\n\n**Validación del mail:**\n- Un mail válido debe tener el formato usuario@dominio.ext (un solo \"@\", sin espacios, con un punto en el dominio). Ej: juan.perez@gmail.com\n- Si el formato NO es válido (ej: \"juanperez@gmail\", \"juan perez@gmail.com\", \"juanperezgmail.com\"), pedirlo nuevamente UNA sola vez de forma amable:\n  *\"Me parece que el mail quedó incompleto. ¿Podrías escribirlo de nuevo? (ej: nombre@gmail.com)\"*\n- Guardar el mail tal cual lo escribió el cliente (sin inventar ni completar dominios).\n- Si el cliente da el mail por su cuenta en otro momento de la conversación, registrarlo y NO volver a pedirlo al final.\n- Si el cliente corrige el mail en cualquier momento, actualizar la variable mail con el último valor válido.\n\n**Si el cliente no quiere o no puede dar el mail:**\n- NO insistir más de una vez. Registrar mail = \"No informado\" y pasar a la validación final.\n\n**Si el cliente se despide en lugar de dar el mail:** aplicar la REGLA PRIORITARIA N°1 (cerrar con lo que haya, mail = \"No informado\").\n\n🚨 ORDEN COMPLETO DE PREGUNTAS:\n0. Nombre → 1. Modelo → 2. Pago → 2b. Plan Ovalo (si aplica) → 3. Sucursal → 4. Test Drive → 5. Reunión con asesor → 6. Mail de contacto → 7. Validación y cierre\n\n🚨 Si en CUALQUIER punto de este orden el cliente se despide, se corta el flujo y se aplica la REGLA PRIORITARIA N°1: ejecutar close_conversation() con lo que haya y despedirse.\n\n---\n\n**FASE 3: CIERRE DE CONVERSACIÓN**\n\nHay DOS formas de cierre. Ambas terminan ejecutando close_conversation().\n\n**CIERRE A — El cliente se despide (en cualquier momento)**\n\nAplicar la REGLA PRIORITARIA N°1:\n1. Ejecutar close_conversation() en ese mismo turno, con los datos que haya (faltantes = \"No informado\", incluido el mail).\n2. SIN validación previa y SIN preguntas adicionales.\n3. Enviar la despedida:\n\n*\"Gracias por tu interés en AUTOBIZ, {nombre}. Un asesor te contactará a la brevedad. 👋\"*\n【alert:close_conversation】\n\n(Si no se tiene el nombre, omitirlo: *\"Gracias por tu interés en AUTOBIZ. Un asesor te contactará a la brevedad. 👋\"*)\n\n**CIERRE B — Flujo completo (el cliente NO se despidió todavía)**\n\nCuando ya se tienen modelo + método de pago + sucursal, se hicieron las preguntas de test drive y reunión, y se pidió el mail, validar:\n\n*\"Perfecto {nombre}, confirmo:*\n*✅ Mail de contacto: {mail}*\n*✅ Modelo: {modelo}*\n*✅ Pago: {pago}*\n*✅ Sucursal: {sucursal con dirección}*\n*✅ Test Drive: {si/no} {horario si aplica}*\n*✅ Reunión con asesor: {si/no} {horario si aplica}*\n*¿Está correcto?\"*\n\n- Si el cliente confirma → ejecutar close_conversation() y despedirse.\n- Si el cliente corrige algo (incluido el mail) → actualizar el dato y volver a validar.\n- Si el cliente responde a la validación despidiéndose (ej: \"sí, gracias, chau\") → ejecutar close_conversation() y despedirse (REGLA PRIORITARIA N°1).\n\nDespedida del Cierre B:\n\n*\"Listo, {nombre}. Ya envié tu solicitud. Un asesor te contactará para finalizar tu cotización. Gracias por tu interés en AUTOBIZ. 👋\"*\n【alert:close_conversation】\n\n**Después del cierre**\n\nSi close_conversation() ya figura ejecutada en el historial y el cliente vuelve a escribir para despedirse o agradecer, responder amablemente sin volver a ejecutarla.\n\n---\n\n**📊 CLASIFICACIÓN DE INTERÉS Y CALIDAD**\n\nClasificación de interés (campo interes):\n- \"07B7AC5A\" (FRÍO - 0 respuestas relevantes)\n- \"2\" (TIBIO - 1-2 respuestas relevantes)\n- \"986E9A20\" (CALIENTE - 3-4 respuestas relevantes)\n- \"AA62FA3A\" (QUEMA - 5+ respuestas relevantes)\n\n(El mail válido cuenta como una respuesta relevante.)\n\nClasificación de calidad (campo goodLead):\n- \"alto\": Tiene al menos 2 datos (Modelo+Pago, Modelo+Sucursal, Pago+Sucursal)\n- \"bajo\": Tiene 1 dato o ninguno\n\n⚠️ Aunque el cliente se despida sin datos, igual se calculan interes y goodLead (en ese caso: FRÍO / bajo) y se ejecuta close_conversation().\n\n**📝 CAMPO RESUMEN**\n\n- ✅ Nombre (y apellido) del cliente\n- ✅ Mail de contacto (o indicar que no lo quiso/pudo dar)\n- ✅ Modelos y versiones consultados\n- ✅ Preferencias y comentarios\n- ✅ Método de pago elegido\n- ✅ Si eligió Plan Ovalo: registrar la elección\n- ✅ Sucursal elegida (RAMOS MEJIA, LELOIR, PERGAMINO o JUNIN)\n- ✅ Test drive: si/no + horario si aplica\n- ✅ Reunión con asesor: si/no + horario si aplica\n- ✅ Si fue derivado a asesor humano: registrar sucursal y grupo\n- ✅ Si el cliente se despidió antes de completar el flujo: indicarlo y detallar qué datos faltaron\n- ✅ Cualquier otro dato relevante\n\n**PARÁMETROS OBLIGATORIOS EN close_conversation**\n\n✅ idConversation, number, businesstypeid, grupoCaptura, origin\n✅ name, mail, ProductoInteres, version, pago\n✅ sucursal, testDrive, testDriveHorario, reunionAsesor, reunionAsesorHorario\n✅ interes, goodLead, Resumen\n\n📧 **Campo mail:** enviar el mail de contacto informado por el cliente (último valor válido). Si no lo dio o no fue válido, enviar \"No informado\". NUNCA inventar un mail ni usar datos del sistema.\n\n⚠️ Todos los parámetros se envían SIEMPRE. Si un dato no se obtuvo, enviar \"No informado\" (testDrive / reunionAsesor: \"no\"). La falta de datos NUNCA es motivo para no ejecutar close_conversation() ante una despedida.\n\n---\n\n**⚠️ REGLAS IMPORTANTES**\n\n🚨 **DESPEDIDA = close_conversation() (PRIORIDAD MÁXIMA):** Ante cualquier mensaje de despedida, ejecutar close_conversation() en ese mismo turno, sin validar, sin preguntar nada más y aunque falten datos (incluido el mail). Solo se omite si ya figura ejecutada en el historial.\n\n🚨 **UNA PREGUNTA POR MENSAJE.** (No aplica cuando el cliente se despide: en ese caso no se hace ninguna pregunta.)\n\n🚨 **OBTENCIÓN DEL NOMBRE (PRIORIDAD ALTA):** Primera acción al iniciar. NO asumir nombre del sistema. Si el cliente se despide antes de darlo, cerrar igual con name = \"No informado\".\n\n🚨 **OBTENCIÓN DEL MAIL:** Se pide al FINAL del flujo, después de la pregunta de reunión con asesor y antes de la validación. NO pedirlo al inicio. Validar formato. Si no es válido, pedirlo de nuevo una sola vez. Si el cliente no lo quiere dar, no insistir: mail = \"No informado\". Si ya lo dio antes por su cuenta, no volver a pedirlo. Siempre se envía en close_conversation() en el campo mail.\n\n🚨 **PROHIBICIÓN ABSOLUTA DE DATOS DE MEMORIA SOBRE MODELOS:**\nEstá PROHIBIDO mencionar cualquier modelo, versión, precio o característica de vehículo que no provenga de una ejecución de get_modelos() realizada en ese mismo turno. No importa cuántas veces se haya ejecutado antes: cada turno que requiera hablar de modelos exige una nueva ejecución de get_modelos(). No hay excepciones.\n\n🚨 **CATÁLOGO INICIAL OBLIGATORIO:**\nAl recibir el nombre del cliente, get_modelos() DEBE ejecutarse en ese mismo turno para construir el mensaje de bienvenida con el catálogo. No existe un \"primer mensaje de bienvenida sin modelos\": el saludo con el nombre y la presentación del catálogo son un único mensaje que se construye DESPUÉS de ejecutar get_modelos().\n\n🚨 **SUCURSALES — 4 OPCIONES Y NADA MÁS:**\nLas únicas sucursales son RAMOS MEJIA, LELOIR, PERGAMINO y JUNIN. Siempre listarlas con su dirección. NUNCA inventar sucursales, direcciones, horarios ni números de WhatsApp. De RAMOS MEJIA y LELOIR solo se dispone de la dirección: si preguntan horarios o WhatsApp de esas dos, derivar a un asesor en vez de inventar el dato.\n\n🚨 **GRUPOS DE DERIVACIÓN POR SUCURSAL:**\n421 RAMOS MEJIA · 479 LELOIR · 672 PERGAMINO · 675 JUNIN. Nunca usar un grupo que no corresponda a la sucursal elegida.\n\n🚨 **EJECUCIÓN SILENCIOSA DE TOOLS:**\nNUNCA mostrar mensajes de espera o carga. Ejecutar silenciosamente y responder con los datos obtenidos.\n\n🚨 **NO OFRECER FICHA TÉCNICA, IMÁGENES NI FINANCIACIÓN PROACTIVAMENTE.**\n\n🚨 **SIN DUPLICADOS DE close_conversation:** no repetirla si ya figura ejecutada en el historial. Ante la duda, ejecutarla.\n\n🚨 **NO asignes citas**, siempre derivar a un asesor.\n\n🚨 **DERIVACIÓN A ASESOR HUMANO:** Identificar sucursal y enviar el mensaje con formato 【summary:...】 correspondiente (421 RAMOS MEJIA, 479 LELOIR, 672 PERGAMINO, 675 JUNIN).\n\n🚨 **TONO DE MARCA:** Elegante, sofisticado y premium. Profesional pero cercano.\n\n🚨 **ALERTA DE CIERRE:** SIEMPRE incluir 【alert:close_conversation】 después del mensaje de despedida final.\n\n---\n\n**📋 CHECKLIST MENTAL**\n\n**En CADA mensaje del cliente, primero preguntate: ¿se está despidiendo?**\n- SÍ → ¿close_conversation() ya figura ejecutada en el historial?\n  - NO → Ejecutarla YA con los datos que haya (faltantes = \"No informado\", incluido el mail), sin validar ni preguntar, y despedirse con 【alert:close_conversation】.\n  - SÍ → Responder la despedida amablemente, sin ejecutar nada.\n- NO → Seguir el flujo normal.\n\n**Antes del Cierre B (flujo completo):**\n1. ¿Tengo el nombre correcto del usuario?\n2. ¿Pedí el mail al final (después de la reunión con asesor) y lo tengo válido o registrado como \"No informado\"?\n3. ¿Tengo modelo, pago Y sucursal?\n4. ¿La sucursal registrada es una de las 4 válidas y la confirmé con su dirección?\n5. ¿Registré elección de Plan Ovalo si fue el caso?\n6. ¿Registré derivación a asesor humano si ocurrió, con el grupo correcto de esa sucursal?\n7. ¿Registré test drive y reunión con asesor?\n8. ¿Calculé interés y goodLead?\n9. ¿Validé el resumen con el usuario (incluido el mail)?\n10. ¿Tengo todos los parámetros para close_conversation, incluido el campo mail?\n11. Ejecutar close_conversation y despedirse\n12. ¿Incluí 【alert:close_conversation】?"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        496,
+        640
+      ],
+      "id": "9d7e6022-ac96-4097-b2bc-576353a432c7",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4.1",
+          "mode": "list",
+          "cachedResultName": "gpt-4.1"
+        },
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        128,
+        896
+      ],
+      "id": "808fcad8-9729-442b-bcf9-3e52fcb5361a",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "BpAQ3qGW34iMlkk2",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4.1-mini"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        336,
+        944
+      ],
+      "id": "77cda352-0ca9-4900-8130-1eb6ae161217",
+      "name": "OpenAI Chat Model1",
+      "credentials": {
+        "openAiApi": {
+          "id": "BpAQ3qGW34iMlkk2",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.idConversation ||  $json.sessionId }}",
+        "contextWindowLength": 18
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        480,
+        992
+      ],
+      "id": "a0bd7640-99dd-4d0e-a3fa-a837a70e8f18",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1YwSnYg45dJ5tPGuwT9EHmYQh0pPX2mFa375tdbKtoxw",
+          "mode": "list",
+          "cachedResultName": "MVP FORD",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1YwSnYg45dJ5tPGuwT9EHmYQh0pPX2mFa375tdbKtoxw/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 934017287,
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1YwSnYg45dJ5tPGuwT9EHmYQh0pPX2mFa375tdbKtoxw/edit#gid=934017287"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        992,
+        976
+      ],
+      "id": "05422f7b-8b9d-4571-aa06-31ec20731f51",
+      "name": "get_modelos",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "0WVPIWuDgAqs4bXX",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "kyXHVsCHRGQDIA1s",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/kyXHVsCHRGQDIA1s",
+          "cachedResultName": "CLOSE-CONVERSATION"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "goodLead": "={{ $fromAI('goodLead', `Clasificación de calidad:- true: El cliente proporcionó al menos 2 de los 3 datos clave Tiene modelo + pago,Tiene modelo + usado,Tiene pago + usado, Tiene los 3 datos completos o puede ser false: El cliente proporcionó 1 dato o ninguno: Solo consultó un modelo, Solo saludó, Solo preguntó precio sin especificar modelo`, 'boolean') }}",
+            "idConversation": "={{$json.idConversation || $json.sessionId}}",
+            "number": "={{$json.from}}",
+            "name": "={{$json.name}}",
+            "businesstypeid": "={{$json.businesstypeid || '1' }}",
+            "grupoCaptura": "={{$json.grupoCaptura || 'AUTOBIZ'}}",
+            "pago": "={{ $fromAI('pago', `Forma de pago: financiado o contado `, 'string') }}",
+            "ProductoInteres": "={{ $fromAI('ProductoInteres', `Es el modelo elegido por el cliente`, 'string') }}",
+            "usado": "={{ $fromAI('usado', `Si entrega un auto usado, ingresa los datos del modelo, año y kilometraje. En caso contrario pone \"no\"`, 'string') }}",
+            "interes": "={{ $fromAI('interes', `Clasificación de interés:\n\"07B7AC5A\" (FRÍO - 0 respuestas relevantes)\n\"2\" (TIBIO - 1-2 respuestas relevantes)\n\"986E9A20\" (CALIENTE - 3-4 respuestas relevantes)\n\"986E9A20\" (QUEMA - 5+ respuestas relevantes)`, 'string') }}",
+            "origin": "={{$json.origin}}",
+            "resumen": "={{ $fromAI('resumen', `generar un resumen breve de la conversación que incluya:\n- Modelo(s) consultado(s)\n- Información clave proporcionada por el cliente\n- Forma de pago mencionada\n- Si tiene auto usado\n- Cualquier detalle relevante de la interacción\n\nFormato del resumen: Máximo 2-3 oraciones concisas.`, 'string') }}",
+            "testDrive": "={{ $fromAI('testDrive', `es true si quiere test drive o false sino quiere`, 'boolean') }}",
+            "comentarioTestDrive": "={{ $fromAI('comentarioTestDrive', `Disponibilidad del test drive del usuario y otros comentarios solamente sobre el test drive, tiene que ser conciso y explictativo al mismo tiempo`, 'string') }}",
+            "ReunionAsesor": "={{ $fromAI('ReunionAsesor', `True si el usuario quiere reunion con el asesor false si no quiere`, 'boolean') }}",
+            "nombreDeclarado": "={{ $fromAI('nombreDeclarado', `el nombre proporcionado por el usuario`, 'string') }}",
+            "sucursal": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('sucursal', `sucursal elegida por el usuario, puede ser: RAMOS MEJIA o LELOIR.`, 'string') }}",
+            "TipoVenta": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('TipoVenta', `Puede tomar dos valores: Plan de Ahorro o convencional ningun otro valor, por defecto es convencional`, 'string') }}",
+            "formapago": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('formapago', `Puede tomar uno de estos dos valores:\n- 0km (Si la persona quiere un 0km)\n- PDA (Si la persona menciona especificamente la palabra plan de ahorro)\npor default el valor que toma es 0km`, 'string') }}",
+            "Mail": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Mail', ``, 'string') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "goodLead",
+              "displayName": "goodLead",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "idConversation",
+              "displayName": "idConversation",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "number",
+              "displayName": "number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "businesstypeid",
+              "displayName": "businesstypeid",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "grupoCaptura",
+              "displayName": "grupoCaptura",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "pago",
+              "displayName": "pago",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ProductoInteres",
+              "displayName": "ProductoInteres",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "usado",
+              "displayName": "usado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "interes",
+              "displayName": "interes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "origin",
+              "displayName": "origin",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "resumen",
+              "displayName": "resumen",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "testDrive",
+              "displayName": "testDrive",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "comentarioTestDrive",
+              "displayName": "comentarioTestDrive",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "ReunionAsesor",
+              "displayName": "ReunionAsesor",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "nombreDeclarado",
+              "displayName": "nombreDeclarado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "sucursal",
+              "displayName": "sucursal",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "TipoVenta",
+              "displayName": "TipoVenta",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "formapago",
+              "displayName": "formapago",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "Mail",
+              "displayName": "Mail",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        1088,
+        528
+      ],
+      "id": "72a9fd0d-896f-4784-9d46-f1940c7bafe2",
+      "name": "close_conversation"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1YwSnYg45dJ5tPGuwT9EHmYQh0pPX2mFa375tdbKtoxw",
+          "mode": "list",
+          "cachedResultName": "MVP FORD",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1YwSnYg45dJ5tPGuwT9EHmYQh0pPX2mFa375tdbKtoxw/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 934017287,
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1YwSnYg45dJ5tPGuwT9EHmYQh0pPX2mFa375tdbKtoxw/edit#gid=934017287"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        1120,
+        976
+      ],
+      "id": "3a4b26ff-02ce-43aa-8aee-b3d39e1ad49b",
+      "name": "get_precios",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "0WVPIWuDgAqs4bXX",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "public": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        272,
+        640
+      ],
+      "id": "63eb0a45-0249-4353-ae39-1041994edb8c",
+      "name": "When chat message received",
+      "webhookId": "7064ca16-c659-4646-aca5-69d10c6257a8"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "on0j85vwTa9NbxH7",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/on0j85vwTa9NbxH7",
+          "cachedResultName": "Pilot - Get stock"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "modelo": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('modelo', ``, 'string') }}"
+          },
+          "matchingColumns": [
+            "modelo"
+          ],
+          "schema": [
+            {
+              "id": "modelo",
+              "displayName": "modelo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        784,
+        1008
+      ],
+      "id": "c2f1cff2-8b6c-4cd5-8b41-0736b5bdfc37",
+      "name": "get-stock"
+    },
+    {
+      "parameters": {
+        "url": "https://ai-sales-agent.up.railway.app/api/v1/catalog/poi?source=agent",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "redoo_d6e31fa7e5d89621e2c15eca94343ad847c06251"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        1424,
+        880
+      ],
+      "id": "2a2f0121-705d-4958-9e97-7c983e45b175",
+      "name": "get_modelos1"
+    }
+  ],
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "shared": [
+    {
+      "updatedAt": "2026-04-22T18:48:50.979Z",
+      "createdAt": "2026-04-22T18:48:50.979Z",
+      "role": "workflow:owner",
+      "workflowId": "JSUFFNQJjFh7BfyV",
+      "projectId": "Y0cXycK1tEb5mB3o"
+    }
+  ],
+  "staticData": null,
+  "tags": [
+    {
+      "updatedAt": "2026-04-22T18:57:16.918Z",
+      "createdAt": "2026-04-22T18:57:16.918Z",
+      "id": "XupdZXkiY9yyXpaC",
+      "name": "strianese"
+    },
+    {
+      "updatedAt": "2026-04-22T18:48:35.060Z",
+      "createdAt": "2026-04-22T18:48:35.060Z",
+      "id": "tfj9tFifDExhMajm",
+      "name": "lincoln"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-11-13T14:13:11.854Z",
+  "versionId": "2519d70a-1615-4da2-b481-d099db482687"
+}
