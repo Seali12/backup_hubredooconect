@@ -1,0 +1,300 @@
+{
+  "active": false,
+  "activeVersion": null,
+  "activeVersionId": null,
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Login",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Login": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Get Cars",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Cars1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Cars": {
+      "main": [
+        [
+          {
+            "node": "Get Marcas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Cars1": {
+      "main": [
+        [
+          {
+            "node": "Get Marcas1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-03-26T00:02:12.604Z",
+  "id": "Mg63hcMuO7FpKi37",
+  "isArchived": false,
+  "meta": null,
+  "name": "get_modelos",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "accion"
+            },
+            {
+              "name": "marca"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        80
+      ],
+      "id": "502952af-256e-41ad-b725-688b08f856c5",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://oficina.mapaalautomotores.com.ar/api/auth/login",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"username\":\"m@p@l-adm1n\",\"password\":\"mapaal2024\"}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        224,
+        80
+      ],
+      "id": "916fbb93-bad0-4a15-879f-7f692a463adb",
+      "name": "Login"
+    },
+    {
+      "parameters": {
+        "url": "https://oficina.mapaalautomotores.com.ar/api/cars",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cookie",
+              "value": "={{ $('Login').item.json.headers['set-cookie'][0].split(';')[0] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        672,
+        -16
+      ],
+      "id": "05e6491c-88b8-48b9-8561-509cff090315",
+      "name": "Get Cars"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('When Executed by Another Workflow').item.json.accion }}",
+                    "rightValue": "get_marcas",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "dab771a3-9ff4-4f85-acb9-3ec84cdbfcbb"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "6c96f492-0a1a-473d-9af6-a8d4ecbc0b26",
+                    "leftValue": "={{ $('When Executed by Another Workflow').item.json.accion }}",
+                    "rightValue": "get_autos_by_modelo",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        448,
+        80
+      ],
+      "id": "1dc60b44-5759-49cb-a1c9-aa555efbd675",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Devuelve las marcas únicas disponibles en el dataset,\n// normalizadas (trim) y ordenadas alfabéticamente.\n\nconst input = $input.all();\n\nconst data = input[0].json;\nconst autos = Array.isArray(data) ? data[0].autos : data.autos;\n\nif (!autos || !Array.isArray(autos)) {\n  throw new Error(\"No se encontró el array 'autos' en el input.\");\n}\n\nconst marcasUnicas = [\n  ...new Set(autos.map(auto => auto.marca.trim()))\n].sort();\n\n// Opción A — un único ítem con array de marcas (útil para mostrar/loguear)\nreturn [\n  {\n    json: {\n      marcas: marcasUnicas,\n      total: marcasUnicas.length\n    }\n  }\n];\n\n// Opción B — un ítem por marca (útil para iterar en nodos siguientes)\n// Descomenta esto y comentá la opción A si la necesitás:\n// return marcasUnicas.map(marca => ({ json: { marca } }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        -16
+      ],
+      "id": "f438ed22-9aa4-4043-8b54-3e6158ae02fd",
+      "name": "Get Marcas"
+    },
+    {
+      "parameters": {
+        "url": "https://oficina.mapaalautomotores.com.ar/api/cars",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cookie",
+              "value": "={{ $('Login').item.json.headers['set-cookie'][0].split(';')[0] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        672,
+        176
+      ],
+      "id": "58ce7f22-53e2-4aad-a6b4-d3bc6d970a77",
+      "name": "Get Cars1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Marcas posibles en el dataset:\n//   - FIAT / Fiat\n//   - RENAULT / Renault\n//   - Toyota\n//   - VOLKSWAGEN / Volkswagen\n//   - Mercedes benz\n//   - HONDA\n//   - Chevrolet\n//   - FORD\n//   - Nissan\n\n// Marca a filtrar (insensible a mayúsculas)\nconst MARCA_FILTRO = $('When Executed by Another Workflow').first().json.marca;\n\nconst input = $input.all();\n\n// El payload viene como array con un objeto que tiene la clave \"autos\"\nconst data = input[0].json;\nconst autos = Array.isArray(data) ? data[0].autos : data.autos;\n\nif (!autos || !Array.isArray(autos)) {\n  throw new Error(\"No se encontró el array 'autos' en el input.\");\n}\n\nconst filtrados = autos.filter(auto =>\n  auto.marca.trim().toLowerCase() === MARCA_FILTRO.trim().toLowerCase()\n);\n\nreturn filtrados.map(auto => ({ json: auto }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        176
+      ],
+      "id": "94799a8b-d053-4902-a549-04b1289a9e1a",
+      "name": "Get Marcas1"
+    }
+  ],
+  "pinData": {
+    "When Executed by Another Workflow": [
+      {
+        "json": {
+          "accion": "get_autos_by_modelo",
+          "marca": "VOLKSWAGEN"
+        }
+      }
+    ]
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "shared": [
+    {
+      "updatedAt": "2026-03-26T00:02:12.607Z",
+      "createdAt": "2026-03-26T00:02:12.607Z",
+      "role": "workflow:owner",
+      "workflowId": "Mg63hcMuO7FpKi37",
+      "projectId": "x2fq0GA2N6Z7n3QP"
+    }
+  ],
+  "staticData": null,
+  "tags": [
+    {
+      "updatedAt": "2026-03-25T19:55:25.674Z",
+      "createdAt": "2026-03-25T19:55:25.674Z",
+      "id": "7GbgmDchDRTipkHU",
+      "name": "lincoln"
+    }
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2026-04-09T12:53:18.336Z",
+  "versionId": "6be71c11-587d-4cec-bb7d-802f9cd4980a"
+}
