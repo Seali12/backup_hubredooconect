@@ -1,0 +1,771 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "693a4d30-9a83-4ed8-a45f-b75e8e81e09e",
+    "workflowId": "wQxc2BpmuUwA3ArV",
+    "nodes": [
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "f1dc333f-f212-4ea2-8280-2e551ab1bc83",
+                "leftValue": "={{ $json.data.welcome_guid }}",
+                "rightValue": "=true",
+                "operator": {
+                  "type": "string",
+                  "operation": "exists",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "337b22f1-308e-4844-8acf-852c0634c7bd",
+        "name": "If2",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          48,
+          48
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "update",
+          "table": {
+            "__rl": true,
+            "value": "conversations",
+            "mode": "list",
+            "cachedResultName": "conversations"
+          },
+          "dataMode": "defineBelow",
+          "columnToMatchOn": "id",
+          "valueToMatchOn": "={{$json.LeadId}}",
+          "valuesToSend": {
+            "values": [
+              {
+                "column": "crm_name",
+                "value": "pilot"
+              },
+              {
+                "column": "crm_lead",
+                "value": "={{ $json.data.welcome_guid }}"
+              },
+              {
+                "column": "status",
+                "value": "closed"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "36f8a11b-69bb-48d9-a33d-a768fa3d80cc",
+        "name": "MySQL",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          272,
+          -32
+        ],
+        "credentials": {
+          "mySql": {
+            "id": "5fA5QNZA5SZZ9tQU",
+            "name": "MySQL account"
+          }
+        },
+        "disabled": true
+      },
+      {
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "9937f4fd-647d-4129-b4e6-d232a90f75e2",
+                "name": "response",
+                "value": "Lead creado correctamente!",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "093719d6-c88b-441e-8d1a-426254164c14",
+        "name": "Edit Fields",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [
+          464,
+          -32
+        ]
+      },
+      {
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "9937f4fd-647d-4129-b4e6-d232a90f75e2",
+                "name": "response",
+                "value": "Ya nos quedo tu consulta",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "9afde4a5-3ee0-4b95-b6c1-05401a6e7eab",
+        "name": "Edit Fields1",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [
+          384,
+          144
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const input = $input.all()[0].json;\n\nfunction parseQueryString(queryString) {\n  const result = {};\n  \n  const patterns = [\n    { key: 'origin', regex: /origin:\\s*([^,]+)/i },\n    { key: 'businesstypeid', regex: /businesstypeid:\\s*([^,]+)/i },\n    { key: 'grupoCaptura', regex: /grupoCaptura:\\s*([^,]+?)(?=,\\s*modelo:|$)/i },\n    { key: 'modelo', regex: /modelo:\\s*([^,]+?)(?=,\\s*pago:|$)/i },\n    { key: 'pago', regex: /pago:\\s*([^,]+?)(?=,\\s*usado:|$)/i },\n    { key: 'usado', regex: /usado:\\s*([^,]+?)(?=,\\s*interes:|$)/i },\n    { key: 'interes', regex: /interes:\\s*([^,]+)/i }\n  ];\n  \n  patterns.forEach(({ key, regex }) => {\n    const match = queryString.match(regex);\n    if (match) {\n      result[key] = match[1].trim();\n    }\n  });\n  \n  return result;\n}\n\nlet parsedQuery = {};\nif (typeof input.query === 'string') {\n  parsedQuery = parseQueryString(input.query);\n} else if (typeof input.query === 'object' && input.query !== null) {\n  parsedQuery = {\n    modelo: input.query.producto || input.query.modelo,\n    pago: input.query.pago,\n    usado: input.query.usado,\n    interes: input.query.interes\n  };\n}\n\nconst modelo = parsedQuery.modelo || \n              (input.producto !== 'undefined' ? input.producto : '') || '';\n              \nconst pago = parsedQuery.pago || \n            (input.pago !== 'undefined' ? input.pago : '') || '';\n            \nconst usado = parsedQuery.usado || \n             (input.usado !== 'undefined' ? input.usado : '') || '';\n             \nconst interes = parsedQuery.interes || \n               (modelo && pago && usado ? 'alto' : 'bajo');\n\nconst pilot_notes = `Modelo: ${modelo || 'No especificado'}\nPago: ${pago || 'No especificado'}\nUsado: ${usado || 'No especificado'}\nInterés: ${interes}`;\n\nconst output = {\n  name: input.name,\n  from: input.from,\n  idConversation: input.idConversation,\n  origin: parsedQuery.origin || input.origin || '',\n  businesstypeid: parsedQuery.businesstypeid || input['businesstypeid ']?.trim() || input.businesstypeid?.trim() || '',\n  grupoCaptura: parsedQuery.grupoCaptura || input['grupoCaptura ']?.trim() || input.grupoCaptura?.trim() || '',\n  pilot_notes: pilot_notes,\n  producto: modelo || 'No especificado'  // ✅ Campo nuevo\n};\n\nreturn { json: output };"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -576,
+          64
+        ],
+        "id": "099b2a28-d286-4566-8768-2d50b9705647",
+        "name": "Code"
+      },
+      {
+        "parameters": {
+          "url": "https://api.pilotsolution.net/webhooks/welcome.php",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "appkey",
+                "value": "=DFF69CB4-D648-458B-8E68-330CEFE48F1B"
+              },
+              {
+                "name": "pilot_firstname",
+                "value": "={{ $('Code').item.json.name }}"
+              },
+              {
+                "name": "pilot_cellphone",
+                "value": "={{ $('Code').item.json.from }}"
+              },
+              {
+                "name": "pilot_contact_type_id",
+                "value": "1"
+              },
+              {
+                "name": "pilot_suborigin_id",
+                "value": "=FZO730DQWH7RG3TXC"
+              },
+              {
+                "name": "pilot_business_type_id",
+                "value": "=1"
+              },
+              {
+                "name": "pilot_notes",
+                "value": "={{ $('Code').item.json.pilot_notes }}"
+              },
+              {
+                "name": "pilot_product_of_interest",
+                "value": "={{ $('Code').item.json.producto }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "aa049b33-041d-453f-bef0-0336c9ad4f91",
+        "name": "HTTP Request1",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -160,
+          -32
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://leads.redooconect.com.ar/api/v1/leads",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-API-KEY",
+                "value": "a1dd20a7-e0bf-46f7-842b-c8292b926557"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={\n  \"first_name\": \"{{$json.name || $json.nombre  || 'No_ofrecido'}}\",\n  \"priority\": \"{{ $('When Executed by Another Workflow').item.json.interes === 'alto' ? 'high' : $('When Executed by Another Workflow').item.json.interes === 'bajo' ? 'low' : 'medium' }}\",\n  \"phone\": \"{{$json.from || $json.telefono || 5491131424}}\",\n  \"source\": \"IA Ventas\",\n  \"notes\": \"{{ $('When Executed by Another Workflow').item.json.resumen }}\"\n\n}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -416,
+          48
+        ],
+        "id": "f16913fc-8598-43a8-a037-2030b80a3ddb",
+        "name": "LEADS1",
+        "retryOnFail": false,
+        "onError": "continueErrorOutput"
+      },
+      {
+        "parameters": {
+          "workflowInputs": {
+            "values": [
+              {
+                "name": "name"
+              },
+              {
+                "name": "from"
+              },
+              {
+                "name": "origin"
+              },
+              {
+                "name": "idConversation"
+              },
+              {
+                "name": "businesstypeid"
+              },
+              {
+                "name": "grupoCaptura"
+              },
+              {
+                "name": "producto"
+              },
+              {
+                "name": "usado"
+              },
+              {
+                "name": "pago"
+              },
+              {
+                "name": "interes"
+              },
+              {
+                "name": "resumen"
+              }
+            ]
+          }
+        },
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "typeVersion": 1.1,
+        "position": [
+          -784,
+          64
+        ],
+        "id": "b7b69cab-43c8-437d-931a-5f945a3ae441",
+        "name": "When Executed by Another Workflow"
+      }
+    ],
+    "connections": {
+      "If2": {
+        "main": [
+          [
+            {
+              "node": "MySQL",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Edit Fields1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "MySQL": {
+        "main": [
+          [
+            {
+              "node": "Edit Fields",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code": {
+        "main": [
+          [
+            {
+              "node": "LEADS1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "HTTP Request1": {
+        "main": [
+          [
+            {
+              "node": "If2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "When Executed by Another Workflow": {
+        "main": [
+          [
+            {
+              "node": "Code",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "LEADS1": {
+        "main": [
+          [
+            {
+              "node": "HTTP Request1",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Edit Fields1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "system migration",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-11-10T13:52:35.720Z",
+    "updatedAt": "2026-11-10T13:52:35.720Z"
+  },
+  "activeVersionId": "693a4d30-9a83-4ed8-a45f-b75e8e81e09e",
+  "connections": {
+    "If2": {
+      "main": [
+        [
+          {
+            "node": "MySQL",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Edit Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MySQL": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "LEADS1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "If2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LEADS1": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Edit Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2025-11-13T13:19:59.419Z",
+  "id": "wQxc2BpmuUwA3ArV",
+  "isArchived": false,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "name": "CLOSE-CONVERSATION-GRUPO -JACK",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "f1dc333f-f212-4ea2-8280-2e551ab1bc83",
+              "leftValue": "={{ $json.data.welcome_guid }}",
+              "rightValue": "=true",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "337b22f1-308e-4844-8acf-852c0634c7bd",
+      "name": "If2",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        48,
+        48
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "table": {
+          "__rl": true,
+          "value": "conversations",
+          "mode": "list",
+          "cachedResultName": "conversations"
+        },
+        "dataMode": "defineBelow",
+        "columnToMatchOn": "id",
+        "valueToMatchOn": "={{$json.LeadId}}",
+        "valuesToSend": {
+          "values": [
+            {
+              "column": "crm_name",
+              "value": "pilot"
+            },
+            {
+              "column": "crm_lead",
+              "value": "={{ $json.data.welcome_guid }}"
+            },
+            {
+              "column": "status",
+              "value": "closed"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "36f8a11b-69bb-48d9-a33d-a768fa3d80cc",
+      "name": "MySQL",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        272,
+        -32
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "5fA5QNZA5SZZ9tQU",
+          "name": "MySQL account"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "9937f4fd-647d-4129-b4e6-d232a90f75e2",
+              "name": "response",
+              "value": "Lead creado correctamente!",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "093719d6-c88b-441e-8d1a-426254164c14",
+      "name": "Edit Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        464,
+        -32
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "9937f4fd-647d-4129-b4e6-d232a90f75e2",
+              "name": "response",
+              "value": "Ya nos quedo tu consulta",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "9afde4a5-3ee0-4b95-b6c1-05401a6e7eab",
+      "name": "Edit Fields1",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        384,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.all()[0].json;\n\nfunction parseQueryString(queryString) {\n  const result = {};\n  \n  const patterns = [\n    { key: 'origin', regex: /origin:\\s*([^,]+)/i },\n    { key: 'businesstypeid', regex: /businesstypeid:\\s*([^,]+)/i },\n    { key: 'grupoCaptura', regex: /grupoCaptura:\\s*([^,]+?)(?=,\\s*modelo:|$)/i },\n    { key: 'modelo', regex: /modelo:\\s*([^,]+?)(?=,\\s*pago:|$)/i },\n    { key: 'pago', regex: /pago:\\s*([^,]+?)(?=,\\s*usado:|$)/i },\n    { key: 'usado', regex: /usado:\\s*([^,]+?)(?=,\\s*interes:|$)/i },\n    { key: 'interes', regex: /interes:\\s*([^,]+)/i }\n  ];\n  \n  patterns.forEach(({ key, regex }) => {\n    const match = queryString.match(regex);\n    if (match) {\n      result[key] = match[1].trim();\n    }\n  });\n  \n  return result;\n}\n\nlet parsedQuery = {};\nif (typeof input.query === 'string') {\n  parsedQuery = parseQueryString(input.query);\n} else if (typeof input.query === 'object' && input.query !== null) {\n  parsedQuery = {\n    modelo: input.query.producto || input.query.modelo,\n    pago: input.query.pago,\n    usado: input.query.usado,\n    interes: input.query.interes\n  };\n}\n\nconst modelo = parsedQuery.modelo || \n              (input.producto !== 'undefined' ? input.producto : '') || '';\n              \nconst pago = parsedQuery.pago || \n            (input.pago !== 'undefined' ? input.pago : '') || '';\n            \nconst usado = parsedQuery.usado || \n             (input.usado !== 'undefined' ? input.usado : '') || '';\n             \nconst interes = parsedQuery.interes || \n               (modelo && pago && usado ? 'alto' : 'bajo');\n\nconst pilot_notes = `Modelo: ${modelo || 'No especificado'}\nPago: ${pago || 'No especificado'}\nUsado: ${usado || 'No especificado'}\nInterés: ${interes}`;\n\nconst output = {\n  name: input.name,\n  from: input.from,\n  idConversation: input.idConversation,\n  origin: parsedQuery.origin || input.origin || '',\n  businesstypeid: parsedQuery.businesstypeid || input['businesstypeid ']?.trim() || input.businesstypeid?.trim() || '',\n  grupoCaptura: parsedQuery.grupoCaptura || input['grupoCaptura ']?.trim() || input.grupoCaptura?.trim() || '',\n  pilot_notes: pilot_notes,\n  producto: modelo || 'No especificado'  // ✅ Campo nuevo\n};\n\nreturn { json: output };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -576,
+        64
+      ],
+      "id": "099b2a28-d286-4566-8768-2d50b9705647",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "url": "https://api.pilotsolution.net/webhooks/welcome.php",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "appkey",
+              "value": "=DFF69CB4-D648-458B-8E68-330CEFE48F1B"
+            },
+            {
+              "name": "pilot_firstname",
+              "value": "={{ $('Code').item.json.name }}"
+            },
+            {
+              "name": "pilot_cellphone",
+              "value": "={{ $('Code').item.json.from }}"
+            },
+            {
+              "name": "pilot_contact_type_id",
+              "value": "1"
+            },
+            {
+              "name": "pilot_suborigin_id",
+              "value": "=FZO730DQWH7RG3TXC"
+            },
+            {
+              "name": "pilot_business_type_id",
+              "value": "=1"
+            },
+            {
+              "name": "pilot_notes",
+              "value": "={{ $('Code').item.json.pilot_notes }}"
+            },
+            {
+              "name": "pilot_product_of_interest",
+              "value": "={{ $('Code').item.json.producto }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "aa049b33-041d-453f-bef0-0336c9ad4f91",
+      "name": "HTTP Request1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -160,
+        -32
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://leads.redooconect.com.ar/api/v1/leads",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-KEY",
+              "value": "a1dd20a7-e0bf-46f7-842b-c8292b926557"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"first_name\": \"{{$json.name || $json.nombre  || 'No_ofrecido'}}\",\n  \"priority\": \"{{ $('When Executed by Another Workflow').item.json.interes === 'alto' ? 'high' : $('When Executed by Another Workflow').item.json.interes === 'bajo' ? 'low' : 'medium' }}\",\n  \"phone\": \"{{$json.from || $json.telefono || 5491131424}}\",\n  \"source\": \"IA Ventas\",\n  \"notes\": \"{{ $('When Executed by Another Workflow').item.json.resumen }}\"\n\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -416,
+        48
+      ],
+      "id": "f16913fc-8598-43a8-a037-2030b80a3ddb",
+      "name": "LEADS1",
+      "retryOnFail": false,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "name"
+            },
+            {
+              "name": "from"
+            },
+            {
+              "name": "origin"
+            },
+            {
+              "name": "idConversation"
+            },
+            {
+              "name": "businesstypeid"
+            },
+            {
+              "name": "grupoCaptura"
+            },
+            {
+              "name": "producto"
+            },
+            {
+              "name": "usado"
+            },
+            {
+              "name": "pago"
+            },
+            {
+              "name": "interes"
+            },
+            {
+              "name": "resumen"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -784,
+        64
+      ],
+      "id": "b7b69cab-43c8-437d-931a-5f945a3ae441",
+      "name": "When Executed by Another Workflow"
+    }
+  ],
+  "pinData": {
+    "When Executed by Another Workflow": [
+      {
+        "json": {
+          "name": "Julian Carballo",
+          "from": "+5491122895630",
+          "origin": "",
+          "idConversation": "975813",
+          "businesstypeid": "",
+          "grupoCaptura": "",
+          "producto": "",
+          "usado": "",
+          "pago": "",
+          "interes": "bajo",
+          "resumen": "Cliente envió un solo mensaje: 'hola'. No se recopilaron datos de modelo, forma de pago ni usado."
+        }
+      }
+    ]
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "wQxc2BpmuUwA3ArV",
+      "projectId": "zwwuseLNt4CeDNcf",
+      "createdAt": "2025-11-13T13:19:59.422Z",
+      "updatedAt": "2025-11-13T13:19:59.422Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [
+    {
+      "id": "c7d7Um3sFMr3qMPn",
+      "name": "MG",
+      "createdAt": "2025-10-03T00:25:06.690Z",
+      "updatedAt": "2026-02-24T20:32:07.445Z"
+    }
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2026-11-10T14:15:50.166Z",
+  "versionId": "693a4d30-9a83-4ed8-a45f-b75e8e81e09e"
+}
