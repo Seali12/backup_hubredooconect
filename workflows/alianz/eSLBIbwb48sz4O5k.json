@@ -1,0 +1,3415 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "5eab73fc-eb04-449b-8105-5705b8f0ad69",
+    "workflowId": "eSLBIbwb48sz4O5k",
+    "nodes": [
+      {
+        "parameters": {
+          "workflowInputs": {
+            "values": [
+              {
+                "name": "action"
+              },
+              {
+                "name": "telefono"
+              },
+              {
+                "name": "patente"
+              },
+              {
+                "name": "nombre"
+              },
+              {
+                "name": "apellido"
+              },
+              {
+                "name": "email"
+              },
+              {
+                "name": "modelo"
+              },
+              {
+                "name": "sucursal"
+              },
+              {
+                "name": "fecha"
+              },
+              {
+                "name": "hora"
+              },
+              {
+                "name": "customer_id"
+              },
+              {
+                "name": "vehicle_id"
+              },
+              {
+                "name": "appointment_id"
+              },
+              {
+                "name": "tipo_lavado"
+              },
+              {
+                "name": "motivo"
+              },
+              {
+                "name": "notas"
+              }
+            ]
+          }
+        },
+        "id": "bc0bac78-a43a-4f22-a0cd-33856c3fb636",
+        "name": "Entrada",
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "typeVersion": 1.1,
+        "position": [
+          0,
+          576
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT id AS client_id, company_name FROM clients WHERE company_name LIKE '%Alianz%' ORDER BY id LIMIT 2",
+          "options": {}
+        },
+        "id": "dfc19a6b-cb2e-4150-94f0-0e45f9ff726f",
+        "name": "Cliente Alianz",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          224,
+          576
+        ],
+        "executeOnce": true,
+        "alwaysOutputData": true,
+        "credentials": {
+          "mySql": {
+            "id": "AL7stJqRLXjlr9Ap",
+            "name": "MySQL account-suite-redoo"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "const inp = $('Entrada').first().json;\nconst cfg = $input.all().map(i => i.json).filter(r => r.client_id);\nconst bad = (error) => [{ json: { valid: false, action: 'invalido', error: error } }];\nif (cfg.length !== 1) return bad('No pude identificar a Alianz en la suite (clients). Avisá que hubo un problema y derivá al asesor.');\nconst clean = v => (v === undefined || v === null) ? '' : String(v).trim();\nconst digits = clean(inp.telefono).replace(/[^0-9]/g, '');\nlet hora = clean(inp.hora).replace('.', ':').replace(/[^0-9:]/g, '');\nif (/^[0-9]{1,2}$/.test(hora)) hora = hora + ':00';\nif (/^[0-9]:[0-9]{2}$/.test(hora)) hora = '0' + hora;\nconst d = {\n  valid: true, action: clean(inp.action), client_id: Number(cfg[0].client_id),\n  telefono: digits, tel10: digits.slice(-10) || '#sin-telefono#',\n  patente: clean(inp.patente).toUpperCase().replace(/[^A-Z0-9]/g, ''),\n  nombre: clean(inp.nombre), apellido: clean(inp.apellido), email: clean(inp.email).toLowerCase(),\n  modelo: clean(inp.modelo), sucursal: clean(inp.sucursal).toUpperCase(),\n  fecha: clean(inp.fecha).slice(0, 10), hora: hora,\n  customer_id: parseInt(clean(inp.customer_id), 10) || 0, vehicle_id: parseInt(clean(inp.vehicle_id), 10) || 0,\n  appointment_id: parseInt(clean(inp.appointment_id), 10) || 0,\n  tipo_lavado: clean(inp.tipo_lavado), motivo: clean(inp.motivo), notas: clean(inp.notas),\n};\nd.patq = d.patente || '#sin-patente#';\nconst okFecha = /^20[0-9]{2}-[01][0-9]-[0-3][0-9]$/.test(d.fecha);\nconst okHora = /^[0-2][0-9]:[0-5][0-9]$/.test(d.hora);\nconst a = d.action;\nif (a === 'buscar_cliente' || a === 'mis_turnos') { if (!digits && !d.patente) return bad('Falta teléfono o patente.'); }\nelse if (a === 'registrar_cliente') { if (!digits) return bad('Falta el teléfono.'); if (!d.nombre) return bad('Falta el nombre.'); if (d.patente.length < 6) return bad('La patente no es válida: pedila de nuevo.'); }\nelse if (a === 'turnos_disponibles') { if (!d.sucursal) return bad('Falta la sucursal.'); if (d.fecha && !okFecha) return bad('La fecha debe ser AAAA-MM-DD.'); }\nelse if (a === 'agendar') { if (!d.sucursal) return bad('Falta la sucursal.'); if (!okFecha || !okHora) return bad('Fecha (AAAA-MM-DD) y hora (HH:MM) obligatorias, tal cual las devolvió turnos_disponibles.'); if (!d.customer_id || !d.vehicle_id) return bad('Faltan customer_id y vehicle_id: ejecutá buscar_cliente o registrar_cliente primero.'); }\nelse if (a === 'modificar') { if (!d.appointment_id) return bad('Falta appointment_id (sale de mis_turnos).'); if (!okFecha || !okHora) return bad('Fecha (AAAA-MM-DD) y hora (HH:MM) obligatorias.'); if (!digits) return bad('Falta el teléfono.'); }\nelse if (a === 'cancelar') { if (!d.appointment_id) return bad('Falta appointment_id (sale de mis_turnos).'); if (!digits) return bad('Falta el teléfono.'); }\nelse return bad('Acción inválida: ' + a);\nreturn [{ json: d }];"
+        },
+        "id": "721b3d55-47c6-47c0-ab94-16d63788c8e7",
+        "name": "Validar",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          448,
+          576
+        ]
+      },
+      {
+        "parameters": {
+          "rules": {
+            "values": [
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "leftValue": "={{ $json.action }}",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      },
+                      "rightValue": "invalido"
+                    }
+                  ],
+                  "combinator": "and"
+                }
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "leftValue": "={{ $json.action }}",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      },
+                      "rightValue": "buscar_cliente"
+                    }
+                  ],
+                  "combinator": "and"
+                }
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "leftValue": "={{ $json.action }}",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      },
+                      "rightValue": "registrar_cliente"
+                    }
+                  ],
+                  "combinator": "and"
+                }
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "leftValue": "={{ $json.action }}",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      },
+                      "rightValue": "turnos_disponibles"
+                    }
+                  ],
+                  "combinator": "and"
+                }
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "leftValue": "={{ $json.action }}",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      },
+                      "rightValue": "agendar"
+                    }
+                  ],
+                  "combinator": "and"
+                }
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "leftValue": "={{ $json.action }}",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      },
+                      "rightValue": "mis_turnos"
+                    }
+                  ],
+                  "combinator": "and"
+                }
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "leftValue": "={{ $json.action }}",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      },
+                      "rightValue": "modificar"
+                    }
+                  ],
+                  "combinator": "and"
+                }
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "leftValue": "={{ $json.action }}",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      },
+                      "rightValue": "cancelar"
+                    }
+                  ],
+                  "combinator": "and"
+                }
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "ba2cfa10-9dde-4456-a9b4-ecaac1c7faef",
+        "name": "Por acción",
+        "type": "n8n-nodes-base.switch",
+        "typeVersion": 3.2,
+        "position": [
+          672,
+          480
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "return [{ json: { success: false, message: $('Validar').first().json.error } }];"
+        },
+        "id": "31771a43-7362-43c8-80ac-fac2b2a37c93",
+        "name": "Respuesta inválida",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          896,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT c.id AS customer_id, c.first_name, c.last_name, c.email, c.phone, c.mobile, v.id AS vehicle_id, v.license_plate, COALESCE(bm.name, bm2.name, vm.name, vm2.name, cm.name, NULLIF(v.notes, '')) AS modelo, COALESCE(bvv.name, vv.name) AS version FROM customers c LEFT JOIN customer_vehicles v ON v.customer_id = c.id AND v.is_active = 1 LEFT JOIN brand_vehicle_models bm ON bm.id = v.brand_vehicle_model_id LEFT JOIN vehicle_models vm ON vm.id = v.vehicle_model_id LEFT JOIN brand_vehicle_versions bvv ON bvv.id = v.brand_vehicle_version_id LEFT JOIN brand_vehicle_models bm2 ON bm2.id = bvv.brand_vehicle_model_id LEFT JOIN vehicle_versions vv ON vv.id = v.vehicle_version_id LEFT JOIN vehicle_models vm2 ON vm2.id = vv.vehicle_model_id LEFT JOIN brand_vehicle_models cm ON cm.id = c.model_id WHERE c.client_id = $1 AND c.is_active = 1 AND (RIGHT(REPLACE(REPLACE(REPLACE(IFNULL(c.phone,''),'+',''),' ',''),'-',''),10) = $2 OR RIGHT(REPLACE(REPLACE(REPLACE(IFNULL(c.mobile,''),'+',''),' ',''),'-',''),10) = $3 OR REPLACE(REPLACE(UPPER(IFNULL(v.license_plate,'')),' ',''),'-','') = $4) ORDER BY c.id DESC, v.id DESC LIMIT 20",
+          "options": {
+            "queryReplacement": "={{ [ $('Validar').first().json.client_id, $('Validar').first().json.tel10, $('Validar').first().json.tel10, $('Validar').first().json.patq ] }}"
+          }
+        },
+        "id": "28b02f46-86fa-4c4f-9a4b-189734f01925",
+        "name": "Buscar cliente",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          1344,
+          224
+        ],
+        "executeOnce": true,
+        "alwaysOutputData": true,
+        "credentials": {
+          "mySql": {
+            "id": "AL7stJqRLXjlr9Ap",
+            "name": "MySQL account-suite-redoo"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "const p = $('Validar').first().json;\nconst rows = $input.all().map(i => i.json).filter(r => r.customer_id);\nif (!rows.length) return [{ json: { success: true, encontrado: false, message: p.action === 'registrar_cliente' ? 'No se pudo registrar al cliente. Avisá que hubo un problema y derivá al asesor.' : 'No hay un cliente registrado con ese teléfono o patente. Pedile los datos y usá registrar_cliente.' } }];\nconst byId = {};\nfor (const r of rows) {\n  if (!byId[r.customer_id]) byId[r.customer_id] = { customer_id: r.customer_id, nombre: r.first_name || '', apellido: r.last_name || '', email: r.email || '', telefono: r.mobile || r.phone || '', vehiculos: [] };\n  if (r.vehicle_id) byId[r.customer_id].vehiculos.push({ vehicle_id: r.vehicle_id, patente: r.license_plate, modelo: r.modelo || '', version: r.version || '' });\n}\nconst clientes = Object.values(byId);\nreturn [{ json: { success: true, encontrado: true, registrado: p.action === 'registrar_cliente', clientes: clientes, message: 'Usá customer_id y vehicle_id de acá para agendar. Si un vehículo tiene modelo vacío, mostralo solo con la patente y preguntá el modelo para el resumen (no hace falta registrarlo de nuevo). Si el vehículo no está en la lista, pedí patente y modelo y usá registrar_cliente.' } }];"
+        },
+        "id": "fa266c3e-4f38-48d7-9ece-0ba5317a62df",
+        "name": "Respuesta cliente",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1568,
+          224
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "INSERT INTO customers (client_id, first_name, last_name, email, phone, mobile, is_active, created_at, updated_at) SELECT $1, $2, $3, $4, $5, $6, 1, NOW(), NOW() FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM customers c WHERE c.client_id = $7 AND c.is_active = 1 AND (RIGHT(REPLACE(REPLACE(REPLACE(IFNULL(c.phone,''),'+',''),' ',''),'-',''),10) = $8 OR RIGHT(REPLACE(REPLACE(REPLACE(IFNULL(c.mobile,''),'+',''),' ',''),'-',''),10) = $9))",
+          "options": {
+            "queryReplacement": "={{ [ $('Validar').first().json.client_id, $('Validar').first().json.nombre, $('Validar').first().json.apellido, $('Validar').first().json.email, $('Validar').first().json.telefono, $('Validar').first().json.telefono, $('Validar').first().json.client_id, $('Validar').first().json.tel10, $('Validar').first().json.tel10 ] }}"
+          }
+        },
+        "id": "a6c6e994-297d-4eeb-8636-e61be7d931bc",
+        "name": "Insertar cliente",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          896,
+          288
+        ],
+        "executeOnce": true,
+        "credentials": {
+          "mySql": {
+            "id": "AL7stJqRLXjlr9Ap",
+            "name": "MySQL account-suite-redoo"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "INSERT INTO customer_vehicles (customer_id, brand_vehicle_model_id, license_plate, current_km, notes, is_active, created_at, updated_at) SELECT c.id, (SELECT bm.id FROM brand_vehicle_models bm WHERE bm.brand = 'Toyota' AND bm.is_active = 1 AND UPPER(bm.name) = UPPER($1) LIMIT 1), $2, 0, $3, 1, NOW(), NOW() FROM customers c WHERE c.client_id = $4 AND c.is_active = 1 AND (RIGHT(REPLACE(REPLACE(REPLACE(IFNULL(c.phone,''),'+',''),' ',''),'-',''),10) = $5 OR RIGHT(REPLACE(REPLACE(REPLACE(IFNULL(c.mobile,''),'+',''),' ',''),'-',''),10) = $6) AND NOT EXISTS (SELECT 1 FROM customer_vehicles v WHERE v.customer_id = c.id AND v.is_active = 1 AND REPLACE(REPLACE(UPPER(IFNULL(v.license_plate,'')),' ',''),'-','') = $7) ORDER BY c.id DESC LIMIT 1",
+          "options": {
+            "queryReplacement": "={{ [ $('Validar').first().json.modelo, $('Validar').first().json.patente, 'Modelo informado por el cliente: ' + $('Validar').first().json.modelo, $('Validar').first().json.client_id, $('Validar').first().json.tel10, $('Validar').first().json.tel10, $('Validar').first().json.patente ] }}"
+          }
+        },
+        "id": "32df88b8-36ca-4714-a681-1b3ff6b66197",
+        "name": "Insertar vehículo",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          1120,
+          288
+        ],
+        "executeOnce": true,
+        "credentials": {
+          "mySql": {
+            "id": "AL7stJqRLXjlr9Ap",
+            "name": "MySQL account-suite-redoo"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT b.id AS branch_id, b.name AS branch_name, b.open_time, b.close_time, b.lunch_start_time, b.lunch_duration, b.break1_time, b.break1_duration, b.break2_time, b.break2_duration, b.break3_time, b.break3_duration, b.open_time_weekend, b.close_time_weekend, b.confirmation_hours, b.service_days, w.id AS workshop_id, TRIM(w.google_calendar_url) AS calendar_id, COALESCE((SELECT ot.wash_minutes FROM operation_times ot WHERE ot.client_id = b.client_id AND ot.branch_id = b.id ORDER BY ot.id DESC LIMIT 1), (SELECT ot.wash_minutes FROM operation_times ot WHERE ot.client_id = b.client_id AND ot.branch_id IS NULL ORDER BY ot.id DESC LIMIT 1), 30) AS wash_minutes, (SELECT COUNT(*) FROM customers c JOIN customer_vehicles v ON v.customer_id = c.id WHERE c.id = $1 AND c.client_id = b.client_id AND c.is_active = 1 AND v.id = $2) AS owner_ok, (LOWER(IFNULL(w.name, '')) LIKE '%lavad%') AS is_lavado FROM branches b JOIN workshops w ON w.branch_id = b.id AND w.is_active = 1 AND w.google_calendar_url IS NOT NULL AND w.google_calendar_url <> '' AND w.business_type = 'service' WHERE b.client_id = $3 AND b.is_active = 1 AND b.has_wash = 1 AND (UPPER(b.name) LIKE CONCAT('%', $4, '%') OR UPPER(b.city) LIKE CONCAT('%', $5, '%')) ORDER BY w.id",
+          "options": {
+            "queryReplacement": "={{ [ $('Validar').first().json.customer_id, $('Validar').first().json.vehicle_id, $('Validar').first().json.client_id, $('Validar').first().json.sucursal, $('Validar').first().json.sucursal ] }}"
+          }
+        },
+        "id": "0be1fb82-a0d6-4389-a9f3-b76cf99c208f",
+        "name": "Lavaderos de la sucursal",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          896,
+          576
+        ],
+        "executeOnce": true,
+        "alwaysOutputData": true,
+        "credentials": {
+          "mySql": {
+            "id": "AL7stJqRLXjlr9Ap",
+            "name": "MySQL account-suite-redoo"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT a.id AS appointment_id, DATE_FORMAT(a.scheduled_date, '%Y-%m-%d') AS fecha, a.scheduled_time AS hora, a.estimated_end_time AS hora_fin, a.estimated_duration, a.status, a.calendar_id, a.google_event_id, a.workshop_id, v.license_plate AS patente, a.customer_notes AS detalle, b.id AS branch_id, b.name AS branch_name, b.open_time, b.close_time, b.lunch_start_time, b.lunch_duration, b.break1_time, b.break1_duration, b.break2_time, b.break2_duration, b.break3_time, b.break3_duration, b.open_time_weekend, b.close_time_weekend, b.confirmation_hours, b.service_days FROM appointments a JOIN customers c ON c.id = a.customer_id JOIN branches b ON b.id = a.branch_id LEFT JOIN customer_vehicles v ON v.id = a.customer_vehicle_id WHERE a.client_id = $1 AND a.operation_type = 'carwash' AND a.status IN ('pending', 'confirmed') AND a.scheduled_date >= CURDATE() AND (RIGHT(REPLACE(REPLACE(REPLACE(IFNULL(c.phone,''),'+',''),' ',''),'-',''),10) = $2 OR RIGHT(REPLACE(REPLACE(REPLACE(IFNULL(c.mobile,''),'+',''),' ',''),'-',''),10) = $3 OR REPLACE(REPLACE(UPPER(IFNULL(v.license_plate,'')),' ',''),'-','') = $4) ORDER BY a.scheduled_date, a.scheduled_time LIMIT 10",
+          "options": {
+            "queryReplacement": "={{ [ $('Validar').first().json.client_id, $('Validar').first().json.tel10, $('Validar').first().json.tel10, $('Validar').first().json.patq ] }}"
+          }
+        },
+        "id": "6763d23e-6648-4ef0-8f1d-1096a8b359a8",
+        "name": "Turnos del cliente",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          896,
+          896
+        ],
+        "executeOnce": true,
+        "alwaysOutputData": true,
+        "credentials": {
+          "mySql": {
+            "id": "AL7stJqRLXjlr9Ap",
+            "name": "MySQL account-suite-redoo"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "const rows = $input.all().map(i => i.json).filter(r => r.appointment_id);\nconst turnos = rows.map(r => ({ appointment_id: r.appointment_id, fecha: r.fecha, hora: r.hora, hora_fin: r.hora_fin, sucursal: r.branch_name, patente: r.patente, detalle: r.detalle }));\nreturn [{ json: { success: true, turnos: turnos, message: turnos.length ? 'Estos son los turnos de lavado vigentes del cliente.' : 'El cliente no tiene turnos de lavado vigentes.' } }];"
+        },
+        "id": "bbfc5561-3466-4d1a-a216-e0f64a0cd48f",
+        "name": "Respuesta mis turnos",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1120,
+          896
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT a.id AS appointment_id, DATE_FORMAT(a.scheduled_date, '%Y-%m-%d') AS fecha, a.scheduled_time AS hora, a.estimated_end_time AS hora_fin, a.estimated_duration, a.status, a.calendar_id, a.google_event_id, a.workshop_id, v.license_plate AS patente, a.customer_notes AS detalle, b.id AS branch_id, b.name AS branch_name, b.open_time, b.close_time, b.lunch_start_time, b.lunch_duration, b.break1_time, b.break1_duration, b.break2_time, b.break2_duration, b.break3_time, b.break3_duration, b.open_time_weekend, b.close_time_weekend, b.confirmation_hours, b.service_days FROM appointments a JOIN customers c ON c.id = a.customer_id JOIN branches b ON b.id = a.branch_id LEFT JOIN customer_vehicles v ON v.id = a.customer_vehicle_id WHERE a.id = $1 AND a.client_id = $2 AND a.operation_type = 'carwash' AND a.status IN ('pending', 'confirmed') AND (RIGHT(REPLACE(REPLACE(REPLACE(IFNULL(c.phone,''),'+',''),' ',''),'-',''),10) = $3 OR RIGHT(REPLACE(REPLACE(REPLACE(IFNULL(c.mobile,''),'+',''),' ',''),'-',''),10) = $4) LIMIT 1",
+          "options": {
+            "queryReplacement": "={{ [ $('Validar').first().json.appointment_id, $('Validar').first().json.client_id, $('Validar').first().json.tel10, $('Validar').first().json.tel10 ] }}"
+          }
+        },
+        "id": "cf5f2e6a-cc71-4ccd-a71b-3e4e8b647d52",
+        "name": "Turno a modificar",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          896,
+          1088
+        ],
+        "executeOnce": true,
+        "alwaysOutputData": true,
+        "credentials": {
+          "mySql": {
+            "id": "AL7stJqRLXjlr9Ap",
+            "name": "MySQL account-suite-redoo"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "const DAYS = ['DO','LU','MA','MI','JU','VI','SA'];\nconst DIAS = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];\nfunction dow(ds) { return new Date(ds + 'T12:00:00Z').getUTCDay(); }\nfunction isServiceDay(b, ds) { return String(b.service_days || 'LU-MA-MI-JU-VI-SA').toUpperCase().split(/[-, ]+/).includes(DAYS[dow(ds)]); }\nfunction hoursFor(b, ds) { const we = dow(ds) === 0 || dow(ds) === 6; return { open: (we && b.open_time_weekend) ? b.open_time_weekend : (b.open_time || '08:00'), close: (we && b.close_time_weekend) ? b.close_time_weekend : (b.close_time || '18:00') }; }\nfunction utc(ds, hm) { const parts = String(hm).split(':').map(Number); const d = new Date(ds + 'T00:00:00Z'); d.setUTCHours(parts[0] + 3, parts[1] || 0, 0, 0); return d; }\nfunction hhmm(d) { return String(d.getUTCHours() - 3).padStart(2, '0') + ':' + String(d.getUTCMinutes()).padStart(2, '0'); }\nfunction blocksFor(b, ds) { const out = []; const add = (t, m) => { if (!t || !m || Number(m) <= 0) return; const s = utc(ds, t); out.push({ s: s, e: new Date(s.getTime() + Number(m) * 60000) }); }; add(b.lunch_start_time, b.lunch_duration); add(b.break1_time, b.break1_duration); add(b.break2_time, b.break2_duration); add(b.break3_time, b.break3_duration); return out; }\nfunction todayAR() { return new Date(Date.now() - 3 * 3600000).toISOString().slice(0, 10); }\nfunction minAllowed(b) { return new Date(Date.now() + (Number(b.confirmation_hours) || 0) * 3600000); }\nfunction checkSlot(b, ds, hora, dur) { if (ds <= todayAR()) return 'muy_pronto'; if (!isServiceDay(b, ds)) return 'not_service_day'; const h = hoursFor(b, ds); const s = utc(ds, hora); const e = new Date(s.getTime() + dur * 60000); if (s < utc(ds, h.open) || e > utc(ds, h.close)) return 'fuera_horario'; if (blocksFor(b, ds).some(x => s < x.e && e > x.s)) return 'fuera_horario'; if (s < minAllowed(b)) return 'muy_pronto'; return ''; }\nfunction busyOf(it) { const s = new Date(it.start && it.start.dateTime ? it.start.dateTime : it.start); const e = new Date(it.end && it.end.dateTime ? it.end.dateTime : it.end); return (isNaN(s) || isNaN(e)) ? null : { s: s, e: e }; }\nconst p = $('Validar').first().json;\nconst t = $input.first().json;\nif (!t.appointment_id) return [{ json: { ok: false, reason: 'no_encontrado' } }];\nconst dur = Number(t.estimated_duration) || 30;\nconst why = checkSlot(t, p.fecha, p.hora, dur);\nif (why) return [{ json: { ok: false, reason: why } }];\nconst s = utc(p.fecha, p.hora), e = new Date(s.getTime() + dur * 60000);\nreturn [{ json: { ok: true, appointment_id: t.appointment_id, calendar_id: String(t.calendar_id || '').trim(), event_id: t.google_event_id, start_iso: s.toISOString(), end_iso: e.toISOString(), hora_fin: hhmm(e), branch_name: t.branch_name, old: t.fecha + ' ' + t.hora } }];"
+        },
+        "id": "7cccbb50-6bf8-4ab8-b391-7569e069d6ef",
+        "name": "Preparar cambio",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1120,
+          1088
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 1
+            },
+            "conditions": [
+              {
+                "leftValue": "={{ $json.ok }}",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "0d89e4c3-f4da-4740-b464-e3f29bedb175",
+        "name": "Cambio válido",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          1344,
+          1088
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "getAll",
+          "calendar": {
+            "__rl": true,
+            "mode": "id",
+            "value": "={{ $json.calendar_id }}"
+          },
+          "returnAll": true,
+          "timeMin": "={{ $json.start_iso }}",
+          "timeMax": "={{ $json.end_iso }}",
+          "options": {}
+        },
+        "id": "4d1b4939-09a8-4b4a-a174-af2a21509986",
+        "name": "Eventos en el nuevo horario",
+        "type": "n8n-nodes-base.googleCalendar",
+        "typeVersion": 1.3,
+        "position": [
+          1568,
+          896
+        ],
+        "alwaysOutputData": true,
+        "credentials": {
+          "googleCalendarOAuth2Api": {
+            "id": "cNQ1bJyV4lYs9qoV",
+            "name": "Google Calendar account"
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "const c = $('Preparar cambio').first().json;\nconst evs = $input.all().map(i => i.json);\nif (evs.some(e => e.error)) return [{ json: { ok: false, reason: 'error_agenda' } }];\nconst otros = evs.filter(e => e.id && e.id !== c.event_id && e.status !== 'cancelled' && e.transparency !== 'transparent');\nreturn [{ json: Object.assign({}, c, { ok: otros.length === 0, reason: otros.length ? 'ocupado' : '' }) }];"
+        },
+        "id": "e096244e-f372-44ff-ad00-529bb7ddf8a8",
+        "name": "Revisar conflicto",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1792,
+          896
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 1
+            },
+            "conditions": [
+              {
+                "leftValue": "={{ $json.ok }}",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "07a12917-cb3f-4468-9b41-85f95879b1ff",
+        "name": "Horario libre",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          2016,
+          896
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "update",
+          "calendar": {
+            "__rl": true,
+            "mode": "id",
+            "value": "={{ $json.calendar_id }}"
+          },
+          "eventId": "={{ $json.event_id }}",
+          "updateFields": {
+            "end": "={{ $json.end_iso }}",
+            "start": "={{ $json.start_iso }}"
+          }
+        },
+        "id": "877555b6-fd30-4e63-a8c8-3590ddd09c73",
+        "name": "Mover evento",
+        "type": "n8n-nodes-base.googleCalendar",
+        "typeVersion": 1.3,
+        "position": [
+          2240,
+          576
+        ],
+        "credentials": {
+          "googleCalendarOAuth2Api": {
+            "id": "cNQ1bJyV4lYs9qoV",
+            "name": "Google Calendar account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "UPDATE appointments SET scheduled_date = $1, scheduled_time = $2, estimated_end_time = $3, updated_at = NOW() WHERE id = $4 AND client_id = $5",
+          "options": {
+            "queryReplacement": "={{ [ $('Validar').first().json.fecha, $('Validar').first().json.hora, $('Revisar conflicto').first().json.hora_fin, $('Revisar conflicto').first().json.appointment_id, $('Validar').first().json.client_id ] }}"
+          }
+        },
+        "id": "e41226d5-b0d1-45de-b488-6466e408fa04",
+        "name": "Actualizar turno en la suite",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          2464,
+          576
+        ],
+        "executeOnce": true,
+        "credentials": {
+          "mySql": {
+            "id": "AL7stJqRLXjlr9Ap",
+            "name": "MySQL account-suite-redoo"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "INSERT INTO appointment_history (appointment_id, action, old_value, new_value, changed_by, notes, created_at) VALUES ($1, 'modified', $2, $3, 'ia-lavado', 'Turno de lavado modificado por WhatsApp', NOW())",
+          "options": {
+            "queryReplacement": "={{ [ $('Revisar conflicto').first().json.appointment_id, $('Revisar conflicto').first().json.old, $('Validar').first().json.fecha + ' ' + $('Validar').first().json.hora ] }}"
+          }
+        },
+        "id": "8355c20a-f9b6-40cb-88b5-2ad908a0a806",
+        "name": "Historial cambio",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          2688,
+          576
+        ],
+        "executeOnce": true,
+        "credentials": {
+          "mySql": {
+            "id": "AL7stJqRLXjlr9Ap",
+            "name": "MySQL account-suite-redoo"
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "const p = $('Validar').first().json;\nconst c = $('Revisar conflicto').first().json;\nreturn [{ json: { success: true, appointment_id: c.appointment_id, fecha: p.fecha, hora: p.hora, hora_fin: c.hora_fin, sucursal: c.branch_name, message: 'Turno de lavado modificado. Confirmale al cliente la nueva fecha y hora.' } }];"
+        },
+        "id": "a9c149d0-3c34-4d03-9f65-932b7f226002",
+        "name": "Respuesta modificado",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2912,
+          576
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const MSG = {\n  sin_lavadero: 'La sucursal no tiene agenda de lavado configurada en la suite. No ofrezcas turnos: derivá al asesor con el summary.',\n  not_service_day: 'Ese día la sucursal no atiende. Ofrecé otro día con turnos_disponibles.',\n  fuera_horario: 'Ese horario está fuera del horario de atención. Ofrecé solo horarios devueltos por turnos_disponibles.',\n  muy_pronto: 'Ese horario ya no se puede reservar (es muy pronto). Ofrecé otro con turnos_disponibles.',\n  ocupado: 'Ese horario se acaba de ocupar. No digas que hubo un error: avisale que se ocupó, ejecutá turnos_disponibles de nuevo y ofrecé otros. NO INVENTES TURNOS.',\n  error_agenda: 'No pude consultar la agenda en este momento. Pedile disculpas y derivá al asesor con el summary.',\n  cliente_invalido: 'El cliente o el vehículo no corresponden. Volvé a ejecutar buscar_cliente y usá los ids que devuelve.',\n  no_encontrado: 'No encontré ese turno de lavado a nombre del cliente. Ejecutá mis_turnos para ver sus turnos vigentes.'\n};\nconst r = $input.first().json.reason || 'ocupado';\nreturn [{ json: { success: false, reason: r, message: MSG[r] || MSG.ocupado } }];"
+        },
+        "id": "552232c1-0cb3-4b95-8a0d-bdd518ed3fa0",
+        "name": "Respuesta no modificado",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2240,
+          1088
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT a.id AS appointment_id, DATE_FORMAT(a.scheduled_date, '%Y-%m-%d') AS fecha, a.scheduled_time AS hora, a.estimated_end_time AS hora_fin, a.estimated_duration, a.status, a.calendar_id, a.google_event_id, a.workshop_id, v.license_plate AS patente, a.customer_notes AS detalle, b.id AS branch_id, b.name AS branch_name, b.open_time, b.close_time, b.lunch_start_time, b.lunch_duration, b.break1_time, b.break1_duration, b.break2_time, b.break2_duration, b.break3_time, b.break3_duration, b.open_time_weekend, b.close_time_weekend, b.confirmation_hours, b.service_days FROM appointments a JOIN customers c ON c.id = a.customer_id JOIN branches b ON b.id = a.branch_id LEFT JOIN customer_vehicles v ON v.id = a.customer_vehicle_id WHERE a.id = $1 AND a.client_id = $2 AND a.operation_type = 'carwash' AND a.status IN ('pending', 'confirmed') AND (RIGHT(REPLACE(REPLACE(REPLACE(IFNULL(c.phone,''),'+',''),' ',''),'-',''),10) = $3 OR RIGHT(REPLACE(REPLACE(REPLACE(IFNULL(c.mobile,''),'+',''),' ',''),'-',''),10) = $4) LIMIT 1",
+          "options": {
+            "queryReplacement": "={{ [ $('Validar').first().json.appointment_id, $('Validar').first().json.client_id, $('Validar').first().json.tel10, $('Validar').first().json.tel10 ] }}"
+          }
+        },
+        "id": "3838005c-056f-4f81-9b6a-4d8fb2dc44b2",
+        "name": "Turno a cancelar",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          896,
+          1472
+        ],
+        "executeOnce": true,
+        "alwaysOutputData": true,
+        "credentials": {
+          "mySql": {
+            "id": "AL7stJqRLXjlr9Ap",
+            "name": "MySQL account-suite-redoo"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 1
+            },
+            "conditions": [
+              {
+                "leftValue": "={{ !!$json.appointment_id }}",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "533f80e6-6b24-484d-bf67-88a8cb268da3",
+        "name": "Turno encontrado",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          1120,
+          1472
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "delete",
+          "calendar": {
+            "__rl": true,
+            "mode": "id",
+            "value": "={{ String($json.calendar_id || '').trim() }}"
+          },
+          "eventId": "={{ $json.google_event_id }}",
+          "options": {}
+        },
+        "id": "4b61b275-4fbe-430f-98f7-b3297a9fd2db",
+        "name": "Borrar evento",
+        "type": "n8n-nodes-base.googleCalendar",
+        "typeVersion": 1.3,
+        "position": [
+          1344,
+          1280
+        ],
+        "credentials": {
+          "googleCalendarOAuth2Api": {
+            "id": "cNQ1bJyV4lYs9qoV",
+            "name": "Google Calendar account"
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "UPDATE appointments SET status = 'cancelled', cancelled_at = NOW(), cancelled_by = 'cliente (WhatsApp)', cancelled_reason = $1, updated_at = NOW() WHERE id = $2 AND client_id = $3",
+          "options": {
+            "queryReplacement": "={{ [ $('Validar').first().json.motivo || 'Cancelado por el cliente', $('Turno a cancelar').first().json.appointment_id, $('Validar').first().json.client_id ] }}"
+          }
+        },
+        "id": "23981df7-5a2a-4fca-b36b-40b02a701d29",
+        "name": "Cancelar turno en la suite",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          1568,
+          1280
+        ],
+        "executeOnce": true,
+        "credentials": {
+          "mySql": {
+            "id": "AL7stJqRLXjlr9Ap",
+            "name": "MySQL account-suite-redoo"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "INSERT INTO appointment_history (appointment_id, action, old_value, new_value, changed_by, notes, created_at) VALUES ($1, 'cancelled', $2, 'cancelled', 'ia-lavado', $3, NOW())",
+          "options": {
+            "queryReplacement": "={{ [ $('Turno a cancelar').first().json.appointment_id, $('Turno a cancelar').first().json.fecha + ' ' + $('Turno a cancelar').first().json.hora, $('Validar').first().json.motivo || 'Cancelado por el cliente' ] }}"
+          }
+        },
+        "id": "4a1e1934-5bb2-4fe9-971e-76985c8db2a2",
+        "name": "Historial baja",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          1792,
+          1280
+        ],
+        "executeOnce": true,
+        "credentials": {
+          "mySql": {
+            "id": "AL7stJqRLXjlr9Ap",
+            "name": "MySQL account-suite-redoo"
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "const t = $('Turno a cancelar').first().json;\nreturn [{ json: { success: true, appointment_id: t.appointment_id, fecha: t.fecha, hora: t.hora, sucursal: t.branch_name, message: 'Turno de lavado cancelado. Confirmáselo al cliente.' } }];"
+        },
+        "id": "505282fe-4c2c-4fa9-bc73-130b0238275c",
+        "name": "Respuesta cancelado",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2016,
+          1280
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const MSG = {\n  sin_lavadero: 'La sucursal no tiene agenda de lavado configurada en la suite. No ofrezcas turnos: derivá al asesor con el summary.',\n  not_service_day: 'Ese día la sucursal no atiende. Ofrecé otro día con turnos_disponibles.',\n  fuera_horario: 'Ese horario está fuera del horario de atención. Ofrecé solo horarios devueltos por turnos_disponibles.',\n  muy_pronto: 'Ese horario ya no se puede reservar (es muy pronto). Ofrecé otro con turnos_disponibles.',\n  ocupado: 'Ese horario se acaba de ocupar. No digas que hubo un error: avisale que se ocupó, ejecutá turnos_disponibles de nuevo y ofrecé otros. NO INVENTES TURNOS.',\n  error_agenda: 'No pude consultar la agenda en este momento. Pedile disculpas y derivá al asesor con el summary.',\n  cliente_invalido: 'El cliente o el vehículo no corresponden. Volvé a ejecutar buscar_cliente y usá los ids que devuelve.',\n  no_encontrado: 'No encontré ese turno de lavado a nombre del cliente. Ejecutá mis_turnos para ver sus turnos vigentes.'\n};\nreturn [{ json: { success: false, reason: 'no_encontrado', message: MSG.no_encontrado } }];"
+        },
+        "id": "e48c2ec2-7ae1-49fa-9110-85ec3d2c6a79",
+        "name": "Respuesta no cancelado",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1344,
+          1472
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const DAYS = ['DO','LU','MA','MI','JU','VI','SA'];\nconst DIAS = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];\nfunction dow(ds) { return new Date(ds + 'T12:00:00Z').getUTCDay(); }\nfunction isServiceDay(b, ds) { return String(b.service_days || 'LU-MA-MI-JU-VI-SA').toUpperCase().split(/[-, ]+/).includes(DAYS[dow(ds)]); }\nfunction hoursFor(b, ds) { const we = dow(ds) === 0 || dow(ds) === 6; return { open: (we && b.open_time_weekend) ? b.open_time_weekend : (b.open_time || '08:00'), close: (we && b.close_time_weekend) ? b.close_time_weekend : (b.close_time || '18:00') }; }\nfunction utc(ds, hm) { const parts = String(hm).split(':').map(Number); const d = new Date(ds + 'T00:00:00Z'); d.setUTCHours(parts[0] + 3, parts[1] || 0, 0, 0); return d; }\nfunction hhmm(d) { return String(d.getUTCHours() - 3).padStart(2, '0') + ':' + String(d.getUTCMinutes()).padStart(2, '0'); }\nfunction blocksFor(b, ds) { const out = []; const add = (t, m) => { if (!t || !m || Number(m) <= 0) return; const s = utc(ds, t); out.push({ s: s, e: new Date(s.getTime() + Number(m) * 60000) }); }; add(b.lunch_start_time, b.lunch_duration); add(b.break1_time, b.break1_duration); add(b.break2_time, b.break2_duration); add(b.break3_time, b.break3_duration); return out; }\nfunction todayAR() { return new Date(Date.now() - 3 * 3600000).toISOString().slice(0, 10); }\nfunction minAllowed(b) { return new Date(Date.now() + (Number(b.confirmation_hours) || 0) * 3600000); }\nfunction checkSlot(b, ds, hora, dur) { if (ds <= todayAR()) return 'muy_pronto'; if (!isServiceDay(b, ds)) return 'not_service_day'; const h = hoursFor(b, ds); const s = utc(ds, hora); const e = new Date(s.getTime() + dur * 60000); if (s < utc(ds, h.open) || e > utc(ds, h.close)) return 'fuera_horario'; if (blocksFor(b, ds).some(x => s < x.e && e > x.s)) return 'fuera_horario'; if (s < minAllowed(b)) return 'muy_pronto'; return ''; }\nfunction busyOf(it) { const s = new Date(it.start && it.start.dateTime ? it.start.dateTime : it.start); const e = new Date(it.end && it.end.dateTime ? it.end.dateTime : it.end); return (isNaN(s) || isNaN(e)) ? null : { s: s, e: e }; }\nconst p = $('Validar').first().json;\nconst rows = $input.all().map(i => i.json).filter(r => r.workshop_id);\nif (!rows.length) return [{ json: { no_calendar: true, reason: 'sin_lavadero' } }];\nconst b = rows[0];\nconst dur = Number(b.wash_minutes) || 30;\nconst lavado = rows.filter(r => Number(r.is_lavado) === 1);\nconst workshops = (lavado.length ? lavado : rows).map(r => ({ workshop_id: r.workshop_id, calendar_id: String(r.calendar_id || '').trim() }));\nconst iso = (ds, hm) => ds + 'T' + String(hm).slice(0, 5) + ':00-03:00';\nif (p.action === 'agendar') {\n  if (Number(b.owner_ok) < 1) return [{ json: { no_calendar: true, reason: 'cliente_invalido' } }];\n  const why = checkSlot(b, p.fecha, p.hora, dur);\n  if (why) return [{ json: { no_calendar: true, reason: why } }];\n  const s = new Date(iso(p.fecha, p.hora));\n  const e = new Date(s.getTime() + (dur + 10) * 60000);\n  return workshops.map(w => ({ json: { branch: b, duration: dur, fecha: p.fecha, workshop_id: w.workshop_id, calendar_id: w.calendar_id, time_min: s.toISOString(), time_max: e.toISOString() } }));\n}\nlet dates = [];\nif (p.fecha) dates = [p.fecha];\nelse { const base = new Date(todayAR() + 'T12:00:00Z'); for (let i = 1; i <= 21 && dates.length < 6; i++) { const ds = new Date(base.getTime() + i * 86400000).toISOString().slice(0, 10); if (isServiceDay(b, ds)) dates.push(ds); } }\ndates = dates.filter(ds => ds > todayAR() && isServiceDay(b, ds));\nif (!dates.length) return [{ json: { no_calendar: true, reason: p.fecha && p.fecha <= todayAR() ? 'muy_pronto' : 'not_service_day' } }];\nconst items = [];\nfor (const ds of dates) { const h = hoursFor(b, ds); for (const w of workshops) items.push({ json: { branch: b, duration: dur, fecha: ds, workshop_id: w.workshop_id, calendar_id: w.calendar_id, time_min: iso(ds, h.open), time_max: iso(ds, h.close) } }); }\nreturn items;"
+        },
+        "id": "473cae84-4d0e-401f-8b6a-0cd334e5f61f",
+        "name": "Preparar consulta",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1120,
+          576
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 1
+            },
+            "conditions": [
+              {
+                "leftValue": "={{ $json.no_calendar }}",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "notEquals"
+                },
+                "rightValue": true
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "dc8b6ff9-a63a-4256-bd2a-29745b7ab1c7",
+        "name": "Hay agenda",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          1344,
+          576
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 1
+            },
+            "conditions": [
+              {
+                "leftValue": "={{ $('Validar').first().json.action }}",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals"
+                },
+                "rightValue": "agendar"
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "e76cab72-478d-40ce-a4b6-f2643aa89cad",
+        "name": "Es reserva",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          1792,
+          240
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const DAYS = ['DO','LU','MA','MI','JU','VI'];\nconst DIAS = ['domingo','lunes','martes','miércoles','jueves','viernes'];\nfunction dow(ds) { return new Date(ds + 'T12:00:00Z').getUTCDay(); }\nfunction isServiceDay(b, ds) { return String(b.service_days || 'LU-MA-MI-JU-VI-SA').toUpperCase().split(/[-, ]+/).includes(DAYS[dow(ds)]); }\nfunction hoursFor(b, ds) { const we = dow(ds) === 0 || dow(ds) === 6; return { open: (we && b.open_time_weekend) ? b.open_time_weekend : (b.open_time || '08:00'), close: (we && b.close_time_weekend) ? b.close_time_weekend : (b.close_time || '18:00') }; }\nfunction utc(ds, hm) { const parts = String(hm).split(':').map(Number); const d = new Date(ds + 'T00:00:00Z'); d.setUTCHours(parts[0] + 3, parts[1] || 0, 0, 0); return d; }\nfunction hhmm(d) { return String(d.getUTCHours() - 3).padStart(2, '0') + ':' + String(d.getUTCMinutes()).padStart(2, '0'); }\nfunction blocksFor(b, ds) { const out = []; const add = (t, m) => { if (!t || !m || Number(m) <= 0) return; const s = utc(ds, t); out.push({ s: s, e: new Date(s.getTime() + Number(m) * 60000) }); }; add(b.lunch_start_time, b.lunch_duration); add(b.break1_time, b.break1_duration); add(b.break2_time, b.break2_duration); add(b.break3_time, b.break3_duration); return out; }\nfunction todayAR() { return new Date(Date.now() - 3 * 3600000).toISOString().slice(0, 10); }\nfunction minAllowed(b) { return new Date(Date.now() + (Number(b.confirmation_hours) || 0) * 3600000); }\nfunction checkSlot(b, ds, hora, dur) { if (ds <= todayAR()) return 'muy_pronto'; if (!isServiceDay(b, ds)) return 'not_service_day'; const h = hoursFor(b, ds); const s = utc(ds, hora); const e = new Date(s.getTime() + dur * 60000); if (s < utc(ds, h.open) || e > utc(ds, h.close)) return 'fuera_horario'; if (blocksFor(b, ds).some(x => s < x.e && e > x.s)) return 'fuera_horario'; if (s < minAllowed(b)) return 'muy_pronto'; return ''; }\nfunction busyOf(it) { const s = new Date(it.start && it.start.dateTime ? it.start.dateTime : it.start); const e = new Date(it.end && it.end.dateTime ? it.end.dateTime : it.end); return (isNaN(s) || isNaN(e)) ? null : { s: s, e: e }; }\nconst p = $('Validar').first().json;\nconst prep = $('Preparar consulta').all().map(i => i.json);\nconst tagged = $input.all().map(i => i.json);\nif (tagged.some(t => t.error)) return [{ json: { found: false, reason: 'error_agenda' } }];\nconst b = prep[0].branch, dur = prep[0].duration;\nconst s = utc(p.fecha, p.hora), e = new Date(s.getTime() + dur * 60000);\nfor (const w of prep) {\n  const conflict = tagged.filter(t => !t.empty && t.calendar_id === w.calendar_id).map(busyOf).filter(Boolean).some(x => s < x.e && e > x.s);\n  if (!conflict) return [{ json: { found: true, calendar_id: w.calendar_id, workshop_id: w.workshop_id, branch_id: b.branch_id, branch_name: b.branch_name, duration: dur, start_iso: s.toISOString(), end_iso: e.toISOString(), hora_fin: hhmm(e) } }];\n}\nreturn [{ json: { found: false, reason: 'ocupado' } }];"
+        },
+        "id": "c5a44760-e494-4c05-b1bd-506ec1bfe077",
+        "name": "Elegir lavadero libre",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2016,
+          96
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 1
+            },
+            "conditions": [
+              {
+                "leftValue": "={{ $json.found }}",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "31187b54-2ecd-4eef-bcff-6dd1948fa4d0",
+        "name": "Lavadero libre",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          2240,
+          96
+        ]
+      },
+      {
+        "parameters": {
+          "calendar": {
+            "__rl": true,
+            "mode": "id",
+            "value": "={{ $json.calendar_id }}"
+          },
+          "start": "={{ $json.start_iso }}",
+          "end": "={{ $json.end_iso }}",
+          "additionalFields": {
+            "description": "={{ 'Turno de lavado agendado por la IA de WhatsApp' + String.fromCharCode(10) + 'Tipo de lavado: ' + ($('Validar').first().json.tipo_lavado || 'SIN INFORMAR') + String.fromCharCode(10) + 'Cliente: ' + (($('Validar').first().json.nombre || '') + ' ' + ($('Validar').first().json.apellido || '')).trim() + String.fromCharCode(10) + 'Teléfono: ' + $('Validar').first().json.telefono + String.fromCharCode(10) + 'Vehículo: ' + ($('Validar').first().json.modelo || '') + ' ' + ($('Validar').first().json.patente || '') + String.fromCharCode(10) + 'Notas: ' + ($('Validar').first().json.notas || '-') }}",
+            "summary": "={{ 'Lavado ' + ($('Validar').first().json.tipo_lavado || '') + ' - ' + ($('Validar').first().json.patente || '') + ' - ' + (($('Validar').first().json.nombre || '') + ' ' + ($('Validar').first().json.apellido || '')).trim() }}"
+          }
+        },
+        "id": "c7e434d2-16ee-4fdc-ab4a-a352cca6ffdc",
+        "name": "Crear evento",
+        "type": "n8n-nodes-base.googleCalendar",
+        "typeVersion": 1.3,
+        "position": [
+          2464,
+          0
+        ],
+        "credentials": {
+          "googleCalendarOAuth2Api": {
+            "id": "cNQ1bJyV4lYs9qoV",
+            "name": "Google Calendar account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "INSERT INTO appointments (client_id, branch_id, workshop_id, customer_id, customer_vehicle_id, operation_type, status, source, scheduled_date, scheduled_time, estimated_duration, estimated_end_time, km_at_appointment, estimated_price, final_price, is_paid, reminder_sent, customer_notes, internal_notes, google_event_id, calendar_id, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, 'carwash', 'pending', 'whatsapp', $6, $7, $8, $9, 0, 0, 0, 0, 0, $10, $11, $12, $13, NOW(), NOW())",
+          "options": {
+            "queryReplacement": "={{ [ $('Validar').first().json.client_id, $('Elegir lavadero libre').first().json.branch_id, $('Elegir lavadero libre').first().json.workshop_id, $('Validar').first().json.customer_id, $('Validar').first().json.vehicle_id, $('Validar').first().json.fecha, $('Validar').first().json.hora, $('Elegir lavadero libre').first().json.duration, $('Elegir lavadero libre').first().json.hora_fin, 'Lavado ' + ($('Validar').first().json.tipo_lavado || '') + ($('Validar').first().json.notas ? ' - ' + $('Validar').first().json.notas : ''), 'Agendado por IA Lavado (n8n)', $json.id, $('Elegir lavadero libre').first().json.calendar_id ] }}"
+          }
+        },
+        "id": "af068e6f-8ddd-4c99-8f1d-f9d742399d1a",
+        "name": "Guardar turno en la suite",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          2688,
+          0
+        ],
+        "executeOnce": true,
+        "credentials": {
+          "mySql": {
+            "id": "AL7stJqRLXjlr9Ap",
+            "name": "MySQL account-suite-redoo"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "INSERT INTO appointment_history (appointment_id, action, old_value, new_value, changed_by, notes, created_at) SELECT a.id, 'created', '', CONCAT(a.scheduled_date, ' ', a.scheduled_time), 'ia-lavado', 'Turno de lavado agendado por WhatsApp', NOW() FROM appointments a WHERE a.google_event_id = $1 ORDER BY a.id DESC LIMIT 1",
+          "options": {
+            "queryReplacement": "={{ [ $('Crear evento').first().json.id ] }}"
+          }
+        },
+        "id": "801ca21e-7d01-49c4-aa63-23b7ae8f639a",
+        "name": "Historial alta",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          2912,
+          0
+        ],
+        "executeOnce": true,
+        "credentials": {
+          "mySql": {
+            "id": "AL7stJqRLXjlr9Ap",
+            "name": "MySQL account-suite-redoo"
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT a.id AS appointment_id FROM appointments a WHERE a.google_event_id = $1 ORDER BY a.id DESC LIMIT 1",
+          "options": {
+            "queryReplacement": "={{ [ $('Crear evento').first().json.id ] }}"
+          }
+        },
+        "id": "fe075213-c1d3-459e-af0a-ab2b8273f625",
+        "name": "Turno creado",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          3136,
+          0
+        ],
+        "executeOnce": true,
+        "alwaysOutputData": true,
+        "credentials": {
+          "mySql": {
+            "id": "AL7stJqRLXjlr9Ap",
+            "name": "MySQL account-suite-redoo"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "const p = $('Validar').first().json;\nconst w = $('Elegir lavadero libre').first().json;\nconst id = $input.first().json.appointment_id || null;\nreturn [{ json: { success: true, appointment_id: id, fecha: p.fecha, hora: p.hora, hora_fin: w.hora_fin, duracion_minutos: w.duration, sucursal: w.branch_name, message: 'Turno de lavado agendado. Confirmale al cliente fecha, hora y sucursal.' } }];"
+        },
+        "id": "c486bc3e-a82d-40d0-8fb8-2bfd868b7bce",
+        "name": "Respuesta reserva",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          3360,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const MSG = {\n  sin_lavadero: 'La sucursal no tiene agenda de lavado configurada en la suite. No ofrezcas turnos: derivá al asesor con el summary.',\n  not_service_day: 'Ese día la sucursal no atiende. Ofrecé otro día con turnos_disponibles.',\n  fuera_horario: 'Ese horario está fuera del horario de atención. Ofrecé solo horarios devueltos por turnos_disponibles.',\n  muy_pronto: 'Ese horario ya no se puede reservar (es muy pronto). Ofrecé otro con turnos_disponibles.',\n  ocupado: 'Ese horario se acaba de ocupar. No digas que hubo un error: avisale que se ocupó, ejecutá turnos_disponibles de nuevo y ofrecé otros. NO INVENTES TURNOS.',\n  error_agenda: 'No pude consultar la agenda en este momento. Pedile disculpas y derivá al asesor con el summary.',\n  cliente_invalido: 'El cliente o el vehículo no corresponden. Volvé a ejecutar buscar_cliente y usá los ids que devuelve.',\n  no_encontrado: 'No encontré ese turno de lavado a nombre del cliente. Ejecutá mis_turnos para ver sus turnos vigentes.'\n};\nconst r = $input.first().json.reason || 'ocupado';\nreturn [{ json: { success: false, reason: r, message: MSG[r] || MSG.ocupado } }];"
+        },
+        "id": "f2b53844-831a-4fa0-8cd9-78346ab31a36",
+        "name": "Respuesta no agendado",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2464,
+          384
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const DAYS = ['DO','LU','MA','MI','JU','VI','SA'];\nconst DIAS = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];\nfunction dow(ds) { return new Date(ds + 'T12:00:00Z').getUTCDay(); }\nfunction isServiceDay(b, ds) { return String(b.service_days || 'LU-MA-MI-JU-VI-SA').toUpperCase().split(/[-, ]+/).includes(DAYS[dow(ds)]); }\nfunction hoursFor(b, ds) { const we = dow(ds) === 0 || dow(ds) === 6; return { open: (we && b.open_time_weekend) ? b.open_time_weekend : (b.open_time || '08:00'), close: (we && b.close_time_weekend) ? b.close_time_weekend : (b.close_time || '18:00') }; }\nfunction utc(ds, hm) { const parts = String(hm).split(':').map(Number); const d = new Date(ds + 'T00:00:00Z'); d.setUTCHours(parts[0] + 3, parts[1] || 0, 0, 0); return d; }\nfunction hhmm(d) { return String(d.getUTCHours() - 3).padStart(2, '0') + ':' + String(d.getUTCMinutes()).padStart(2, '0'); }\nfunction blocksFor(b, ds) { const out = []; const add = (t, m) => { if (!t || !m || Number(m) <= 0) return; const s = utc(ds, t); out.push({ s: s, e: new Date(s.getTime() + Number(m) * 60000) }); }; add(b.lunch_start_time, b.lunch_duration); add(b.break1_time, b.break1_duration); add(b.break2_time, b.break2_duration); add(b.break3_time, b.break3_duration); return out; }\nfunction todayAR() { return new Date(Date.now() - 3 * 3600000).toISOString().slice(0, 10); }\nfunction minAllowed(b) { return new Date(Date.now() + (Number(b.confirmation_hours) || 0) * 3600000); }\nfunction checkSlot(b, ds, hora, dur) { if (ds <= todayAR()) return 'muy_pronto'; if (!isServiceDay(b, ds)) return 'not_service_day'; const h = hoursFor(b, ds); const s = utc(ds, hora); const e = new Date(s.getTime() + dur * 60000); if (s < utc(ds, h.open) || e > utc(ds, h.close)) return 'fuera_horario'; if (blocksFor(b, ds).some(x => s < x.e && e > x.s)) return 'fuera_horario'; if (s < minAllowed(b)) return 'muy_pronto'; return ''; }\nfunction busyOf(it) { const s = new Date(it.start && it.start.dateTime ? it.start.dateTime : it.start); const e = new Date(it.end && it.end.dateTime ? it.end.dateTime : it.end); return (isNaN(s) || isNaN(e)) ? null : { s: s, e: e }; }\nconst p = $('Validar').first().json;\nconst prep = $('Preparar consulta').all().map(i => i.json);\nconst tagged = $input.all().map(i => i.json);\nif (tagged.some(t => t.error)) return [{ json: { success: false, message: 'No pude consultar la agenda en este momento. Pedile disculpas y derivá al asesor con el summary.' } }];\nconst b = prep[0].branch;\nconst dur = prep[0].duration;\nconst durMs = dur * 60000, step = 30 * 60000, perDay = 6;\nconst busy = {};\nfor (const t of tagged) { if (t.empty || !t.calendar_id) continue; const x = busyOf(t); if (!x) continue; const k = t.fecha + '|' + t.calendar_id; (busy[k] = busy[k] || []).push(x); }\nconst cals = Array.from(new Set(prep.map(r => r.calendar_id)));\nconst fechas = Array.from(new Set(prep.map(r => r.fecha)));\nconst limit = minAllowed(b);\nconst dias = [];\nfor (const ds of fechas) {\n  const h = hoursFor(b, ds);\n  const dayStart = utc(ds, h.open), dayEnd = utc(ds, h.close);\n  const blocks = blocksFor(b, ds);\n  const libres = [];\n  for (let t = dayStart.getTime(); t + durMs <= dayEnd.getTime(); t += step) {\n    const s = new Date(t), e = new Date(t + durMs);\n    if (s < limit) continue;\n    if (blocks.some(x => s < x.e && e > x.s)) continue;\n    if (cals.some(c => !(busy[ds + '|' + c] || []).some(x => s < x.e && e > x.s))) libres.push(hhmm(s));\n  }\n  let elegidos = libres;\n  if (libres.length > perDay) { const st = (libres.length - 1) / (perDay - 1); const seen = new Set(); elegidos = []; for (let i = 0; i < perDay; i++) { const idx = Math.min(Math.round(i * st), libres.length - 1); if (!seen.has(idx)) { seen.add(idx); elegidos.push(libres[idx]); } } }\n  if (elegidos.length) { const dd = ds.split('-'); dias.push({ fecha: ds, dia: DIAS[dow(ds)] + ' ' + Number(dd[2]) + '/' + Number(dd[1]), horarios: elegidos }); }\n  if (!p.fecha && dias.length >= 3) break;\n}\nreturn [{ json: { success: true, sucursal: b.branch_name, duracion_minutos: dur, dias: dias, message: dias.length ? 'Ofrecé estos días y horarios tal cual (fecha AAAA-MM-DD y hora HH:MM para agendar). No inventes otros.' : 'No hay turnos de lavado disponibles en esas fechas. Ofrecé buscar otra fecha o derivar al asesor.' } }];"
+        },
+        "id": "956560c0-e047-422d-a058-6a6479a6b7f1",
+        "name": "Calcular turnos",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2016,
+          288
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "calendar",
+          "calendar": {
+            "__rl": true,
+            "mode": "id",
+            "value": "={{ $json.calendar_id }}"
+          },
+          "timeMin": "={{ $json.time_min }}",
+          "timeMax": "={{ $json.time_max }}",
+          "options": {
+            "outputFormat": "bookedSlots",
+            "timezone": {
+              "__rl": true,
+              "mode": "list",
+              "value": "America/Argentina/Buenos_Aires",
+              "cachedResultName": "America/Argentina/Buenos_Aires"
+            }
+          }
+        },
+        "id": "46977f21-df69-46fe-b87b-92700129cf0d",
+        "name": "Ocupación del calendario",
+        "type": "n8n-nodes-base.googleCalendar",
+        "typeVersion": 1.3,
+        "position": [
+          1792,
+          480
+        ],
+        "alwaysOutputData": true,
+        "credentials": {
+          "googleCalendarOAuth2Api": {
+            "id": "cNQ1bJyV4lYs9qoV",
+            "name": "Google Calendar account"
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "const cur = $('Recorrer agendas').first().json;\nconst out = $input.all().map(i => ({ json: Object.assign({}, i.json, { calendar_id: cur.calendar_id, workshop_id: cur.workshop_id, fecha: cur.fecha }) }));\nreturn out.length ? out : [{ json: { calendar_id: cur.calendar_id, workshop_id: cur.workshop_id, fecha: cur.fecha, empty: true } }];"
+        },
+        "id": "53c54b90-9e35-4b29-a64c-b1dd315ca480",
+        "name": "Etiquetar ocupación",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2016,
+          576
+        ]
+      },
+      {
+        "parameters": {
+          "options": {}
+        },
+        "id": "9d1f99bc-c778-4ae6-9a79-d058c24f57b3",
+        "name": "Recorrer agendas",
+        "type": "n8n-nodes-base.splitInBatches",
+        "typeVersion": 3,
+        "position": [
+          1568,
+          480
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const MSG = {\n  sin_lavadero: 'La sucursal no tiene agenda de lavado configurada en la suite. No ofrezcas turnos: derivá al asesor con el summary.',\n  not_service_day: 'Ese día la sucursal no atiende. Ofrecé otro día con turnos_disponibles.',\n  fuera_horario: 'Ese horario está fuera del horario de atención. Ofrecé solo horarios devueltos por turnos_disponibles.',\n  muy_pronto: 'Ese horario ya no se puede reservar (es muy pronto). Ofrecé otro con turnos_disponibles.',\n  ocupado: 'Ese horario se acaba de ocupar. No digas que hubo un error: avisale que se ocupó, ejecutá turnos_disponibles de nuevo y ofrecé otros. NO INVENTES TURNOS.',\n  error_agenda: 'No pude consultar la agenda en este momento. Pedile disculpas y derivá al asesor con el summary.',\n  cliente_invalido: 'El cliente o el vehículo no corresponden. Volvé a ejecutar buscar_cliente y usá los ids que devuelve.',\n  no_encontrado: 'No encontré ese turno de lavado a nombre del cliente. Ejecutá mis_turnos para ver sus turnos vigentes.'\n};\nconst r = $input.first().json.reason || 'sin_lavadero';\nreturn [{ json: { success: false, reason: r, message: MSG[r] || MSG.sin_lavadero } }];"
+        },
+        "id": "3130b665-5466-476d-aeaf-3a2ba1876a0c",
+        "name": "Respuesta sin agenda",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1568,
+          704
+        ]
+      }
+    ],
+    "connections": {
+      "Entrada": {
+        "main": [
+          [
+            {
+              "node": "Cliente Alianz",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Cliente Alianz": {
+        "main": [
+          [
+            {
+              "node": "Validar",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Validar": {
+        "main": [
+          [
+            {
+              "node": "Por acción",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Por acción": {
+        "main": [
+          [
+            {
+              "node": "Respuesta inválida",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Buscar cliente",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Insertar cliente",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Lavaderos de la sucursal",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Lavaderos de la sucursal",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Turnos del cliente",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Turno a modificar",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Turno a cancelar",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Buscar cliente": {
+        "main": [
+          [
+            {
+              "node": "Respuesta cliente",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Insertar cliente": {
+        "main": [
+          [
+            {
+              "node": "Insertar vehículo",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Insertar vehículo": {
+        "main": [
+          [
+            {
+              "node": "Buscar cliente",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Lavaderos de la sucursal": {
+        "main": [
+          [
+            {
+              "node": "Preparar consulta",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Turnos del cliente": {
+        "main": [
+          [
+            {
+              "node": "Respuesta mis turnos",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Turno a modificar": {
+        "main": [
+          [
+            {
+              "node": "Preparar cambio",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Preparar cambio": {
+        "main": [
+          [
+            {
+              "node": "Cambio válido",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Cambio válido": {
+        "main": [
+          [
+            {
+              "node": "Eventos en el nuevo horario",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Respuesta no modificado",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Eventos en el nuevo horario": {
+        "main": [
+          [
+            {
+              "node": "Revisar conflicto",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Revisar conflicto": {
+        "main": [
+          [
+            {
+              "node": "Horario libre",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Horario libre": {
+        "main": [
+          [
+            {
+              "node": "Mover evento",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Respuesta no modificado",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Mover evento": {
+        "main": [
+          [
+            {
+              "node": "Actualizar turno en la suite",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Actualizar turno en la suite": {
+        "main": [
+          [
+            {
+              "node": "Historial cambio",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Historial cambio": {
+        "main": [
+          [
+            {
+              "node": "Respuesta modificado",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Turno a cancelar": {
+        "main": [
+          [
+            {
+              "node": "Turno encontrado",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Turno encontrado": {
+        "main": [
+          [
+            {
+              "node": "Borrar evento",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Respuesta no cancelado",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Borrar evento": {
+        "main": [
+          [
+            {
+              "node": "Cancelar turno en la suite",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Cancelar turno en la suite": {
+        "main": [
+          [
+            {
+              "node": "Historial baja",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Historial baja": {
+        "main": [
+          [
+            {
+              "node": "Respuesta cancelado",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Preparar consulta": {
+        "main": [
+          [
+            {
+              "node": "Hay agenda",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Hay agenda": {
+        "main": [
+          [
+            {
+              "node": "Recorrer agendas",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Respuesta sin agenda",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Es reserva": {
+        "main": [
+          [
+            {
+              "node": "Elegir lavadero libre",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Calcular turnos",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Elegir lavadero libre": {
+        "main": [
+          [
+            {
+              "node": "Lavadero libre",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Lavadero libre": {
+        "main": [
+          [
+            {
+              "node": "Crear evento",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Respuesta no agendado",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Crear evento": {
+        "main": [
+          [
+            {
+              "node": "Guardar turno en la suite",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Guardar turno en la suite": {
+        "main": [
+          [
+            {
+              "node": "Historial alta",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Historial alta": {
+        "main": [
+          [
+            {
+              "node": "Turno creado",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Turno creado": {
+        "main": [
+          [
+            {
+              "node": "Respuesta reserva",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ocupación del calendario": {
+        "main": [
+          [
+            {
+              "node": "Etiquetar ocupación",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Etiquetar ocupación": {
+        "main": [
+          [
+            {
+              "node": "Recorrer agendas",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Recorrer agendas": {
+        "main": [
+          [
+            {
+              "node": "Es reserva",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Ocupación del calendario",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "Marcelo Dri",
+    "name": "Version 5eab73fc",
+    "description": "",
+    "autosaved": true,
+    "createdAt": "2026-11-16T14:39:49.329Z",
+    "updatedAt": "2026-11-16T15:00:54.000Z"
+  },
+  "activeVersionId": "5eab73fc-eb04-449b-8105-5705b8f0ad69",
+  "connections": {
+    "Entrada": {
+      "main": [
+        [
+          {
+            "node": "Cliente Alianz",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cliente Alianz": {
+      "main": [
+        [
+          {
+            "node": "Validar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar": {
+      "main": [
+        [
+          {
+            "node": "Por acción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Por acción": {
+      "main": [
+        [
+          {
+            "node": "Respuesta inválida",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Buscar cliente",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Insertar cliente",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lavaderos de la sucursal",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lavaderos de la sucursal",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Turnos del cliente",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Turno a modificar",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Turno a cancelar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar cliente": {
+      "main": [
+        [
+          {
+            "node": "Respuesta cliente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insertar cliente": {
+      "main": [
+        [
+          {
+            "node": "Insertar vehículo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insertar vehículo": {
+      "main": [
+        [
+          {
+            "node": "Buscar cliente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lavaderos de la sucursal": {
+      "main": [
+        [
+          {
+            "node": "Preparar consulta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Turnos del cliente": {
+      "main": [
+        [
+          {
+            "node": "Respuesta mis turnos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Turno a modificar": {
+      "main": [
+        [
+          {
+            "node": "Preparar cambio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar cambio": {
+      "main": [
+        [
+          {
+            "node": "Cambio válido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cambio válido": {
+      "main": [
+        [
+          {
+            "node": "Eventos en el nuevo horario",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respuesta no modificado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Eventos en el nuevo horario": {
+      "main": [
+        [
+          {
+            "node": "Revisar conflicto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Revisar conflicto": {
+      "main": [
+        [
+          {
+            "node": "Horario libre",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Horario libre": {
+      "main": [
+        [
+          {
+            "node": "Mover evento",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respuesta no modificado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mover evento": {
+      "main": [
+        [
+          {
+            "node": "Actualizar turno en la suite",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Actualizar turno en la suite": {
+      "main": [
+        [
+          {
+            "node": "Historial cambio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Historial cambio": {
+      "main": [
+        [
+          {
+            "node": "Respuesta modificado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Turno a cancelar": {
+      "main": [
+        [
+          {
+            "node": "Turno encontrado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Turno encontrado": {
+      "main": [
+        [
+          {
+            "node": "Borrar evento",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respuesta no cancelado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Borrar evento": {
+      "main": [
+        [
+          {
+            "node": "Cancelar turno en la suite",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cancelar turno en la suite": {
+      "main": [
+        [
+          {
+            "node": "Historial baja",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Historial baja": {
+      "main": [
+        [
+          {
+            "node": "Respuesta cancelado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar consulta": {
+      "main": [
+        [
+          {
+            "node": "Hay agenda",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hay agenda": {
+      "main": [
+        [
+          {
+            "node": "Recorrer agendas",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respuesta sin agenda",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Es reserva": {
+      "main": [
+        [
+          {
+            "node": "Elegir lavadero libre",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Calcular turnos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Elegir lavadero libre": {
+      "main": [
+        [
+          {
+            "node": "Lavadero libre",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lavadero libre": {
+      "main": [
+        [
+          {
+            "node": "Crear evento",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respuesta no agendado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crear evento": {
+      "main": [
+        [
+          {
+            "node": "Guardar turno en la suite",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar turno en la suite": {
+      "main": [
+        [
+          {
+            "node": "Historial alta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Historial alta": {
+      "main": [
+        [
+          {
+            "node": "Turno creado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Turno creado": {
+      "main": [
+        [
+          {
+            "node": "Respuesta reserva",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ocupación del calendario": {
+      "main": [
+        [
+          {
+            "node": "Etiquetar ocupación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Etiquetar ocupación": {
+      "main": [
+        [
+          {
+            "node": "Recorrer agendas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recorrer agendas": {
+      "main": [
+        [
+          {
+            "node": "Es reserva",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ocupación del calendario",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-11-16T13:52:57.063Z",
+  "id": "eSLBIbwb48sz4O5k",
+  "isArchived": false,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "name": "Lavado - Agenda (suite)",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "action"
+            },
+            {
+              "name": "telefono"
+            },
+            {
+              "name": "patente"
+            },
+            {
+              "name": "nombre"
+            },
+            {
+              "name": "apellido"
+            },
+            {
+              "name": "email"
+            },
+            {
+              "name": "modelo"
+            },
+            {
+              "name": "sucursal"
+            },
+            {
+              "name": "fecha"
+            },
+            {
+              "name": "hora"
+            },
+            {
+              "name": "customer_id"
+            },
+            {
+              "name": "vehicle_id"
+            },
+            {
+              "name": "appointment_id"
+            },
+            {
+              "name": "tipo_lavado"
+            },
+            {
+              "name": "motivo"
+            },
+            {
+              "name": "notas"
+            }
+          ]
+        }
+      },
+      "id": "bc0bac78-a43a-4f22-a0cd-33856c3fb636",
+      "name": "Entrada",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        576
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id AS client_id, company_name FROM clients WHERE company_name LIKE '%Alianz%' ORDER BY id LIMIT 2",
+        "options": {}
+      },
+      "id": "dfc19a6b-cb2e-4150-94f0-0e45f9ff726f",
+      "name": "Cliente Alianz",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        224,
+        576
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "mySql": {
+          "id": "AL7stJqRLXjlr9Ap",
+          "name": "MySQL account-suite-redoo"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const inp = $('Entrada').first().json;\nconst cfg = $input.all().map(i => i.json).filter(r => r.client_id);\nconst bad = (error) => [{ json: { valid: false, action: 'invalido', error: error } }];\nif (cfg.length !== 1) return bad('No pude identificar a Alianz en la suite (clients). Avisá que hubo un problema y derivá al asesor.');\nconst clean = v => (v === undefined || v === null) ? '' : String(v).trim();\nconst digits = clean(inp.telefono).replace(/[^0-9]/g, '');\nlet hora = clean(inp.hora).replace('.', ':').replace(/[^0-9:]/g, '');\nif (/^[0-9]{1,2}$/.test(hora)) hora = hora + ':00';\nif (/^[0-9]:[0-9]{2}$/.test(hora)) hora = '0' + hora;\nconst d = {\n  valid: true, action: clean(inp.action), client_id: Number(cfg[0].client_id),\n  telefono: digits, tel10: digits.slice(-10) || '#sin-telefono#',\n  patente: clean(inp.patente).toUpperCase().replace(/[^A-Z0-9]/g, ''),\n  nombre: clean(inp.nombre), apellido: clean(inp.apellido), email: clean(inp.email).toLowerCase(),\n  modelo: clean(inp.modelo), sucursal: clean(inp.sucursal).toUpperCase(),\n  fecha: clean(inp.fecha).slice(0, 10), hora: hora,\n  customer_id: parseInt(clean(inp.customer_id), 10) || 0, vehicle_id: parseInt(clean(inp.vehicle_id), 10) || 0,\n  appointment_id: parseInt(clean(inp.appointment_id), 10) || 0,\n  tipo_lavado: clean(inp.tipo_lavado), motivo: clean(inp.motivo), notas: clean(inp.notas),\n};\nd.patq = d.patente || '#sin-patente#';\nconst okFecha = /^20[0-9]{2}-[01][0-9]-[0-3][0-9]$/.test(d.fecha);\nconst okHora = /^[0-2][0-9]:[0-5][0-9]$/.test(d.hora);\nconst a = d.action;\nif (a === 'buscar_cliente' || a === 'mis_turnos') { if (!digits && !d.patente) return bad('Falta teléfono o patente.'); }\nelse if (a === 'registrar_cliente') { if (!digits) return bad('Falta el teléfono.'); if (!d.nombre) return bad('Falta el nombre.'); if (d.patente.length < 6) return bad('La patente no es válida: pedila de nuevo.'); }\nelse if (a === 'turnos_disponibles') { if (!d.sucursal) return bad('Falta la sucursal.'); if (d.fecha && !okFecha) return bad('La fecha debe ser AAAA-MM-DD.'); }\nelse if (a === 'agendar') { if (!d.sucursal) return bad('Falta la sucursal.'); if (!okFecha || !okHora) return bad('Fecha (AAAA-MM-DD) y hora (HH:MM) obligatorias, tal cual las devolvió turnos_disponibles.'); if (!d.customer_id || !d.vehicle_id) return bad('Faltan customer_id y vehicle_id: ejecutá buscar_cliente o registrar_cliente primero.'); }\nelse if (a === 'modificar') { if (!d.appointment_id) return bad('Falta appointment_id (sale de mis_turnos).'); if (!okFecha || !okHora) return bad('Fecha (AAAA-MM-DD) y hora (HH:MM) obligatorias.'); if (!digits) return bad('Falta el teléfono.'); }\nelse if (a === 'cancelar') { if (!d.appointment_id) return bad('Falta appointment_id (sale de mis_turnos).'); if (!digits) return bad('Falta el teléfono.'); }\nelse return bad('Acción inválida: ' + a);\nreturn [{ json: d }];"
+      },
+      "id": "721b3d55-47c6-47c0-ab94-16d63788c8e7",
+      "name": "Validar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        576
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "rightValue": "invalido"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "rightValue": "buscar_cliente"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "rightValue": "registrar_cliente"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "rightValue": "turnos_disponibles"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "rightValue": "agendar"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "rightValue": "mis_turnos"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "rightValue": "modificar"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "rightValue": "cancelar"
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ba2cfa10-9dde-4456-a9b4-ecaac1c7faef",
+      "name": "Por acción",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        672,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { success: false, message: $('Validar').first().json.error } }];"
+      },
+      "id": "31771a43-7362-43c8-80ac-fac2b2a37c93",
+      "name": "Respuesta inválida",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT c.id AS customer_id, c.first_name, c.last_name, c.email, c.phone, c.mobile, v.id AS vehicle_id, v.license_plate, COALESCE(bm.name, bm2.name, vm.name, vm2.name, cm.name, NULLIF(v.notes, '')) AS modelo, COALESCE(bvv.name, vv.name) AS version FROM customers c LEFT JOIN customer_vehicles v ON v.customer_id = c.id AND v.is_active = 1 LEFT JOIN brand_vehicle_models bm ON bm.id = v.brand_vehicle_model_id LEFT JOIN vehicle_models vm ON vm.id = v.vehicle_model_id LEFT JOIN brand_vehicle_versions bvv ON bvv.id = v.brand_vehicle_version_id LEFT JOIN brand_vehicle_models bm2 ON bm2.id = bvv.brand_vehicle_model_id LEFT JOIN vehicle_versions vv ON vv.id = v.vehicle_version_id LEFT JOIN vehicle_models vm2 ON vm2.id = vv.vehicle_model_id LEFT JOIN brand_vehicle_models cm ON cm.id = c.model_id WHERE c.client_id = $1 AND c.is_active = 1 AND (RIGHT(REPLACE(REPLACE(REPLACE(IFNULL(c.phone,''),'+',''),' ',''),'-',''),10) = $2 OR RIGHT(REPLACE(REPLACE(REPLACE(IFNULL(c.mobile,''),'+',''),' ',''),'-',''),10) = $3 OR REPLACE(REPLACE(UPPER(IFNULL(v.license_plate,'')),' ',''),'-','') = $4) ORDER BY c.id DESC, v.id DESC LIMIT 20",
+        "options": {
+          "queryReplacement": "={{ [ $('Validar').first().json.client_id, $('Validar').first().json.tel10, $('Validar').first().json.tel10, $('Validar').first().json.patq ] }}"
+        }
+      },
+      "id": "28b02f46-86fa-4c4f-9a4b-189734f01925",
+      "name": "Buscar cliente",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        1344,
+        224
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "mySql": {
+          "id": "AL7stJqRLXjlr9Ap",
+          "name": "MySQL account-suite-redoo"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const p = $('Validar').first().json;\nconst rows = $input.all().map(i => i.json).filter(r => r.customer_id);\nif (!rows.length) return [{ json: { success: true, encontrado: false, message: p.action === 'registrar_cliente' ? 'No se pudo registrar al cliente. Avisá que hubo un problema y derivá al asesor.' : 'No hay un cliente registrado con ese teléfono o patente. Pedile los datos y usá registrar_cliente.' } }];\nconst byId = {};\nfor (const r of rows) {\n  if (!byId[r.customer_id]) byId[r.customer_id] = { customer_id: r.customer_id, nombre: r.first_name || '', apellido: r.last_name || '', email: r.email || '', telefono: r.mobile || r.phone || '', vehiculos: [] };\n  if (r.vehicle_id) byId[r.customer_id].vehiculos.push({ vehicle_id: r.vehicle_id, patente: r.license_plate, modelo: r.modelo || '', version: r.version || '' });\n}\nconst clientes = Object.values(byId);\nreturn [{ json: { success: true, encontrado: true, registrado: p.action === 'registrar_cliente', clientes: clientes, message: 'Usá customer_id y vehicle_id de acá para agendar. Si un vehículo tiene modelo vacío, mostralo solo con la patente y preguntá el modelo para el resumen (no hace falta registrarlo de nuevo). Si el vehículo no está en la lista, pedí patente y modelo y usá registrar_cliente.' } }];"
+      },
+      "id": "fa266c3e-4f38-48d7-9ece-0ba5317a62df",
+      "name": "Respuesta cliente",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO customers (client_id, first_name, last_name, email, phone, mobile, is_active, created_at, updated_at) SELECT $1, $2, $3, $4, $5, $6, 1, NOW(), NOW() FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM customers c WHERE c.client_id = $7 AND c.is_active = 1 AND (RIGHT(REPLACE(REPLACE(REPLACE(IFNULL(c.phone,''),'+',''),' ',''),'-',''),10) = $8 OR RIGHT(REPLACE(REPLACE(REPLACE(IFNULL(c.mobile,''),'+',''),' ',''),'-',''),10) = $9))",
+        "options": {
+          "queryReplacement": "={{ [ $('Validar').first().json.client_id, $('Validar').first().json.nombre, $('Validar').first().json.apellido, $('Validar').first().json.email, $('Validar').first().json.telefono, $('Validar').first().json.telefono, $('Validar').first().json.client_id, $('Validar').first().json.tel10, $('Validar').first().json.tel10 ] }}"
+        }
+      },
+      "id": "a6c6e994-297d-4eeb-8636-e61be7d931bc",
+      "name": "Insertar cliente",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        896,
+        288
+      ],
+      "executeOnce": true,
+      "credentials": {
+        "mySql": {
+          "id": "AL7stJqRLXjlr9Ap",
+          "name": "MySQL account-suite-redoo"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO customer_vehicles (customer_id, brand_vehicle_model_id, license_plate, current_km, notes, is_active, created_at, updated_at) SELECT c.id, (SELECT bm.id FROM brand_vehicle_models bm WHERE bm.brand = 'Toyota' AND bm.is_active = 1 AND UPPER(bm.name) = UPPER($1) LIMIT 1), $2, 0, $3, 1, NOW(), NOW() FROM customers c WHERE c.client_id = $4 AND c.is_active = 1 AND (RIGHT(REPLACE(REPLACE(REPLACE(IFNULL(c.phone,''),'+',''),' ',''),'-',''),10) = $5 OR RIGHT(REPLACE(REPLACE(REPLACE(IFNULL(c.mobile,''),'+',''),' ',''),'-',''),10) = $6) AND NOT EXISTS (SELECT 1 FROM customer_vehicles v WHERE v.customer_id = c.id AND v.is_active = 1 AND REPLACE(REPLACE(UPPER(IFNULL(v.license_plate,'')),' ',''),'-','') = $7) ORDER BY c.id DESC LIMIT 1",
+        "options": {
+          "queryReplacement": "={{ [ $('Validar').first().json.modelo, $('Validar').first().json.patente, 'Modelo informado por el cliente: ' + $('Validar').first().json.modelo, $('Validar').first().json.client_id, $('Validar').first().json.tel10, $('Validar').first().json.tel10, $('Validar').first().json.patente ] }}"
+        }
+      },
+      "id": "32df88b8-36ca-4714-a681-1b3ff6b66197",
+      "name": "Insertar vehículo",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        1120,
+        288
+      ],
+      "executeOnce": true,
+      "credentials": {
+        "mySql": {
+          "id": "AL7stJqRLXjlr9Ap",
+          "name": "MySQL account-suite-redoo"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT b.id AS branch_id, b.name AS branch_name, b.open_time, b.close_time, b.lunch_start_time, b.lunch_duration, b.break1_time, b.break1_duration, b.break2_time, b.break2_duration, b.break3_time, b.break3_duration, b.open_time_weekend, b.close_time_weekend, b.confirmation_hours, b.service_days, w.id AS workshop_id, TRIM(w.google_calendar_url) AS calendar_id, COALESCE((SELECT ot.wash_minutes FROM operation_times ot WHERE ot.client_id = b.client_id AND ot.branch_id = b.id ORDER BY ot.id DESC LIMIT 1), (SELECT ot.wash_minutes FROM operation_times ot WHERE ot.client_id = b.client_id AND ot.branch_id IS NULL ORDER BY ot.id DESC LIMIT 1), 30) AS wash_minutes, (SELECT COUNT(*) FROM customers c JOIN customer_vehicles v ON v.customer_id = c.id WHERE c.id = $1 AND c.client_id = b.client_id AND c.is_active = 1 AND v.id = $2) AS owner_ok, (LOWER(IFNULL(w.name, '')) LIKE '%lavad%') AS is_lavado FROM branches b JOIN workshops w ON w.branch_id = b.id AND w.is_active = 1 AND w.google_calendar_url IS NOT NULL AND w.google_calendar_url <> '' AND w.business_type = 'service' WHERE b.client_id = $3 AND b.is_active = 1 AND b.has_wash = 1 AND (UPPER(b.name) LIKE CONCAT('%', $4, '%') OR UPPER(b.city) LIKE CONCAT('%', $5, '%')) ORDER BY w.id",
+        "options": {
+          "queryReplacement": "={{ [ $('Validar').first().json.customer_id, $('Validar').first().json.vehicle_id, $('Validar').first().json.client_id, $('Validar').first().json.sucursal, $('Validar').first().json.sucursal ] }}"
+        }
+      },
+      "id": "0be1fb82-a0d6-4389-a9f3-b76cf99c208f",
+      "name": "Lavaderos de la sucursal",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        896,
+        576
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "mySql": {
+          "id": "AL7stJqRLXjlr9Ap",
+          "name": "MySQL account-suite-redoo"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT a.id AS appointment_id, DATE_FORMAT(a.scheduled_date, '%Y-%m-%d') AS fecha, a.scheduled_time AS hora, a.estimated_end_time AS hora_fin, a.estimated_duration, a.status, a.calendar_id, a.google_event_id, a.workshop_id, v.license_plate AS patente, a.customer_notes AS detalle, b.id AS branch_id, b.name AS branch_name, b.open_time, b.close_time, b.lunch_start_time, b.lunch_duration, b.break1_time, b.break1_duration, b.break2_time, b.break2_duration, b.break3_time, b.break3_duration, b.open_time_weekend, b.close_time_weekend, b.confirmation_hours, b.service_days FROM appointments a JOIN customers c ON c.id = a.customer_id JOIN branches b ON b.id = a.branch_id LEFT JOIN customer_vehicles v ON v.id = a.customer_vehicle_id WHERE a.client_id = $1 AND a.operation_type = 'carwash' AND a.status IN ('pending', 'confirmed') AND a.scheduled_date >= CURDATE() AND (RIGHT(REPLACE(REPLACE(REPLACE(IFNULL(c.phone,''),'+',''),' ',''),'-',''),10) = $2 OR RIGHT(REPLACE(REPLACE(REPLACE(IFNULL(c.mobile,''),'+',''),' ',''),'-',''),10) = $3 OR REPLACE(REPLACE(UPPER(IFNULL(v.license_plate,'')),' ',''),'-','') = $4) ORDER BY a.scheduled_date, a.scheduled_time LIMIT 10",
+        "options": {
+          "queryReplacement": "={{ [ $('Validar').first().json.client_id, $('Validar').first().json.tel10, $('Validar').first().json.tel10, $('Validar').first().json.patq ] }}"
+        }
+      },
+      "id": "6763d23e-6648-4ef0-8f1d-1096a8b359a8",
+      "name": "Turnos del cliente",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        896,
+        896
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "mySql": {
+          "id": "AL7stJqRLXjlr9Ap",
+          "name": "MySQL account-suite-redoo"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all().map(i => i.json).filter(r => r.appointment_id);\nconst turnos = rows.map(r => ({ appointment_id: r.appointment_id, fecha: r.fecha, hora: r.hora, hora_fin: r.hora_fin, sucursal: r.branch_name, patente: r.patente, detalle: r.detalle }));\nreturn [{ json: { success: true, turnos: turnos, message: turnos.length ? 'Estos son los turnos de lavado vigentes del cliente.' : 'El cliente no tiene turnos de lavado vigentes.' } }];"
+      },
+      "id": "bbfc5561-3466-4d1a-a216-e0f64a0cd48f",
+      "name": "Respuesta mis turnos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        896
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT a.id AS appointment_id, DATE_FORMAT(a.scheduled_date, '%Y-%m-%d') AS fecha, a.scheduled_time AS hora, a.estimated_end_time AS hora_fin, a.estimated_duration, a.status, a.calendar_id, a.google_event_id, a.workshop_id, v.license_plate AS patente, a.customer_notes AS detalle, b.id AS branch_id, b.name AS branch_name, b.open_time, b.close_time, b.lunch_start_time, b.lunch_duration, b.break1_time, b.break1_duration, b.break2_time, b.break2_duration, b.break3_time, b.break3_duration, b.open_time_weekend, b.close_time_weekend, b.confirmation_hours, b.service_days FROM appointments a JOIN customers c ON c.id = a.customer_id JOIN branches b ON b.id = a.branch_id LEFT JOIN customer_vehicles v ON v.id = a.customer_vehicle_id WHERE a.id = $1 AND a.client_id = $2 AND a.operation_type = 'carwash' AND a.status IN ('pending', 'confirmed') AND (RIGHT(REPLACE(REPLACE(REPLACE(IFNULL(c.phone,''),'+',''),' ',''),'-',''),10) = $3 OR RIGHT(REPLACE(REPLACE(REPLACE(IFNULL(c.mobile,''),'+',''),' ',''),'-',''),10) = $4) LIMIT 1",
+        "options": {
+          "queryReplacement": "={{ [ $('Validar').first().json.appointment_id, $('Validar').first().json.client_id, $('Validar').first().json.tel10, $('Validar').first().json.tel10 ] }}"
+        }
+      },
+      "id": "cf5f2e6a-cc71-4ccd-a71b-3e4e8b647d52",
+      "name": "Turno a modificar",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        896,
+        1088
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "mySql": {
+          "id": "AL7stJqRLXjlr9Ap",
+          "name": "MySQL account-suite-redoo"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const DAYS = ['DO','LU','MA','MI','JU','VI','SA'];\nconst DIAS = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];\nfunction dow(ds) { return new Date(ds + 'T12:00:00Z').getUTCDay(); }\nfunction isServiceDay(b, ds) { return String(b.service_days || 'LU-MA-MI-JU-VI-SA').toUpperCase().split(/[-, ]+/).includes(DAYS[dow(ds)]); }\nfunction hoursFor(b, ds) { const we = dow(ds) === 0 || dow(ds) === 6; return { open: (we && b.open_time_weekend) ? b.open_time_weekend : (b.open_time || '08:00'), close: (we && b.close_time_weekend) ? b.close_time_weekend : (b.close_time || '18:00') }; }\nfunction utc(ds, hm) { const parts = String(hm).split(':').map(Number); const d = new Date(ds + 'T00:00:00Z'); d.setUTCHours(parts[0] + 3, parts[1] || 0, 0, 0); return d; }\nfunction hhmm(d) { return String(d.getUTCHours() - 3).padStart(2, '0') + ':' + String(d.getUTCMinutes()).padStart(2, '0'); }\nfunction blocksFor(b, ds) { const out = []; const add = (t, m) => { if (!t || !m || Number(m) <= 0) return; const s = utc(ds, t); out.push({ s: s, e: new Date(s.getTime() + Number(m) * 60000) }); }; add(b.lunch_start_time, b.lunch_duration); add(b.break1_time, b.break1_duration); add(b.break2_time, b.break2_duration); add(b.break3_time, b.break3_duration); return out; }\nfunction todayAR() { return new Date(Date.now() - 3 * 3600000).toISOString().slice(0, 10); }\nfunction minAllowed(b) { return new Date(Date.now() + (Number(b.confirmation_hours) || 0) * 3600000); }\nfunction checkSlot(b, ds, hora, dur) { if (ds <= todayAR()) return 'muy_pronto'; if (!isServiceDay(b, ds)) return 'not_service_day'; const h = hoursFor(b, ds); const s = utc(ds, hora); const e = new Date(s.getTime() + dur * 60000); if (s < utc(ds, h.open) || e > utc(ds, h.close)) return 'fuera_horario'; if (blocksFor(b, ds).some(x => s < x.e && e > x.s)) return 'fuera_horario'; if (s < minAllowed(b)) return 'muy_pronto'; return ''; }\nfunction busyOf(it) { const s = new Date(it.start && it.start.dateTime ? it.start.dateTime : it.start); const e = new Date(it.end && it.end.dateTime ? it.end.dateTime : it.end); return (isNaN(s) || isNaN(e)) ? null : { s: s, e: e }; }\nconst p = $('Validar').first().json;\nconst t = $input.first().json;\nif (!t.appointment_id) return [{ json: { ok: false, reason: 'no_encontrado' } }];\nconst dur = Number(t.estimated_duration) || 30;\nconst why = checkSlot(t, p.fecha, p.hora, dur);\nif (why) return [{ json: { ok: false, reason: why } }];\nconst s = utc(p.fecha, p.hora), e = new Date(s.getTime() + dur * 60000);\nreturn [{ json: { ok: true, appointment_id: t.appointment_id, calendar_id: String(t.calendar_id || '').trim(), event_id: t.google_event_id, start_iso: s.toISOString(), end_iso: e.toISOString(), hora_fin: hhmm(e), branch_name: t.branch_name, old: t.fecha + ' ' + t.hora } }];"
+      },
+      "id": "7cccbb50-6bf8-4ab8-b391-7569e069d6ef",
+      "name": "Preparar cambio",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        1088
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.ok }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "0d89e4c3-f4da-4740-b464-e3f29bedb175",
+      "name": "Cambio válido",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1344,
+        1088
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.calendar_id }}"
+        },
+        "returnAll": true,
+        "timeMin": "={{ $json.start_iso }}",
+        "timeMax": "={{ $json.end_iso }}",
+        "options": {}
+      },
+      "id": "4d1b4939-09a8-4b4a-a174-af2a21509986",
+      "name": "Eventos en el nuevo horario",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        1568,
+        896
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "cNQ1bJyV4lYs9qoV",
+          "name": "Google Calendar account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const c = $('Preparar cambio').first().json;\nconst evs = $input.all().map(i => i.json);\nif (evs.some(e => e.error)) return [{ json: { ok: false, reason: 'error_agenda' } }];\nconst otros = evs.filter(e => e.id && e.id !== c.event_id && e.status !== 'cancelled' && e.transparency !== 'transparent');\nreturn [{ json: Object.assign({}, c, { ok: otros.length === 0, reason: otros.length ? 'ocupado' : '' }) }];"
+      },
+      "id": "e096244e-f372-44ff-ad00-529bb7ddf8a8",
+      "name": "Revisar conflicto",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        896
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.ok }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "07a12917-cb3f-4468-9b41-85f95879b1ff",
+      "name": "Horario libre",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2016,
+        896
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "calendar": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.calendar_id }}"
+        },
+        "eventId": "={{ $json.event_id }}",
+        "updateFields": {
+          "end": "={{ $json.end_iso }}",
+          "start": "={{ $json.start_iso }}"
+        }
+      },
+      "id": "877555b6-fd30-4e63-a8c8-3590ddd09c73",
+      "name": "Mover evento",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        2240,
+        576
+      ],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "cNQ1bJyV4lYs9qoV",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE appointments SET scheduled_date = $1, scheduled_time = $2, estimated_end_time = $3, updated_at = NOW() WHERE id = $4 AND client_id = $5",
+        "options": {
+          "queryReplacement": "={{ [ $('Validar').first().json.fecha, $('Validar').first().json.hora, $('Revisar conflicto').first().json.hora_fin, $('Revisar conflicto').first().json.appointment_id, $('Validar').first().json.client_id ] }}"
+        }
+      },
+      "id": "e41226d5-b0d1-45de-b488-6466e408fa04",
+      "name": "Actualizar turno en la suite",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        2464,
+        576
+      ],
+      "executeOnce": true,
+      "credentials": {
+        "mySql": {
+          "id": "AL7stJqRLXjlr9Ap",
+          "name": "MySQL account-suite-redoo"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO appointment_history (appointment_id, action, old_value, new_value, changed_by, notes, created_at) VALUES ($1, 'modified', $2, $3, 'ia-lavado', 'Turno de lavado modificado por WhatsApp', NOW())",
+        "options": {
+          "queryReplacement": "={{ [ $('Revisar conflicto').first().json.appointment_id, $('Revisar conflicto').first().json.old, $('Validar').first().json.fecha + ' ' + $('Validar').first().json.hora ] }}"
+        }
+      },
+      "id": "8355c20a-f9b6-40cb-88b5-2ad908a0a806",
+      "name": "Historial cambio",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        2688,
+        576
+      ],
+      "executeOnce": true,
+      "credentials": {
+        "mySql": {
+          "id": "AL7stJqRLXjlr9Ap",
+          "name": "MySQL account-suite-redoo"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const p = $('Validar').first().json;\nconst c = $('Revisar conflicto').first().json;\nreturn [{ json: { success: true, appointment_id: c.appointment_id, fecha: p.fecha, hora: p.hora, hora_fin: c.hora_fin, sucursal: c.branch_name, message: 'Turno de lavado modificado. Confirmale al cliente la nueva fecha y hora.' } }];"
+      },
+      "id": "a9c149d0-3c34-4d03-9f65-932b7f226002",
+      "name": "Respuesta modificado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2912,
+        576
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const MSG = {\n  sin_lavadero: 'La sucursal no tiene agenda de lavado configurada en la suite. No ofrezcas turnos: derivá al asesor con el summary.',\n  not_service_day: 'Ese día la sucursal no atiende. Ofrecé otro día con turnos_disponibles.',\n  fuera_horario: 'Ese horario está fuera del horario de atención. Ofrecé solo horarios devueltos por turnos_disponibles.',\n  muy_pronto: 'Ese horario ya no se puede reservar (es muy pronto). Ofrecé otro con turnos_disponibles.',\n  ocupado: 'Ese horario se acaba de ocupar. No digas que hubo un error: avisale que se ocupó, ejecutá turnos_disponibles de nuevo y ofrecé otros. NO INVENTES TURNOS.',\n  error_agenda: 'No pude consultar la agenda en este momento. Pedile disculpas y derivá al asesor con el summary.',\n  cliente_invalido: 'El cliente o el vehículo no corresponden. Volvé a ejecutar buscar_cliente y usá los ids que devuelve.',\n  no_encontrado: 'No encontré ese turno de lavado a nombre del cliente. Ejecutá mis_turnos para ver sus turnos vigentes.'\n};\nconst r = $input.first().json.reason || 'ocupado';\nreturn [{ json: { success: false, reason: r, message: MSG[r] || MSG.ocupado } }];"
+      },
+      "id": "552232c1-0cb3-4b95-8a0d-bdd518ed3fa0",
+      "name": "Respuesta no modificado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        1088
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT a.id AS appointment_id, DATE_FORMAT(a.scheduled_date, '%Y-%m-%d') AS fecha, a.scheduled_time AS hora, a.estimated_end_time AS hora_fin, a.estimated_duration, a.status, a.calendar_id, a.google_event_id, a.workshop_id, v.license_plate AS patente, a.customer_notes AS detalle, b.id AS branch_id, b.name AS branch_name, b.open_time, b.close_time, b.lunch_start_time, b.lunch_duration, b.break1_time, b.break1_duration, b.break2_time, b.break2_duration, b.break3_time, b.break3_duration, b.open_time_weekend, b.close_time_weekend, b.confirmation_hours, b.service_days FROM appointments a JOIN customers c ON c.id = a.customer_id JOIN branches b ON b.id = a.branch_id LEFT JOIN customer_vehicles v ON v.id = a.customer_vehicle_id WHERE a.id = $1 AND a.client_id = $2 AND a.operation_type = 'carwash' AND a.status IN ('pending', 'confirmed') AND (RIGHT(REPLACE(REPLACE(REPLACE(IFNULL(c.phone,''),'+',''),' ',''),'-',''),10) = $3 OR RIGHT(REPLACE(REPLACE(REPLACE(IFNULL(c.mobile,''),'+',''),' ',''),'-',''),10) = $4) LIMIT 1",
+        "options": {
+          "queryReplacement": "={{ [ $('Validar').first().json.appointment_id, $('Validar').first().json.client_id, $('Validar').first().json.tel10, $('Validar').first().json.tel10 ] }}"
+        }
+      },
+      "id": "3838005c-056f-4f81-9b6a-4d8fb2dc44b2",
+      "name": "Turno a cancelar",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        896,
+        1472
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "mySql": {
+          "id": "AL7stJqRLXjlr9Ap",
+          "name": "MySQL account-suite-redoo"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ !!$json.appointment_id }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "533f80e6-6b24-484d-bf67-88a8cb268da3",
+      "name": "Turno encontrado",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1120,
+        1472
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "calendar": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ String($json.calendar_id || '').trim() }}"
+        },
+        "eventId": "={{ $json.google_event_id }}",
+        "options": {}
+      },
+      "id": "4b61b275-4fbe-430f-98f7-b3297a9fd2db",
+      "name": "Borrar evento",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        1344,
+        1280
+      ],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "cNQ1bJyV4lYs9qoV",
+          "name": "Google Calendar account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE appointments SET status = 'cancelled', cancelled_at = NOW(), cancelled_by = 'cliente (WhatsApp)', cancelled_reason = $1, updated_at = NOW() WHERE id = $2 AND client_id = $3",
+        "options": {
+          "queryReplacement": "={{ [ $('Validar').first().json.motivo || 'Cancelado por el cliente', $('Turno a cancelar').first().json.appointment_id, $('Validar').first().json.client_id ] }}"
+        }
+      },
+      "id": "23981df7-5a2a-4fca-b36b-40b02a701d29",
+      "name": "Cancelar turno en la suite",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        1568,
+        1280
+      ],
+      "executeOnce": true,
+      "credentials": {
+        "mySql": {
+          "id": "AL7stJqRLXjlr9Ap",
+          "name": "MySQL account-suite-redoo"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO appointment_history (appointment_id, action, old_value, new_value, changed_by, notes, created_at) VALUES ($1, 'cancelled', $2, 'cancelled', 'ia-lavado', $3, NOW())",
+        "options": {
+          "queryReplacement": "={{ [ $('Turno a cancelar').first().json.appointment_id, $('Turno a cancelar').first().json.fecha + ' ' + $('Turno a cancelar').first().json.hora, $('Validar').first().json.motivo || 'Cancelado por el cliente' ] }}"
+        }
+      },
+      "id": "4a1e1934-5bb2-4fe9-971e-76985c8db2a2",
+      "name": "Historial baja",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        1792,
+        1280
+      ],
+      "executeOnce": true,
+      "credentials": {
+        "mySql": {
+          "id": "AL7stJqRLXjlr9Ap",
+          "name": "MySQL account-suite-redoo"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const t = $('Turno a cancelar').first().json;\nreturn [{ json: { success: true, appointment_id: t.appointment_id, fecha: t.fecha, hora: t.hora, sucursal: t.branch_name, message: 'Turno de lavado cancelado. Confirmáselo al cliente.' } }];"
+      },
+      "id": "505282fe-4c2c-4fa9-bc73-130b0238275c",
+      "name": "Respuesta cancelado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2016,
+        1280
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const MSG = {\n  sin_lavadero: 'La sucursal no tiene agenda de lavado configurada en la suite. No ofrezcas turnos: derivá al asesor con el summary.',\n  not_service_day: 'Ese día la sucursal no atiende. Ofrecé otro día con turnos_disponibles.',\n  fuera_horario: 'Ese horario está fuera del horario de atención. Ofrecé solo horarios devueltos por turnos_disponibles.',\n  muy_pronto: 'Ese horario ya no se puede reservar (es muy pronto). Ofrecé otro con turnos_disponibles.',\n  ocupado: 'Ese horario se acaba de ocupar. No digas que hubo un error: avisale que se ocupó, ejecutá turnos_disponibles de nuevo y ofrecé otros. NO INVENTES TURNOS.',\n  error_agenda: 'No pude consultar la agenda en este momento. Pedile disculpas y derivá al asesor con el summary.',\n  cliente_invalido: 'El cliente o el vehículo no corresponden. Volvé a ejecutar buscar_cliente y usá los ids que devuelve.',\n  no_encontrado: 'No encontré ese turno de lavado a nombre del cliente. Ejecutá mis_turnos para ver sus turnos vigentes.'\n};\nreturn [{ json: { success: false, reason: 'no_encontrado', message: MSG.no_encontrado } }];"
+      },
+      "id": "e48c2ec2-7ae1-49fa-9110-85ec3d2c6a79",
+      "name": "Respuesta no cancelado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        1472
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const DAYS = ['DO','LU','MA','MI','JU','VI','SA'];\nconst DIAS = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];\nfunction dow(ds) { return new Date(ds + 'T12:00:00Z').getUTCDay(); }\nfunction isServiceDay(b, ds) { return String(b.service_days || 'LU-MA-MI-JU-VI-SA').toUpperCase().split(/[-, ]+/).includes(DAYS[dow(ds)]); }\nfunction hoursFor(b, ds) { const we = dow(ds) === 0 || dow(ds) === 6; return { open: (we && b.open_time_weekend) ? b.open_time_weekend : (b.open_time || '08:00'), close: (we && b.close_time_weekend) ? b.close_time_weekend : (b.close_time || '18:00') }; }\nfunction utc(ds, hm) { const parts = String(hm).split(':').map(Number); const d = new Date(ds + 'T00:00:00Z'); d.setUTCHours(parts[0] + 3, parts[1] || 0, 0, 0); return d; }\nfunction hhmm(d) { return String(d.getUTCHours() - 3).padStart(2, '0') + ':' + String(d.getUTCMinutes()).padStart(2, '0'); }\nfunction blocksFor(b, ds) { const out = []; const add = (t, m) => { if (!t || !m || Number(m) <= 0) return; const s = utc(ds, t); out.push({ s: s, e: new Date(s.getTime() + Number(m) * 60000) }); }; add(b.lunch_start_time, b.lunch_duration); add(b.break1_time, b.break1_duration); add(b.break2_time, b.break2_duration); add(b.break3_time, b.break3_duration); return out; }\nfunction todayAR() { return new Date(Date.now() - 3 * 3600000).toISOString().slice(0, 10); }\nfunction minAllowed(b) { return new Date(Date.now() + (Number(b.confirmation_hours) || 0) * 3600000); }\nfunction checkSlot(b, ds, hora, dur) { if (ds <= todayAR()) return 'muy_pronto'; if (!isServiceDay(b, ds)) return 'not_service_day'; const h = hoursFor(b, ds); const s = utc(ds, hora); const e = new Date(s.getTime() + dur * 60000); if (s < utc(ds, h.open) || e > utc(ds, h.close)) return 'fuera_horario'; if (blocksFor(b, ds).some(x => s < x.e && e > x.s)) return 'fuera_horario'; if (s < minAllowed(b)) return 'muy_pronto'; return ''; }\nfunction busyOf(it) { const s = new Date(it.start && it.start.dateTime ? it.start.dateTime : it.start); const e = new Date(it.end && it.end.dateTime ? it.end.dateTime : it.end); return (isNaN(s) || isNaN(e)) ? null : { s: s, e: e }; }\nconst p = $('Validar').first().json;\nconst rows = $input.all().map(i => i.json).filter(r => r.workshop_id);\nif (!rows.length) return [{ json: { no_calendar: true, reason: 'sin_lavadero' } }];\nconst b = rows[0];\nconst dur = Number(b.wash_minutes) || 30;\nconst lavado = rows.filter(r => Number(r.is_lavado) === 1);\nconst workshops = (lavado.length ? lavado : rows).map(r => ({ workshop_id: r.workshop_id, calendar_id: String(r.calendar_id || '').trim() }));\nconst iso = (ds, hm) => ds + 'T' + String(hm).slice(0, 5) + ':00-03:00';\nif (p.action === 'agendar') {\n  if (Number(b.owner_ok) < 1) return [{ json: { no_calendar: true, reason: 'cliente_invalido' } }];\n  const why = checkSlot(b, p.fecha, p.hora, dur);\n  if (why) return [{ json: { no_calendar: true, reason: why } }];\n  const s = new Date(iso(p.fecha, p.hora));\n  const e = new Date(s.getTime() + (dur + 10) * 60000);\n  return workshops.map(w => ({ json: { branch: b, duration: dur, fecha: p.fecha, workshop_id: w.workshop_id, calendar_id: w.calendar_id, time_min: s.toISOString(), time_max: e.toISOString() } }));\n}\nlet dates = [];\nif (p.fecha) dates = [p.fecha];\nelse { const base = new Date(todayAR() + 'T12:00:00Z'); for (let i = 1; i <= 21 && dates.length < 6; i++) { const ds = new Date(base.getTime() + i * 86400000).toISOString().slice(0, 10); if (isServiceDay(b, ds)) dates.push(ds); } }\ndates = dates.filter(ds => ds > todayAR() && isServiceDay(b, ds));\nif (!dates.length) return [{ json: { no_calendar: true, reason: p.fecha && p.fecha <= todayAR() ? 'muy_pronto' : 'not_service_day' } }];\nconst items = [];\nfor (const ds of dates) { const h = hoursFor(b, ds); for (const w of workshops) items.push({ json: { branch: b, duration: dur, fecha: ds, workshop_id: w.workshop_id, calendar_id: w.calendar_id, time_min: iso(ds, h.open), time_max: iso(ds, h.close) } }); }\nreturn items;"
+      },
+      "id": "473cae84-4d0e-401f-8b6a-0cd334e5f61f",
+      "name": "Preparar consulta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        576
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.no_calendar }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "notEquals"
+              },
+              "rightValue": true
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "dc8b6ff9-a63a-4256-bd2a-29745b7ab1c7",
+      "name": "Hay agenda",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1344,
+        576
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $('Validar').first().json.action }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "rightValue": "agendar"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e76cab72-478d-40ce-a4b6-f2643aa89cad",
+      "name": "Es reserva",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1792,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const DAYS = ['DO','LU','MA','MI','JU','VI'];\nconst DIAS = ['domingo','lunes','martes','miércoles','jueves','viernes'];\nfunction dow(ds) { return new Date(ds + 'T12:00:00Z').getUTCDay(); }\nfunction isServiceDay(b, ds) { return String(b.service_days || 'LU-MA-MI-JU-VI-SA').toUpperCase().split(/[-, ]+/).includes(DAYS[dow(ds)]); }\nfunction hoursFor(b, ds) { const we = dow(ds) === 0 || dow(ds) === 6; return { open: (we && b.open_time_weekend) ? b.open_time_weekend : (b.open_time || '08:00'), close: (we && b.close_time_weekend) ? b.close_time_weekend : (b.close_time || '18:00') }; }\nfunction utc(ds, hm) { const parts = String(hm).split(':').map(Number); const d = new Date(ds + 'T00:00:00Z'); d.setUTCHours(parts[0] + 3, parts[1] || 0, 0, 0); return d; }\nfunction hhmm(d) { return String(d.getUTCHours() - 3).padStart(2, '0') + ':' + String(d.getUTCMinutes()).padStart(2, '0'); }\nfunction blocksFor(b, ds) { const out = []; const add = (t, m) => { if (!t || !m || Number(m) <= 0) return; const s = utc(ds, t); out.push({ s: s, e: new Date(s.getTime() + Number(m) * 60000) }); }; add(b.lunch_start_time, b.lunch_duration); add(b.break1_time, b.break1_duration); add(b.break2_time, b.break2_duration); add(b.break3_time, b.break3_duration); return out; }\nfunction todayAR() { return new Date(Date.now() - 3 * 3600000).toISOString().slice(0, 10); }\nfunction minAllowed(b) { return new Date(Date.now() + (Number(b.confirmation_hours) || 0) * 3600000); }\nfunction checkSlot(b, ds, hora, dur) { if (ds <= todayAR()) return 'muy_pronto'; if (!isServiceDay(b, ds)) return 'not_service_day'; const h = hoursFor(b, ds); const s = utc(ds, hora); const e = new Date(s.getTime() + dur * 60000); if (s < utc(ds, h.open) || e > utc(ds, h.close)) return 'fuera_horario'; if (blocksFor(b, ds).some(x => s < x.e && e > x.s)) return 'fuera_horario'; if (s < minAllowed(b)) return 'muy_pronto'; return ''; }\nfunction busyOf(it) { const s = new Date(it.start && it.start.dateTime ? it.start.dateTime : it.start); const e = new Date(it.end && it.end.dateTime ? it.end.dateTime : it.end); return (isNaN(s) || isNaN(e)) ? null : { s: s, e: e }; }\nconst p = $('Validar').first().json;\nconst prep = $('Preparar consulta').all().map(i => i.json);\nconst tagged = $input.all().map(i => i.json);\nif (tagged.some(t => t.error)) return [{ json: { found: false, reason: 'error_agenda' } }];\nconst b = prep[0].branch, dur = prep[0].duration;\nconst s = utc(p.fecha, p.hora), e = new Date(s.getTime() + dur * 60000);\nfor (const w of prep) {\n  const conflict = tagged.filter(t => !t.empty && t.calendar_id === w.calendar_id).map(busyOf).filter(Boolean).some(x => s < x.e && e > x.s);\n  if (!conflict) return [{ json: { found: true, calendar_id: w.calendar_id, workshop_id: w.workshop_id, branch_id: b.branch_id, branch_name: b.branch_name, duration: dur, start_iso: s.toISOString(), end_iso: e.toISOString(), hora_fin: hhmm(e) } }];\n}\nreturn [{ json: { found: false, reason: 'ocupado' } }];"
+      },
+      "id": "c5a44760-e494-4c05-b1bd-506ec1bfe077",
+      "name": "Elegir lavadero libre",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2016,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.found }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "31187b54-2ecd-4eef-bcff-6dd1948fa4d0",
+      "name": "Lavadero libre",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2240,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.calendar_id }}"
+        },
+        "start": "={{ $json.start_iso }}",
+        "end": "={{ $json.end_iso }}",
+        "additionalFields": {
+          "description": "={{ 'Turno de lavado agendado por la IA de WhatsApp' + String.fromCharCode(10) + 'Tipo de lavado: ' + ($('Validar').first().json.tipo_lavado || 'SIN INFORMAR') + String.fromCharCode(10) + 'Cliente: ' + (($('Validar').first().json.nombre || '') + ' ' + ($('Validar').first().json.apellido || '')).trim() + String.fromCharCode(10) + 'Teléfono: ' + $('Validar').first().json.telefono + String.fromCharCode(10) + 'Vehículo: ' + ($('Validar').first().json.modelo || '') + ' ' + ($('Validar').first().json.patente || '') + String.fromCharCode(10) + 'Notas: ' + ($('Validar').first().json.notas || '-') }}",
+          "summary": "={{ 'Lavado ' + ($('Validar').first().json.tipo_lavado || '') + ' - ' + ($('Validar').first().json.patente || '') + ' - ' + (($('Validar').first().json.nombre || '') + ' ' + ($('Validar').first().json.apellido || '')).trim() }}"
+        }
+      },
+      "id": "c7e434d2-16ee-4fdc-ab4a-a352cca6ffdc",
+      "name": "Crear evento",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        2464,
+        0
+      ],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "cNQ1bJyV4lYs9qoV",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO appointments (client_id, branch_id, workshop_id, customer_id, customer_vehicle_id, operation_type, status, source, scheduled_date, scheduled_time, estimated_duration, estimated_end_time, km_at_appointment, estimated_price, final_price, is_paid, reminder_sent, customer_notes, internal_notes, google_event_id, calendar_id, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, 'carwash', 'pending', 'whatsapp', $6, $7, $8, $9, 0, 0, 0, 0, 0, $10, $11, $12, $13, NOW(), NOW())",
+        "options": {
+          "queryReplacement": "={{ [ $('Validar').first().json.client_id, $('Elegir lavadero libre').first().json.branch_id, $('Elegir lavadero libre').first().json.workshop_id, $('Validar').first().json.customer_id, $('Validar').first().json.vehicle_id, $('Validar').first().json.fecha, $('Validar').first().json.hora, $('Elegir lavadero libre').first().json.duration, $('Elegir lavadero libre').first().json.hora_fin, 'Lavado ' + ($('Validar').first().json.tipo_lavado || '') + ($('Validar').first().json.notas ? ' - ' + $('Validar').first().json.notas : ''), 'Agendado por IA Lavado (n8n)', $json.id, $('Elegir lavadero libre').first().json.calendar_id ] }}"
+        }
+      },
+      "id": "af068e6f-8ddd-4c99-8f1d-f9d742399d1a",
+      "name": "Guardar turno en la suite",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        2688,
+        0
+      ],
+      "executeOnce": true,
+      "credentials": {
+        "mySql": {
+          "id": "AL7stJqRLXjlr9Ap",
+          "name": "MySQL account-suite-redoo"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO appointment_history (appointment_id, action, old_value, new_value, changed_by, notes, created_at) SELECT a.id, 'created', '', CONCAT(a.scheduled_date, ' ', a.scheduled_time), 'ia-lavado', 'Turno de lavado agendado por WhatsApp', NOW() FROM appointments a WHERE a.google_event_id = $1 ORDER BY a.id DESC LIMIT 1",
+        "options": {
+          "queryReplacement": "={{ [ $('Crear evento').first().json.id ] }}"
+        }
+      },
+      "id": "801ca21e-7d01-49c4-aa63-23b7ae8f639a",
+      "name": "Historial alta",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        2912,
+        0
+      ],
+      "executeOnce": true,
+      "credentials": {
+        "mySql": {
+          "id": "AL7stJqRLXjlr9Ap",
+          "name": "MySQL account-suite-redoo"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT a.id AS appointment_id FROM appointments a WHERE a.google_event_id = $1 ORDER BY a.id DESC LIMIT 1",
+        "options": {
+          "queryReplacement": "={{ [ $('Crear evento').first().json.id ] }}"
+        }
+      },
+      "id": "fe075213-c1d3-459e-af0a-ab2b8273f625",
+      "name": "Turno creado",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        3136,
+        0
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "mySql": {
+          "id": "AL7stJqRLXjlr9Ap",
+          "name": "MySQL account-suite-redoo"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const p = $('Validar').first().json;\nconst w = $('Elegir lavadero libre').first().json;\nconst id = $input.first().json.appointment_id || null;\nreturn [{ json: { success: true, appointment_id: id, fecha: p.fecha, hora: p.hora, hora_fin: w.hora_fin, duracion_minutos: w.duration, sucursal: w.branch_name, message: 'Turno de lavado agendado. Confirmale al cliente fecha, hora y sucursal.' } }];"
+      },
+      "id": "c486bc3e-a82d-40d0-8fb8-2bfd868b7bce",
+      "name": "Respuesta reserva",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3360,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const MSG = {\n  sin_lavadero: 'La sucursal no tiene agenda de lavado configurada en la suite. No ofrezcas turnos: derivá al asesor con el summary.',\n  not_service_day: 'Ese día la sucursal no atiende. Ofrecé otro día con turnos_disponibles.',\n  fuera_horario: 'Ese horario está fuera del horario de atención. Ofrecé solo horarios devueltos por turnos_disponibles.',\n  muy_pronto: 'Ese horario ya no se puede reservar (es muy pronto). Ofrecé otro con turnos_disponibles.',\n  ocupado: 'Ese horario se acaba de ocupar. No digas que hubo un error: avisale que se ocupó, ejecutá turnos_disponibles de nuevo y ofrecé otros. NO INVENTES TURNOS.',\n  error_agenda: 'No pude consultar la agenda en este momento. Pedile disculpas y derivá al asesor con el summary.',\n  cliente_invalido: 'El cliente o el vehículo no corresponden. Volvé a ejecutar buscar_cliente y usá los ids que devuelve.',\n  no_encontrado: 'No encontré ese turno de lavado a nombre del cliente. Ejecutá mis_turnos para ver sus turnos vigentes.'\n};\nconst r = $input.first().json.reason || 'ocupado';\nreturn [{ json: { success: false, reason: r, message: MSG[r] || MSG.ocupado } }];"
+      },
+      "id": "f2b53844-831a-4fa0-8cd9-78346ab31a36",
+      "name": "Respuesta no agendado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2464,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const DAYS = ['DO','LU','MA','MI','JU','VI','SA'];\nconst DIAS = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];\nfunction dow(ds) { return new Date(ds + 'T12:00:00Z').getUTCDay(); }\nfunction isServiceDay(b, ds) { return String(b.service_days || 'LU-MA-MI-JU-VI-SA').toUpperCase().split(/[-, ]+/).includes(DAYS[dow(ds)]); }\nfunction hoursFor(b, ds) { const we = dow(ds) === 0 || dow(ds) === 6; return { open: (we && b.open_time_weekend) ? b.open_time_weekend : (b.open_time || '08:00'), close: (we && b.close_time_weekend) ? b.close_time_weekend : (b.close_time || '18:00') }; }\nfunction utc(ds, hm) { const parts = String(hm).split(':').map(Number); const d = new Date(ds + 'T00:00:00Z'); d.setUTCHours(parts[0] + 3, parts[1] || 0, 0, 0); return d; }\nfunction hhmm(d) { return String(d.getUTCHours() - 3).padStart(2, '0') + ':' + String(d.getUTCMinutes()).padStart(2, '0'); }\nfunction blocksFor(b, ds) { const out = []; const add = (t, m) => { if (!t || !m || Number(m) <= 0) return; const s = utc(ds, t); out.push({ s: s, e: new Date(s.getTime() + Number(m) * 60000) }); }; add(b.lunch_start_time, b.lunch_duration); add(b.break1_time, b.break1_duration); add(b.break2_time, b.break2_duration); add(b.break3_time, b.break3_duration); return out; }\nfunction todayAR() { return new Date(Date.now() - 3 * 3600000).toISOString().slice(0, 10); }\nfunction minAllowed(b) { return new Date(Date.now() + (Number(b.confirmation_hours) || 0) * 3600000); }\nfunction checkSlot(b, ds, hora, dur) { if (ds <= todayAR()) return 'muy_pronto'; if (!isServiceDay(b, ds)) return 'not_service_day'; const h = hoursFor(b, ds); const s = utc(ds, hora); const e = new Date(s.getTime() + dur * 60000); if (s < utc(ds, h.open) || e > utc(ds, h.close)) return 'fuera_horario'; if (blocksFor(b, ds).some(x => s < x.e && e > x.s)) return 'fuera_horario'; if (s < minAllowed(b)) return 'muy_pronto'; return ''; }\nfunction busyOf(it) { const s = new Date(it.start && it.start.dateTime ? it.start.dateTime : it.start); const e = new Date(it.end && it.end.dateTime ? it.end.dateTime : it.end); return (isNaN(s) || isNaN(e)) ? null : { s: s, e: e }; }\nconst p = $('Validar').first().json;\nconst prep = $('Preparar consulta').all().map(i => i.json);\nconst tagged = $input.all().map(i => i.json);\nif (tagged.some(t => t.error)) return [{ json: { success: false, message: 'No pude consultar la agenda en este momento. Pedile disculpas y derivá al asesor con el summary.' } }];\nconst b = prep[0].branch;\nconst dur = prep[0].duration;\nconst durMs = dur * 60000, step = 30 * 60000, perDay = 6;\nconst busy = {};\nfor (const t of tagged) { if (t.empty || !t.calendar_id) continue; const x = busyOf(t); if (!x) continue; const k = t.fecha + '|' + t.calendar_id; (busy[k] = busy[k] || []).push(x); }\nconst cals = Array.from(new Set(prep.map(r => r.calendar_id)));\nconst fechas = Array.from(new Set(prep.map(r => r.fecha)));\nconst limit = minAllowed(b);\nconst dias = [];\nfor (const ds of fechas) {\n  const h = hoursFor(b, ds);\n  const dayStart = utc(ds, h.open), dayEnd = utc(ds, h.close);\n  const blocks = blocksFor(b, ds);\n  const libres = [];\n  for (let t = dayStart.getTime(); t + durMs <= dayEnd.getTime(); t += step) {\n    const s = new Date(t), e = new Date(t + durMs);\n    if (s < limit) continue;\n    if (blocks.some(x => s < x.e && e > x.s)) continue;\n    if (cals.some(c => !(busy[ds + '|' + c] || []).some(x => s < x.e && e > x.s))) libres.push(hhmm(s));\n  }\n  let elegidos = libres;\n  if (libres.length > perDay) { const st = (libres.length - 1) / (perDay - 1); const seen = new Set(); elegidos = []; for (let i = 0; i < perDay; i++) { const idx = Math.min(Math.round(i * st), libres.length - 1); if (!seen.has(idx)) { seen.add(idx); elegidos.push(libres[idx]); } } }\n  if (elegidos.length) { const dd = ds.split('-'); dias.push({ fecha: ds, dia: DIAS[dow(ds)] + ' ' + Number(dd[2]) + '/' + Number(dd[1]), horarios: elegidos }); }\n  if (!p.fecha && dias.length >= 3) break;\n}\nreturn [{ json: { success: true, sucursal: b.branch_name, duracion_minutos: dur, dias: dias, message: dias.length ? 'Ofrecé estos días y horarios tal cual (fecha AAAA-MM-DD y hora HH:MM para agendar). No inventes otros.' : 'No hay turnos de lavado disponibles en esas fechas. Ofrecé buscar otra fecha o derivar al asesor.' } }];"
+      },
+      "id": "956560c0-e047-422d-a058-6a6479a6b7f1",
+      "name": "Calcular turnos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2016,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "calendar",
+        "calendar": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.calendar_id }}"
+        },
+        "timeMin": "={{ $json.time_min }}",
+        "timeMax": "={{ $json.time_max }}",
+        "options": {
+          "outputFormat": "bookedSlots",
+          "timezone": {
+            "__rl": true,
+            "mode": "list",
+            "value": "America/Argentina/Buenos_Aires",
+            "cachedResultName": "America/Argentina/Buenos_Aires"
+          }
+        }
+      },
+      "id": "46977f21-df69-46fe-b87b-92700129cf0d",
+      "name": "Ocupación del calendario",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        1792,
+        480
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "cNQ1bJyV4lYs9qoV",
+          "name": "Google Calendar account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const cur = $('Recorrer agendas').first().json;\nconst out = $input.all().map(i => ({ json: Object.assign({}, i.json, { calendar_id: cur.calendar_id, workshop_id: cur.workshop_id, fecha: cur.fecha }) }));\nreturn out.length ? out : [{ json: { calendar_id: cur.calendar_id, workshop_id: cur.workshop_id, fecha: cur.fecha, empty: true } }];"
+      },
+      "id": "53c54b90-9e35-4b29-a64c-b1dd315ca480",
+      "name": "Etiquetar ocupación",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2016,
+        576
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "9d1f99bc-c778-4ae6-9a79-d058c24f57b3",
+      "name": "Recorrer agendas",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1568,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const MSG = {\n  sin_lavadero: 'La sucursal no tiene agenda de lavado configurada en la suite. No ofrezcas turnos: derivá al asesor con el summary.',\n  not_service_day: 'Ese día la sucursal no atiende. Ofrecé otro día con turnos_disponibles.',\n  fuera_horario: 'Ese horario está fuera del horario de atención. Ofrecé solo horarios devueltos por turnos_disponibles.',\n  muy_pronto: 'Ese horario ya no se puede reservar (es muy pronto). Ofrecé otro con turnos_disponibles.',\n  ocupado: 'Ese horario se acaba de ocupar. No digas que hubo un error: avisale que se ocupó, ejecutá turnos_disponibles de nuevo y ofrecé otros. NO INVENTES TURNOS.',\n  error_agenda: 'No pude consultar la agenda en este momento. Pedile disculpas y derivá al asesor con el summary.',\n  cliente_invalido: 'El cliente o el vehículo no corresponden. Volvé a ejecutar buscar_cliente y usá los ids que devuelve.',\n  no_encontrado: 'No encontré ese turno de lavado a nombre del cliente. Ejecutá mis_turnos para ver sus turnos vigentes.'\n};\nconst r = $input.first().json.reason || 'sin_lavadero';\nreturn [{ json: { success: false, reason: r, message: MSG[r] || MSG.sin_lavadero } }];"
+      },
+      "id": "3130b665-5466-476d-aeaf-3a2ba1876a0c",
+      "name": "Respuesta sin agenda",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        704
+      ]
+    }
+  ],
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate"
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "eSLBIbwb48sz4O5k",
+      "projectId": "sSMIUUZ5rPWEROjK",
+      "createdAt": "2026-11-16T13:52:57.074Z",
+      "updatedAt": "2026-11-16T13:52:57.074Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [
+    {
+      "id": "2wNITLDUR4FoIzlb",
+      "name": "alianz",
+      "createdAt": "2026-02-13T19:45:33.941Z",
+      "updatedAt": "2026-02-13T19:45:33.941Z"
+    }
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2026-11-24T18:55:45.846Z",
+  "versionId": "5eab73fc-eb04-449b-8105-5705b8f0ad69"
+}
