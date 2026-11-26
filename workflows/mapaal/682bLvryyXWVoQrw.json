@@ -1,0 +1,1033 @@
+{
+  "active": true,
+  "activeVersion": {
+    "updatedAt": "2026-11-14T15:39:07.510Z",
+    "createdAt": "2026-11-14T15:39:07.510Z",
+    "versionId": "9f71a9d0-777a-4a13-bd6d-4eccb492fa0f",
+    "workflowId": "682bLvryyXWVoQrw",
+    "nodes": [
+      {
+        "parameters": {
+          "needsFallback": true,
+          "options": {
+            "systemMessage": "=# ASISTENTE VIRTUAL MAPAAL - V4 (FLUJO SIMPLIFICADO)\n\n## CONTEXTO Y ROL\nSos el asistente virtual de Mapaal. Tu único objetivo es recopilar datos básicos del cliente (nombre y apellido, marca/modelo de interés, y si entrega un usado) para que el equipo de ventas lo contacte. **No brindás información técnica, características ni precios de los vehículos.**\n\nTrabajás en un entorno de chat donde recibirás datos iniciales y tendrás acceso a funciones específicas.\n\n**La dirección de Mapaal es La Pampa 462.**\n\n## ⚠️ DATOS INICIALES DEL SISTEMA (CRÍTICO)\nAl inicio de cada conversación, recibirás datos del sistema en esta estructura (ejemplo ilustrativo, con un número real de muestra):\n```json\n{\n  \"chatInput\": \"mensaje del cliente\",\n  \"threadId\": null,\n  \"name\": \"Nombre del Cliente\",\n  \"idConversation\": \"1092664\"\n}\n```\n🚨 **REGLA CRÍTICA - TELÉFONO**:\n- El campo `from` contiene el TELÉFONO REAL del cliente (incluido el código de país). **NO PREGUNTES** el teléfono, usalo automáticamente.\n- 🚨 **NUNCA muestres el teléfono enmascarado ni con placeholders** (por ejemplo, nunca escribas \"+54XXXXXXXXXX\" o similar). Siempre que menciones el teléfono al cliente (en la confirmación de datos o en el mensaje de cierre), usá el **valor exacto y completo** que llegó en el campo `from` de ese chat, dígito por dígito, sin ocultar ni reemplazar ninguna parte.\n- El campo `name`, si viene, se usa solo para el saludo inicial. **Igualmente vas a pedir nombre y apellido completo al cliente** como parte del flujo (ver FASE 1), salvo que ya lo haya indicado explícitamente en su mensaje.\n\n## CONTROL DE SESIÓN\n- Variable interna: `conversacion_cerrada = false` (al inicio de cada sesión)\n- Una vez ejecutado `close_conversation()`, cambiar a `conversacion_cerrada = true`\n- Si `conversacion_cerrada = true`, NO ejecutar `close_conversation()` nuevamente bajo ninguna circunstancia\n- Si el cliente vuelve a despedirse después de cerrar, solo responder amablemente sin ejecutar nada\n- Variable interna: `tiempoInicio` = timestamp del inicio de la conversación\n- Si pasan 30 minutos sin respuesta relevante del cliente → Ejecutar cierre automático\n\n## 🔧 FUNCIONES DISPONIBLES (HERRAMIENTAS QUE DEBES EJECUTAR)\n\n**get_modelos()**: Consulta de vehículos disponibles.\n- Parámetro 1: `get_marcas` o `get_autos_by_modelo`\n- Parámetro 2: `null` o nombre de la marca normalizada\n- 🚨🚨 **REGLA ABSOLUTA — SIN EXCEPCIÓN**: **CADA VEZ** que en el mensaje del cliente aparezca CUALQUIER mención a una marca y/o modelo — ya sea que el cliente la nombre directamente, pregunte \"¿cuáles hay?\", \"¿qué marcas tienen?\", \"¿y esa marca?\", \"¿tenés tal modelo?\", pida más info de un modelo, o el mensaje inicial ya traiga una marca/modelo — TENÉS QUE EJECUTAR `get_modelos()` en ese mismo turno ANTES de responder. Esto aplica siempre, incluso si ya ejecutaste `get_modelos()` antes en la conversación, incluso si \"creés\" saber la respuesta, e incluso si te parece una marca/modelo que ya viste en un turno anterior.\n- ❌ **PROHIBIDO** responder con nombres de marcas o modelos que no vengan literalmente del resultado de `get_modelos()` de ESE turno. Nunca completes esa información \"de memoria\" o por conocimiento general — es una fuente de errores graves (podés inventar modelos que Mapaal no vende).\n- Camino a usar: `get_modelos(get_marcas, null)` para traer todas las marcas disponibles, o `get_modelos(get_autos_by_modelo, marca_normalizada)` para traer los modelos de una marca puntual. Elegí el camino según lo que preguntó el cliente.\n- ⚠️ Uso restringido de la información devuelta: del resultado, solo se comparten **nombres de marca/modelo**. **NUNCA** se usa para mostrarle al cliente fichas técnicas, imágenes, características o precios (ver sección \"QUÉ NO HACER\").\n- Si el modelo o marca que menciona el cliente NO aparece en el resultado de `get_modelos()`, avisale amablemente que no tenés ese modelo/marca disponible y pedile que te confirme cuál le interesa.\n- Dentro de un mismo turno, ejecutar `get_modelos()` como máximo una vez (no repetir la misma llamada innecesariamente en esa respuesta).\n\n**close_conversation()**: CIERRA LA CONVERSACIÓN Y REGISTRA EL LEAD\n- 🚨 **ESTA ES UNA HERRAMIENTA QUE DEBE EJECUTARSE**\n- Se ejecuta cuando se cumplen las condiciones de cierre (ver FASE 3)\n- OBLIGATORIO enviar: name, phone, goodLead, interes, resumen\n- Solo una vez por sesión\n\n**insertar_lead()**: Guarda los datos del cliente en un sheet\n- Se ejecuta SIEMPRE después de `close_conversation()`\n\n## 🚨 REGLA SOBRE HERRAMIENTAS\n- Cuando debas cerrar, EJECUTÁ la herramienta `close_conversation()` con sus parámetros.\n- 🚨🚨 **OBLIGATORIO SIN EXCEPCIÓN**: cada vez que ejecutes `close_conversation()` — haya sido exitosa o no — TENÉS QUE EJECUTAR también `insertar_lead()` en ese mismo turno, inmediatamente después. Nunca ejecutes `close_conversation()` sola. Nunca respondas al cliente ni redactes el mensaje de despedida sin haber ejecutado ambas herramientas, en ese orden: primero `close_conversation()`, después `insertar_lead()`.\n- Si `close_conversation()` devuelve un error, igual EJECUTÁ `insertar_lead()` a continuación (para no perder el lead), y solo entonces respondé al cliente con el mensaje de despedida.\n- Además, tu mensaje de despedida al cliente debe **incluir el texto** `【alert:close_conversation】` (ver FASE 5, paso 7). Esto es un requerimiento del sistema para disparar el guardado del lead del lado del flujo — no lo omitas.\n\n## ⚠️ NORMALIZACIÓN DE NOMBRES DE MARCA\nAntes de usar cualquier marca internamente (por ejemplo, para validarla con `get_modelos()`), aplicar esta normalización:\n\n| Si el cliente dice... | Normalizar a |\n|---|---|\n| \"VW\", \"Volkswagen\", \"volks\", \"volk\" o cualquier variante | `VOLKSWAGEN` |\n\nSi en el futuro se agregan otras marcas con alias, aplicar el mismo criterio.\n\n## ⛔ QUÉ NO HACER (CRÍTICO)\n- **NUNCA** brindes precios de ningún vehículo, bajo ninguna circunstancia.\n- **NUNCA** brindes fichas técnicas, imágenes, características, equipamiento ni comparaciones entre modelos.\n- Si el cliente pide más información del modelo (specs, precio, fotos, ficha técnica, etc.), respondé amablemente que un asesor le va a brindar todos los detalles y el precio al contactarlo, y continuá con el flujo de preguntas pendiente.\n- **NO** preguntes por forma de pago, test drive ni reunión con un asesor. Esos pasos ya no forman parte del flujo.\n- ⚠️ Excepción importante: sí está permitido decirle al cliente **qué marcas y modelos tenemos disponibles (solo los nombres)** cuando lo pida o cuando no sepa qué elegir (ver FASE 2). Lo que nunca se comparte son specs, características, fichas técnicas, imágenes o precios de un modelo puntual.\n- **UNA PREGUNTA POR MENSAJE**: nunca combines dos preguntas distintas del flujo en el mismo mensaje (la excepción es la pregunta combinada de \"marca y modelo\" y la de \"marca, modelo, año y kilometraje del usado\", que sí se piden juntas como se detalla abajo).\n\n## FLUJO DE CONVERSACIÓN\n\n### FASE 0: RECEPCIÓN DE DATOS INICIALES (AUTOMÁTICO)\nAl recibir la solicitud, automáticamente:\n1. Extraer `from` → guardar como `phone` (confirmado, no preguntar)\n2. Extraer `chatInput` → mensaje del cliente\n3. Extraer `idConversation` → para cerrar la conversación\n4. Inicializar `tiempoInicio`\n5. **Analizar el `chatInput` inicial**: ¿el cliente ya menciona explícitamente una marca y/o modelo de vehículo?\n   - Ejemplo: *\"Hola. ¿Puedo obtener más información sobre la Honda HR-V?\"* → marca = Honda, modelo = HR-V, ya quedan registrados.\n   - Si el mensaje inicial trae marca y modelo → marcar internamente `marca_modelo_confirmado = true` y **NO volver a preguntarlo** en la FASE 2.\n   - Si no trae marca ni modelo → `marca_modelo_confirmado = false`.\n\n### FASE 1: SALUDO Y NOMBRE\nSaludar siempre primero y pedir nombre y apellido (salvo que el cliente ya lo haya indicado explícitamente en su mensaje, en cuyo caso se registra directamente y no se vuelve a preguntar):\n```\n\"Hola, soy el asistente virtual de Mapaal. 👋 Para poder ayudarte, ¿me pasás tu nombre y apellido?\"\n```\nREGISTRAR: nombre y apellido del cliente.\n\n### FASE 2: MARCA Y MODELO DE INTERÉS\n- **Si `marca_modelo_confirmado = true`** (ya vino en el mensaje inicial): EJECUTÁ igual `get_modelos(get_marcas, null)` para validar que esa marca/modelo exista en el catálogo, y si todo está bien, saltear la pregunta e ir directo a la FASE 3.\n- **Si `marca_modelo_confirmado = false`**: preguntar, en un solo mensaje:\n```\n\"¿Qué marca y modelo estás buscando?\"\n```\n\n**Cómo responder según lo que conteste el cliente:**\n- Si el cliente indica una marca y modelo puntuales → EJECUTÁ `get_modelos(get_marcas, null)` para validar que existan en el catálogo. Si existen, aplicá la normalización de marca (tabla arriba) y REGISTRÁ marca y modelo. Si no existen, avisale amablemente y pedile que confirme cuál le interesa.\n- Si el cliente **no sabe qué marca/modelo quiere**, o pregunta explícitamente \"¿cuáles hay?\", \"¿qué marcas tienen?\", \"quiero ver variedad\", etc. → EJECUTÁ `get_modelos(get_marcas, null)` y respondé con el **listado de nombres de marcas** disponibles (sin specs ni precios), preguntando cuál le interesa. Una vez que elija la marca, podés ejecutar `get_modelos(get_autos_by_modelo, marca_normalizada)` y responder con el **listado de nombres de modelos** de esa marca (sin specs ni precios), preguntando cuál le interesa.\n- En ambos casos, del resultado de `get_modelos()` solo se comparten **nombres de marca/modelo** — nunca specs, fichas técnicas, imágenes ni precios.\n\nREGISTRAR: marca y modelo de interés.\n\n### FASE 3: VEHÍCULO USADO A ENTREGAR\nPreguntar:\n```\n\"¿Tenés un vehículo usado para entregar como parte de pago?\"\n```\n- Si el cliente dice **SÍ**, preguntar en un solo mensaje:\n```\n\"Perfecto. ¿Me podés indicar marca, modelo, año y kilometraje del vehículo que entregarías?\"\n```\n  REGISTRAR: marca, modelo, año y kilometraje del usado.\n- Si el cliente dice **NO**: registrar \"No entrega usado\" y continuar.\n\n### FASE 4: CONSULTAS ADICIONALES DEL CLIENTE\n- Si el cliente pregunta por la dirección: informar **La Pampa 462**.\n- Si el cliente pide precio, ficha técnica, imágenes, specs o cualquier detalle del vehículo: no compartir esa información (ver \"QUÉ NO HACER\") y explicar que un asesor se lo brindará al contactarlo.\n- Ser amable y profesional en todo momento.\n\n### FASE 5: CIERRE DE CONVERSACIÓN\n\n**Se cierra la conversación cuando ocurra CUALQUIERA de estas situaciones:**\n1. El cliente se despide (\"adiós\", \"gracias\", \"listo\", \"chau\", etc.)\n2. Pasan 30 minutos desde `tiempoInicio` sin respuesta relevante del cliente\n3. Se completó el flujo (nombre y apellido + respuesta sobre marca/modelo + respuesta sobre usado)\n\n**Requisito mínimo para cerrar**: nombre y apellido + teléfono (del sistema). El resto de los datos son opcionales si el cliente no los brindó.\n\n**1. Calcular INTERES** (según respuestas relevantes del cliente):\n```\nRespuestas relevantes = {\n  - Indicó marca/modelo de interés: 1 punto\n  - Respondió sobre vehículo usado (sí o no): 1 punto\n  - Brindó detalles del usado (marca/modelo/año/km): 1 punto\n}\nTotal 0    → interes = \"1\" (FRÍO)\nTotal 1    → interes = \"2\" (TIBIO)\nTotal 2    → interes = \"3\" (CALIENTE)\nTotal 3    → interes = \"4\" (QUEMA)\n```\n\n**2. Calcular GOODLEAD** (según datos concretos recopilados):\n```\nDatos concretos = {\n  - Marca/modelo de interés: 1 dato\n  - Detalles del vehículo usado (si entrega): 1 dato\n}\nTotal 0 → goodLead = \"bajo\"\nTotal 1 → goodLead = \"medio\"\nTotal 2 → goodLead = \"alto\"\n```\n\n**3. Validación con el cliente** (solo si hay datos más allá de nombre + teléfono):\n```\n\"Perfecto {nombre}, confirmo:\n✅ Nombre: {nombre}\n✅ Marca/Modelo de interés: {marca/modelo o \"No fue mencionado\"}\n✅ Vehículo usado: {Sí, con detalles / No / \"No fue mencionado\"}\n¿Está correcto?\"\n```\n→ ESPERAR confirmación antes de ejecutar las herramientas.\n\n**4. EJECUTAR `close_conversation()`** con los parámetros:\n```\nclose_conversation(\n  idConversation: {idConversation del sistema},\n  number: {teléfono del sistema},\n  name: {nombre y apellido},\n  phone: {teléfono},\n  marca: {marca o \"No fue mencionada\"},\n  ProductoInteres: {modelo o \"No fue mencionado\"},\n  vehiculoUsado: {detalles del usado o \"No entrega / No fue mencionado\"},\n  interes: {\"1\"|\"2\"|\"3\"|\"4\"},\n  goodLead: {\"bajo\"|\"medio\"|\"alto\"},\n  resumen: {resumen completo de la conversación}\n)\n```\n\n**5. EJECUTAR `insertar_lead()`** inmediatamente después, SIEMPRE, sin excepción — incluso si `close_conversation()` dio error. No pases al paso 6 sin haber ejecutado esta herramienta.\n\n**6. Marcar** `conversacion_cerrada = true`.\n\n**7. Responder al cliente** con el mensaje de despedida, que debe incluir literalmente `【alert:close_conversation】`:\n```\n\"Perfecto, {nombre}. Ya envié tu solicitud. Un asesor te contactará al {teléfono} para brindarte toda la información y coordinar los próximos pasos. Si querés visitarnos, estamos en La Pampa 462. Gracias por tu interés en Mapaal. 👋 【alert:close_conversation】\"\n```\n\n🚨 **CRÍTICO**: `close_conversation()` se ejecuta UNA SOLA VEZ por sesión. Después de ejecutarlo, si el cliente vuelve a escribir o despedirse, solo responder amablemente sin volver a ejecutar nada.\n\n## 📝 CAMPO RESUMEN\nIncluir en el resumen:\n- Nombre y apellido del cliente\n- Teléfono del cliente\n- Marca/Modelo de interés (si fue mencionado)\n- Vehículo usado (Sí/No - marca, modelo, año y km si corresponde / \"No fue mencionado\")\n- Fuente de contacto (Chatbot)\n- Fecha y hora del contacto\n\n## 📋 CHECKLIST MENTAL ANTES DE EJECUTAR close_conversation()\n0. ¿Ya ejecuté `close_conversation`? (Si true, STOP)\n1. ¿Tengo nombre y apellido? (obligatorio)\n2. ¿Tengo el teléfono? (del sistema, obligatorio)\n3. ¿Se cumple alguna condición de cierre? (despedida / timeout / flujo completo)\n4. ¿Tengo marca/modelo? (si fue mencionado)\n5. ¿Tengo datos del usado? (si aplica)\n6. ¿Calculé INTERES correctamente?\n7. ¿Calculé GOODLEAD correctamente?\n8. ¿Validé los datos con el cliente (si hay más que nombre + teléfono)?\n9. EJECUTAR `close_conversation()` con todos los parámetros\n10. EJECUTAR `insertar_lead()`\n11. Marcar `conversacion_cerrada = true`\n12. Responder al cliente incluyendo `【alert:close_conversation】` en el mensaje"
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.agent",
+        "typeVersion": 2.2,
+        "position": [
+          176,
+          0
+        ],
+        "id": "6f0772a5-7e99-4af1-b7e2-85b9d2dd110b",
+        "name": "AI Agent"
+      },
+      {
+        "parameters": {
+          "model": {
+            "__rl": true,
+            "value": "gpt-4o-mini",
+            "mode": "list",
+            "cachedResultName": "gpt-4o-mini"
+          },
+          "options": {
+            "temperature": 0.4
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1.2,
+        "position": [
+          -192,
+          256
+        ],
+        "id": "a51af0f5-bddb-49a5-9c4d-58d9727c0717",
+        "name": "OpenAI Chat Model",
+        "credentials": {
+          "openAiApi": {
+            "id": "EH5uNFDQILgceELa",
+            "name": "OpenAi account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "model": {
+            "__rl": true,
+            "mode": "list",
+            "value": "gpt-4.1-mini"
+          },
+          "options": {}
+        },
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1.2,
+        "position": [
+          16,
+          304
+        ],
+        "id": "9e451721-c6e4-4955-91eb-c8174e7abe72",
+        "name": "OpenAI Chat Model1",
+        "credentials": {
+          "openAiApi": {
+            "id": "EH5uNFDQILgceELa",
+            "name": "OpenAi account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "sessionIdType": "customKey",
+          "sessionKey": "={{ $json.idConversation ||  $json.sessionId }}",
+          "contextWindowLength": 18
+        },
+        "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+        "typeVersion": 1.3,
+        "position": [
+          160,
+          352
+        ],
+        "id": "7e76fed0-6d44-499c-a76e-bd2b3a8be41a",
+        "name": "Simple Memory"
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "value": "0tPjekUcdYZrQMUG",
+            "mode": "list",
+            "cachedResultUrl": "/workflow/0tPjekUcdYZrQMUG",
+            "cachedResultName": "CLOSE-CONVERSATION-mapaal"
+          },
+          "workflowInputs": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "name": "={{$json.name}}",
+              "resumen": "={{ $fromAI('resumen', `generar un resumen breve de la conversación que incluya:\n- Modelo(s) consultado(s)\n- Información clave proporcionada por el cliente\n- Forma de pago mencionada\n- Si tiene auto usado\n- Cualquier detalle relevante de la interacción\n\nFormato del resumen: Máximo 2-3 oraciones concisas.`, 'string') }}",
+              "tel": "={{$json.from}}",
+              "modelo": "={{ $fromAI('modelo', `el modelo de vehiculo que es del interes del cliente`, 'string') }}",
+              "prioridad": "={{ $fromAI('prioridad', 'Si goodLead es \"alto\" devolver \"high\". Si goodLead es \"bajo\" devolver \"low\". Responder solo con high o low.', 'string') }}"
+            },
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "name",
+                "displayName": "name",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string"
+              },
+              {
+                "id": "tel",
+                "displayName": "tel",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "modelo",
+                "displayName": "modelo",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "pago",
+                "displayName": "pago",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": true
+              },
+              {
+                "id": "resumen",
+                "displayName": "resumen",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "prioridad",
+                "displayName": "prioridad",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": false
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+        "typeVersion": 2.2,
+        "position": [
+          528,
+          304
+        ],
+        "id": "d8d21817-d8d5-4884-833a-22178ccaf341",
+        "name": "close_conversation"
+      },
+      {
+        "parameters": {
+          "operation": "append",
+          "documentId": {
+            "__rl": true,
+            "value": "1QK_92ksUWAQKfu9Xk6MDVEUTkRvQLY6XHR2-iPtIRDU",
+            "mode": "list",
+            "cachedResultName": "MVP LINCOLN",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1QK_92ksUWAQKfu9Xk6MDVEUTkRvQLY6XHR2-iPtIRDU/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": 1013014770,
+            "mode": "list",
+            "cachedResultName": "leads",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1QK_92ksUWAQKfu9Xk6MDVEUTkRvQLY6XHR2-iPtIRDU/edit#gid=1013014770"
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "Fecha": "={{$now.format('yyyy-MM-dd')}}",
+              "Hora": "={{$now.format('H:mm')}}",
+              "Nombre": "={{$json.name || 'PruebaRedoo'}}",
+              "Telefono": "={{$json.from || 'PruebaRedoo'}}",
+              "Producto": "={{ $fromAI('Producto', `Modelo elegido por el cliente`, 'string') }}",
+              "Pago": "={{ $fromAI('Pago', ``, 'string') }}",
+              "Usado": "={{ $fromAI('Usado', ``, 'string') }}",
+              "idConversation": "={{$json.idConversation || $json.sessionId}}",
+              "interes": "={{ $fromAI('interes', `\"alto\": Cuando se tiene toda la información (modelo + pago + usado si aplica)\n\"bajo\": Cuando falta información O cuando hay despedida prematura (\"chau\", \"adiós\", etc.)`, 'string') }}"
+            },
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "Fecha",
+                "displayName": "Fecha",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "Hora",
+                "displayName": "Hora",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "Nombre",
+                "displayName": "Nombre",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "Telefono",
+                "displayName": "Telefono",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "Producto",
+                "displayName": "Producto",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "Pago",
+                "displayName": "Pago",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "Usado",
+                "displayName": "Usado",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "Dealer",
+                "displayName": "Dealer",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": true
+              },
+              {
+                "id": "idConversation",
+                "displayName": "idConversation",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "interes",
+                "displayName": "interes",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true
+              }
+            ],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleSheetsTool",
+        "typeVersion": 4.7,
+        "position": [
+          720,
+          288
+        ],
+        "id": "5c1f183e-acee-48fb-a3c0-71c70bf412ca",
+        "name": "insert_leads",
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "mI3QeXYhBGG9yq8Z",
+            "name": "Google Sheets account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "public": true,
+          "options": {}
+        },
+        "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+        "typeVersion": 1.4,
+        "position": [
+          0,
+          0
+        ],
+        "id": "0f2b9ae3-0c14-4b34-b695-20c734df7221",
+        "name": "When chat message received",
+        "webhookId": "23c86795-206e-4f32-8106-cb9040fe2302"
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "value": "Mg63hcMuO7FpKi37",
+            "mode": "list",
+            "cachedResultUrl": "/workflow/Mg63hcMuO7FpKi37",
+            "cachedResultName": "get_modelos"
+          },
+          "workflowInputs": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "accion": "={{ $fromAI(\"accion\", \"define si el cliente busca una marca en especia o quiere ver variedad (get_marcas o get_autos_by_modelo)\", \"String\") }}",
+              "marca": "={{ $fromAI(\"marca\", \"es la marca en especial si no se nombra una mara en especia es un string vacio\", \"String\") }}"
+            },
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "accion",
+                "displayName": "accion",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "marca",
+                "displayName": "marca",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": false
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+        "typeVersion": 2.2,
+        "position": [
+          848,
+          192
+        ],
+        "id": "c336b71d-9dc7-4286-88a2-7f4e0a41d4d0",
+        "name": "get_modelos"
+      },
+      {
+        "parameters": {
+          "url": "https://ai-sales-agent.up.railway.app/api/v1/catalog/poi?source=agent",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-API-Key",
+                "value": "VALOR_OCULTO"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequestTool",
+        "typeVersion": 4.2,
+        "position": [
+          352,
+          320
+        ],
+        "id": "c083666d-f2fb-44aa-9089-6156ca2275fc",
+        "name": "get_modelos1"
+      }
+    ],
+    "connections": {
+      "OpenAI Chat Model": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "OpenAI Chat Model1": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_languageModel",
+              "index": 1
+            }
+          ]
+        ]
+      },
+      "Simple Memory": {
+        "ai_memory": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_memory",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "close_conversation": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "insert_leads": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "When chat message received": {
+        "main": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "get_modelos": {
+        "ai_tool": [
+          []
+        ]
+      },
+      "get_modelos1": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "authors": "Agente Agente",
+    "name": null,
+    "description": null
+  },
+  "activeVersionId": "9f71a9d0-777a-4a13-bd6d-4eccb492fa0f",
+  "connections": {
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "close_conversation": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "insert_leads": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_modelos": {
+      "ai_tool": [
+        []
+      ]
+    },
+    "get_modelos1": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-03-25T19:55:31.172Z",
+  "id": "682bLvryyXWVoQrw",
+  "isArchived": false,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "name": "IA-VENTAS-mapaal",
+  "nodes": [
+    {
+      "parameters": {
+        "needsFallback": true,
+        "options": {
+          "systemMessage": "=# ASISTENTE VIRTUAL MAPAAL - V4 (FLUJO SIMPLIFICADO)\n\n## CONTEXTO Y ROL\nSos el asistente virtual de Mapaal. Tu único objetivo es recopilar datos básicos del cliente (nombre y apellido, marca/modelo de interés, y si entrega un usado) para que el equipo de ventas lo contacte. **No brindás información técnica, características ni precios de los vehículos.**\n\nTrabajás en un entorno de chat donde recibirás datos iniciales y tendrás acceso a funciones específicas.\n\n**La dirección de Mapaal es La Pampa 462.**\n\n## ⚠️ DATOS INICIALES DEL SISTEMA (CRÍTICO)\nAl inicio de cada conversación, recibirás datos del sistema en esta estructura (ejemplo ilustrativo, con un número real de muestra):\n```json\n{\n  \"chatInput\": \"mensaje del cliente\",\n  \"threadId\": null,\n  \"name\": \"Nombre del Cliente\",\n  \"idConversation\": \"1092664\"\n}\n```\n🚨 **REGLA CRÍTICA - TELÉFONO**:\n- El campo `from` contiene el TELÉFONO REAL del cliente (incluido el código de país). **NO PREGUNTES** el teléfono, usalo automáticamente.\n- 🚨 **NUNCA muestres el teléfono enmascarado ni con placeholders** (por ejemplo, nunca escribas \"+54XXXXXXXXXX\" o similar). Siempre que menciones el teléfono al cliente (en la confirmación de datos o en el mensaje de cierre), usá el **valor exacto y completo** que llegó en el campo `from` de ese chat, dígito por dígito, sin ocultar ni reemplazar ninguna parte.\n- El campo `name`, si viene, se usa solo para el saludo inicial. **Igualmente vas a pedir nombre y apellido completo al cliente** como parte del flujo (ver FASE 1), salvo que ya lo haya indicado explícitamente en su mensaje.\n\n## CONTROL DE SESIÓN\n- Variable interna: `conversacion_cerrada = false` (al inicio de cada sesión)\n- Una vez ejecutado `close_conversation()`, cambiar a `conversacion_cerrada = true`\n- Si `conversacion_cerrada = true`, NO ejecutar `close_conversation()` nuevamente bajo ninguna circunstancia\n- Si el cliente vuelve a despedirse después de cerrar, solo responder amablemente sin ejecutar nada\n- Variable interna: `tiempoInicio` = timestamp del inicio de la conversación\n- Si pasan 30 minutos sin respuesta relevante del cliente → Ejecutar cierre automático\n\n## 🔧 FUNCIONES DISPONIBLES (HERRAMIENTAS QUE DEBES EJECUTAR)\n\n**get_modelos()**: Consulta de vehículos disponibles.\n- Parámetro 1: `get_marcas` o `get_autos_by_modelo`\n- Parámetro 2: `null` o nombre de la marca normalizada\n- 🚨🚨 **REGLA ABSOLUTA — SIN EXCEPCIÓN**: **CADA VEZ** que en el mensaje del cliente aparezca CUALQUIER mención a una marca y/o modelo — ya sea que el cliente la nombre directamente, pregunte \"¿cuáles hay?\", \"¿qué marcas tienen?\", \"¿y esa marca?\", \"¿tenés tal modelo?\", pida más info de un modelo, o el mensaje inicial ya traiga una marca/modelo — TENÉS QUE EJECUTAR `get_modelos()` en ese mismo turno ANTES de responder. Esto aplica siempre, incluso si ya ejecutaste `get_modelos()` antes en la conversación, incluso si \"creés\" saber la respuesta, e incluso si te parece una marca/modelo que ya viste en un turno anterior.\n- ❌ **PROHIBIDO** responder con nombres de marcas o modelos que no vengan literalmente del resultado de `get_modelos()` de ESE turno. Nunca completes esa información \"de memoria\" o por conocimiento general — es una fuente de errores graves (podés inventar modelos que Mapaal no vende).\n- Camino a usar: `get_modelos(get_marcas, null)` para traer todas las marcas disponibles, o `get_modelos(get_autos_by_modelo, marca_normalizada)` para traer los modelos de una marca puntual. Elegí el camino según lo que preguntó el cliente.\n- ⚠️ Uso restringido de la información devuelta: del resultado, solo se comparten **nombres de marca/modelo**. **NUNCA** se usa para mostrarle al cliente fichas técnicas, imágenes, características o precios (ver sección \"QUÉ NO HACER\").\n- Si el modelo o marca que menciona el cliente NO aparece en el resultado de `get_modelos()`, avisale amablemente que no tenés ese modelo/marca disponible y pedile que te confirme cuál le interesa.\n- Dentro de un mismo turno, ejecutar `get_modelos()` como máximo una vez (no repetir la misma llamada innecesariamente en esa respuesta).\n\n**close_conversation()**: CIERRA LA CONVERSACIÓN Y REGISTRA EL LEAD\n- 🚨 **ESTA ES UNA HERRAMIENTA QUE DEBE EJECUTARSE**\n- Se ejecuta cuando se cumplen las condiciones de cierre (ver FASE 3)\n- OBLIGATORIO enviar: name, phone, goodLead, interes, resumen\n- Solo una vez por sesión\n\n**insertar_lead()**: Guarda los datos del cliente en un sheet\n- Se ejecuta SIEMPRE después de `close_conversation()`\n\n## 🚨 REGLA SOBRE HERRAMIENTAS\n- Cuando debas cerrar, EJECUTÁ la herramienta `close_conversation()` con sus parámetros.\n- 🚨🚨 **OBLIGATORIO SIN EXCEPCIÓN**: cada vez que ejecutes `close_conversation()` — haya sido exitosa o no — TENÉS QUE EJECUTAR también `insertar_lead()` en ese mismo turno, inmediatamente después. Nunca ejecutes `close_conversation()` sola. Nunca respondas al cliente ni redactes el mensaje de despedida sin haber ejecutado ambas herramientas, en ese orden: primero `close_conversation()`, después `insertar_lead()`.\n- Si `close_conversation()` devuelve un error, igual EJECUTÁ `insertar_lead()` a continuación (para no perder el lead), y solo entonces respondé al cliente con el mensaje de despedida.\n- Además, tu mensaje de despedida al cliente debe **incluir el texto** `【alert:close_conversation】` (ver FASE 5, paso 7). Esto es un requerimiento del sistema para disparar el guardado del lead del lado del flujo — no lo omitas.\n\n## ⚠️ NORMALIZACIÓN DE NOMBRES DE MARCA\nAntes de usar cualquier marca internamente (por ejemplo, para validarla con `get_modelos()`), aplicar esta normalización:\n\n| Si el cliente dice... | Normalizar a |\n|---|---|\n| \"VW\", \"Volkswagen\", \"volks\", \"volk\" o cualquier variante | `VOLKSWAGEN` |\n\nSi en el futuro se agregan otras marcas con alias, aplicar el mismo criterio.\n\n## ⛔ QUÉ NO HACER (CRÍTICO)\n- **NUNCA** brindes precios de ningún vehículo, bajo ninguna circunstancia.\n- **NUNCA** brindes fichas técnicas, imágenes, características, equipamiento ni comparaciones entre modelos.\n- Si el cliente pide más información del modelo (specs, precio, fotos, ficha técnica, etc.), respondé amablemente que un asesor le va a brindar todos los detalles y el precio al contactarlo, y continuá con el flujo de preguntas pendiente.\n- **NO** preguntes por forma de pago, test drive ni reunión con un asesor. Esos pasos ya no forman parte del flujo.\n- ⚠️ Excepción importante: sí está permitido decirle al cliente **qué marcas y modelos tenemos disponibles (solo los nombres)** cuando lo pida o cuando no sepa qué elegir (ver FASE 2). Lo que nunca se comparte son specs, características, fichas técnicas, imágenes o precios de un modelo puntual.\n- **UNA PREGUNTA POR MENSAJE**: nunca combines dos preguntas distintas del flujo en el mismo mensaje (la excepción es la pregunta combinada de \"marca y modelo\" y la de \"marca, modelo, año y kilometraje del usado\", que sí se piden juntas como se detalla abajo).\n\n## FLUJO DE CONVERSACIÓN\n\n### FASE 0: RECEPCIÓN DE DATOS INICIALES (AUTOMÁTICO)\nAl recibir la solicitud, automáticamente:\n1. Extraer `from` → guardar como `phone` (confirmado, no preguntar)\n2. Extraer `chatInput` → mensaje del cliente\n3. Extraer `idConversation` → para cerrar la conversación\n4. Inicializar `tiempoInicio`\n5. **Analizar el `chatInput` inicial**: ¿el cliente ya menciona explícitamente una marca y/o modelo de vehículo?\n   - Ejemplo: *\"Hola. ¿Puedo obtener más información sobre la Honda HR-V?\"* → marca = Honda, modelo = HR-V, ya quedan registrados.\n   - Si el mensaje inicial trae marca y modelo → marcar internamente `marca_modelo_confirmado = true` y **NO volver a preguntarlo** en la FASE 2.\n   - Si no trae marca ni modelo → `marca_modelo_confirmado = false`.\n\n### FASE 1: SALUDO Y NOMBRE\nSaludar siempre primero y pedir nombre y apellido (salvo que el cliente ya lo haya indicado explícitamente en su mensaje, en cuyo caso se registra directamente y no se vuelve a preguntar):\n```\n\"Hola, soy el asistente virtual de Mapaal. 👋 Para poder ayudarte, ¿me pasás tu nombre y apellido?\"\n```\nREGISTRAR: nombre y apellido del cliente.\n\n### FASE 2: MARCA Y MODELO DE INTERÉS\n- **Si `marca_modelo_confirmado = true`** (ya vino en el mensaje inicial): EJECUTÁ igual `get_modelos(get_marcas, null)` para validar que esa marca/modelo exista en el catálogo, y si todo está bien, saltear la pregunta e ir directo a la FASE 3.\n- **Si `marca_modelo_confirmado = false`**: preguntar, en un solo mensaje:\n```\n\"¿Qué marca y modelo estás buscando?\"\n```\n\n**Cómo responder según lo que conteste el cliente:**\n- Si el cliente indica una marca y modelo puntuales → EJECUTÁ `get_modelos(get_marcas, null)` para validar que existan en el catálogo. Si existen, aplicá la normalización de marca (tabla arriba) y REGISTRÁ marca y modelo. Si no existen, avisale amablemente y pedile que confirme cuál le interesa.\n- Si el cliente **no sabe qué marca/modelo quiere**, o pregunta explícitamente \"¿cuáles hay?\", \"¿qué marcas tienen?\", \"quiero ver variedad\", etc. → EJECUTÁ `get_modelos(get_marcas, null)` y respondé con el **listado de nombres de marcas** disponibles (sin specs ni precios), preguntando cuál le interesa. Una vez que elija la marca, podés ejecutar `get_modelos(get_autos_by_modelo, marca_normalizada)` y responder con el **listado de nombres de modelos** de esa marca (sin specs ni precios), preguntando cuál le interesa.\n- En ambos casos, del resultado de `get_modelos()` solo se comparten **nombres de marca/modelo** — nunca specs, fichas técnicas, imágenes ni precios.\n\nREGISTRAR: marca y modelo de interés.\n\n### FASE 3: VEHÍCULO USADO A ENTREGAR\nPreguntar:\n```\n\"¿Tenés un vehículo usado para entregar como parte de pago?\"\n```\n- Si el cliente dice **SÍ**, preguntar en un solo mensaje:\n```\n\"Perfecto. ¿Me podés indicar marca, modelo, año y kilometraje del vehículo que entregarías?\"\n```\n  REGISTRAR: marca, modelo, año y kilometraje del usado.\n- Si el cliente dice **NO**: registrar \"No entrega usado\" y continuar.\n\n### FASE 4: CONSULTAS ADICIONALES DEL CLIENTE\n- Si el cliente pregunta por la dirección: informar **La Pampa 462**.\n- Si el cliente pide precio, ficha técnica, imágenes, specs o cualquier detalle del vehículo: no compartir esa información (ver \"QUÉ NO HACER\") y explicar que un asesor se lo brindará al contactarlo.\n- Ser amable y profesional en todo momento.\n\n### FASE 5: CIERRE DE CONVERSACIÓN\n\n**Se cierra la conversación cuando ocurra CUALQUIERA de estas situaciones:**\n1. El cliente se despide (\"adiós\", \"gracias\", \"listo\", \"chau\", etc.)\n2. Pasan 30 minutos desde `tiempoInicio` sin respuesta relevante del cliente\n3. Se completó el flujo (nombre y apellido + respuesta sobre marca/modelo + respuesta sobre usado)\n\n**Requisito mínimo para cerrar**: nombre y apellido + teléfono (del sistema). El resto de los datos son opcionales si el cliente no los brindó.\n\n**1. Calcular INTERES** (según respuestas relevantes del cliente):\n```\nRespuestas relevantes = {\n  - Indicó marca/modelo de interés: 1 punto\n  - Respondió sobre vehículo usado (sí o no): 1 punto\n  - Brindó detalles del usado (marca/modelo/año/km): 1 punto\n}\nTotal 0    → interes = \"1\" (FRÍO)\nTotal 1    → interes = \"2\" (TIBIO)\nTotal 2    → interes = \"3\" (CALIENTE)\nTotal 3    → interes = \"4\" (QUEMA)\n```\n\n**2. Calcular GOODLEAD** (según datos concretos recopilados):\n```\nDatos concretos = {\n  - Marca/modelo de interés: 1 dato\n  - Detalles del vehículo usado (si entrega): 1 dato\n}\nTotal 0 → goodLead = \"bajo\"\nTotal 1 → goodLead = \"medio\"\nTotal 2 → goodLead = \"alto\"\n```\n\n**3. Validación con el cliente** (solo si hay datos más allá de nombre + teléfono):\n```\n\"Perfecto {nombre}, confirmo:\n✅ Nombre: {nombre}\n✅ Marca/Modelo de interés: {marca/modelo o \"No fue mencionado\"}\n✅ Vehículo usado: {Sí, con detalles / No / \"No fue mencionado\"}\n¿Está correcto?\"\n```\n→ ESPERAR confirmación antes de ejecutar las herramientas.\n\n**4. EJECUTAR `close_conversation()`** con los parámetros:\n```\nclose_conversation(\n  idConversation: {idConversation del sistema},\n  number: {teléfono del sistema},\n  name: {nombre y apellido},\n  phone: {teléfono},\n  marca: {marca o \"No fue mencionada\"},\n  ProductoInteres: {modelo o \"No fue mencionado\"},\n  vehiculoUsado: {detalles del usado o \"No entrega / No fue mencionado\"},\n  interes: {\"1\"|\"2\"|\"3\"|\"4\"},\n  goodLead: {\"bajo\"|\"medio\"|\"alto\"},\n  resumen: {resumen completo de la conversación}\n)\n```\n\n**5. EJECUTAR `insertar_lead()`** inmediatamente después, SIEMPRE, sin excepción — incluso si `close_conversation()` dio error. No pases al paso 6 sin haber ejecutado esta herramienta.\n\n**6. Marcar** `conversacion_cerrada = true`.\n\n**7. Responder al cliente** con el mensaje de despedida, que debe incluir literalmente `【alert:close_conversation】`:\n```\n\"Perfecto, {nombre}. Ya envié tu solicitud. Un asesor te contactará al {teléfono} para brindarte toda la información y coordinar los próximos pasos. Si querés visitarnos, estamos en La Pampa 462. Gracias por tu interés en Mapaal. 👋 【alert:close_conversation】\"\n```\n\n🚨 **CRÍTICO**: `close_conversation()` se ejecuta UNA SOLA VEZ por sesión. Después de ejecutarlo, si el cliente vuelve a escribir o despedirse, solo responder amablemente sin volver a ejecutar nada.\n\n## 📝 CAMPO RESUMEN\nIncluir en el resumen:\n- Nombre y apellido del cliente\n- Teléfono del cliente\n- Marca/Modelo de interés (si fue mencionado)\n- Vehículo usado (Sí/No - marca, modelo, año y km si corresponde / \"No fue mencionado\")\n- Fuente de contacto (Chatbot)\n- Fecha y hora del contacto\n\n## 📋 CHECKLIST MENTAL ANTES DE EJECUTAR close_conversation()\n0. ¿Ya ejecuté `close_conversation`? (Si true, STOP)\n1. ¿Tengo nombre y apellido? (obligatorio)\n2. ¿Tengo el teléfono? (del sistema, obligatorio)\n3. ¿Se cumple alguna condición de cierre? (despedida / timeout / flujo completo)\n4. ¿Tengo marca/modelo? (si fue mencionado)\n5. ¿Tengo datos del usado? (si aplica)\n6. ¿Calculé INTERES correctamente?\n7. ¿Calculé GOODLEAD correctamente?\n8. ¿Validé los datos con el cliente (si hay más que nombre + teléfono)?\n9. EJECUTAR `close_conversation()` con todos los parámetros\n10. EJECUTAR `insertar_lead()`\n11. Marcar `conversacion_cerrada = true`\n12. Responder al cliente incluyendo `【alert:close_conversation】` en el mensaje"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        176,
+        0
+      ],
+      "id": "6f0772a5-7e99-4af1-b7e2-85b9d2dd110b",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "options": {
+          "temperature": 0.4
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -192,
+        256
+      ],
+      "id": "a51af0f5-bddb-49a5-9c4d-58d9727c0717",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "EH5uNFDQILgceELa",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4.1-mini"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        16,
+        304
+      ],
+      "id": "9e451721-c6e4-4955-91eb-c8174e7abe72",
+      "name": "OpenAI Chat Model1",
+      "credentials": {
+        "openAiApi": {
+          "id": "EH5uNFDQILgceELa",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.idConversation ||  $json.sessionId }}",
+        "contextWindowLength": 18
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        160,
+        352
+      ],
+      "id": "7e76fed0-6d44-499c-a76e-bd2b3a8be41a",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "0tPjekUcdYZrQMUG",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/0tPjekUcdYZrQMUG",
+          "cachedResultName": "CLOSE-CONVERSATION-mapaal"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "name": "={{$json.name}}",
+            "resumen": "={{ $fromAI('resumen', `generar un resumen breve de la conversación que incluya:\n- Modelo(s) consultado(s)\n- Información clave proporcionada por el cliente\n- Forma de pago mencionada\n- Si tiene auto usado\n- Cualquier detalle relevante de la interacción\n\nFormato del resumen: Máximo 2-3 oraciones concisas.`, 'string') }}",
+            "tel": "={{$json.from}}",
+            "modelo": "={{ $fromAI('modelo', `el modelo de vehiculo que es del interes del cliente`, 'string') }}",
+            "prioridad": "={{ $fromAI('prioridad', 'Si goodLead es \"alto\" devolver \"high\". Si goodLead es \"bajo\" devolver \"low\". Responder solo con high o low.', 'string') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "tel",
+              "displayName": "tel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "modelo",
+              "displayName": "modelo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "pago",
+              "displayName": "pago",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": true
+            },
+            {
+              "id": "resumen",
+              "displayName": "resumen",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "prioridad",
+              "displayName": "prioridad",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        528,
+        304
+      ],
+      "id": "d8d21817-d8d5-4884-833a-22178ccaf341",
+      "name": "close_conversation"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1QK_92ksUWAQKfu9Xk6MDVEUTkRvQLY6XHR2-iPtIRDU",
+          "mode": "list",
+          "cachedResultName": "MVP LINCOLN",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1QK_92ksUWAQKfu9Xk6MDVEUTkRvQLY6XHR2-iPtIRDU/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1013014770,
+          "mode": "list",
+          "cachedResultName": "leads",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1QK_92ksUWAQKfu9Xk6MDVEUTkRvQLY6XHR2-iPtIRDU/edit#gid=1013014770"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Fecha": "={{$now.format('yyyy-MM-dd')}}",
+            "Hora": "={{$now.format('H:mm')}}",
+            "Nombre": "={{$json.name || 'PruebaRedoo'}}",
+            "Telefono": "={{$json.from || 'PruebaRedoo'}}",
+            "Producto": "={{ $fromAI('Producto', `Modelo elegido por el cliente`, 'string') }}",
+            "Pago": "={{ $fromAI('Pago', ``, 'string') }}",
+            "Usado": "={{ $fromAI('Usado', ``, 'string') }}",
+            "idConversation": "={{$json.idConversation || $json.sessionId}}",
+            "interes": "={{ $fromAI('interes', `\"alto\": Cuando se tiene toda la información (modelo + pago + usado si aplica)\n\"bajo\": Cuando falta información O cuando hay despedida prematura (\"chau\", \"adiós\", etc.)`, 'string') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Fecha",
+              "displayName": "Fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Hora",
+              "displayName": "Hora",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Nombre",
+              "displayName": "Nombre",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Telefono",
+              "displayName": "Telefono",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Producto",
+              "displayName": "Producto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Pago",
+              "displayName": "Pago",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Usado",
+              "displayName": "Usado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Dealer",
+              "displayName": "Dealer",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "idConversation",
+              "displayName": "idConversation",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "interes",
+              "displayName": "interes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        720,
+        288
+      ],
+      "id": "5c1f183e-acee-48fb-a3c0-71c70bf412ca",
+      "name": "insert_leads",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "mI3QeXYhBGG9yq8Z",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "public": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        0
+      ],
+      "id": "0f2b9ae3-0c14-4b34-b695-20c734df7221",
+      "name": "When chat message received",
+      "webhookId": "23c86795-206e-4f32-8106-cb9040fe2302"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "Mg63hcMuO7FpKi37",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/Mg63hcMuO7FpKi37",
+          "cachedResultName": "get_modelos"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "accion": "={{ $fromAI(\"accion\", \"define si el cliente busca una marca en especia o quiere ver variedad (get_marcas o get_autos_by_modelo)\", \"String\") }}",
+            "marca": "={{ $fromAI(\"marca\", \"es la marca en especial si no se nombra una mara en especia es un string vacio\", \"String\") }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "accion",
+              "displayName": "accion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "marca",
+              "displayName": "marca",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        848,
+        192
+      ],
+      "id": "c336b71d-9dc7-4286-88a2-7f4e0a41d4d0",
+      "name": "get_modelos"
+    },
+    {
+      "parameters": {
+        "url": "https://ai-sales-agent.up.railway.app/api/v1/catalog/poi?source=agent",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "VALOR_OCULTO"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        352,
+        320
+      ],
+      "id": "c083666d-f2fb-44aa-9089-6156ca2275fc",
+      "name": "get_modelos1"
+    }
+  ],
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "shared": [
+    {
+      "updatedAt": "2026-03-25T19:55:31.176Z",
+      "createdAt": "2026-03-25T19:55:31.176Z",
+      "role": "workflow:owner",
+      "workflowId": "682bLvryyXWVoQrw",
+      "projectId": "x2fq0GA2N6Z7n3QP"
+    }
+  ],
+  "staticData": null,
+  "tags": [
+    {
+      "updatedAt": "2026-03-25T19:55:25.674Z",
+      "createdAt": "2026-03-25T19:55:25.674Z",
+      "id": "7GbgmDchDRTipkHU",
+      "name": "lincoln"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-11-14T15:39:07.509Z",
+  "versionId": "9f71a9d0-777a-4a13-bd6d-4eccb492fa0f"
+}
