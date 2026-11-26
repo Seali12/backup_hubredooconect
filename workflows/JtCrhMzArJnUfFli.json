@@ -1,0 +1,909 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "97379dd2-4080-4a08-9057-4bd20f928f73",
+    "workflowId": "JtCrhMzArJnUfFli",
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "0ed89707-67ae-4356-981d-f263d0efc106",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.1,
+        "position": [
+          -384,
+          160
+        ],
+        "id": "36f26726-ef17-4f3a-acda-e914d9135840",
+        "name": "Webhook",
+        "webhookId": "0ed89707-67ae-4356-981d-f263d0efc106"
+      },
+      {
+        "parameters": {
+          "jsCode": "const input = $input.first().json;\nconst body = input.body ?? {};\n\nfunction normalizarTelefonoArgentina(numero) {\n  if (numero === null || numero === undefined) {\n    return null;\n  }\n\n  let limpio = String(numero).replace(/\\D/g, '');\n\n  if (!limpio) {\n    return null;\n  }\n\n  // Quitar prefijo internacional 00\n  if (limpio.startsWith('00')) {\n    limpio = limpio.slice(2);\n  }\n\n  // Ya viene como 549 + 10 dígitos\n  if (/^549\\d{10}$/.test(limpio)) {\n    return limpio;\n  }\n\n  // Viene como 54 + 10 dígitos, sin el 9 de celular\n  if (/^54\\d{10}$/.test(limpio)) {\n    return `549${limpio.slice(2)}`;\n  }\n\n  // Quitar el cero nacional inicial\n  if (limpio.startsWith('0')) {\n    limpio = limpio.slice(1);\n  }\n\n  // Número nacional argentino: área + teléfono = 10 dígitos\n  if (/^\\d{10}$/.test(limpio)) {\n    return `549${limpio}`;\n  }\n\n  return null;\n}\n\nconst telefonoCelular = body.pilot_cellphone ?? null;\nconst telefonoFijo = body.pilot_phone ?? null;\n\nconst celularNormalizado =\n  normalizarTelefonoArgentina(telefonoCelular);\n\nconst telefonoNormalizado =\n  normalizarTelefonoArgentina(telefonoFijo);\n\nconst whatsapp =\n  celularNormalizado ??\n  telefonoNormalizado ??\n  null;\n\nlet campoUtilizado = null;\nlet original = null;\n\nif (celularNormalizado) {\n  campoUtilizado = 'pilot_cellphone';\n  original = telefonoCelular;\n} else if (telefonoNormalizado) {\n  campoUtilizado = 'pilot_phone';\n  original = telefonoFijo;\n}\n\nreturn [\n  {\n    json: {\n      whatsapp,\n      valido: whatsapp !== null,\n      original,\n      campo_utilizado: campoUtilizado,\n      telefonos_recibidos: {\n        pilot_cellphone: telefonoCelular,\n        pilot_phone: telefonoFijo,\n      },\n      telefonos_normalizados: {\n        pilot_cellphone: celularNormalizado,\n        pilot_phone: telefonoNormalizado,\n      },\n    },\n  },\n];"
+        },
+        "id": "d5378d00-51fb-496f-b8ac-112e8069457e",
+        "name": "Code4",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          144,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.twilio.com/2010-04-01/Accounts/TWILIO_SID_OCULTO/Messages.json",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpBasicAuth",
+          "sendBody": true,
+          "contentType": "multipart-form-data",
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "MessagingServiceSid",
+                "value": "=MG085b57d6e13cc5af223ab80477b9e12e"
+              },
+              {
+                "name": "To",
+                "value": "=whatsapp:{{ $json.whatsapp.startsWith('+') ? $json.whatsapp : '+' + $json.whatsapp }}"
+              },
+              {
+                "name": "ContentSid",
+                "value": "=HX92c58c83bee1be554198e4b2eff0e641"
+              },
+              {
+                "name": "ContentVariables",
+                "value": "={\"1\":\"{{ $('Webhook').item.json.body.pilot_firstname }}\",\"2\":\"WhatsApp-Image-2026-05-14-at-17.32.45_20260514_173441.jpeg\", \"3\" :\"123123123\"}"
+              },
+              {
+                "name": "From",
+                "value": "whatsapp:+5491180243654"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "5864d216-a1d8-488f-99e8-bfe7eea88c5c",
+        "name": "Baic central",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          272,
+          0
+        ],
+        "credentials": {
+          "httpBasicAuth": {
+            "id": "J0U88T5MOTmgUovC",
+            "name": "BAIC CENTRAL TWILLIO"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "2d49fc4b-a14c-40c7-908d-dd9fa84969e8",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.1,
+        "position": [
+          -384,
+          352
+        ],
+        "id": "2a445f55-7645-4b1d-9ecd-85345ce4bdf1",
+        "name": "Webhook1",
+        "webhookId": "2d49fc4b-a14c-40c7-908d-dd9fa84969e8"
+      },
+      {
+        "parameters": {
+          "content": "HX92c58c83bee1be554198e4b2eff0e641",
+          "height": 80
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          -656,
+          176
+        ],
+        "typeVersion": 1,
+        "id": "08768b4f-1a68-4184-80d1-69ebddac1ebd",
+        "name": "Sticky Note"
+      },
+      {
+        "parameters": {
+          "content": "HX11ef0f6846332f13b03365ea8d7bab62",
+          "height": 80
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          -656,
+          368
+        ],
+        "typeVersion": 1,
+        "id": "985f62da-8cf0-4edf-9f35-d5b0139bb7c1",
+        "name": "Sticky Note1"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "boolean": [
+              {
+                "value1": "={{ $json.valido }}",
+                "value2": true
+              }
+            ]
+          }
+        },
+        "id": "66fbf0d6-a806-406d-84b6-038e8fdf2d24",
+        "name": "¿Datos OK?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 1,
+        "position": [
+          64,
+          288
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.twilio.com/2010-04-01/Accounts/{{ $('Code').item.json.account_sid }}/Messages.json",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpBasicAuth",
+          "sendBody": true,
+          "contentType": "multipart-form-data",
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "MessagingServiceSid",
+                "value": "={{ $('Code').item.json.messaging_service_sid }}"
+              },
+              {
+                "name": "To",
+                "value": "=whatsapp:{{ $('Code').item.json.whatsapp.startsWith('+') ? $('Code').item.json.whatsapp : '+' + $('Code').item.json.whatsapp }}"
+              },
+              {
+                "name": "ContentSid",
+                "value": "={{ $('Code').item.json.content_sid }}"
+              },
+              {
+                "name": "ContentVariables",
+                "value": "={{ $('Code').item.json.content_variables }}"
+              },
+              {
+                "name": "From",
+                "value": "={{ $('Code').item.json.from_phone }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "99596e5a-2fa6-4a3c-9cd1-d82caab8fbd5",
+        "name": "Enviar WhatsApp",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          736,
+          160
+        ],
+        "credentials": {
+          "httpBasicAuth": {
+            "id": "J0U88T5MOTmgUovC",
+            "name": "BAIC CENTRAL TWILLIO"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "// ======================================================\n// Webhook → preparar disparo restringido BAIC Central\n// ======================================================\nconst root = $input.first()?.json || {};\nconst body = root.body || root;\n\n// ======================================================\n// DATOS DEL CLIENTE\n// ======================================================\nconst firstname =\n  String(body.pilot_firstname || '').trim() ||\n  [body.pilot_firstname, body.pilot_lastname]\n    .filter((v) => v != null && String(v).trim() !== '')\n    .map((v) => String(v).trim())\n    .join(' ') ||\n  'Cliente';\n\nconst negocio =\n  String(body.pilot_negocio || '').trim();\n\nconst producto =\n  String(body.pilot_product_of_interest || '').trim();\n\n// ======================================================\n// TELÉFONO\n// ======================================================\nlet telefono =\n  body.pilot_cellphone ||\n  body.pilot_phone ||\n  null;\n\n// ======================================================\n// NORMALIZADOR ARGENTINA\n// ======================================================\nfunction normalizarTelefonoArgentina(numero) {\n  if (!numero) return null;\n\n  let limpio = String(numero).replace(/\\D/g, '');\n\n  if (limpio.startsWith('549') && limpio.length === 13) {\n    return limpio;\n  }\n\n  if (limpio.startsWith('54') && limpio.length === 12) {\n    return '549' + limpio.slice(2);\n  }\n\n  if (limpio.startsWith('0')) {\n    limpio = limpio.slice(1);\n  }\n\n  if (limpio.length === 10) {\n    return '549' + limpio;\n  }\n\n  return null;\n}\n\nconst whatsapp = normalizarTelefonoArgentina(telefono);\n\n// ======================================================\n// NORMALIZAR NEGOCIO / PRODUCTO\n// ======================================================\nconst negocioNorm = negocio\n  .normalize('NFD')\n  .replace(/[\\u0300-\\u036f]/g, '')\n  .toUpperCase()\n  .replace(/\\s+/g, ' ')\n  .trim();\n\nconst productoNorm = producto\n  .normalize('NFD')\n  .replace(/[\\u0300-\\u036f]/g, '')\n  .toUpperCase()\n  .replace(/\\s+/g, ' ')\n  .trim();\n\n// ======================================================\n// VALIDAR QUE SEA BAIC\n// ======================================================\nconst esBaic =\n  negocioNorm.includes('BAIC') ||\n  productoNorm.includes('BAIC');\n\n// ======================================================\n// CONSTANTES TWILIO BAIC CENTRAL\n// ======================================================\nconst ACCOUNT_SID = 'TWILIO_SID_OCULTO';\n\nconst MESSAGING_SERVICE_SID =\n  'MG085b57d6e13cc5af223ab80477b9e12e';\n\nconst FROM_PHONE =\n  'whatsapp:+5491180243654';\n\nconst CONTENT_SID =\n  'HX92c58c83bee1be554198e4b2eff0e641';\n\nconst TWILIO_CREDENTIAL_REF =\n  'BAIC CENTRAL TWILIO';\n\n// ======================================================\n// CONTENT VARIABLES\n// ======================================================\nconst contentVariablesObj = {\n  '1': firstname,\n  '2': 'WhatsApp-Image-2026-05-14-at-17.32.45_20260514_173441.jpeg',\n  '3': '123123123'\n};\n\nconst contentVariables =\n  JSON.stringify(contentVariablesObj);\n\n// ======================================================\n// VALIDACIONES\n// ======================================================\nconst telefonoValido =\n  whatsapp !== null;\n\nconst datosClienteValidos =\n  firstname !== '' &&\n  firstname !== 'Cliente';\n\nconst negocioValido =\n  esBaic;\n\nconst templateValido =\n  CONTENT_SID !== '';\n\nconst valido =\n  telefonoValido &&\n  datosClienteValidos &&\n  negocioValido &&\n  templateValido;\n\n// ======================================================\n// SALIDA\n// ======================================================\nreturn [\n  {\n    json: {\n      valido,\n\n      telefonoValido,\n      datosClienteValidos,\n      negocioValido,\n      templateValido,\n\n      whatsapp,\n      to_phone: whatsapp,\n\n      firstname,\n\n      negocio,\n      negocioNorm,\n\n      producto,\n      productoNorm,\n\n      account_sid: ACCOUNT_SID,\n      messaging_service_sid: MESSAGING_SERVICE_SID,\n      from_phone: FROM_PHONE,\n\n      content_sid: CONTENT_SID,\n      content_variables: contentVariables,\n\n      original: telefono,\n\n      twilio_credential_ref: TWILIO_CREDENTIAL_REF,\n\n      source: 'n8n:baic-central-restricciones',\n\n      payload_json: {\n        firstname,\n        negocio,\n        producto,\n        whatsapp,\n        contentVariables\n      }\n    }\n  }\n];"
+        },
+        "id": "6adac1df-9d8a-475d-94bd-bc0eaeb6ff0f",
+        "name": "Code",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -96,
+          288
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api-redoo.up.railway.app/api/v1/companies/me/messages-balance/consume",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-API-Key",
+                "value": "8130a1e0-ec85-4004-aa58-92c19773cacb"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({}) }}",
+          "options": {
+            "response": {
+              "response": {
+                "fullResponse": true,
+                "neverError": true
+              }
+            }
+          }
+        },
+        "id": "0b483913-7093-4085-8e0f-d765d5b73242",
+        "name": "Consume −",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          288,
+          272
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "number": [
+              {
+                "value1": "={{ $json.statusCode }}",
+                "operation": "equal",
+                "value2": 200
+              }
+            ]
+          }
+        },
+        "id": "6cb4c957-ca04-48dc-bb89-9df38e0b599e",
+        "name": "¿Hay saldo?1",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 1,
+        "position": [
+          496,
+          272
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api-redoo.up.railway.app/api/v1/companies/me/outbound-jobs",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-API-Key",
+                "value": "6955995d-7c77-4c76-a029-f2bc3acbc579"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ channel: 'whatsapp', to_phone: $('Code').item.json.to_phone, from_phone: $('Code').item.json.from_phone, account_sid: $('Code').item.json.account_sid, messaging_service_sid: $('Code').item.json.messaging_service_sid, content_sid: $('Code').item.json.content_sid, content_variables: $('Code').item.json.content_variables, twilio_credential_ref: $('Code').item.json.twilio_credential_ref, payload_json: $('Code').item.json.payload_json, source: $('Code').item.json.source }) }}",
+          "options": {}
+        },
+        "id": "62327391-a07d-4ef7-973a-e04766612e78",
+        "name": "Guardar job pendiente1",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          736,
+          384
+        ]
+      },
+      {
+        "parameters": {
+          "sendTo": "virginia.piotti@redoo.com.ar, camila.villareal@redoo.com.ar, ignacio.cabaleiro@redoo.com.ar",
+          "subject": "AUTOFRANCE - LIMITE MENSAJES",
+          "emailType": "text",
+          "message": "Buenas, AutoFrance supero el limite de sus mensajes mensuales. Por favor revisar.",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2.1,
+        "position": [
+          944,
+          384
+        ],
+        "id": "bc6a0c10-a632-479a-b350-a7d9892ffb5c",
+        "name": "Send a message",
+        "webhookId": "e1cd879f-c682-4c81-85ce-3ac2c229d482",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "jwGXROodBSgsAjaM",
+            "name": "Gmail notificaciones IA"
+          }
+        }
+      }
+    ],
+    "connections": {
+      "Code4": {
+        "main": [
+          [
+            {
+              "node": "Baic central",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "Code",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Webhook1": {
+        "main": [
+          [
+            {
+              "node": "Code",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "¿Datos OK?": {
+        "main": [
+          [
+            {
+              "node": "Consume −",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Code": {
+        "main": [
+          [
+            {
+              "node": "¿Datos OK?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Consume −": {
+        "main": [
+          [
+            {
+              "node": "¿Hay saldo?1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "¿Hay saldo?1": {
+        "main": [
+          [
+            {
+              "node": "Enviar WhatsApp",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Guardar job pendiente1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Guardar job pendiente1": {
+        "main": [
+          [
+            {
+              "node": "Send a message",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "system migration",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-10-26T17:05:09.982Z",
+    "updatedAt": "2026-10-26T17:05:09.982Z"
+  },
+  "activeVersionId": "97379dd2-4080-4a08-9057-4bd20f928f73",
+  "connections": {
+    "Code4": {
+      "main": [
+        [
+          {
+            "node": "Baic central",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook1": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Datos OK?": {
+      "main": [
+        [
+          {
+            "node": "Consume −",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "¿Datos OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consume −": {
+      "main": [
+        [
+          {
+            "node": "¿Hay saldo?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Hay saldo?1": {
+      "main": [
+        [
+          {
+            "node": "Enviar WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Guardar job pendiente1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar job pendiente1": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-05-13T18:28:21.834Z",
+  "id": "JtCrhMzArJnUfFli",
+  "isArchived": false,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "name": "WEBHOOK-BAIC-CENTRAL",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "0ed89707-67ae-4356-981d-f263d0efc106",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -384,
+        160
+      ],
+      "id": "36f26726-ef17-4f3a-acda-e914d9135840",
+      "name": "Webhook",
+      "webhookId": "0ed89707-67ae-4356-981d-f263d0efc106"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst body = input.body ?? {};\n\nfunction normalizarTelefonoArgentina(numero) {\n  if (numero === null || numero === undefined) {\n    return null;\n  }\n\n  let limpio = String(numero).replace(/\\D/g, '');\n\n  if (!limpio) {\n    return null;\n  }\n\n  // Quitar prefijo internacional 00\n  if (limpio.startsWith('00')) {\n    limpio = limpio.slice(2);\n  }\n\n  // Ya viene como 549 + 10 dígitos\n  if (/^549\\d{10}$/.test(limpio)) {\n    return limpio;\n  }\n\n  // Viene como 54 + 10 dígitos, sin el 9 de celular\n  if (/^54\\d{10}$/.test(limpio)) {\n    return `549${limpio.slice(2)}`;\n  }\n\n  // Quitar el cero nacional inicial\n  if (limpio.startsWith('0')) {\n    limpio = limpio.slice(1);\n  }\n\n  // Número nacional argentino: área + teléfono = 10 dígitos\n  if (/^\\d{10}$/.test(limpio)) {\n    return `549${limpio}`;\n  }\n\n  return null;\n}\n\nconst telefonoCelular = body.pilot_cellphone ?? null;\nconst telefonoFijo = body.pilot_phone ?? null;\n\nconst celularNormalizado =\n  normalizarTelefonoArgentina(telefonoCelular);\n\nconst telefonoNormalizado =\n  normalizarTelefonoArgentina(telefonoFijo);\n\nconst whatsapp =\n  celularNormalizado ??\n  telefonoNormalizado ??\n  null;\n\nlet campoUtilizado = null;\nlet original = null;\n\nif (celularNormalizado) {\n  campoUtilizado = 'pilot_cellphone';\n  original = telefonoCelular;\n} else if (telefonoNormalizado) {\n  campoUtilizado = 'pilot_phone';\n  original = telefonoFijo;\n}\n\nreturn [\n  {\n    json: {\n      whatsapp,\n      valido: whatsapp !== null,\n      original,\n      campo_utilizado: campoUtilizado,\n      telefonos_recibidos: {\n        pilot_cellphone: telefonoCelular,\n        pilot_phone: telefonoFijo,\n      },\n      telefonos_normalizados: {\n        pilot_cellphone: celularNormalizado,\n        pilot_phone: telefonoNormalizado,\n      },\n    },\n  },\n];"
+      },
+      "id": "d5378d00-51fb-496f-b8ac-112e8069457e",
+      "name": "Code4",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        144,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.twilio.com/2010-04-01/Accounts/TWILIO_SID_OCULTO/Messages.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "MessagingServiceSid",
+              "value": "=MG085b57d6e13cc5af223ab80477b9e12e"
+            },
+            {
+              "name": "To",
+              "value": "=whatsapp:{{ $json.whatsapp.startsWith('+') ? $json.whatsapp : '+' + $json.whatsapp }}"
+            },
+            {
+              "name": "ContentSid",
+              "value": "=HX92c58c83bee1be554198e4b2eff0e641"
+            },
+            {
+              "name": "ContentVariables",
+              "value": "={\"1\":\"{{ $('Webhook').item.json.body.pilot_firstname }}\",\"2\":\"WhatsApp-Image-2026-05-14-at-17.32.45_20260514_173441.jpeg\", \"3\" :\"123123123\"}"
+            },
+            {
+              "name": "From",
+              "value": "whatsapp:+5491180243654"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5864d216-a1d8-488f-99e8-bfe7eea88c5c",
+      "name": "Baic central",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        272,
+        0
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "J0U88T5MOTmgUovC",
+          "name": "BAIC CENTRAL TWILLIO"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "2d49fc4b-a14c-40c7-908d-dd9fa84969e8",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -384,
+        352
+      ],
+      "id": "2a445f55-7645-4b1d-9ecd-85345ce4bdf1",
+      "name": "Webhook1",
+      "webhookId": "2d49fc4b-a14c-40c7-908d-dd9fa84969e8"
+    },
+    {
+      "parameters": {
+        "content": "HX92c58c83bee1be554198e4b2eff0e641",
+        "height": 80
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -656,
+        176
+      ],
+      "typeVersion": 1,
+      "id": "08768b4f-1a68-4184-80d1-69ebddac1ebd",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "HX11ef0f6846332f13b03365ea8d7bab62",
+        "height": 80
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -656,
+        368
+      ],
+      "typeVersion": 1,
+      "id": "985f62da-8cf0-4edf-9f35-d5b0139bb7c1",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.valido }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "66fbf0d6-a806-406d-84b6-038e8fdf2d24",
+      "name": "¿Datos OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        64,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.twilio.com/2010-04-01/Accounts/{{ $('Code').item.json.account_sid }}/Messages.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "MessagingServiceSid",
+              "value": "={{ $('Code').item.json.messaging_service_sid }}"
+            },
+            {
+              "name": "To",
+              "value": "=whatsapp:{{ $('Code').item.json.whatsapp.startsWith('+') ? $('Code').item.json.whatsapp : '+' + $('Code').item.json.whatsapp }}"
+            },
+            {
+              "name": "ContentSid",
+              "value": "={{ $('Code').item.json.content_sid }}"
+            },
+            {
+              "name": "ContentVariables",
+              "value": "={{ $('Code').item.json.content_variables }}"
+            },
+            {
+              "name": "From",
+              "value": "={{ $('Code').item.json.from_phone }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "99596e5a-2fa6-4a3c-9cd1-d82caab8fbd5",
+      "name": "Enviar WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        736,
+        160
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "J0U88T5MOTmgUovC",
+          "name": "BAIC CENTRAL TWILLIO"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ======================================================\n// Webhook → preparar disparo restringido BAIC Central\n// ======================================================\nconst root = $input.first()?.json || {};\nconst body = root.body || root;\n\n// ======================================================\n// DATOS DEL CLIENTE\n// ======================================================\nconst firstname =\n  String(body.pilot_firstname || '').trim() ||\n  [body.pilot_firstname, body.pilot_lastname]\n    .filter((v) => v != null && String(v).trim() !== '')\n    .map((v) => String(v).trim())\n    .join(' ') ||\n  'Cliente';\n\nconst negocio =\n  String(body.pilot_negocio || '').trim();\n\nconst producto =\n  String(body.pilot_product_of_interest || '').trim();\n\n// ======================================================\n// TELÉFONO\n// ======================================================\nlet telefono =\n  body.pilot_cellphone ||\n  body.pilot_phone ||\n  null;\n\n// ======================================================\n// NORMALIZADOR ARGENTINA\n// ======================================================\nfunction normalizarTelefonoArgentina(numero) {\n  if (!numero) return null;\n\n  let limpio = String(numero).replace(/\\D/g, '');\n\n  if (limpio.startsWith('549') && limpio.length === 13) {\n    return limpio;\n  }\n\n  if (limpio.startsWith('54') && limpio.length === 12) {\n    return '549' + limpio.slice(2);\n  }\n\n  if (limpio.startsWith('0')) {\n    limpio = limpio.slice(1);\n  }\n\n  if (limpio.length === 10) {\n    return '549' + limpio;\n  }\n\n  return null;\n}\n\nconst whatsapp = normalizarTelefonoArgentina(telefono);\n\n// ======================================================\n// NORMALIZAR NEGOCIO / PRODUCTO\n// ======================================================\nconst negocioNorm = negocio\n  .normalize('NFD')\n  .replace(/[\\u0300-\\u036f]/g, '')\n  .toUpperCase()\n  .replace(/\\s+/g, ' ')\n  .trim();\n\nconst productoNorm = producto\n  .normalize('NFD')\n  .replace(/[\\u0300-\\u036f]/g, '')\n  .toUpperCase()\n  .replace(/\\s+/g, ' ')\n  .trim();\n\n// ======================================================\n// VALIDAR QUE SEA BAIC\n// ======================================================\nconst esBaic =\n  negocioNorm.includes('BAIC') ||\n  productoNorm.includes('BAIC');\n\n// ======================================================\n// CONSTANTES TWILIO BAIC CENTRAL\n// ======================================================\nconst ACCOUNT_SID = 'TWILIO_SID_OCULTO';\n\nconst MESSAGING_SERVICE_SID =\n  'MG085b57d6e13cc5af223ab80477b9e12e';\n\nconst FROM_PHONE =\n  'whatsapp:+5491180243654';\n\nconst CONTENT_SID =\n  'HX92c58c83bee1be554198e4b2eff0e641';\n\nconst TWILIO_CREDENTIAL_REF =\n  'BAIC CENTRAL TWILIO';\n\n// ======================================================\n// CONTENT VARIABLES\n// ======================================================\nconst contentVariablesObj = {\n  '1': firstname,\n  '2': 'WhatsApp-Image-2026-05-14-at-17.32.45_20260514_173441.jpeg',\n  '3': '123123123'\n};\n\nconst contentVariables =\n  JSON.stringify(contentVariablesObj);\n\n// ======================================================\n// VALIDACIONES\n// ======================================================\nconst telefonoValido =\n  whatsapp !== null;\n\nconst datosClienteValidos =\n  firstname !== '' &&\n  firstname !== 'Cliente';\n\nconst negocioValido =\n  esBaic;\n\nconst templateValido =\n  CONTENT_SID !== '';\n\nconst valido =\n  telefonoValido &&\n  datosClienteValidos &&\n  negocioValido &&\n  templateValido;\n\n// ======================================================\n// SALIDA\n// ======================================================\nreturn [\n  {\n    json: {\n      valido,\n\n      telefonoValido,\n      datosClienteValidos,\n      negocioValido,\n      templateValido,\n\n      whatsapp,\n      to_phone: whatsapp,\n\n      firstname,\n\n      negocio,\n      negocioNorm,\n\n      producto,\n      productoNorm,\n\n      account_sid: ACCOUNT_SID,\n      messaging_service_sid: MESSAGING_SERVICE_SID,\n      from_phone: FROM_PHONE,\n\n      content_sid: CONTENT_SID,\n      content_variables: contentVariables,\n\n      original: telefono,\n\n      twilio_credential_ref: TWILIO_CREDENTIAL_REF,\n\n      source: 'n8n:baic-central-restricciones',\n\n      payload_json: {\n        firstname,\n        negocio,\n        producto,\n        whatsapp,\n        contentVariables\n      }\n    }\n  }\n];"
+      },
+      "id": "6adac1df-9d8a-475d-94bd-bc0eaeb6ff0f",
+      "name": "Code",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -96,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api-redoo.up.railway.app/api/v1/companies/me/messages-balance/consume",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "8130a1e0-ec85-4004-aa58-92c19773cacb"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({}) }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "0b483913-7093-4085-8e0f-d765d5b73242",
+      "name": "Consume −",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        288,
+        272
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.statusCode }}",
+              "operation": "equal",
+              "value2": 200
+            }
+          ]
+        }
+      },
+      "id": "6cb4c957-ca04-48dc-bb89-9df38e0b599e",
+      "name": "¿Hay saldo?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        496,
+        272
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api-redoo.up.railway.app/api/v1/companies/me/outbound-jobs",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "6955995d-7c77-4c76-a029-f2bc3acbc579"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ channel: 'whatsapp', to_phone: $('Code').item.json.to_phone, from_phone: $('Code').item.json.from_phone, account_sid: $('Code').item.json.account_sid, messaging_service_sid: $('Code').item.json.messaging_service_sid, content_sid: $('Code').item.json.content_sid, content_variables: $('Code').item.json.content_variables, twilio_credential_ref: $('Code').item.json.twilio_credential_ref, payload_json: $('Code').item.json.payload_json, source: $('Code').item.json.source }) }}",
+        "options": {}
+      },
+      "id": "62327391-a07d-4ef7-973a-e04766612e78",
+      "name": "Guardar job pendiente1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        736,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "virginia.piotti@redoo.com.ar, camila.villareal@redoo.com.ar, ignacio.cabaleiro@redoo.com.ar",
+        "subject": "AUTOFRANCE - LIMITE MENSAJES",
+        "emailType": "text",
+        "message": "Buenas, AutoFrance supero el limite de sus mensajes mensuales. Por favor revisar.",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        944,
+        384
+      ],
+      "id": "bc6a0c10-a632-479a-b350-a7d9892ffb5c",
+      "name": "Send a message",
+      "webhookId": "e1cd879f-c682-4c81-85ce-3ac2c229d482",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "jwGXROodBSgsAjaM",
+          "name": "Gmail notificaciones IA"
+        }
+      }
+    }
+  ],
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "headers": {
+            "host": "hub.redooconect.com.ar",
+            "user-agent": "BAAS-WEBHOOKS-GATEWAY/WEBHOOK_EVENTS",
+            "accept": "*/*",
+            "content-type": "application/json",
+            "x-forwarded-for": "52.5.77.151",
+            "x-forwarded-host": "hub.redooconect.com.ar",
+            "x-forwarded-server": "hub.redooconect.com.ar",
+            "content-length": "413",
+            "connection": "Keep-Alive"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "action": "create",
+            "pilot_firstname": "Cami",
+            "pilot_lastname": "",
+            "pilot_phone": "",
+            "pilot_cellphone": "5492616809213",
+            "pilot_email": "matias.nicolas.1986@gmail.com",
+            "pilot_negocio": "Plan Ahorro",
+            "pilot_product_of_interest": "BAIC BJ30 4X2 HYBRID (BJ30 4x2)",
+            "pilot_notes": "Comentario: ¿Con qué anticipo contás actualmente?: tengo_un_vehículo_para_entregar // Fecha desistido:22/09/2026 12:08"
+          },
+          "webhookUrl": "https://hub.redooconect.com.ar/webhook/0ed89707-67ae-4356-981d-f263d0efc106",
+          "executionMode": "production"
+        }
+      }
+    ]
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "JtCrhMzArJnUfFli",
+      "projectId": "K8p6XEqA0L6D2uVt",
+      "createdAt": "2026-05-13T18:28:21.837Z",
+      "updatedAt": "2026-05-13T18:28:21.837Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 2,
+  "updatedAt": "2026-10-26T17:06:13.535Z",
+  "versionId": "97379dd2-4080-4a08-9057-4bd20f928f73"
+}
