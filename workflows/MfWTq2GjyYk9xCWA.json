@@ -1,0 +1,1590 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "e6313f3d-d0cb-4076-8d10-f4975c0f38f2",
+    "workflowId": "MfWTq2GjyYk9xCWA",
+    "nodes": [
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "hours",
+                "hoursInterval": 3
+              }
+            ]
+          }
+        },
+        "id": "6747999f-7e57-4c16-8e9d-7d15c8512ecd",
+        "name": "⏰ Schedule Trigger",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          -1472,
+          688
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT user_id, nombre, refresh_token FROM meli_tokens",
+          "options": {}
+        },
+        "id": "56b13290-767e-4ca3-a65d-b197da2a9592",
+        "name": "🗄️ Leer tokens MySQL",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          -1248,
+          688
+        ],
+        "credentials": {
+          "mySql": {
+            "id": "FezTcDnLo3SqPHvd",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "options": {}
+        },
+        "id": "5c9de3b7-47c3-404e-82eb-0353df238276",
+        "name": "🔁 Loop por cuenta",
+        "type": "n8n-nodes-base.splitInBatches",
+        "typeVersion": 3,
+        "position": [
+          -1040,
+          688
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.mercadolibre.com/oauth/token",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "content-type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ]
+          },
+          "sendBody": true,
+          "contentType": "form-urlencoded",
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "grant_type",
+                "value": "refresh_token"
+              },
+              {
+                "name": "client_id",
+                "value": "5782358665537188"
+              },
+              {
+                "name": "client_secret",
+                "value": "DqctU0UeyvwNldu1ee8Q37rUZacxHuM2"
+              },
+              {
+                "name": "refresh_token",
+                "value": "={{ $json.refresh_token }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "56f85e94-73be-46c3-b048-ff372181a405",
+        "name": "🔑 Refresh Token MELI",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -800,
+          704
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "UPDATE meli_tokens SET access_token = '{{ $json.access_token }}', refresh_token = '{{ $json.refresh_token }}', expires_at = DATE_ADD(NOW(), INTERVAL 6 HOUR) WHERE user_id = {{ $('🔁 Loop por cuenta').item.json.user_id }}",
+          "options": {}
+        },
+        "id": "0f386635-a2af-4f8c-97f0-7aeff36c76ab",
+        "name": "💾 Update token MySQL",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          -592,
+          704
+        ],
+        "credentials": {
+          "mySql": {
+            "id": "FezTcDnLo3SqPHvd",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": false,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 1
+            },
+            "conditions": [
+              {
+                "leftValue": "={{ $json.body.topic }}",
+                "rightValue": "vis_leads",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "60a65c5d-ad45-417a-90ce-3d53c451b753",
+        "name": "🔍 Es vis_leads?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          -1248,
+          352
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT access_token FROM meli_tokens WHERE user_id = {{ $json.body.user_id }}",
+          "options": {}
+        },
+        "id": "31e70957-fb42-4bc2-84e8-0fa20e736292",
+        "name": "🗄️ Obtener token",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          -928,
+          336
+        ],
+        "credentials": {
+          "mySql": {
+            "id": "FezTcDnLo3SqPHvd",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "const webhookData = $('📩 Webhook MELI').item.json;\nconst token = $input.item.json.access_token;\nconst resourcePath = webhookData.body.resource;\nconst leadId = resourcePath.replace('/vis/leads/', '');\n\nreturn {\n  json: {\n    lead_id: leadId,\n    user_id: webhookData.body.user_id,\n    received_at: webhookData.body.received,\n    access_token: token\n  }\n};"
+        },
+        "id": "dd06917a-99a2-4b9b-9539-927365093351",
+        "name": "⚙️ Preparar datos",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -704,
+          336
+        ]
+      },
+      {
+        "parameters": {
+          "url": "=https://api.mercadolibre.com/vis/leads/{{ $json.lead_id.replace('/leads', '').replace('/details', '').replace(/^\\/+|\\/+$/g, '') }}",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $json.access_token }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "d56c49bf-2e2f-4559-a66b-31fa6a64e31a",
+        "name": "👤 Fetch Lead",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -480,
+          336
+        ],
+        "retryOnFail": true,
+        "waitBetweenTries": 5000,
+        "maxTries": 5
+      },
+      {
+        "parameters": {
+          "url": "=https://api.mercadolibre.com/items/{{ $json.item_id }}",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $json.access_token }}"
+              }
+            ]
+          },
+          "options": {
+            "response": {
+              "response": {
+                "neverError": true
+              }
+            }
+          }
+        },
+        "id": "0f286a18-0d8e-496b-83de-081bc979a0ac",
+        "name": "🚗 Fetch Item",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -192,
+          336
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "const leadDetails = $input.item.json; // ahora viene de 🚗 Fetch Item1\nconst prev = $('Mapear Lead').item.json;\n\nlet item_titulo = null;\nlet item_precio = null;\nlet item_permalink = null;\nlet item_condition = null;\nlet item_thumbnail = null;\nlet item_status = null;\nlet item_currency = null;\nlet item_descripcion = null;\nlet seller_address = null;\nlet seller_zip = null;\nlet seller_lat = null;\nlet seller_lng = null;\nlet asesor_phone = null;\nlet asesor_phone2 = null;\n\ntry {\n  const item = $('🚗 Fetch Item').item.json;\n  if (item && item.id) {\n    item_titulo = item.title || null;\n    item_precio = item.price || null;\n    item_permalink = item.permalink || null;\n    item_condition = item.condition || null;\n    item_thumbnail = item.thumbnail || null;\n    item_status = item.status || null;\n    item_currency = item.currency_id || null;\n    seller_address = item.seller_address?.address_line || null;\n    seller_zip = item.seller_address?.zip_code || null;\n    seller_lat = item.seller_address?.latitude?.toString() || null;\n    seller_lng = item.seller_address?.longitude?.toString() || null;\n    asesor_phone = item.seller_contact?.phone?.toString() || null;\n    asesor_phone2 = item.seller_contact?.phone2?.toString() || null;\n  }\n} catch (e) {\n  // 🚗 Fetch Item no ejecutó o no tiene output para este item\n}\n\ntry {\n  item_descripcion = $('📝 Fetch Descripción').item.json.plain_text || null;\n} catch (e) {\n  // 📝 Fetch Descripción no ejecutó o la publicación no tiene descripción\n}\n\nlet lead_id = prev.lead_id;\nif (lead_id) {\n  lead_id = lead_id.replace('/leads', '').replace('/details', '').replace(/^\\/+|\\/+$/g, '');\n}\n\n// --- dealership desde el input directo (🚗 Fetch Item1) ---\nlet dealership = null;\nconst rawDealership = leadDetails?.details?.dealership || null;\nif (rawDealership) {\n  dealership = rawDealership.split('-')[0].trim();\n}\n\nreturn {\n  json: {\n    ...prev,\n    lead_id,\n    item_titulo,\n    item_precio,\n    item_permalink,\n    item_condition,\n    item_thumbnail,\n    item_status,\n    item_currency,\n    item_descripcion,\n    seller_address,\n    seller_zip,\n    seller_lat,\n    seller_lng,\n    asesor_phone,\n    asesor_phone2,\n    dealership,\n    received_at: prev.received_at ? new Date(prev.received_at).toISOString().replace('T', ' ').substring(0, 19) : null\n  }\n};"
+        },
+        "id": "6a722e07-379c-4654-8b5c-7bf2d2cd3682",
+        "name": "⚙️ Mapear Item",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          176,
+          336
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "INSERT INTO meli_leads (id, user_id, item_id, item_titulo, item_precio, item_permalink, item_condition, item_thumbnail, item_currency, item_status, buyer_id, buyer_nombre, buyer_email, buyer_phone, buyer_cuit, asesor_phone, asesor_phone2, contact_type, status, seller_address, seller_zip, seller_lat, seller_lng, received_at, dealership) VALUES ('{{ $json.lead_id }}', {{ $json.user_id }}, '{{ $json.item_id }}', {{ $json.item_titulo ? `'${$json.item_titulo.replace(/'/g, \"''\")}'` : 'NULL' }}, {{ $json.item_precio ?? 'NULL' }}, {{ $json.item_permalink ? `'${$json.item_permalink}'` : 'NULL' }}, {{ $json.item_condition ? `'${$json.item_condition}'` : 'NULL' }}, {{ $json.item_thumbnail ? `'${$json.item_thumbnail}'` : 'NULL' }}, {{ $json.item_currency ? `'${$json.item_currency}'` : 'NULL' }}, {{ $json.item_status ? `'${$json.item_status}'` : 'NULL' }}, {{ $json.buyer_id ?? 'NULL' }}, {{ $json.buyer_nombre ? `'${$json.buyer_nombre.replace(/'/g, \"''\")}'` : 'NULL' }}, {{ $json.buyer_email ? `'${$json.buyer_email}'` : 'NULL' }}, {{ $json.buyer_phone ? `'${$json.buyer_phone}'` : 'NULL' }}, {{ $json.buyer_cuit ? `'${$json.buyer_cuit}'` : 'NULL' }}, {{ $json.asesor_phone ? `'${$json.asesor_phone}'` : 'NULL' }}, {{ $json.asesor_phone2 ? `'${$json.asesor_phone2}'` : 'NULL' }}, {{ $json.contact_type ? `'${$json.contact_type}'` : 'NULL' }}, {{ $json.status ? `'${$json.status}'` : 'NULL' }}, {{ $json.seller_address ? `'${$json.seller_address.replace(/'/g, \"''\")}'` : 'NULL' }}, {{ $json.seller_zip ? `'${$json.seller_zip}'` : 'NULL' }}, {{ $json.seller_lat ? `'${$json.seller_lat}'` : 'NULL' }}, {{ $json.seller_lng ? `'${$json.seller_lng}'` : 'NULL' }}, '{{ $json.received_at }}', {{ $json.dealership ? `'${$json.dealership}'` : 'NULL' }})",
+          "options": {}
+        },
+        "id": "1e70d471-3230-4ea7-a988-aa5d3b78806e",
+        "name": "💾 Guardar Lead MySQL",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          400,
+          336
+        ],
+        "credentials": {
+          "mySql": {
+            "id": "FezTcDnLo3SqPHvd",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "d4f3308b-7c1c-40fe-b5d6-f5ec840ab539",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.1,
+        "position": [
+          -1472,
+          352
+        ],
+        "id": "62ce9c74-3056-4b82-b99a-bfecfc840c9d",
+        "name": "📩 Webhook MELI",
+        "webhookId": "d4f3308b-7c1c-40fe-b5d6-f5ec840ab539"
+      },
+      {
+        "parameters": {
+          "content": "## Endpoint ML\n",
+          "height": 80,
+          "width": 176
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          -1728,
+          368
+        ],
+        "typeVersion": 1,
+        "id": "8af31e08-8218-4277-94a3-a41584ea7ea8",
+        "name": "Sticky Note"
+      },
+      {
+        "parameters": {
+          "content": "## Actualiza Token\n",
+          "height": 80,
+          "width": 208
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          -1728,
+          704
+        ],
+        "typeVersion": 1,
+        "id": "7c3ea2aa-01b8-4fa3-865d-03f12d73f913",
+        "name": "Sticky Note1"
+      },
+      {
+        "parameters": {
+          "jsCode": "const lead = $input.item.json;\nconst prev = $('⚙️ Preparar datos').item.json;\n\nconst escape = (str) => str ? str.toString().replace(/'/g, \"''\") : null;\n\nreturn {\n  json: {\n    lead_id: prev.lead_id,\n    user_id: prev.user_id,\n    received_at: prev.received_at,\n    access_token: prev.access_token,\n    item_id: lead.item_id,\n    buyer_id: lead.buyer_id,\n    buyer_nombre: escape(lead.name),\n    buyer_email: escape(lead.email),\n    buyer_phone: escape(lead.phone),\n    buyer_cuit: escape(lead.identification_number),\n    contact_type: lead.contact_type,\n    status: (!lead.buyer_id || lead.buyer_id === 0 || !lead.name) ? 'incomplete' : 'active'\n  }\n};"
+        },
+        "id": "0d55ced8-e5f3-44f4-b4c4-303aface73c7",
+        "name": "Mapear Lead",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -336,
+          336
+        ]
+      },
+      {
+        "parameters": {
+          "url": "=https://api.mercadolibre.com/leads/{{ $('👤 Fetch Lead').item.json.id }}/details",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $('Mapear Lead').item.json.access_token }}"
+              }
+            ]
+          },
+          "options": {
+            "response": {
+              "response": {
+                "neverError": true
+              }
+            }
+          }
+        },
+        "id": "217f3c5b-53af-4e33-8116-964db10b1398",
+        "name": "Get detail",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          0,
+          336
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "INSERT IGNORE INTO meli_leads (id, user_id, item_id, item_titulo, item_precio, item_permalink, item_condition, item_thumbnail, item_currency, item_status, item_descripcion, buyer_id, buyer_nombre, buyer_email, buyer_phone, buyer_cuit, asesor_phone, asesor_phone2, contact_type, status, seller_address, seller_zip, seller_lat, seller_lng, received_at, dealership) VALUES ('{{ $json.lead_id }}', {{ $json.user_id }}, '{{ $json.item_id }}', {{ $json.item_titulo ? `'${$json.item_titulo.replace(/'/g, \"''\").replace(/\\$(?=\\d)/g, '$ ')}'` : 'NULL' }}, {{ $json.item_precio ?? 'NULL' }}, {{ $json.item_permalink ? `'${$json.item_permalink}'` : 'NULL' }}, {{ $json.item_condition ? `'${$json.item_condition}'` : 'NULL' }}, {{ $json.item_thumbnail ? `'${$json.item_thumbnail}'` : 'NULL' }}, {{ $json.item_currency ? `'${$json.item_currency}'` : 'NULL' }}, {{ $json.item_status ? `'${$json.item_status}'` : 'NULL' }}, {{ $json.item_descripcion ? `'${$json.item_descripcion.replace(/\\\\/g, '\\\\\\\\').replace(/'/g, \"''\").replace(/\\$(?=\\d)/g, '$ ')}'` : 'NULL' }}, {{ $json.buyer_id ?? 'NULL' }}, {{ $json.buyer_nombre ? `'${$json.buyer_nombre}'` : 'NULL' }}, {{ $json.buyer_email ? `'${$json.buyer_email}'` : 'NULL' }}, {{ $json.buyer_phone ? `'${$json.buyer_phone}'` : 'NULL' }}, {{ $json.buyer_cuit ? `'${$json.buyer_cuit}'` : 'NULL' }}, {{ $json.asesor_phone ? `'${$json.asesor_phone}'` : 'NULL' }}, {{ $json.asesor_phone2 ? `'${$json.asesor_phone2}'` : 'NULL' }}, {{ $json.contact_type ? `'${$json.contact_type}'` : 'NULL' }}, {{ $json.status ? `'${$json.status}'` : 'NULL' }}, {{ $json.seller_address ? `'${$json.seller_address.replace(/'/g, \"''\")}'` : 'NULL' }}, {{ $json.seller_zip ? `'${$json.seller_zip}'` : 'NULL' }}, {{ $json.seller_lat ? `'${$json.seller_lat}'` : 'NULL' }}, {{ $json.seller_lng ? `'${$json.seller_lng}'` : 'NULL' }}, '{{ $json.received_at }}', {{ $json.dealership ? `'${$json.dealership}'` : 'NULL' }})",
+          "options": {}
+        },
+        "name": "💾 Guardar Lead Suite",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          400,
+          528
+        ],
+        "id": "107a0626-28a3-43c5-9cee-635501150ec1",
+        "credentials": {
+          "mySql": {
+            "id": "HZXcTU4GLNSSF2EL",
+            "name": "MySQL account SUITE"
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "hours",
+                "hoursInterval": 3
+              }
+            ]
+          }
+        },
+        "id": "3c0e84fd-f8f9-404c-bd53-4dfe0335a7bf",
+        "name": "⏰ Schedule Trigger1",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          -1472,
+          928
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT user_id, nombre, refresh_token FROM meli_tokens",
+          "options": {}
+        },
+        "id": "68d6ef49-c92d-4daf-951d-c6b4a6cf0fb8",
+        "name": "🗄️ Leer tokens MySQL1",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          -1248,
+          928
+        ],
+        "credentials": {
+          "mySql": {
+            "id": "HZXcTU4GLNSSF2EL",
+            "name": "MySQL account SUITE"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "options": {}
+        },
+        "id": "25b9cb55-0248-46d1-839f-cfc464fcc322",
+        "name": "🔁 Loop por cuenta1",
+        "type": "n8n-nodes-base.splitInBatches",
+        "typeVersion": 3,
+        "position": [
+          -1040,
+          928
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.mercadolibre.com/oauth/token",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "content-type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ]
+          },
+          "sendBody": true,
+          "contentType": "form-urlencoded",
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "grant_type",
+                "value": "refresh_token"
+              },
+              {
+                "name": "client_id",
+                "value": "5782358665537188"
+              },
+              {
+                "name": "client_secret",
+                "value": "DqctU0UeyvwNldu1ee8Q37rUZacxHuM2"
+              },
+              {
+                "name": "refresh_token",
+                "value": "={{ $json.refresh_token }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "eb94a43a-4f62-4528-b4f9-b80ac2b8dfc6",
+        "name": "🔑 Refresh Token MELI1",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -800,
+          944
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "UPDATE meli_tokens SET access_token = '{{ $json.access_token }}', refresh_token = '{{ $json.refresh_token }}', expires_at = DATE_ADD(NOW(), INTERVAL 6 HOUR) WHERE user_id = {{ $('🔁 Loop por cuenta1').item.json.user_id }}",
+          "options": {}
+        },
+        "id": "112f65bf-9046-4c9b-9176-f0bf0538024a",
+        "name": "💾 Update token MySQL1",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          -592,
+          944
+        ],
+        "credentials": {
+          "mySql": {
+            "id": "HZXcTU4GLNSSF2EL",
+            "name": "MySQL account SUITE"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "content": "## Actualiza Token\nSUITE",
+          "height": 80,
+          "width": 208
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          -1728,
+          944
+        ],
+        "typeVersion": 1,
+        "id": "842ca6f3-3545-44cb-b10c-f963e783490d",
+        "name": "Sticky Note2"
+      }
+    ],
+    "connections": {
+      "⏰ Schedule Trigger": {
+        "main": [
+          [
+            {
+              "node": "🗄️ Leer tokens MySQL",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🗄️ Leer tokens MySQL": {
+        "main": [
+          [
+            {
+              "node": "🔁 Loop por cuenta",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🔁 Loop por cuenta": {
+        "main": [
+          [],
+          [
+            {
+              "node": "🔑 Refresh Token MELI",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🔑 Refresh Token MELI": {
+        "main": [
+          [
+            {
+              "node": "💾 Update token MySQL",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "💾 Update token MySQL": {
+        "main": [
+          [
+            {
+              "node": "🔁 Loop por cuenta",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🔍 Es vis_leads?": {
+        "main": [
+          [
+            {
+              "node": "🗄️ Obtener token",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🗄️ Obtener token": {
+        "main": [
+          [
+            {
+              "node": "⚙️ Preparar datos",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "⚙️ Preparar datos": {
+        "main": [
+          [
+            {
+              "node": "👤 Fetch Lead",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "👤 Fetch Lead": {
+        "main": [
+          [
+            {
+              "node": "Mapear Lead",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🚗 Fetch Item": {
+        "main": [
+          [
+            {
+              "node": "Get detail",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "⚙️ Mapear Item": {
+        "main": [
+          [
+            {
+              "node": "💾 Guardar Lead Suite",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "💾 Guardar Lead MySQL",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "📩 Webhook MELI": {
+        "main": [
+          [
+            {
+              "node": "🔍 Es vis_leads?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Mapear Lead": {
+        "main": [
+          [
+            {
+              "node": "🚗 Fetch Item",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get detail": {
+        "main": [
+          [
+            {
+              "node": "⚙️ Mapear Item",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "⏰ Schedule Trigger1": {
+        "main": [
+          [
+            {
+              "node": "🗄️ Leer tokens MySQL1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🗄️ Leer tokens MySQL1": {
+        "main": [
+          [
+            {
+              "node": "🔁 Loop por cuenta1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🔁 Loop por cuenta1": {
+        "main": [
+          [],
+          [
+            {
+              "node": "🔑 Refresh Token MELI1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🔑 Refresh Token MELI1": {
+        "main": [
+          [
+            {
+              "node": "💾 Update token MySQL1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "💾 Update token MySQL1": {
+        "main": [
+          [
+            {
+              "node": "🔁 Loop por cuenta1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "MARCELO AGUSTIN DRI",
+    "name": "Version e6313f3d",
+    "description": "",
+    "autosaved": true,
+    "createdAt": "2026-11-13T19:35:18.022Z",
+    "updatedAt": "2026-11-13T19:35:24.000Z"
+  },
+  "activeVersionId": "e6313f3d-d0cb-4076-8d10-f4975c0f38f2",
+  "connections": {
+    "⏰ Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "🗄️ Leer tokens MySQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🗄️ Leer tokens MySQL": {
+      "main": [
+        [
+          {
+            "node": "🔁 Loop por cuenta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔁 Loop por cuenta": {
+      "main": [
+        [],
+        [
+          {
+            "node": "🔑 Refresh Token MELI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔑 Refresh Token MELI": {
+      "main": [
+        [
+          {
+            "node": "💾 Update token MySQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "💾 Update token MySQL": {
+      "main": [
+        [
+          {
+            "node": "🔁 Loop por cuenta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔍 Es vis_leads?": {
+      "main": [
+        [
+          {
+            "node": "🗄️ Obtener token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🗄️ Obtener token": {
+      "main": [
+        [
+          {
+            "node": "⚙️ Preparar datos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⚙️ Preparar datos": {
+      "main": [
+        [
+          {
+            "node": "👤 Fetch Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "👤 Fetch Lead": {
+      "main": [
+        [
+          {
+            "node": "Mapear Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🚗 Fetch Item": {
+      "main": [
+        [
+          {
+            "node": "Get detail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⚙️ Mapear Item": {
+      "main": [
+        [
+          {
+            "node": "💾 Guardar Lead Suite",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "💾 Guardar Lead MySQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📩 Webhook MELI": {
+      "main": [
+        [
+          {
+            "node": "🔍 Es vis_leads?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mapear Lead": {
+      "main": [
+        [
+          {
+            "node": "🚗 Fetch Item",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get detail": {
+      "main": [
+        [
+          {
+            "node": "⚙️ Mapear Item",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⏰ Schedule Trigger1": {
+      "main": [
+        [
+          {
+            "node": "🗄️ Leer tokens MySQL1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🗄️ Leer tokens MySQL1": {
+      "main": [
+        [
+          {
+            "node": "🔁 Loop por cuenta1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔁 Loop por cuenta1": {
+      "main": [
+        [],
+        [
+          {
+            "node": "🔑 Refresh Token MELI1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔑 Refresh Token MELI1": {
+      "main": [
+        [
+          {
+            "node": "💾 Update token MySQL1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "💾 Update token MySQL1": {
+      "main": [
+        [
+          {
+            "node": "🔁 Loop por cuenta1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-05-06T20:16:43.150Z",
+  "id": "MfWTq2GjyYk9xCWA",
+  "isArchived": false,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "name": "MELI",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 3
+            }
+          ]
+        }
+      },
+      "id": "6747999f-7e57-4c16-8e9d-7d15c8512ecd",
+      "name": "⏰ Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1472,
+        688
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT user_id, nombre, refresh_token FROM meli_tokens",
+        "options": {}
+      },
+      "id": "56b13290-767e-4ca3-a65d-b197da2a9592",
+      "name": "🗄️ Leer tokens MySQL",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        -1248,
+        688
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "FezTcDnLo3SqPHvd",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "5c9de3b7-47c3-404e-82eb-0353df238276",
+      "name": "🔁 Loop por cuenta",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -1040,
+        688
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.mercadolibre.com/oauth/token",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "content-type",
+              "value": "application/x-www-form-urlencoded"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "grant_type",
+              "value": "refresh_token"
+            },
+            {
+              "name": "client_id",
+              "value": "5782358665537188"
+            },
+            {
+              "name": "client_secret",
+              "value": "DqctU0UeyvwNldu1ee8Q37rUZacxHuM2"
+            },
+            {
+              "name": "refresh_token",
+              "value": "={{ $json.refresh_token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "56f85e94-73be-46c3-b048-ff372181a405",
+      "name": "🔑 Refresh Token MELI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -800,
+        704
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE meli_tokens SET access_token = '{{ $json.access_token }}', refresh_token = '{{ $json.refresh_token }}', expires_at = DATE_ADD(NOW(), INTERVAL 6 HOUR) WHERE user_id = {{ $('🔁 Loop por cuenta').item.json.user_id }}",
+        "options": {}
+      },
+      "id": "0f386635-a2af-4f8c-97f0-7aeff36c76ab",
+      "name": "💾 Update token MySQL",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        -592,
+        704
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "FezTcDnLo3SqPHvd",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.body.topic }}",
+              "rightValue": "vis_leads",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "60a65c5d-ad45-417a-90ce-3d53c451b753",
+      "name": "🔍 Es vis_leads?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1248,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT access_token FROM meli_tokens WHERE user_id = {{ $json.body.user_id }}",
+        "options": {}
+      },
+      "id": "31e70957-fb42-4bc2-84e8-0fa20e736292",
+      "name": "🗄️ Obtener token",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        -928,
+        336
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "FezTcDnLo3SqPHvd",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const webhookData = $('📩 Webhook MELI').item.json;\nconst token = $input.item.json.access_token;\nconst resourcePath = webhookData.body.resource;\nconst leadId = resourcePath.replace('/vis/leads/', '');\n\nreturn {\n  json: {\n    lead_id: leadId,\n    user_id: webhookData.body.user_id,\n    received_at: webhookData.body.received,\n    access_token: token\n  }\n};"
+      },
+      "id": "dd06917a-99a2-4b9b-9539-927365093351",
+      "name": "⚙️ Preparar datos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -704,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.mercadolibre.com/vis/leads/{{ $json.lead_id.replace('/leads', '').replace('/details', '').replace(/^\\/+|\\/+$/g, '') }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.access_token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d56c49bf-2e2f-4559-a66b-31fa6a64e31a",
+      "name": "👤 Fetch Lead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -480,
+        336
+      ],
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "maxTries": 5
+    },
+    {
+      "parameters": {
+        "url": "=https://api.mercadolibre.com/items/{{ $json.item_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.access_token }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "0f286a18-0d8e-496b-83de-081bc979a0ac",
+      "name": "🚗 Fetch Item",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -192,
+        336
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const leadDetails = $input.item.json; // ahora viene de 🚗 Fetch Item1\nconst prev = $('Mapear Lead').item.json;\n\nlet item_titulo = null;\nlet item_precio = null;\nlet item_permalink = null;\nlet item_condition = null;\nlet item_thumbnail = null;\nlet item_status = null;\nlet item_currency = null;\nlet item_descripcion = null;\nlet seller_address = null;\nlet seller_zip = null;\nlet seller_lat = null;\nlet seller_lng = null;\nlet asesor_phone = null;\nlet asesor_phone2 = null;\n\ntry {\n  const item = $('🚗 Fetch Item').item.json;\n  if (item && item.id) {\n    item_titulo = item.title || null;\n    item_precio = item.price || null;\n    item_permalink = item.permalink || null;\n    item_condition = item.condition || null;\n    item_thumbnail = item.thumbnail || null;\n    item_status = item.status || null;\n    item_currency = item.currency_id || null;\n    seller_address = item.seller_address?.address_line || null;\n    seller_zip = item.seller_address?.zip_code || null;\n    seller_lat = item.seller_address?.latitude?.toString() || null;\n    seller_lng = item.seller_address?.longitude?.toString() || null;\n    asesor_phone = item.seller_contact?.phone?.toString() || null;\n    asesor_phone2 = item.seller_contact?.phone2?.toString() || null;\n  }\n} catch (e) {\n  // 🚗 Fetch Item no ejecutó o no tiene output para este item\n}\n\ntry {\n  item_descripcion = $('📝 Fetch Descripción').item.json.plain_text || null;\n} catch (e) {\n  // 📝 Fetch Descripción no ejecutó o la publicación no tiene descripción\n}\n\nlet lead_id = prev.lead_id;\nif (lead_id) {\n  lead_id = lead_id.replace('/leads', '').replace('/details', '').replace(/^\\/+|\\/+$/g, '');\n}\n\n// --- dealership desde el input directo (🚗 Fetch Item1) ---\nlet dealership = null;\nconst rawDealership = leadDetails?.details?.dealership || null;\nif (rawDealership) {\n  dealership = rawDealership.split('-')[0].trim();\n}\n\nreturn {\n  json: {\n    ...prev,\n    lead_id,\n    item_titulo,\n    item_precio,\n    item_permalink,\n    item_condition,\n    item_thumbnail,\n    item_status,\n    item_currency,\n    item_descripcion,\n    seller_address,\n    seller_zip,\n    seller_lat,\n    seller_lng,\n    asesor_phone,\n    asesor_phone2,\n    dealership,\n    received_at: prev.received_at ? new Date(prev.received_at).toISOString().replace('T', ' ').substring(0, 19) : null\n  }\n};"
+      },
+      "id": "6a722e07-379c-4654-8b5c-7bf2d2cd3682",
+      "name": "⚙️ Mapear Item",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        176,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO meli_leads (id, user_id, item_id, item_titulo, item_precio, item_permalink, item_condition, item_thumbnail, item_currency, item_status, buyer_id, buyer_nombre, buyer_email, buyer_phone, buyer_cuit, asesor_phone, asesor_phone2, contact_type, status, seller_address, seller_zip, seller_lat, seller_lng, received_at, dealership) VALUES ('{{ $json.lead_id }}', {{ $json.user_id }}, '{{ $json.item_id }}', {{ $json.item_titulo ? `'${$json.item_titulo.replace(/'/g, \"''\")}'` : 'NULL' }}, {{ $json.item_precio ?? 'NULL' }}, {{ $json.item_permalink ? `'${$json.item_permalink}'` : 'NULL' }}, {{ $json.item_condition ? `'${$json.item_condition}'` : 'NULL' }}, {{ $json.item_thumbnail ? `'${$json.item_thumbnail}'` : 'NULL' }}, {{ $json.item_currency ? `'${$json.item_currency}'` : 'NULL' }}, {{ $json.item_status ? `'${$json.item_status}'` : 'NULL' }}, {{ $json.buyer_id ?? 'NULL' }}, {{ $json.buyer_nombre ? `'${$json.buyer_nombre.replace(/'/g, \"''\")}'` : 'NULL' }}, {{ $json.buyer_email ? `'${$json.buyer_email}'` : 'NULL' }}, {{ $json.buyer_phone ? `'${$json.buyer_phone}'` : 'NULL' }}, {{ $json.buyer_cuit ? `'${$json.buyer_cuit}'` : 'NULL' }}, {{ $json.asesor_phone ? `'${$json.asesor_phone}'` : 'NULL' }}, {{ $json.asesor_phone2 ? `'${$json.asesor_phone2}'` : 'NULL' }}, {{ $json.contact_type ? `'${$json.contact_type}'` : 'NULL' }}, {{ $json.status ? `'${$json.status}'` : 'NULL' }}, {{ $json.seller_address ? `'${$json.seller_address.replace(/'/g, \"''\")}'` : 'NULL' }}, {{ $json.seller_zip ? `'${$json.seller_zip}'` : 'NULL' }}, {{ $json.seller_lat ? `'${$json.seller_lat}'` : 'NULL' }}, {{ $json.seller_lng ? `'${$json.seller_lng}'` : 'NULL' }}, '{{ $json.received_at }}', {{ $json.dealership ? `'${$json.dealership}'` : 'NULL' }})",
+        "options": {}
+      },
+      "id": "1e70d471-3230-4ea7-a988-aa5d3b78806e",
+      "name": "💾 Guardar Lead MySQL",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        400,
+        336
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "FezTcDnLo3SqPHvd",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "d4f3308b-7c1c-40fe-b5d6-f5ec840ab539",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1472,
+        352
+      ],
+      "id": "62ce9c74-3056-4b82-b99a-bfecfc840c9d",
+      "name": "📩 Webhook MELI",
+      "webhookId": "d4f3308b-7c1c-40fe-b5d6-f5ec840ab539"
+    },
+    {
+      "parameters": {
+        "content": "## Endpoint ML\n",
+        "height": 80,
+        "width": 176
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1728,
+        368
+      ],
+      "typeVersion": 1,
+      "id": "8af31e08-8218-4277-94a3-a41584ea7ea8",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "## Actualiza Token\n",
+        "height": 80,
+        "width": 208
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1728,
+        704
+      ],
+      "typeVersion": 1,
+      "id": "7c3ea2aa-01b8-4fa3-865d-03f12d73f913",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $input.item.json;\nconst prev = $('⚙️ Preparar datos').item.json;\n\nconst escape = (str) => str ? str.toString().replace(/'/g, \"''\") : null;\n\nreturn {\n  json: {\n    lead_id: prev.lead_id,\n    user_id: prev.user_id,\n    received_at: prev.received_at,\n    access_token: prev.access_token,\n    item_id: lead.item_id,\n    buyer_id: lead.buyer_id,\n    buyer_nombre: escape(lead.name),\n    buyer_email: escape(lead.email),\n    buyer_phone: escape(lead.phone),\n    buyer_cuit: escape(lead.identification_number),\n    contact_type: lead.contact_type,\n    status: (!lead.buyer_id || lead.buyer_id === 0 || !lead.name) ? 'incomplete' : 'active'\n  }\n};"
+      },
+      "id": "0d55ced8-e5f3-44f4-b4c4-303aface73c7",
+      "name": "Mapear Lead",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -336,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.mercadolibre.com/leads/{{ $('👤 Fetch Lead').item.json.id }}/details",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Mapear Lead').item.json.access_token }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "217f3c5b-53af-4e33-8116-964db10b1398",
+      "name": "Get detail",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        336
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT IGNORE INTO meli_leads (id, user_id, item_id, item_titulo, item_precio, item_permalink, item_condition, item_thumbnail, item_currency, item_status, item_descripcion, buyer_id, buyer_nombre, buyer_email, buyer_phone, buyer_cuit, asesor_phone, asesor_phone2, contact_type, status, seller_address, seller_zip, seller_lat, seller_lng, received_at, dealership) VALUES ('{{ $json.lead_id }}', {{ $json.user_id }}, '{{ $json.item_id }}', {{ $json.item_titulo ? `'${$json.item_titulo.replace(/'/g, \"''\").replace(/\\$(?=\\d)/g, '$ ')}'` : 'NULL' }}, {{ $json.item_precio ?? 'NULL' }}, {{ $json.item_permalink ? `'${$json.item_permalink}'` : 'NULL' }}, {{ $json.item_condition ? `'${$json.item_condition}'` : 'NULL' }}, {{ $json.item_thumbnail ? `'${$json.item_thumbnail}'` : 'NULL' }}, {{ $json.item_currency ? `'${$json.item_currency}'` : 'NULL' }}, {{ $json.item_status ? `'${$json.item_status}'` : 'NULL' }}, {{ $json.item_descripcion ? `'${$json.item_descripcion.replace(/\\\\/g, '\\\\\\\\').replace(/'/g, \"''\").replace(/\\$(?=\\d)/g, '$ ')}'` : 'NULL' }}, {{ $json.buyer_id ?? 'NULL' }}, {{ $json.buyer_nombre ? `'${$json.buyer_nombre}'` : 'NULL' }}, {{ $json.buyer_email ? `'${$json.buyer_email}'` : 'NULL' }}, {{ $json.buyer_phone ? `'${$json.buyer_phone}'` : 'NULL' }}, {{ $json.buyer_cuit ? `'${$json.buyer_cuit}'` : 'NULL' }}, {{ $json.asesor_phone ? `'${$json.asesor_phone}'` : 'NULL' }}, {{ $json.asesor_phone2 ? `'${$json.asesor_phone2}'` : 'NULL' }}, {{ $json.contact_type ? `'${$json.contact_type}'` : 'NULL' }}, {{ $json.status ? `'${$json.status}'` : 'NULL' }}, {{ $json.seller_address ? `'${$json.seller_address.replace(/'/g, \"''\")}'` : 'NULL' }}, {{ $json.seller_zip ? `'${$json.seller_zip}'` : 'NULL' }}, {{ $json.seller_lat ? `'${$json.seller_lat}'` : 'NULL' }}, {{ $json.seller_lng ? `'${$json.seller_lng}'` : 'NULL' }}, '{{ $json.received_at }}', {{ $json.dealership ? `'${$json.dealership}'` : 'NULL' }})",
+        "options": {}
+      },
+      "name": "💾 Guardar Lead Suite",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        400,
+        528
+      ],
+      "id": "107a0626-28a3-43c5-9cee-635501150ec1",
+      "credentials": {
+        "mySql": {
+          "id": "HZXcTU4GLNSSF2EL",
+          "name": "MySQL account SUITE"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 3
+            }
+          ]
+        }
+      },
+      "id": "3c0e84fd-f8f9-404c-bd53-4dfe0335a7bf",
+      "name": "⏰ Schedule Trigger1",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1472,
+        928
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT user_id, nombre, refresh_token FROM meli_tokens",
+        "options": {}
+      },
+      "id": "68d6ef49-c92d-4daf-951d-c6b4a6cf0fb8",
+      "name": "🗄️ Leer tokens MySQL1",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        -1248,
+        928
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "HZXcTU4GLNSSF2EL",
+          "name": "MySQL account SUITE"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "25b9cb55-0248-46d1-839f-cfc464fcc322",
+      "name": "🔁 Loop por cuenta1",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -1040,
+        928
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.mercadolibre.com/oauth/token",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "content-type",
+              "value": "application/x-www-form-urlencoded"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "grant_type",
+              "value": "refresh_token"
+            },
+            {
+              "name": "client_id",
+              "value": "5782358665537188"
+            },
+            {
+              "name": "client_secret",
+              "value": "DqctU0UeyvwNldu1ee8Q37rUZacxHuM2"
+            },
+            {
+              "name": "refresh_token",
+              "value": "={{ $json.refresh_token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "eb94a43a-4f62-4528-b4f9-b80ac2b8dfc6",
+      "name": "🔑 Refresh Token MELI1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -800,
+        944
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE meli_tokens SET access_token = '{{ $json.access_token }}', refresh_token = '{{ $json.refresh_token }}', expires_at = DATE_ADD(NOW(), INTERVAL 6 HOUR) WHERE user_id = {{ $('🔁 Loop por cuenta1').item.json.user_id }}",
+        "options": {}
+      },
+      "id": "112f65bf-9046-4c9b-9176-f0bf0538024a",
+      "name": "💾 Update token MySQL1",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        -592,
+        944
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "HZXcTU4GLNSSF2EL",
+          "name": "MySQL account SUITE"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## Actualiza Token\nSUITE",
+        "height": 80,
+        "width": 208
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1728,
+        944
+      ],
+      "typeVersion": 1,
+      "id": "842ca6f3-3545-44cb-b10c-f963e783490d",
+      "name": "Sticky Note2"
+    }
+  ],
+  "pinData": {
+    "📩 Webhook MELI": [
+      {
+        "json": {
+          "headers": {
+            "host": "hub.redooconect.com.ar",
+            "user-agent": "github.com/go-loco/restful",
+            "accept": "application/json",
+            "content-type": "application/json",
+            "traceparent": "00-4f9fd525b290e32cf448e1a562777466-6372244c2467fb20-00",
+            "x-b3-sampled": "0",
+            "x-b3-spanid": "6372244c2467fb20",
+            "x-b3-traceid": "4f9fd525b290e32cf448e1a562777466",
+            "x-rest-pool-name": "pool_unknown",
+            "x-socket-timeout": "800",
+            "accept-encoding": "gzip",
+            "x-forwarded-for": "35.186.182.146",
+            "x-forwarded-host": "hub.redooconect.com.ar",
+            "x-forwarded-server": "hub.redooconect.com.ar",
+            "content-length": "288",
+            "connection": "Keep-Alive"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "_id": "c8625bc7-f18d-4e8d-a430-1fdaf591a2c9",
+            "topic": "vis_leads",
+            "resource": "/vis/leads/6937f128-fdad-4185-93e5-9bc3b668259b",
+            "user_id": 72477913,
+            "application_id": 5782358665537188,
+            "sent": "2026-10-27T13:56:20.007Z",
+            "attempts": 1,
+            "received": "2026-10-27T13:56:19.762Z",
+            "actions": [
+              "whatsapp"
+            ]
+          },
+          "webhookUrl": "https://hub.redooconect.com.ar/webhook/d4f3308b-7c1c-40fe-b5d6-f5ec840ab539",
+          "executionMode": "production"
+        }
+      }
+    ]
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate"
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "MfWTq2GjyYk9xCWA",
+      "projectId": "K8p6XEqA0L6D2uVt",
+      "createdAt": "2026-05-06T20:16:43.154Z",
+      "updatedAt": "2026-05-06T20:16:43.154Z"
+    }
+  ],
+  "staticData": {
+    "node:⏰ Schedule Trigger": {
+      "recurrenceRules": [
+        15
+      ],
+      "recurrenceRuleSignatures": [
+        "hours:3"
+      ]
+    },
+    "node:⏰ Schedule Trigger1": {
+      "recurrenceRules": [
+        15
+      ],
+      "recurrenceRuleSignatures": [
+        "hours:3"
+      ]
+    }
+  },
+  "tags": [],
+  "triggerCount": 3,
+  "updatedAt": "2026-11-13T19:35:18.019Z",
+  "versionId": "e6313f3d-d0cb-4076-8d10-f4975c0f38f2"
+}
