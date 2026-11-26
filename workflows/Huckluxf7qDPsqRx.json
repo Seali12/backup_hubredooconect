@@ -1,0 +1,199 @@
+{
+  "active": false,
+  "activeVersion": null,
+  "activeVersionId": null,
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Pilot authentication",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pilot authentication": {
+      "main": [
+        [
+          {
+            "node": "Pilot authorization",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pilot authorization": {
+      "main": [
+        [
+          {
+            "node": "Consultas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultas": {
+      "main": [
+        [
+          {
+            "node": "Contar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Contar": {
+      "main": [
+        [
+          {
+            "node": "Resumen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-11-24T19:34:06.109Z",
+  "id": "Huckluxf7qDPsqRx",
+  "isArchived": true,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "name": "TEMP Ford - contar leads del mes",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "id": "776d6c3a-2c18-457b-96ae-046db919b403",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "f59ac097-6945-4ad7-b127-c23d90fbfdb1",
+      "name": "Pilot authentication",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        224,
+        0
+      ],
+      "parameters": {
+        "url": "https://api.pilotsolution.net/v1/users/authentication.php",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "options": {}
+      },
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "NHXyrkv9ca6Njn8R",
+          "name": "PILOT FORD COLOMBIA"
+        }
+      }
+    },
+    {
+      "id": "cf932e0d-d1f1-4911-a197-55799b077582",
+      "name": "Pilot authorization",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        448,
+        0
+      ],
+      "parameters": {
+        "url": "https://api.pilotsolution.net/v1/users/authorization.php",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "identity_token",
+              "value": "={{ $json.result.entitydata.accounts[0].token }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "fc97a1ba-e578-48f7-8939-d2746f807360",
+      "name": "Consultas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        0
+      ],
+      "parameters": {
+        "jsCode": "return [\n { json: { t: 'desde 1/11', filters: [ { field: 'created', operation: '>=', value: '2026-11-01T05:00:00.000' } ] } },\n { json: { t: '1/11 a 6/11 con <', filters: [ { field: 'created', operation: '>=', value: '2026-11-01T05:00:00.000' }, { field: 'created', operation: '<', value: '2026-11-06T05:00:00.000' } ] } },\n { json: { t: 'desde 6/11', filters: [ { field: 'created', operation: '>=', value: '2026-11-06T05:00:00.000' } ] } }\n];"
+      }
+    },
+    {
+      "id": "c04e20ce-7219-4f66-96ed-1ca0fde05d22",
+      "name": "Contar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        896,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.pilotsolution.net/v1/welcomes/list.php",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ \"data\": { \"limit\": 1, \"page\": 1, \"filters\": $json.filters, \"wildCard\": \"*\", \"sorts\": [ { \"field\": \"created\", \"order\": \"ASC\" } ] }, \"header\": { \"FlowName\": \"List_Leads\", \"SequenceId\": 1, \"TimeStamp\": 1248377, \"TrackingId\": \"FD1C4A1A-CAFB-467E-825B-7FFB86CC21E3\", \"access_token\": $(\"Pilot authorization\").first().json.result.entitydata.session.identityToken } }) }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 3000
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "496f8d23-dff6-4204-ae55-9d15a540ea73",
+      "name": "Resumen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const q = $('Consultas').all();\nreturn $input.all().map((it, i) => { const r = it.json.result || {}; return { json: { t: q[i].json.t, status: r.status, msg: r.message, rows: (r.aditional_data || {}).rows_count, primero: ((r.entitydata || [])[0] || {}).created } }; });"
+      }
+    }
+  ],
+  "pinData": null,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "Huckluxf7qDPsqRx",
+      "projectId": "K8p6XEqA0L6D2uVt",
+      "createdAt": "2026-11-24T19:34:06.112Z",
+      "updatedAt": "2026-11-24T19:34:06.112Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2026-11-24T19:45:06.000Z",
+  "versionId": "7c51bd18-9d06-483c-a983-3329b8abbe77"
+}
