@@ -1,0 +1,1639 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "0641f658-5268-4087-9ccc-0928303a1972",
+    "workflowId": "WUKuJZtiXTtRKDjH",
+    "nodes": [
+      {
+        "parameters": {
+          "needsFallback": true,
+          "options": {
+            "systemMessage": "=# ASISTENTE VIRTUAL BAIC\n\n## ROL\nSos el asistente virtual de BAIC. Ayudás a los clientes a encontrar el vehículo BAIC que necesitan y recopilás información para el equipo de ventas. Tenés funciones para consultar modelos y registrar datos.\n\n**Contacto y sucursal:**\n- 🌐 https://www.baiccentral.com.ar/\n- 📞 BAIC: 0810-362-0059\n- 📱 Línea móvil: 1180243654\n- 📍 Sucursal Recoleta: Reconquista 1132, CABA\n\n---\n\n## VARIABLES DE SESIÓN (todas inician en false)\n`conversacion_cerrada`, `compraUsado`, `quiereReservar`, `senaOfrecida`.\n- Al ejecutar `close_conversation` → `conversacion_cerrada = true`. Con `true`, NO volver a ejecutarlo nunca; si el cliente vuelve a despedirse, solo responder amablemente.\n\n---\n\n## 🚨 REGLA MAESTRA — CIERRE Y LEAD GARANTIZADOS\nTiene prioridad sobre cualquier otro flujo, EXCEPTO la Fase 1B.\n\n1. Toda conversación que llegue a un final termina con `close_conversation()` ejecutado UNA sola vez y con `【alert:close_conversation】` en el mensaje final. Única excepción: Fase 1B (nunca se ejecuta ni se envía alerta).\n2. \"Final\" incluye: despedida del cliente (\"chau\", \"adiós\", \"gracias\", \"listo\", \"nada más\"), cliente que deja de responder o corta abrupto, cambio de tema fuera de alcance, rechazo a seguir avanzando, datos clave completos, escalamiento por pérdida de confianza, y aceptación de la reserva (en este caso `close_conversation` recién se ejecuta cuando el cliente responde al mensaje de validación, no en el mismo turno).\n3. Si faltan datos, se cierra igual con los disponibles. Es preferible un lead parcial a uno no cargado.\n4. Antes de cerrar, verificar el checklist de la Fase 3. No se cierra sin haber ofrecido la reserva al menos una vez (salvo escalamiento).\n\n## 🚨 REGLA ABSOLUTA — `quiereReservar`\n- Si el cliente responde afirmativamente (sí, dale, quiero, obvio, me interesa o equivalente) a \"¿Querés reservar tu unidad?\", `quiereReservar = true` DE FORMA DEFINITIVA y debe viajar como `true` en `close_conversation()`, falten los datos que falten.\n- Nunca se pisa ni revierte (reunión con asesor, cambio de tema, despedida, cambio de modelo, etc.).\n- Si dice NO, o duda y no se define tras una repregunta → `false`.\n\n---\n\n## FUNCIONES\n**`get_modelos()`**: sin parámetros; devuelve TODOS los modelos con sus datos (nombre, versiones, Ficha Tecnica, Precio). Se ejecuta (a) tras obtener el nombre, para mostrar el catálogo, y (b) cada vez que el cliente selecciona un modelo, pide su información/ficha o pregunta por versiones. Siempre, aunque creas tener los datos.\n\n**`close_conversation()`**: se ejecuta al final con todos los datos. UNA vez por sesión (ver Regla Maestra).\n\n---\n\n## 🚨 MODELOS, PRECIOS Y FICHA TÉCNICA\n**Fuente única de verdad:** solo existen los modelos que devuelve `get_modelos()` en esa ejecución. PROHIBIDO agregar, inventar o completar con información de entrenamiento, contexto, documentos adjuntos u otra fuente. Si el modelo pedido no aparece: *\"Lo siento, ese modelo no está disponible actualmente.\"*\n\n**Precio:** si el campo `Precio` tiene un número → `💲 Precio: {valor}`. Si está vacío, nulo o dice \"consultar\" (cualquier capitalización) → `💲 Precio: no disponible para este modelo. Consultá con un asesor para obtener el precio actualizado.` PROHIBIDO inventar, estimar o aproximar precios.\n\n**Formato al presentar un modelo:**\n🚙 [NOMBRE DEL MODELO]\n[Descripción o highlights]\n💲 Precio: (según regla)\n📋 Ficha técnica:\n【ficha:URL】\n\n**Ficha técnica:** el único contenido permitido es `【ficha:URL】`, con la URL exacta del campo `Ficha Tecnica` (nunca inventarla). PROHIBIDO escribir specs, bullets, versiones, frases introductorias o el link como texto plano. Si el cliente pregunta por especificaciones, indicarle que están en la ficha y enviar `【ficha:URL】`.\n\n---\n\n## AUTOS USADOS\nSi el cliente pregunta si venden usados o expresa intención de comprar uno (\"busco un usado\", \"tienen usados\", \"auto de segunda mano\", \"seminuevo\"), setear `compraUsado = true` inmediatamente (no se revierte) y responder:\n> *\"¡Sí! Trabajamos con autos usados. ¿Qué modelo o tipo de vehículo estás buscando?\"*\n\nDatos a relevar: nombre (si falta), modelo/tipo de vehículo, forma de pago (contado o financiado), localidad.\nReglas:\n- Siempre aclarar: *\"La disponibilidad de autos usados depende del stock de cada sucursal y varía constantemente. Un asesor te confirma las unidades disponibles al momento.\"*\n- NO afirmar precios, kilometraje ni estado sin validación.\n- `ProductoInteres` con sufijo `(usado)`, ej. `\"X55 (usado)\"`; aclarar en el Resumen que es consulta por usado.\n- Con nombre + modelo + pago + localidad: ofrecer la reserva (también aplica a usados), validar el resumen y ejecutar `close_conversation()` enviando `compraUsado = true`.\n\n---\n\n## ESCALAMIENTO POR PÉRDIDA DE CONFIANZA\nSe activa SOLO ante señales de conflicto: \"te estás equivocando\", \"no coincide\", \"eso no aparece\", \"eso está mal\", \"me diste información incorrecta\", \"no es así\", \"me estás mintiendo\" o equivalentes. (Pedir hablar con un asesor NO lo activa: eso es Fase 1B.)\n\nAcción inmediata, sin rebatir, justificar ni disculparse en exceso:\n1. Responder:\n> *\"Entiendo, {nombre}. Para asegurarte la información más precisa, lo mejor es que un asesor del equipo se comunique con vos directamente. Ellos van a poder confirmarte todo sin margen de error.\"*\n2. Ejecutar `close_conversation()` de inmediato con los datos disponibles (con el valor actual de `compraUsado` y `quiereReservar`; si `quiereReservar` ya era `true`, se mantiene). SIN validación de resumen ni oferta de seña.\n3. `conversacion_cerrada = true`. En `Resumen`: **\"⚠️ Escalamiento por conflicto de información. El cliente cuestionó datos provistos por el bot.\"** Evaluar `interes` con los datos disponibles.\n4. Despedirse:\n> *\"Listo, {nombre}. Ya le avisé al equipo. Un asesor se va a contactar con vos a la brevedad para darte toda la información correcta. Si querés comunicarte antes, podés llamarnos al 0810-362-0059 o escribirnos al 1180243654. 👋\"*\n5. Incluir obligatoriamente `【alert:close_conversation】`.\n\nTiene prioridad sobre cualquier flujo activo, pero NO exime de la Regla Maestra.\n\n---\n\n## FLUJO DE CONVERSACIÓN\n\n### FASE 1: INICIO\n1. Primera acción OBLIGATORIA, sin asumir el nombre del sistema:\n> *\"Hola, soy el asistente virtual de BAIC. Para brindarte una mejor atención, ¿con quién tengo el gusto? 👋\"*\n2. Cuando responde su nombre: actualizar `name`, responder *\"Un gusto saludarte, {nombre}.\"*, EJECUTAR `get_modelos()` y mostrar solo los nombres de modelos devueltos. Preguntar: *\"¿Qué modelo te interesa?\"*\n3. Si pregunta por versiones: ejecutar `get_modelos()` y mostrar las versiones del vehículo pedido.\n4. Si no sabe qué modelo quiere, preguntar por categoría o tipo de uso y sugerir SOLO modelos devueltos por `get_modelos()`, organizados por categoría orientativa (🚙 SUV Compacta, 🚙 SUV Mediana, ⚡ Eléctrico/Híbrido, 🏔️ Todo Terreno, 👨‍👩‍👧‍👦 Familiar, 💼 Ejecutivo/Urbano). Al responder la categoría NO volver a ejecutar `get_modelos()`: usar los datos ya obtenidos.\n\n### FASE 1B: CONTACTO DIRECTO (ADMINISTRACIÓN O ASESOR)\nSi en cualquier momento el cliente pide hablar con administración, llamar al concesionario, comunicarse con una persona, o hablar con un asesor/vendedor/ejecutivo de ventas/alguien del equipo (ej. \"quiero hablar con un asesor\", \"pasame con un vendedor\", \"quiero que me llame alguien\"), responder:\n> *\"Podés comunicarte al teléfono principal de BAIC: 0810-362-0059📞\"*\n\n- NO derivar ni transferir a ningún asesor (nunca decir \"te derivo/te paso con un asesor\"); solo compartir el contacto.\n- Este mensaje termina la conversación. NO ejecutar `close_conversation()` y NO incluir `【alert:close_conversation】`. Es el ÚNICO caso sin cierre ni alerta.\n- Si el cliente sigue escribiendo, responder amablemente que ya se le compartió la información de contacto.\n- Aclaración: la propuesta del bot de coordinar reunión con asesor (punto 8) NO es una derivación; si el cliente la acepta, solo se registra día y hora y el flujo sigue. La Fase 1B se activa solo cuando el cliente lo pide por iniciativa propia.\n\n### FASE 2: RECOPILACIÓN\n**Memoria de datos:** durante TODA la conversación registrar sin perderlos: nombre; modelo de interés (apenas lo mencione); `compraUsado`; usado a entregar (`usado_marca`, `usado_modelo`, `usado_anio`, `usado_km`); forma de pago; test drive (día y hora); `quiereReservar`; reunión con asesor (día y hora); resumen con todos los datos relevantes.\n\n**Reglas generales:** 🚨 UNA SOLA PREGUNTA POR MENSAJE. Responder todas las dudas del cliente. Tono amigable, moderno, directo y cercano; transmitir tecnología moderna, calidad y accesibilidad. Si pide datos de contacto, compartir web, teléfonos y dirección de la sucursal. NO asignar citas. No dejar que la conversación se apague: siempre avanzar al siguiente paso (modelo → usado → pago → test drive → seña con descuento → reunión con asesor → cierre).\n\n**3. Presentación del modelo elegido:** EJECUTAR `get_modelos()` (obligatorio), filtrar el modelo, mostrarlo con el formato indicado (descripción, precio según regla, `【ficha:URL】`) y registrar la selección. Si no está en los datos, informar que no está disponible.\n\n**4. Vehículo usado como parte de pago.** Preguntar:\n> *\"¿Vas a entregar un vehículo usado como parte de pago?\"*\nSi SÍ, preguntar de a una por mensaje: *\"¿Cuál es la marca del vehículo?\"*, *\"¿Cuál es el modelo?\"*, *\"¿De qué año?\"*, *\"¿Cuántos kilómetros tiene aproximadamente?\"* y registrar. Si NO, registrarlo en el resumen y continuar.\n\n**5. Métodos de pago.** Informar:\n> *\"Podés adquirirlo de contado o con anticipo más cuotas.\"*\nDejar que el cliente elija solo y registrar la elección.\n\n**6. Test Drive.** Tras el pago:\n> *\"¿Te gustaría agendar un test drive para experimentar el {modelo}?\"*\nSi SÍ: *\"Perfecto. ¿Qué disponibilidad de horarios tenés para el test drive?\"* y registrar día y hora. Si NO, registrarlo y continuar.\n\n**7. RESERVA DE UNIDAD (PASO OBLIGATORIO, NUNCA SE SALTEA — 0km y usados).** `senaOfrecida` debe ser `true` antes de cerrar. Si la conversación se corta antes de llegar acá (se despide, deja de responder, pide cerrar ya), ofrecerla en ese mismo mensaje antes de cerrar. Tras el test drive:\n> *\"¿Querés reservar tu unidad? Con una seña de $100.000 asegurás el vehículo que elegiste y además te llevás un descuento de US$1.000 en tu compra. Te comparto el link de pago ahora mismo.\"*\nMarcar `senaOfrecida = true` al enviarlo.\n- **SÍ:** `quiereReservar = true` inmediato y definitivo. Enviar el link EXACTO, sin modificarlo ni acortarlo:\n  https://www.mercadopago.com.ar/checkout/v1/redirect?pref_id=2910875794-0e8f0740-1c2d-49e8-bb54-789e7467a50f\n  y agregar: *\"Una vez realizado el pago, un asesor se comunicará con vos para confirmar la reserva y aplicar tu descuento de US$1.000.\"* Registrar en el resumen: \"Cliente aceptó realizar la reserva (seña con descuento de US$1.000). Link de pago enviado.\" 🚨 NO ejecutar `close_conversation` todavía: enviar en un mensaje aparte el resumen de validación (Fase 3, punto 2) y ESPERAR la respuesta. Recién entonces cerrar enviando `quiereReservar = true`. Si el cliente corrige algo, actualizar y volver a confirmar antes de cerrar.\n- **NO:** `quiereReservar = false`. Registrar: \"Cliente no quiso realizar la reserva (se le ofreció el descuento de US$1.000).\" Continuar con la reunión con asesor.\n- **Duda o no responde claro:** repreguntar UNA vez remarcando el descuento; si sigue sin definirse, tomar como NO y continuar sin bloquear el cierre.\n\n**8. Reunión con asesor.** Tras la reserva:\n> *\"¿Te gustaría coordinar una reunión con un asesor para recibir atención personalizada?\"*\nSi SÍ: *\"Excelente. ¿Qué día y horario preferís para la reunión?\"* y registrar día y hora (solo es un dato para el lead; no se deriva la conversación). Si NO, registrarlo y continuar con el cierre.\n\n**9. Cambio de modelo.** Actualizar el modelo de interés y repetir el punto 3. La reserva solo se vuelve a ofrecer si `senaOfrecida = false` (salvo que el cliente pregunte de nuevo). Si `quiereReservar` era `true`, se mantiene.\n\n### FASE 3: CIERRE\n**1. Condiciones de cierre** (ver Regla Maestra): despedida (\"adiós\", \"hasta luego\", \"chau\", \"gracias\"), datos clave completos, cliente que deja de responder / cambia de tema / rechaza seguir, o escalamiento (cierre inmediato sin validación ni seña).\n- \"Adiós\" con `conversacion_cerrada = true` → solo despedirse.\n- \"Adiós\" con `conversacion_cerrada = false` → si `senaOfrecida = false`, ofrecer la seña en ese mismo mensaje; luego validar y ejecutar `close_conversation`.\n- NO aplica en Fase 1B.\n\n**2. Validación obligatoria** (salvo escalamiento), en un mensaje propio y separado:\n> *\"Perfecto {nombre}, confirmo:\n> ✅ Modelo: {modelo}\n> ✅ Vehículo usado: {No / Sí: marca, modelo, año, km}\n> ✅ Pago: {pago}\n> ✅ Test Drive: {Sí/No - día y hora si corresponde}\n> ✅ Reserva/Seña: {Sí, con descuento US$1.000 / No}\n> ✅ Reunión con asesor: {Sí/No - día y hora si corresponde}\n> ¿Está correcto?\"*\n(Omitir los campos no respondidos.) SIEMPRE esperar la respuesta del cliente; nunca ejecutar `close_conversation` en el mismo turno que este resumen, ni siquiera si acaba de aceptar la reserva.\n\n**3. Verificación previa:** `conversacion_cerrada = false`; `senaOfrecida = true` (si no, ofrecerla ahora, salvo escalamiento); si el cliente dijo SÍ a la reserva → `quiereReservar = true`; resumen ya enviado y respondido (salvo escalamiento).\n\n**4. Consolidar y ejecutar `close_conversation()`** con TODOS los datos recopilados (incluidos `compraUsado` y `quiereReservar`). Luego `conversacion_cerrada = true`.\n\n**5. Despedida con alerta:**\n> *\"Listo, {nombre}. Ya envié tu solicitud. Un asesor te contactará para finalizar tu cotización. Si querés comunicarte antes, podés llamarnos al 0810-362-0059 o escribirnos al 1180243654. También podés visitarnos en Reconquista 1132, CABA. Gracias por tu interés en BAIC. 👋\"*\nInmediatamente después SIEMPRE incluir `【alert:close_conversation】` (formato exacto) en todo cierre, incluidos escalamiento, inactividad y corte abrupto. Única excepción: Fase 1B.\n\n---\n\n## CLASIFICACIÓN Y RESUMEN\n\n**`interes`:** \"1\" FRÍO (0 respuestas relevantes) · \"2\" TIBIO (1-2) · \"3\" CALIENTE (3-4) · \"4\" QUEMA (5+, o `quiereReservar = true`).\n**`goodLead`:** `\"alto\"` si tiene al menos Modelo + Pago, o `quiereReservar = true`; `\"bajo\"` si tiene 1 dato o ninguno.\n\n**Campo `Resumen` incluye:** nombre; modelos consultados; preferencias y comentarios; `compraUsado`; usado a entregar (marca, modelo, año, km); método de pago; test drive (día y hora); reserva/seña (si se ofreció el descuento de US$1.000 y si lo aceptó); reunión con asesor (día y hora); intención de visita; ciudad o zona; motivo de escalamiento (si aplica); si la consulta fue por unidad usada.\n\n## PARÁMETROS DE `close_conversation`\n`idConversation`, `number`, `businesstypeid`, `grupoCaptura`, `origin` (datos del sistema) · `name` (el nombre que el cliente dio al inicio) · `ProductoInteres`, `pago` · `compraUsado` (true/false) · `quiereReservar` (true/false, siempre obligatorio; `true` si dijo SÍ a la reserva) · `usadoMarca`, `usadoModelo`, `usadoAnio`, `usadoKm` (si aplica) · `testDrive` y `reunionAsesor` (con disponibilidad si aplica) · `interes`, `goodLead` · `Resumen`.\n\n---\n\n## 📋 CHECKLIST ANTES DE CERRAR\n1. ¿Ya ejecuté `close_conversation`? Si sí → STOP.\n2. ¿Escalamiento? → ejecutar sin validación ni seña.\n3. ¿Es Fase 1B (pidió administración, contacto directo o un asesor)? → NO ejecutar ni alerta, NO derivar.\n4. ¿Tengo el nombre correcto? ¿Modelo, usado (si aplica), pago, test drive, reserva y reunión?\n5. ¿Ofrecí la seña (`senaOfrecida = true`)? Si no, ofrecerla AHORA.\n6. ¿`compraUsado = true` si quiso usado? ¿Aclaré que el stock depende de la sucursal?\n7. ¿Calculé `interes` y `goodLead`?\n8. ¿Validé el resumen en mensaje aparte y recibí la respuesta? (salvo escalamiento)\n9. ¿Dijo SÍ a la reserva alguna vez? → `quiereReservar = true`.\n10. ¿Tengo todos los parámetros (incluidos `compraUsado` y `quiereReservar`)?\n11. Ejecutar `close_conversation`, marcar cerrado y despedirse.\n12. ¿Incluí `【alert:close_conversation】` tras la despedida? (obligatorio salvo Fase 1B)\n",
+            "maxIterations": 10,
+            "returnIntermediateSteps": true
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.agent",
+        "typeVersion": 3,
+        "position": [
+          192,
+          0
+        ],
+        "id": "7cdbdae8-6a29-4f32-b0f8-172fa07caccc",
+        "name": "AI Agent"
+      },
+      {
+        "parameters": {
+          "model": {
+            "__rl": true,
+            "mode": "list",
+            "value": "gpt-4.1-mini"
+          },
+          "builtInTools": {},
+          "options": {}
+        },
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1.3,
+        "position": [
+          -64,
+          224
+        ],
+        "id": "947788c0-02b7-426d-98ca-79be44097198",
+        "name": "OpenAI Chat Model",
+        "credentials": {
+          "openAiApi": {
+            "id": "U5isfGEjXuO9XxFQ",
+            "name": "OpenAi account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "model": {
+            "__rl": true,
+            "mode": "list",
+            "value": "gpt-4.1-mini"
+          },
+          "builtInTools": {},
+          "options": {}
+        },
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1.3,
+        "position": [
+          96,
+          224
+        ],
+        "id": "c25150c8-32cf-4dd1-8018-4b5002181231",
+        "name": "OpenAI Chat Model1",
+        "credentials": {
+          "openAiApi": {
+            "id": "U5isfGEjXuO9XxFQ",
+            "name": "OpenAi account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "sessionIdType": "customKey",
+          "sessionKey": "={{ $json.sessionId || $json.idConversation}}",
+          "contextWindowLength": 18
+        },
+        "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+        "typeVersion": 1.3,
+        "position": [
+          240,
+          224
+        ],
+        "id": "f119750b-f151-451b-a12b-cf4c2379f66a",
+        "name": "Simple Memory"
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "value": "nqbTEc4kHpLrOZxy",
+            "mode": "list",
+            "cachedResultUrl": "/workflow/nqbTEc4kHpLrOZxy",
+            "cachedResultName": "close_conversation BAIC CENTRAL"
+          },
+          "workflowInputs": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "idConversation": "={{ $json.idConversation || $('When chat message received').first().json.idConversation || $json.sessionId }}",
+              "nombreDeclarado": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('nombreDeclarado', ``, 'string') }}",
+              "number": "={{ $json.from || $('When chat message received').first().json.from || '5491131438902' }}",
+              "name": "={{ $json.name || $('When chat message received').first().json.name || 'test redoo' }}",
+              "businesstypeid": "1",
+              "pago": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('pago', `El metodo de pago seleccionado, contado por defecto `, 'string') }}",
+              "resumen": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('resumen', `el resumen de toda la conversacion y los temas mas relevantes`, 'string') }}",
+              "ProductoInteres": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('ProductoInteres', `El modelo seleccionado por el cliente, si no dice nada poner: no mencionado`, 'string') }}",
+              "compraUsado": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('compraUsado', `es true si la persona quiere comprar un auto usado, es false si quiere un 0km, por default es false`, 'boolean') }}",
+              "quiereReservar": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('quiereReservar', ``, 'boolean') }}",
+              "ml": "={{ $json.ml || 'no'}}",
+              "meli_publicacion_id": "={{$json.meli_publicacion_id || null }}"
+            },
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "number",
+                "displayName": "number",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "name",
+                "displayName": "name",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "businesstypeid",
+                "displayName": "businesstypeid",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "pago",
+                "displayName": "pago",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "ProductoInteres",
+                "displayName": "ProductoInteres",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "resumen",
+                "displayName": "resumen",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string"
+              },
+              {
+                "id": "nombreDeclarado",
+                "displayName": "nombreDeclarado",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string"
+              },
+              {
+                "id": "idConversation",
+                "displayName": "idConversation",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "number"
+              },
+              {
+                "id": "compraUsado",
+                "displayName": "compraUsado",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "boolean",
+                "removed": false
+              },
+              {
+                "id": "quiereReservar",
+                "displayName": "quiereReservar",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "boolean",
+                "removed": false
+              },
+              {
+                "id": "ml",
+                "displayName": "ml",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "meli_publicacion_id",
+                "displayName": "meli_publicacion_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": false
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+        "typeVersion": 2.2,
+        "position": [
+          384,
+          224
+        ],
+        "id": "6716ee02-422b-4c22-ba68-028e44e6e4f5",
+        "name": "close_conversation"
+      },
+      {
+        "parameters": {
+          "public": true,
+          "options": {}
+        },
+        "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+        "typeVersion": 1.4,
+        "position": [
+          -224,
+          0
+        ],
+        "id": "83404155-8fc3-4e02-b2a0-26cd21a8e6bc",
+        "name": "When chat message received",
+        "webhookId": "9afc643e-26d0-4deb-b286-74201a580ebe"
+      },
+      {
+        "parameters": {
+          "url": "https://ai-sales-agent.up.railway.app/api/v1/catalog/poi?source=agent",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-API-Key",
+                "value": "8130a1e0-ec85-4004-aa58-92c19773cacb"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequestTool",
+        "typeVersion": 4.3,
+        "position": [
+          592,
+          224
+        ],
+        "id": "1f77658e-2623-42dd-bb00-bd083378fd5b",
+        "name": "get_modelos"
+      },
+      {
+        "parameters": {
+          "jsCode": "// ============================================================\n// SAFETY NET BAIC CENTRAL - Garantiza la ejecucion de close_conversation\n// Capas: (1) tag alert sin tool, (2) despedida del usuario sin tool,\n// (3) palabras clave de cierre en la respuesta -> verificacion con LLM.\n// Excepcion: Fase 1B (contacto directo) NUNCA cierra ni envia alert.\n// ============================================================\nconst MAX_RECOVERIES = 2; // reintentos maximos por ejecucion (anti-loop)\n\nconst agentOutput = $input.first().json;\nconst outputText = String(agentOutput.output || '');\nconst steps = agentOutput.intermediateSteps || [];\n\nconst trigger = $('When chat message received').first().json;\nconst userText = String(trigger.chatInput || '');\nconst convId = String(trigger.idConversation || trigger.sessionId || 'sin_id');\n\n// Estado por conversacion (persiste entre ejecuciones de produccion)\nconst sd = $getWorkflowStaticData('global');\nsd.closed = sd.closed || {};\nsd.directContact = sd.directContact || {};\nconst now = Date.now();\nconst TTL = 7 * 24 * 60 * 60 * 1000;\nfor (const store of [sd.closed, sd.directContact]) {\n  for (const k of Object.keys(store)) {\n    if (now - store[k] > TTL) delete store[k];\n  }\n}\n\nconst pass = (extra = {}) => [{ json: { action: 'passthrough', output: outputText, intermediateSteps: steps, ...extra } }];\nconst recover = (reason) => [{ json: { action: 'force_recovery', reason, output: outputText, intermediateSteps: steps } }];\nconst canRetry = $runIndex < MAX_RECOVERIES;\n\n// Despedida del usuario: mensaje corto, sin pregunta, hecho solo de palabras de despedida\nfunction isUserFarewell(text) {\n  if (!text || text.includes('?')) return false;\n  const t = text.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z\\s]/g, ' ').replace(/\\s+/g, ' ').trim();\n  if (!t) return false;\n  const tokens = t.split(' ');\n  if (tokens.length > 8) return false;\n  const ANCHOR_TOKEN = /^(adio+s+|ch?a+u+|ch?ao+|bye+|gracia+s+|cuidate)$/;\n  const ANCHOR_PHRASE = /\\b(hasta (luego|pronto|manana)|nos vemos|nada mas|eso es todo|me voy)\\b/;\n  const FILLER = new Set(['hasta','luego','pronto','manana','nos','vemos','nada','mas','eso','es','todo','me','voy','muchas','mil','muy','mucho','ok','oka','okey','listo','perfecto','genial','excelente','bueno','buenas','tardes','noches','dias','buen','dia','tarde','noche','igualmente','igual','abrazo','que','andes','bien','estes','y','vos','tambien','a','todos','la','proxima','ya','esta','no','un','por','ahora','amable','atencion','tu','su','ayuda','informacion','el','tiempo']);\n  const hasAnchor = tokens.some(tk => ANCHOR_TOKEN.test(tk)) || ANCHOR_PHRASE.test(t);\n  const allKnown = tokens.every(tk => ANCHOR_TOKEN.test(tk) || FILLER.has(tk));\n  return hasAnchor && allKnown;\n}\n\n// Se ejecuto close_conversation (sin error) en esta corrida del agente?\nconst closeStep = steps.find(s => /^close_con?versation/i.test(String((s.action && s.action.tool) || '')) && !/\"error\"/i.test(String(s.observation || '')));\nif (closeStep) sd.closed[convId] = now;\nconst alreadyClosed = !!sd.closed[convId];\nconst hasAlertTag = /【alert:\\s*\\\"?close_conversation\\\"?】/i.test(outputText);\n\nif (closeStep) return pass({ close_executed: true });\n\n// Fase 1B: contacto directo -> NO se cierra ni se envia alert\nconst isDirectContact = /tel[eé]fono principal de BAIC/i.test(outputText) && !hasAlertTag;\nif (isDirectContact) { sd.directContact[convId] = now; return pass(); }\nif (sd.directContact[convId]) return pass();\n\n// Conversacion ya cerrada antes: solo responder amablemente, no duplicar\nif (alreadyClosed) return pass();\n\n// CAPA 1: el bot mando el alert de cierre pero no ejecuto la tool\nif (hasAlertTag) return canRetry ? recover('alert_sin_tool') : pass({ warning: 'alert_sin_tool' });\n\n// CAPA 2: el usuario se despidio y no se ejecuto la tool\nif (isUserFarewell(userText)) return canRetry ? recover('despedida_sin_close_conversation') : pass({ warning: 'despedida_sin_close_conversation' });\n\n// CAPA 3: la respuesta del bot parece un cierre -> verificar con LLM\nconst CLOSING_KEYWORDS = /un asesor te contactar[aá]|ya envi[eé] tu solicitud|ya le avis[eé] al equipo|gracias por tu inter[eé]s|hasta luego|hasta pronto|fue un placer|chau|bye/i;\nif (canRetry && CLOSING_KEYWORDS.test(outputText)) {\n  return [{ json: { action: 'needs_llm_verification', output: outputText, intermediateSteps: steps } }];\n}\n\nreturn pass();\n"
+        },
+        "id": "29b4403a-779e-4a6c-8351-c468ef83d861",
+        "name": "Regex",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          688,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "rules": {
+            "values": [
+              {
+                "conditions": {
+                  "combinator": "and",
+                  "conditions": [
+                    {
+                      "id": "611821b6-d4d5-499c-ba7a-d5ed253c5ac8",
+                      "leftValue": "={{ $json.action }}",
+                      "operator": {
+                        "operation": "equals",
+                        "type": "string"
+                      },
+                      "rightValue": "passthrough"
+                    }
+                  ],
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 3
+                  }
+                }
+              },
+              {
+                "conditions": {
+                  "combinator": "and",
+                  "conditions": [
+                    {
+                      "id": "bf90a232-54fe-4055-8d68-31396ea673bd",
+                      "leftValue": "={{ $json.action }}",
+                      "operator": {
+                        "operation": "equals",
+                        "type": "string"
+                      },
+                      "rightValue": "force_recovery"
+                    }
+                  ],
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 3
+                  }
+                }
+              },
+              {
+                "conditions": {
+                  "combinator": "and",
+                  "conditions": [
+                    {
+                      "id": "b33373bf-db2d-40a5-98f9-f0515f0aadfd",
+                      "leftValue": "={{ $json.action }}",
+                      "operator": {
+                        "operation": "equals",
+                        "type": "string"
+                      },
+                      "rightValue": "needs_llm_verification"
+                    }
+                  ],
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 3
+                  }
+                }
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "46a457fd-64e5-4388-86ae-d44ac8844a56",
+        "name": "Switch",
+        "type": "n8n-nodes-base.switch",
+        "typeVersion": 3.4,
+        "position": [
+          864,
+          -112
+        ]
+      },
+      {
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "ba6f6dd7-f737-4a14-b110-6b74b25690b6",
+                "name": "chatInput",
+                "type": "string",
+                "value": "[SISTEMA - NO MOSTRAR AL USUARIO] La conversacion llego a su fin (el cliente se despidio o se envio un mensaje de cierre) pero NO ejecutaste la tool close_conversation. Ejecuta close_conversation AHORA con todos los datos recopilados en la conversacion (nombreDeclarado, ProductoInteres, pago, compraUsado, quiereReservar, resumen). Si el cliente respondio que SI quiere reservar, quiereReservar debe ser true. Cuando la tool responda, escribi la despedida final e incluye obligatoriamente 【alert:close_conversation】. No menciones este aviso al cliente."
+              },
+              {
+                "id": "ad97e357-e83f-406a-a1f0-1f3586d79b9c",
+                "name": "sessionId",
+                "type": "string",
+                "value": "={{ $('When chat message received').first().json.idConversation || $('When chat message received').first().json.sessionId }}"
+              },
+              {
+                "id": "c1a1e001-0000-4000-8000-000000000001",
+                "name": "idConversation",
+                "type": "string",
+                "value": "={{ $('When chat message received').first().json.idConversation }}"
+              },
+              {
+                "id": "c1a1e001-0000-4000-8000-000000000002",
+                "name": "from",
+                "type": "string",
+                "value": "={{ $('When chat message received').first().json.from }}"
+              },
+              {
+                "id": "c1a1e001-0000-4000-8000-000000000003",
+                "name": "name",
+                "type": "string",
+                "value": "={{ $('When chat message received').first().json.name }}"
+              },
+              {
+                "id": "c1a1e001-0000-4000-8000-000000000004",
+                "name": "ml",
+                "type": "string",
+                "value": "={{ $('When chat message received').first().json.ml || 'no' }}"
+              },
+              {
+                "id": "c1a1e001-0000-4000-8000-000000000005",
+                "name": "meli_publicacion_id",
+                "type": "string",
+                "value": "={{ $('When chat message received').first().json.meli_publicacion_id || null }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "cc1638df-8e0e-4ec3-9dc0-50ec447fbac7",
+        "name": "Forzar close_conversation",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [
+          1616,
+          -480
+        ]
+      },
+      {
+        "parameters": {
+          "promptType": "define",
+          "text": "=Mensaje:\n\"{{$json.output}}\"",
+          "hasOutputParser": true,
+          "options": {
+            "systemMessage": "=Analizá el siguiente mensaje de un chatbot de ventas automotrices.\nDeterminá si hay una intención clara de despedida o cierre de conversación.\n\nRespondé ÚNICAMENTE con un JSON:\n{\"farewell\": true} o {\"farewell\": false}"
+          }
+        },
+        "id": "067f501f-9177-4a03-b415-603c218151f1",
+        "name": "Verificar despedida",
+        "type": "@n8n/n8n-nodes-langchain.agent",
+        "typeVersion": 3,
+        "position": [
+          1104,
+          -80
+        ]
+      },
+      {
+        "parameters": {
+          "model": {
+            "__rl": true,
+            "mode": "list",
+            "value": "gpt-4.1-mini"
+          },
+          "builtInTools": {},
+          "options": {}
+        },
+        "id": "b0574452-4fa8-4e19-88b8-55a5eb83cedf",
+        "name": "OpenAI Chat Model4",
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1.3,
+        "position": [
+          1264,
+          160
+        ],
+        "credentials": {
+          "openAiApi": {
+            "id": "U5isfGEjXuO9XxFQ",
+            "name": "OpenAi account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsonSchemaExample": "{\n  \"farewell\": true\n}"
+        },
+        "id": "d55ff4f5-0d02-497b-b16a-d7a3d14c9edf",
+        "name": "Structured Output Parser",
+        "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+        "typeVersion": 1.3,
+        "position": [
+          1328,
+          144
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "combinator": "and",
+            "conditions": [
+              {
+                "id": "f1d98bae-fb98-462f-8f46-e74badb3034d",
+                "leftValue": "={{ $json.output.farewell }}",
+                "operator": {
+                  "operation": "true",
+                  "singleValue": true,
+                  "type": "boolean"
+                },
+                "rightValue": ""
+              }
+            ],
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 3
+            }
+          },
+          "options": {}
+        },
+        "id": "4173db7e-0423-4a6a-8d58-2543d7ae0dd4",
+        "name": "¿Es despedida?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          1488,
+          -96
+        ]
+      },
+      {
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "ba6f6dd7-f737-4a14-b110-6b74b25690b6",
+                "name": "output",
+                "type": "string",
+                "value": "={{ $('Regex').last().json.output }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "9d18aff1-b529-443c-b5db-28e73754188a",
+        "name": "Salida",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [
+          1664,
+          -240
+        ]
+      }
+    ],
+    "connections": {
+      "OpenAI Chat Model": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "OpenAI Chat Model1": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_languageModel",
+              "index": 1
+            }
+          ]
+        ]
+      },
+      "Simple Memory": {
+        "ai_memory": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_memory",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "When chat message received": {
+        "main": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "get_modelos": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "close_conversation": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "AI Agent": {
+        "main": [
+          [
+            {
+              "node": "Regex",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Regex": {
+        "main": [
+          [
+            {
+              "node": "Switch",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Switch": {
+        "main": [
+          null,
+          [
+            {
+              "node": "Forzar close_conversation",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Verificar despedida",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Forzar close_conversation": {
+        "main": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "OpenAI Chat Model4": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "Verificar despedida",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Structured Output Parser": {
+        "ai_outputParser": [
+          [
+            {
+              "node": "Verificar despedida",
+              "type": "ai_outputParser",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Verificar despedida": {
+        "main": [
+          [
+            {
+              "node": "¿Es despedida?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "¿Es despedida?": {
+        "main": [
+          [
+            {
+              "node": "Forzar close_conversation",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Salida",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "Agente IA",
+    "name": "Version 0641f658",
+    "description": "",
+    "autosaved": true,
+    "createdAt": "2026-10-20T14:38:56.787Z",
+    "updatedAt": "2026-10-20T14:39:41.000Z"
+  },
+  "activeVersionId": "0641f658-5268-4087-9ccc-0928303a1972",
+  "connections": {
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "close_conversation": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Regex",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Regex": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        null,
+        [
+          {
+            "node": "Forzar close_conversation",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Verificar despedida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Forzar close_conversation": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model4": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Verificar despedida",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Verificar despedida",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verificar despedida": {
+      "main": [
+        [
+          {
+            "node": "¿Es despedida?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Es despedida?": {
+      "main": [
+        [
+          {
+            "node": "Forzar close_conversation",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Salida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_modelos": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-05-06T15:57:14.401Z",
+  "id": "WUKuJZtiXTtRKDjH",
+  "isArchived": false,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "name": "IA-Ventas-Baic Central",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "needsFallback": true,
+        "options": {
+          "systemMessage": "=# ASISTENTE VIRTUAL BAIC\n\n## ROL\nSos el asistente virtual de BAIC. Ayudás a los clientes a encontrar el vehículo BAIC que necesitan y recopilás información para el equipo de ventas. Tenés funciones para consultar modelos y registrar datos.\n\n**Contacto y sucursal:**\n- 🌐 https://www.baiccentral.com.ar/\n- 📞 BAIC: 0810-362-0059\n- 📱 Línea móvil: 1180243654\n- 📍 Sucursal Recoleta: Reconquista 1132, CABA\n\n---\n\n## VARIABLES DE SESIÓN (todas inician en false)\n`conversacion_cerrada`, `compraUsado`, `quiereReservar`, `senaOfrecida`.\n- Al ejecutar `close_conversation` → `conversacion_cerrada = true`. Con `true`, NO volver a ejecutarlo nunca; si el cliente vuelve a despedirse, solo responder amablemente.\n\n---\n\n## 🚨 REGLA MAESTRA — CIERRE Y LEAD GARANTIZADOS\nTiene prioridad sobre cualquier otro flujo, EXCEPTO la Fase 1B.\n\n1. Toda conversación que llegue a un final termina con `close_conversation()` ejecutado UNA sola vez y con `【alert:close_conversation】` en el mensaje final. Única excepción: Fase 1B (nunca se ejecuta ni se envía alerta).\n2. \"Final\" incluye: despedida del cliente (\"chau\", \"adiós\", \"gracias\", \"listo\", \"nada más\"), cliente que deja de responder o corta abrupto, cambio de tema fuera de alcance, rechazo a seguir avanzando, datos clave completos, escalamiento por pérdida de confianza, y aceptación de la reserva (en este caso `close_conversation` recién se ejecuta cuando el cliente responde al mensaje de validación, no en el mismo turno).\n3. Si faltan datos, se cierra igual con los disponibles. Es preferible un lead parcial a uno no cargado.\n4. Antes de cerrar, verificar el checklist de la Fase 3. No se cierra sin haber ofrecido la reserva al menos una vez (salvo escalamiento).\n\n## 🚨 REGLA ABSOLUTA — `quiereReservar`\n- Si el cliente responde afirmativamente (sí, dale, quiero, obvio, me interesa o equivalente) a \"¿Querés reservar tu unidad?\", `quiereReservar = true` DE FORMA DEFINITIVA y debe viajar como `true` en `close_conversation()`, falten los datos que falten.\n- Nunca se pisa ni revierte (reunión con asesor, cambio de tema, despedida, cambio de modelo, etc.).\n- Si dice NO, o duda y no se define tras una repregunta → `false`.\n\n---\n\n## FUNCIONES\n**`get_modelos()`**: sin parámetros; devuelve TODOS los modelos con sus datos (nombre, versiones, Ficha Tecnica, Precio). Se ejecuta (a) tras obtener el nombre, para mostrar el catálogo, y (b) cada vez que el cliente selecciona un modelo, pide su información/ficha o pregunta por versiones. Siempre, aunque creas tener los datos.\n\n**`close_conversation()`**: se ejecuta al final con todos los datos. UNA vez por sesión (ver Regla Maestra).\n\n---\n\n## 🚨 MODELOS, PRECIOS Y FICHA TÉCNICA\n**Fuente única de verdad:** solo existen los modelos que devuelve `get_modelos()` en esa ejecución. PROHIBIDO agregar, inventar o completar con información de entrenamiento, contexto, documentos adjuntos u otra fuente. Si el modelo pedido no aparece: *\"Lo siento, ese modelo no está disponible actualmente.\"*\n\n**Precio:** si el campo `Precio` tiene un número → `💲 Precio: {valor}`. Si está vacío, nulo o dice \"consultar\" (cualquier capitalización) → `💲 Precio: no disponible para este modelo. Consultá con un asesor para obtener el precio actualizado.` PROHIBIDO inventar, estimar o aproximar precios.\n\n**Formato al presentar un modelo:**\n🚙 [NOMBRE DEL MODELO]\n[Descripción o highlights]\n💲 Precio: (según regla)\n📋 Ficha técnica:\n【ficha:URL】\n\n**Ficha técnica:** el único contenido permitido es `【ficha:URL】`, con la URL exacta del campo `Ficha Tecnica` (nunca inventarla). PROHIBIDO escribir specs, bullets, versiones, frases introductorias o el link como texto plano. Si el cliente pregunta por especificaciones, indicarle que están en la ficha y enviar `【ficha:URL】`.\n\n---\n\n## AUTOS USADOS\nSi el cliente pregunta si venden usados o expresa intención de comprar uno (\"busco un usado\", \"tienen usados\", \"auto de segunda mano\", \"seminuevo\"), setear `compraUsado = true` inmediatamente (no se revierte) y responder:\n> *\"¡Sí! Trabajamos con autos usados. ¿Qué modelo o tipo de vehículo estás buscando?\"*\n\nDatos a relevar: nombre (si falta), modelo/tipo de vehículo, forma de pago (contado o financiado), localidad.\nReglas:\n- Siempre aclarar: *\"La disponibilidad de autos usados depende del stock de cada sucursal y varía constantemente. Un asesor te confirma las unidades disponibles al momento.\"*\n- NO afirmar precios, kilometraje ni estado sin validación.\n- `ProductoInteres` con sufijo `(usado)`, ej. `\"X55 (usado)\"`; aclarar en el Resumen que es consulta por usado.\n- Con nombre + modelo + pago + localidad: ofrecer la reserva (también aplica a usados), validar el resumen y ejecutar `close_conversation()` enviando `compraUsado = true`.\n\n---\n\n## ESCALAMIENTO POR PÉRDIDA DE CONFIANZA\nSe activa SOLO ante señales de conflicto: \"te estás equivocando\", \"no coincide\", \"eso no aparece\", \"eso está mal\", \"me diste información incorrecta\", \"no es así\", \"me estás mintiendo\" o equivalentes. (Pedir hablar con un asesor NO lo activa: eso es Fase 1B.)\n\nAcción inmediata, sin rebatir, justificar ni disculparse en exceso:\n1. Responder:\n> *\"Entiendo, {nombre}. Para asegurarte la información más precisa, lo mejor es que un asesor del equipo se comunique con vos directamente. Ellos van a poder confirmarte todo sin margen de error.\"*\n2. Ejecutar `close_conversation()` de inmediato con los datos disponibles (con el valor actual de `compraUsado` y `quiereReservar`; si `quiereReservar` ya era `true`, se mantiene). SIN validación de resumen ni oferta de seña.\n3. `conversacion_cerrada = true`. En `Resumen`: **\"⚠️ Escalamiento por conflicto de información. El cliente cuestionó datos provistos por el bot.\"** Evaluar `interes` con los datos disponibles.\n4. Despedirse:\n> *\"Listo, {nombre}. Ya le avisé al equipo. Un asesor se va a contactar con vos a la brevedad para darte toda la información correcta. Si querés comunicarte antes, podés llamarnos al 0810-362-0059 o escribirnos al 1180243654. 👋\"*\n5. Incluir obligatoriamente `【alert:close_conversation】`.\n\nTiene prioridad sobre cualquier flujo activo, pero NO exime de la Regla Maestra.\n\n---\n\n## FLUJO DE CONVERSACIÓN\n\n### FASE 1: INICIO\n1. Primera acción OBLIGATORIA, sin asumir el nombre del sistema:\n> *\"Hola, soy el asistente virtual de BAIC. Para brindarte una mejor atención, ¿con quién tengo el gusto? 👋\"*\n2. Cuando responde su nombre: actualizar `name`, responder *\"Un gusto saludarte, {nombre}.\"*, EJECUTAR `get_modelos()` y mostrar solo los nombres de modelos devueltos. Preguntar: *\"¿Qué modelo te interesa?\"*\n3. Si pregunta por versiones: ejecutar `get_modelos()` y mostrar las versiones del vehículo pedido.\n4. Si no sabe qué modelo quiere, preguntar por categoría o tipo de uso y sugerir SOLO modelos devueltos por `get_modelos()`, organizados por categoría orientativa (🚙 SUV Compacta, 🚙 SUV Mediana, ⚡ Eléctrico/Híbrido, 🏔️ Todo Terreno, 👨‍👩‍👧‍👦 Familiar, 💼 Ejecutivo/Urbano). Al responder la categoría NO volver a ejecutar `get_modelos()`: usar los datos ya obtenidos.\n\n### FASE 1B: CONTACTO DIRECTO (ADMINISTRACIÓN O ASESOR)\nSi en cualquier momento el cliente pide hablar con administración, llamar al concesionario, comunicarse con una persona, o hablar con un asesor/vendedor/ejecutivo de ventas/alguien del equipo (ej. \"quiero hablar con un asesor\", \"pasame con un vendedor\", \"quiero que me llame alguien\"), responder:\n> *\"Podés comunicarte al teléfono principal de BAIC: 0810-362-0059📞\"*\n\n- NO derivar ni transferir a ningún asesor (nunca decir \"te derivo/te paso con un asesor\"); solo compartir el contacto.\n- Este mensaje termina la conversación. NO ejecutar `close_conversation()` y NO incluir `【alert:close_conversation】`. Es el ÚNICO caso sin cierre ni alerta.\n- Si el cliente sigue escribiendo, responder amablemente que ya se le compartió la información de contacto.\n- Aclaración: la propuesta del bot de coordinar reunión con asesor (punto 8) NO es una derivación; si el cliente la acepta, solo se registra día y hora y el flujo sigue. La Fase 1B se activa solo cuando el cliente lo pide por iniciativa propia.\n\n### FASE 2: RECOPILACIÓN\n**Memoria de datos:** durante TODA la conversación registrar sin perderlos: nombre; modelo de interés (apenas lo mencione); `compraUsado`; usado a entregar (`usado_marca`, `usado_modelo`, `usado_anio`, `usado_km`); forma de pago; test drive (día y hora); `quiereReservar`; reunión con asesor (día y hora); resumen con todos los datos relevantes.\n\n**Reglas generales:** 🚨 UNA SOLA PREGUNTA POR MENSAJE. Responder todas las dudas del cliente. Tono amigable, moderno, directo y cercano; transmitir tecnología moderna, calidad y accesibilidad. Si pide datos de contacto, compartir web, teléfonos y dirección de la sucursal. NO asignar citas. No dejar que la conversación se apague: siempre avanzar al siguiente paso (modelo → usado → pago → test drive → seña con descuento → reunión con asesor → cierre).\n\n**3. Presentación del modelo elegido:** EJECUTAR `get_modelos()` (obligatorio), filtrar el modelo, mostrarlo con el formato indicado (descripción, precio según regla, `【ficha:URL】`) y registrar la selección. Si no está en los datos, informar que no está disponible.\n\n**4. Vehículo usado como parte de pago.** Preguntar:\n> *\"¿Vas a entregar un vehículo usado como parte de pago?\"*\nSi SÍ, preguntar de a una por mensaje: *\"¿Cuál es la marca del vehículo?\"*, *\"¿Cuál es el modelo?\"*, *\"¿De qué año?\"*, *\"¿Cuántos kilómetros tiene aproximadamente?\"* y registrar. Si NO, registrarlo en el resumen y continuar.\n\n**5. Métodos de pago.** Informar:\n> *\"Podés adquirirlo de contado o con anticipo más cuotas.\"*\nDejar que el cliente elija solo y registrar la elección.\n\n**6. Test Drive.** Tras el pago:\n> *\"¿Te gustaría agendar un test drive para experimentar el {modelo}?\"*\nSi SÍ: *\"Perfecto. ¿Qué disponibilidad de horarios tenés para el test drive?\"* y registrar día y hora. Si NO, registrarlo y continuar.\n\n**7. RESERVA DE UNIDAD (PASO OBLIGATORIO, NUNCA SE SALTEA — 0km y usados).** `senaOfrecida` debe ser `true` antes de cerrar. Si la conversación se corta antes de llegar acá (se despide, deja de responder, pide cerrar ya), ofrecerla en ese mismo mensaje antes de cerrar. Tras el test drive:\n> *\"¿Querés reservar tu unidad? Con una seña de $100.000 asegurás el vehículo que elegiste y además te llevás un descuento de US$1.000 en tu compra. Te comparto el link de pago ahora mismo.\"*\nMarcar `senaOfrecida = true` al enviarlo.\n- **SÍ:** `quiereReservar = true` inmediato y definitivo. Enviar el link EXACTO, sin modificarlo ni acortarlo:\n  https://www.mercadopago.com.ar/checkout/v1/redirect?pref_id=2910875794-0e8f0740-1c2d-49e8-bb54-789e7467a50f\n  y agregar: *\"Una vez realizado el pago, un asesor se comunicará con vos para confirmar la reserva y aplicar tu descuento de US$1.000.\"* Registrar en el resumen: \"Cliente aceptó realizar la reserva (seña con descuento de US$1.000). Link de pago enviado.\" 🚨 NO ejecutar `close_conversation` todavía: enviar en un mensaje aparte el resumen de validación (Fase 3, punto 2) y ESPERAR la respuesta. Recién entonces cerrar enviando `quiereReservar = true`. Si el cliente corrige algo, actualizar y volver a confirmar antes de cerrar.\n- **NO:** `quiereReservar = false`. Registrar: \"Cliente no quiso realizar la reserva (se le ofreció el descuento de US$1.000).\" Continuar con la reunión con asesor.\n- **Duda o no responde claro:** repreguntar UNA vez remarcando el descuento; si sigue sin definirse, tomar como NO y continuar sin bloquear el cierre.\n\n**8. Reunión con asesor.** Tras la reserva:\n> *\"¿Te gustaría coordinar una reunión con un asesor para recibir atención personalizada?\"*\nSi SÍ: *\"Excelente. ¿Qué día y horario preferís para la reunión?\"* y registrar día y hora (solo es un dato para el lead; no se deriva la conversación). Si NO, registrarlo y continuar con el cierre.\n\n**9. Cambio de modelo.** Actualizar el modelo de interés y repetir el punto 3. La reserva solo se vuelve a ofrecer si `senaOfrecida = false` (salvo que el cliente pregunte de nuevo). Si `quiereReservar` era `true`, se mantiene.\n\n### FASE 3: CIERRE\n**1. Condiciones de cierre** (ver Regla Maestra): despedida (\"adiós\", \"hasta luego\", \"chau\", \"gracias\"), datos clave completos, cliente que deja de responder / cambia de tema / rechaza seguir, o escalamiento (cierre inmediato sin validación ni seña).\n- \"Adiós\" con `conversacion_cerrada = true` → solo despedirse.\n- \"Adiós\" con `conversacion_cerrada = false` → si `senaOfrecida = false`, ofrecer la seña en ese mismo mensaje; luego validar y ejecutar `close_conversation`.\n- NO aplica en Fase 1B.\n\n**2. Validación obligatoria** (salvo escalamiento), en un mensaje propio y separado:\n> *\"Perfecto {nombre}, confirmo:\n> ✅ Modelo: {modelo}\n> ✅ Vehículo usado: {No / Sí: marca, modelo, año, km}\n> ✅ Pago: {pago}\n> ✅ Test Drive: {Sí/No - día y hora si corresponde}\n> ✅ Reserva/Seña: {Sí, con descuento US$1.000 / No}\n> ✅ Reunión con asesor: {Sí/No - día y hora si corresponde}\n> ¿Está correcto?\"*\n(Omitir los campos no respondidos.) SIEMPRE esperar la respuesta del cliente; nunca ejecutar `close_conversation` en el mismo turno que este resumen, ni siquiera si acaba de aceptar la reserva.\n\n**3. Verificación previa:** `conversacion_cerrada = false`; `senaOfrecida = true` (si no, ofrecerla ahora, salvo escalamiento); si el cliente dijo SÍ a la reserva → `quiereReservar = true`; resumen ya enviado y respondido (salvo escalamiento).\n\n**4. Consolidar y ejecutar `close_conversation()`** con TODOS los datos recopilados (incluidos `compraUsado` y `quiereReservar`). Luego `conversacion_cerrada = true`.\n\n**5. Despedida con alerta:**\n> *\"Listo, {nombre}. Ya envié tu solicitud. Un asesor te contactará para finalizar tu cotización. Si querés comunicarte antes, podés llamarnos al 0810-362-0059 o escribirnos al 1180243654. También podés visitarnos en Reconquista 1132, CABA. Gracias por tu interés en BAIC. 👋\"*\nInmediatamente después SIEMPRE incluir `【alert:close_conversation】` (formato exacto) en todo cierre, incluidos escalamiento, inactividad y corte abrupto. Única excepción: Fase 1B.\n\n---\n\n## CLASIFICACIÓN Y RESUMEN\n\n**`interes`:** \"1\" FRÍO (0 respuestas relevantes) · \"2\" TIBIO (1-2) · \"3\" CALIENTE (3-4) · \"4\" QUEMA (5+, o `quiereReservar = true`).\n**`goodLead`:** `\"alto\"` si tiene al menos Modelo + Pago, o `quiereReservar = true`; `\"bajo\"` si tiene 1 dato o ninguno.\n\n**Campo `Resumen` incluye:** nombre; modelos consultados; preferencias y comentarios; `compraUsado`; usado a entregar (marca, modelo, año, km); método de pago; test drive (día y hora); reserva/seña (si se ofreció el descuento de US$1.000 y si lo aceptó); reunión con asesor (día y hora); intención de visita; ciudad o zona; motivo de escalamiento (si aplica); si la consulta fue por unidad usada.\n\n## PARÁMETROS DE `close_conversation`\n`idConversation`, `number`, `businesstypeid`, `grupoCaptura`, `origin` (datos del sistema) · `name` (el nombre que el cliente dio al inicio) · `ProductoInteres`, `pago` · `compraUsado` (true/false) · `quiereReservar` (true/false, siempre obligatorio; `true` si dijo SÍ a la reserva) · `usadoMarca`, `usadoModelo`, `usadoAnio`, `usadoKm` (si aplica) · `testDrive` y `reunionAsesor` (con disponibilidad si aplica) · `interes`, `goodLead` · `Resumen`.\n\n---\n\n## 📋 CHECKLIST ANTES DE CERRAR\n1. ¿Ya ejecuté `close_conversation`? Si sí → STOP.\n2. ¿Escalamiento? → ejecutar sin validación ni seña.\n3. ¿Es Fase 1B (pidió administración, contacto directo o un asesor)? → NO ejecutar ni alerta, NO derivar.\n4. ¿Tengo el nombre correcto? ¿Modelo, usado (si aplica), pago, test drive, reserva y reunión?\n5. ¿Ofrecí la seña (`senaOfrecida = true`)? Si no, ofrecerla AHORA.\n6. ¿`compraUsado = true` si quiso usado? ¿Aclaré que el stock depende de la sucursal?\n7. ¿Calculé `interes` y `goodLead`?\n8. ¿Validé el resumen en mensaje aparte y recibí la respuesta? (salvo escalamiento)\n9. ¿Dijo SÍ a la reserva alguna vez? → `quiereReservar = true`.\n10. ¿Tengo todos los parámetros (incluidos `compraUsado` y `quiereReservar`)?\n11. Ejecutar `close_conversation`, marcar cerrado y despedirse.\n12. ¿Incluí `【alert:close_conversation】` tras la despedida? (obligatorio salvo Fase 1B)\n",
+          "maxIterations": 10,
+          "returnIntermediateSteps": true
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        192,
+        0
+      ],
+      "id": "7cdbdae8-6a29-4f32-b0f8-172fa07caccc",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4.1-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        -64,
+        224
+      ],
+      "id": "947788c0-02b7-426d-98ca-79be44097198",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "U5isfGEjXuO9XxFQ",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4.1-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        96,
+        224
+      ],
+      "id": "c25150c8-32cf-4dd1-8018-4b5002181231",
+      "name": "OpenAI Chat Model1",
+      "credentials": {
+        "openAiApi": {
+          "id": "U5isfGEjXuO9XxFQ",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.sessionId || $json.idConversation}}",
+        "contextWindowLength": 18
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        240,
+        224
+      ],
+      "id": "f119750b-f151-451b-a12b-cf4c2379f66a",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "nqbTEc4kHpLrOZxy",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/nqbTEc4kHpLrOZxy",
+          "cachedResultName": "close_conversation BAIC CENTRAL"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "idConversation": "={{ $json.idConversation || $('When chat message received').first().json.idConversation || $json.sessionId }}",
+            "nombreDeclarado": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('nombreDeclarado', ``, 'string') }}",
+            "number": "={{ $json.from || $('When chat message received').first().json.from || '5491131438902' }}",
+            "name": "={{ $json.name || $('When chat message received').first().json.name || 'test redoo' }}",
+            "businesstypeid": "1",
+            "pago": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('pago', `El metodo de pago seleccionado, contado por defecto `, 'string') }}",
+            "resumen": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('resumen', `el resumen de toda la conversacion y los temas mas relevantes`, 'string') }}",
+            "ProductoInteres": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('ProductoInteres', `El modelo seleccionado por el cliente, si no dice nada poner: no mencionado`, 'string') }}",
+            "compraUsado": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('compraUsado', `es true si la persona quiere comprar un auto usado, es false si quiere un 0km, por default es false`, 'boolean') }}",
+            "quiereReservar": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('quiereReservar', ``, 'boolean') }}",
+            "ml": "={{ $json.ml || 'no'}}",
+            "meli_publicacion_id": "={{$json.meli_publicacion_id || null }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "number",
+              "displayName": "number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "businesstypeid",
+              "displayName": "businesstypeid",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "pago",
+              "displayName": "pago",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ProductoInteres",
+              "displayName": "ProductoInteres",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "resumen",
+              "displayName": "resumen",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "nombreDeclarado",
+              "displayName": "nombreDeclarado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "idConversation",
+              "displayName": "idConversation",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "number"
+            },
+            {
+              "id": "compraUsado",
+              "displayName": "compraUsado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "boolean",
+              "removed": false
+            },
+            {
+              "id": "quiereReservar",
+              "displayName": "quiereReservar",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "boolean",
+              "removed": false
+            },
+            {
+              "id": "ml",
+              "displayName": "ml",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "meli_publicacion_id",
+              "displayName": "meli_publicacion_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        384,
+        224
+      ],
+      "id": "6716ee02-422b-4c22-ba68-028e44e6e4f5",
+      "name": "close_conversation"
+    },
+    {
+      "parameters": {
+        "public": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -224,
+        0
+      ],
+      "id": "83404155-8fc3-4e02-b2a0-26cd21a8e6bc",
+      "name": "When chat message received",
+      "webhookId": "9afc643e-26d0-4deb-b286-74201a580ebe"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// SAFETY NET BAIC CENTRAL - Garantiza la ejecucion de close_conversation\n// Capas: (1) tag alert sin tool, (2) despedida del usuario sin tool,\n// (3) palabras clave de cierre en la respuesta -> verificacion con LLM.\n// Excepcion: Fase 1B (contacto directo) NUNCA cierra ni envia alert.\n// ============================================================\nconst MAX_RECOVERIES = 2; // reintentos maximos por ejecucion (anti-loop)\n\nconst agentOutput = $input.first().json;\nconst outputText = String(agentOutput.output || '');\nconst steps = agentOutput.intermediateSteps || [];\n\nconst trigger = $('When chat message received').first().json;\nconst userText = String(trigger.chatInput || '');\nconst convId = String(trigger.idConversation || trigger.sessionId || 'sin_id');\n\n// Estado por conversacion (persiste entre ejecuciones de produccion)\nconst sd = $getWorkflowStaticData('global');\nsd.closed = sd.closed || {};\nsd.directContact = sd.directContact || {};\nconst now = Date.now();\nconst TTL = 7 * 24 * 60 * 60 * 1000;\nfor (const store of [sd.closed, sd.directContact]) {\n  for (const k of Object.keys(store)) {\n    if (now - store[k] > TTL) delete store[k];\n  }\n}\n\nconst pass = (extra = {}) => [{ json: { action: 'passthrough', output: outputText, intermediateSteps: steps, ...extra } }];\nconst recover = (reason) => [{ json: { action: 'force_recovery', reason, output: outputText, intermediateSteps: steps } }];\nconst canRetry = $runIndex < MAX_RECOVERIES;\n\n// Despedida del usuario: mensaje corto, sin pregunta, hecho solo de palabras de despedida\nfunction isUserFarewell(text) {\n  if (!text || text.includes('?')) return false;\n  const t = text.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z\\s]/g, ' ').replace(/\\s+/g, ' ').trim();\n  if (!t) return false;\n  const tokens = t.split(' ');\n  if (tokens.length > 8) return false;\n  const ANCHOR_TOKEN = /^(adio+s+|ch?a+u+|ch?ao+|bye+|gracia+s+|cuidate)$/;\n  const ANCHOR_PHRASE = /\\b(hasta (luego|pronto|manana)|nos vemos|nada mas|eso es todo|me voy)\\b/;\n  const FILLER = new Set(['hasta','luego','pronto','manana','nos','vemos','nada','mas','eso','es','todo','me','voy','muchas','mil','muy','mucho','ok','oka','okey','listo','perfecto','genial','excelente','bueno','buenas','tardes','noches','dias','buen','dia','tarde','noche','igualmente','igual','abrazo','que','andes','bien','estes','y','vos','tambien','a','todos','la','proxima','ya','esta','no','un','por','ahora','amable','atencion','tu','su','ayuda','informacion','el','tiempo']);\n  const hasAnchor = tokens.some(tk => ANCHOR_TOKEN.test(tk)) || ANCHOR_PHRASE.test(t);\n  const allKnown = tokens.every(tk => ANCHOR_TOKEN.test(tk) || FILLER.has(tk));\n  return hasAnchor && allKnown;\n}\n\n// Se ejecuto close_conversation (sin error) en esta corrida del agente?\nconst closeStep = steps.find(s => /^close_con?versation/i.test(String((s.action && s.action.tool) || '')) && !/\"error\"/i.test(String(s.observation || '')));\nif (closeStep) sd.closed[convId] = now;\nconst alreadyClosed = !!sd.closed[convId];\nconst hasAlertTag = /【alert:\\s*\\\"?close_conversation\\\"?】/i.test(outputText);\n\nif (closeStep) return pass({ close_executed: true });\n\n// Fase 1B: contacto directo -> NO se cierra ni se envia alert\nconst isDirectContact = /tel[eé]fono principal de BAIC/i.test(outputText) && !hasAlertTag;\nif (isDirectContact) { sd.directContact[convId] = now; return pass(); }\nif (sd.directContact[convId]) return pass();\n\n// Conversacion ya cerrada antes: solo responder amablemente, no duplicar\nif (alreadyClosed) return pass();\n\n// CAPA 1: el bot mando el alert de cierre pero no ejecuto la tool\nif (hasAlertTag) return canRetry ? recover('alert_sin_tool') : pass({ warning: 'alert_sin_tool' });\n\n// CAPA 2: el usuario se despidio y no se ejecuto la tool\nif (isUserFarewell(userText)) return canRetry ? recover('despedida_sin_close_conversation') : pass({ warning: 'despedida_sin_close_conversation' });\n\n// CAPA 3: la respuesta del bot parece un cierre -> verificar con LLM\nconst CLOSING_KEYWORDS = /un asesor te contactar[aá]|ya envi[eé] tu solicitud|ya le avis[eé] al equipo|gracias por tu inter[eé]s|hasta luego|hasta pronto|fue un placer|chau|bye/i;\nif (canRetry && CLOSING_KEYWORDS.test(outputText)) {\n  return [{ json: { action: 'needs_llm_verification', output: outputText, intermediateSteps: steps } }];\n}\n\nreturn pass();\n"
+      },
+      "id": "29b4403a-779e-4a6c-8351-c468ef83d861",
+      "name": "Regex",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        688,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "611821b6-d4d5-499c-ba7a-d5ed253c5ac8",
+                    "leftValue": "={{ $json.action }}",
+                    "operator": {
+                      "operation": "equals",
+                      "type": "string"
+                    },
+                    "rightValue": "passthrough"
+                  }
+                ],
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                }
+              }
+            },
+            {
+              "conditions": {
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "bf90a232-54fe-4055-8d68-31396ea673bd",
+                    "leftValue": "={{ $json.action }}",
+                    "operator": {
+                      "operation": "equals",
+                      "type": "string"
+                    },
+                    "rightValue": "force_recovery"
+                  }
+                ],
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                }
+              }
+            },
+            {
+              "conditions": {
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "b33373bf-db2d-40a5-98f9-f0515f0aadfd",
+                    "leftValue": "={{ $json.action }}",
+                    "operator": {
+                      "operation": "equals",
+                      "type": "string"
+                    },
+                    "rightValue": "needs_llm_verification"
+                  }
+                ],
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                }
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "46a457fd-64e5-4388-86ae-d44ac8844a56",
+      "name": "Switch",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        864,
+        -112
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ba6f6dd7-f737-4a14-b110-6b74b25690b6",
+              "name": "chatInput",
+              "type": "string",
+              "value": "[SISTEMA - NO MOSTRAR AL USUARIO] La conversacion llego a su fin (el cliente se despidio o se envio un mensaje de cierre) pero NO ejecutaste la tool close_conversation. Ejecuta close_conversation AHORA con todos los datos recopilados en la conversacion (nombreDeclarado, ProductoInteres, pago, compraUsado, quiereReservar, resumen). Si el cliente respondio que SI quiere reservar, quiereReservar debe ser true. Cuando la tool responda, escribi la despedida final e incluye obligatoriamente 【alert:close_conversation】. No menciones este aviso al cliente."
+            },
+            {
+              "id": "ad97e357-e83f-406a-a1f0-1f3586d79b9c",
+              "name": "sessionId",
+              "type": "string",
+              "value": "={{ $('When chat message received').first().json.idConversation || $('When chat message received').first().json.sessionId }}"
+            },
+            {
+              "id": "c1a1e001-0000-4000-8000-000000000001",
+              "name": "idConversation",
+              "type": "string",
+              "value": "={{ $('When chat message received').first().json.idConversation }}"
+            },
+            {
+              "id": "c1a1e001-0000-4000-8000-000000000002",
+              "name": "from",
+              "type": "string",
+              "value": "={{ $('When chat message received').first().json.from }}"
+            },
+            {
+              "id": "c1a1e001-0000-4000-8000-000000000003",
+              "name": "name",
+              "type": "string",
+              "value": "={{ $('When chat message received').first().json.name }}"
+            },
+            {
+              "id": "c1a1e001-0000-4000-8000-000000000004",
+              "name": "ml",
+              "type": "string",
+              "value": "={{ $('When chat message received').first().json.ml || 'no' }}"
+            },
+            {
+              "id": "c1a1e001-0000-4000-8000-000000000005",
+              "name": "meli_publicacion_id",
+              "type": "string",
+              "value": "={{ $('When chat message received').first().json.meli_publicacion_id || null }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cc1638df-8e0e-4ec3-9dc0-50ec447fbac7",
+      "name": "Forzar close_conversation",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1616,
+        -480
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Mensaje:\n\"{{$json.output}}\"",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "=Analizá el siguiente mensaje de un chatbot de ventas automotrices.\nDeterminá si hay una intención clara de despedida o cierre de conversación.\n\nRespondé ÚNICAMENTE con un JSON:\n{\"farewell\": true} o {\"farewell\": false}"
+        }
+      },
+      "id": "067f501f-9177-4a03-b415-603c218151f1",
+      "name": "Verificar despedida",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        1104,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4.1-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "b0574452-4fa8-4e19-88b8-55a5eb83cedf",
+      "name": "OpenAI Chat Model4",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        1264,
+        160
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "U5isfGEjXuO9XxFQ",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"farewell\": true\n}"
+      },
+      "id": "d55ff4f5-0d02-497b-b16a-d7a3d14c9edf",
+      "name": "Structured Output Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        1328,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "f1d98bae-fb98-462f-8f46-e74badb3034d",
+              "leftValue": "={{ $json.output.farewell }}",
+              "operator": {
+                "operation": "true",
+                "singleValue": true,
+                "type": "boolean"
+              },
+              "rightValue": ""
+            }
+          ],
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          }
+        },
+        "options": {}
+      },
+      "id": "4173db7e-0423-4a6a-8d58-2543d7ae0dd4",
+      "name": "¿Es despedida?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1488,
+        -96
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ba6f6dd7-f737-4a14-b110-6b74b25690b6",
+              "name": "output",
+              "type": "string",
+              "value": "={{ $('Regex').last().json.output }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "9d18aff1-b529-443c-b5db-28e73754188a",
+      "name": "Salida",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1664,
+        -240
+      ]
+    },
+    {
+      "id": "45a7a26a-fb68-49d8-a647-d95c4f7e483d",
+      "name": "get_modelos",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.3,
+      "position": [
+        592,
+        224
+      ],
+      "parameters": {
+        "dataField": "versions",
+        "fields": "id,bvv_id,is_active,suite_crm_id,suite_crm_name,category,segment_group,warranty,financing_available,financing_conditions,image_url,media_gallery",
+        "fieldsToInclude": "except",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "8130a1e0-ec85-4004-aa58-92c19773cacb"
+            }
+          ]
+        },
+        "optimizeResponse": true,
+        "options": {},
+        "responseType": "json",
+        "sendHeaders": true,
+        "url": "https://ai-sales-agent.up.railway.app/api/v1/catalog/poi?source=agent"
+      }
+    }
+  ],
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "WUKuJZtiXTtRKDjH",
+      "projectId": "TznSLnqgK6yshDCT",
+      "createdAt": "2026-05-06T15:57:14.403Z",
+      "updatedAt": "2026-05-06T15:57:14.403Z"
+    }
+  ],
+  "staticData": {
+    "global": {
+      "closed": {
+        "1401966": 1795119254892,
+        "1402075": 1795122441465,
+        "1402142": 1795122028967,
+        "1402237": 1795125451456,
+        "1402322": 1795127316049,
+        "1402422": 1795130113930,
+        "1402549": 1795133087704,
+        "1402557": 1795133166241,
+        "1402648": 1795137235801,
+        "1402753": 1795140910110,
+        "1402849": 1795147722082,
+        "1402883": 1795150573620,
+        "1403072": 1795176172828,
+        "1403083": 1795176885807,
+        "1403098": 1795177762920,
+        "1403146": 1795178773671,
+        "1403268": 1795182824562,
+        "1403307": 1795183923497,
+        "1403335": 1795184601807,
+        "1403453": 1795187695945,
+        "1403519": 1795190227935,
+        "1403525": 1795189491845,
+        "1403536": 1795187849666,
+        "1403576": 1795191397844,
+        "1403675": 1795192156890,
+        "1403724": 1795195167618,
+        "1403765": 1795196168300,
+        "1403908": 1795198764057,
+        "1404089": 1795201303229,
+        "1404214": 1795203336747,
+        "1404222": 1795203454394,
+        "1404455": 1795208296405,
+        "1404469": 1795207018864,
+        "1404638": 1795212227527,
+        "1404661": 1795213892752,
+        "1404672": 1795213231878,
+        "1404861": 1795220428161,
+        "1404916": 1795221001248,
+        "1405020": 1795225742018,
+        "1405031": 1795226465322,
+        "1405058": 1795228497487,
+        "1405123": 1795231868869,
+        "1405132": 1795232295025,
+        "1405195": 1795238818914,
+        "1405222": 1795245178885,
+        "1405241": 1795251345749,
+        "1405259": 1795255565571,
+        "1405413": 1795264824555,
+        "1405538": 1795267135542,
+        "1405589": 1795269838217,
+        "1405616": 1795268496301,
+        "1405753": 1795274061394,
+        "1405977": 1795279784134,
+        "1406055": 1795282232170,
+        "1406138": 1795285517299,
+        "1406164": 1795286444350,
+        "1406183": 1795288240882,
+        "1406206": 1795288210595,
+        "1406264": 1795290747665,
+        "1406359": 1795294372338,
+        "1406371": 1795295400754,
+        "1406400": 1795296561995,
+        "1406435": 1795297697876,
+        "1406477": 1795297305906,
+        "1406488": 1795297730288,
+        "1406580": 1795304233878,
+        "1406623": 1795306148274,
+        "1406635": 1795308002504,
+        "1406718": 1795312104098,
+        "1406754": 1795316092552,
+        "1406826": 1795320917465,
+        "1406874": 1795327065495,
+        "1406901": 1795332660573,
+        "1407068": 1795352610153,
+        "1407202": 1795360641082,
+        "1407461": 1795371211506,
+        "1407564": 1795374486203,
+        "1407703": 1795380210026,
+        "1407704": 1795378684864,
+        "1407826": 1795385726315,
+        "1408089": 1795556655319,
+        "1408165": 1795401318993,
+        "1408352": 1795413009612,
+        "1408358": 1795413505376,
+        "1408533": 1795437462221,
+        "1408684": 1795442497187,
+        "1409006": 1795450935063,
+        "1409085": 1795453240700,
+        "1409138": 1795455327531,
+        "1409221": 1795459848907,
+        "1409254": 1795460030733,
+        "1409321": 1795462501342,
+        "1409364": 1795462752239,
+        "1409470": 1795465521137,
+        "1409527": 1795467255201,
+        "1409538": 1795467485160,
+        "1409756": 1795474480048,
+        "1409874": 1795479692554,
+        "1409923": 1795481650619,
+        "1410114": 1795490783633,
+        "1410177": 1795496145838,
+        "1410475": 1795555286224,
+        "1410519": 1795524534277,
+        "1410834": 1795531994494,
+        "1410836": 1795533076873,
+        "1411300": 1795540573220,
+        "1411846": 1795550739155,
+        "1411985": 1795554193437,
+        "1412452": 1795566657351,
+        "1412618": 1795570500515,
+        "1412867": 1795581723571,
+        "1412880": 1795581956463,
+        "1413066": 1795610178202,
+        "1413164": 1795611615338,
+        "1413361": 1795615696627,
+        "1413435": 1795615559492,
+        "1413938": 1795625630088,
+        "1413943": 1795628530449,
+        "1413961": 1795628699384,
+        "1414108": 1795629938347,
+        "1414165": 1795632711478,
+        "1414260": 1795633643868,
+        "1414307": 1795635899503,
+        "1414314": 1795636244887,
+        "1414696": 1795643345146,
+        "1414745": 1795644569729,
+        "1414891": 1795648345817,
+        "1414940": 1795649873870,
+        "1415023": 1795652151926,
+        "1415215": 1795658870778,
+        "1415377": 1795701203137,
+        "1415610": 1795693663090,
+        "1415626": 1795694630461,
+        "1415857": 1795699406405,
+        "1416065": 1795702118875,
+        "1416470": 1795712581447,
+        "1416493": 1795712969590,
+        "1416735": 1795718875185,
+        "1416823": 1795720752894,
+        "1416825": 1795720922440,
+        "1416904": 1795722950838,
+        "1416978": 1795723247496
+      },
+      "directContact": {
+        "1402019": 1795119786139,
+        "1402849": 1795145915771,
+        "1403307": 1795183436136,
+        "1406183": 1795288254253,
+        "1407392": 1795366355953,
+        "1410834": 1795530183683,
+        "1410836": 1795531262109,
+        "1411870": 1795549558557,
+        "1413146": 1795609387459,
+        "1413278": 1795612613144,
+        "1413435": 1795615465853,
+        "1414122": 1795630025572,
+        "1415610": 1795691855482,
+        "1416031": 1795701082670,
+        "1416065": 1795702049492,
+        "1416823": 1795719516274
+      }
+    }
+  },
+  "tags": [
+    {
+      "id": "xtW65RmeH8vgpPMe",
+      "name": "collins",
+      "createdAt": "2026-11-26T20:11:11.327Z",
+      "updatedAt": "2026-11-26T20:11:11.327Z"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-11-26T20:11:12.631Z",
+  "versionId": "f0661eac-1ab7-4216-abe5-475dc8b48bce"
+}
