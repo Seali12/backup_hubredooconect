@@ -1,0 +1,659 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "dbb37553-90d9-471d-a81d-a0997040bee1",
+    "workflowId": "t9AaWogksPWemEfd",
+    "nodes": [
+      {
+        "id": "7bdb3419-1acb-4285-980f-4d0f7c11a1a7",
+        "name": "Lead frío desde Pilot",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.1,
+        "position": [
+          0,
+          0
+        ],
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "re-ingreso",
+          "options": {}
+        },
+        "webhookId": "cde96835-181e-4bbc-aace-19046a6c36db"
+      },
+      {
+        "id": "60ccddd2-eb68-4c37-8c97-3142b3a4b25e",
+        "name": "Normalizar lead",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [
+          224,
+          0
+        ],
+        "parameters": {
+          "mode": "manual",
+          "includeOtherFields": false,
+          "assignments": {
+            "assignments": [
+              {
+                "id": "n1",
+                "name": "lead_id",
+                "type": "string",
+                "value": "={{ $json.body?.pilot_ID ?? $json.body?.pilot_id ?? $json.body?.pilot_tracking_id ?? $json.body?.lead_id ?? \"\" }}"
+              },
+              {
+                "id": "n2",
+                "name": "telefono",
+                "type": "string",
+                "value": "={{ (() => { const d = String($json.body?.pilot_cellphone || $json.body?.pilot_phone || $json.body?.telefono || '').replace(/\\D/g, ''); if (d.length === 9 && d.startsWith('0')) return '598' + d.slice(1); if (d.length === 8) return '598' + d; if (d.startsWith('598') && d.length === 12 && d[3] === '0') return '598' + d.slice(4); return d; })() }}"
+              },
+              {
+                "id": "n3",
+                "name": "nombre",
+                "type": "string",
+                "value": "={{ [($json.body?.pilot_firstname ?? \"\").trim(), ($json.body?.pilot_lastname ?? \"\").trim()].filter(Boolean).join(\" \") }}"
+              },
+              {
+                "id": "n4",
+                "name": "marca",
+                "type": "string",
+                "value": "={{ ($json.body?.pilot_marca || $json.body?.pilot_negocio || $json.body?.marca || \"\").trim().toUpperCase() }}"
+              },
+              {
+                "id": "n5",
+                "name": "modelo",
+                "type": "string",
+                "value": "={{ $json.body?.pilot_product_of_interest ?? $json.body?.pilot_modelo ?? $json.body?.modelo ?? \"\" }}"
+              },
+              {
+                "id": "n6",
+                "name": "grupo_original",
+                "type": "string",
+                "value": "={{ (() => { const b = $json.body || {}; if (b.grupo_original) return b.grupo_original; const n = String(b.pilot_notes || ''); const c = n.replace(/^\\s*Comentario:\\s*/i, '').split('// Fecha desistido')[0]; const i = c.lastIndexOf('|'); const deNotas = i >= 0 ? c.slice(i + 1).trim() : ''; if (deNotas) return deNotas; const g = String(b.pilot_group || '').trim(); return /calificaci[oó]n fr[ií]os/i.test(g) ? '' : g; })() }}"
+              },
+              {
+                "id": "n7",
+                "name": "fecha_consulta",
+                "type": "string",
+                "value": "={{ $json.body?.pilot_fecha || $json.body?.fecha_consulta || $now.toISO() }}"
+              },
+              {
+                "id": "n8",
+                "name": "ultimo_msg_lead",
+                "type": "string",
+                "value": "={{ $json.body?.ultimo_msg_lead || $json.body?.pilot_fecha || $now.toISO() }}"
+              },
+              {
+                "id": "n9",
+                "name": "notas_pilot",
+                "type": "string",
+                "value": "={{ $json.body?.pilot_notes ?? \"\" }}"
+              },
+              {
+                "id": "n10",
+                "name": "email",
+                "type": "string",
+                "value": "={{ $json.body?.pilot_email ?? \"\" }}"
+              },
+              {
+                "id": "n11",
+                "name": "origen",
+                "type": "string",
+                "value": "={{ $json.body?.pilot_origen ?? \"\" }}"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "1d58a657-9105-424c-bb05-6a490422aa5f",
+        "name": "Tiene lead y teléfono",
+        "type": "n8n-nodes-base.filter",
+        "typeVersion": 2.2,
+        "position": [
+          448,
+          0
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose"
+            },
+            "conditions": [
+              {
+                "leftValue": "={{ $json.lead_id }}",
+                "operator": {
+                  "type": "string",
+                  "operation": "notEmpty",
+                  "singleValue": true
+                }
+              },
+              {
+                "leftValue": "={{ $json.telefono }}",
+                "operator": {
+                  "type": "string",
+                  "operation": "notEmpty",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          }
+        }
+      },
+      {
+        "id": "64acf7f9-514a-4264-9dcf-5f8aceae1b6a",
+        "name": "Programar toque 1",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          672,
+          0
+        ],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "// ===== CONFIG (igual que Santa Rosa) =====\nconst CFG = { zona: 'America/Montevideo', abre: 9, cierra: 20, dias: [1,2,3,4,5], feriados: [], horasToque1: 3, topeSesionHs: 24 };\nconst habil = d => CFG.dias.includes(d.weekday) && !CFG.feriados.includes(d.toISODate());\nconst abrir = d => d.set({ hour: CFG.abre, minute: 0, second: 0, millisecond: 0 });\nfunction ajustar(d) {\n  let x = d;\n  if (x.hour >= CFG.cierra) x = abrir(x.plus({ days: 1 }));\n  else if (x.hour < CFG.abre) x = abrir(x);\n  while (!habil(x)) x = abrir(x.plus({ days: 1 }));\n  return x;\n}\nconst ultimo = DateTime.fromISO($json.ultimo_msg_lead, { zone: CFG.zona });\nconst base = (ultimo.isValid ? ultimo : DateTime.now().setZone(CFG.zona)).plus({ hours: CFG.horasToque1 });\nlet envio = ajustar(base);\nif (ultimo.isValid && envio.diff(ultimo, 'hours').hours > CFG.topeSesionHs) {\n  envio = abrir(ultimo.plus({ days: 1 }));\n  if (envio < base) envio = base;\n}\nconst fila = { lead_id: $json.lead_id, nombre: ($json.nombre || '').split(' ')[0] || null, apellido: ($json.nombre || '').split(' ').slice(1).join(' ') || null, telefono: $json.telefono, email: $json.email || null, modelo: $json.modelo || null, origen: $json.origen || null, notas: $json.notas_pilot || null, proximo_envio_at: envio.toUTC().toFormat('yyyy-MM-dd HH:mm:ss'), extra: { marca: $json.marca || null, grupo_original: $json.grupo_original || null, fecha_consulta: $json.fecha_consulta, ultimo_msg_lead: $json.ultimo_msg_lead, toques: {} } };\nreturn { json: { ...$json, proximo_envio: envio.toISO(), fila: JSON.stringify(fila) } };"
+        }
+      },
+      {
+        "id": "66c72de2-9f22-4c04-9370-6a32bb57c4b7",
+        "name": "Insertar en integracion_leads",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          896,
+          0
+        ],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "{{ (() => { const q = v => \"'\" + String(v ?? '').replace(/\\\\/g, '\\\\\\\\').replace(/'/g, \"\\\\'\") + \"'\"; return `INSERT INTO integracion_leads (company_id, integracion, flujo, external_id, nombre, apellido, telefono, email, modelo, origen, notas, crm, crm_lead_id, grado_interes, status, status_changed_at, proximo_toque, proximo_envio_at, extra) SELECT 117, 'pilot', 'reenganche_frios', JSON_UNQUOTE(JSON_EXTRACT(t.j, '$.lead_id')), NULLIF(JSON_UNQUOTE(JSON_EXTRACT(t.j, '$.nombre')), 'null'), NULLIF(JSON_UNQUOTE(JSON_EXTRACT(t.j, '$.apellido')), 'null'), JSON_UNQUOTE(JSON_EXTRACT(t.j, '$.telefono')), NULLIF(JSON_UNQUOTE(JSON_EXTRACT(t.j, '$.email')), 'null'), NULLIF(JSON_UNQUOTE(JSON_EXTRACT(t.j, '$.modelo')), 'null'), NULLIF(JSON_UNQUOTE(JSON_EXTRACT(t.j, '$.origen')), 'null'), NULLIF(JSON_UNQUOTE(JSON_EXTRACT(t.j, '$.notas')), 'null'), 'pilot', JSON_UNQUOTE(JSON_EXTRACT(t.j, '$.lead_id')), 'cold', 'en_secuencia', UTC_TIMESTAMP(), 1, JSON_UNQUOTE(JSON_EXTRACT(t.j, '$.proximo_envio_at')), JSON_EXTRACT(t.j, '$.extra') FROM (SELECT CAST(${q($json.fila)} AS JSON) AS j) t WHERE NOT EXISTS (SELECT 1 FROM integracion_leads x WHERE x.company_id = 117 AND x.flujo = 'reenganche_frios' AND x.telefono = JSON_UNQUOTE(JSON_EXTRACT(t.j, '$.telefono')) AND (x.status IN ('en_secuencia','respondio') OR (x.status = 'derivado' AND x.status_changed_at >= UTC_TIMESTAMP() - INTERVAL 60 DAY)))`; })() }}",
+          "options": {}
+        },
+        "credentials": {
+          "mySql": {
+            "id": "pt3Y683lDuSK9vlt",
+            "name": "MySQL Suite"
+          }
+        }
+      },
+      {
+        "id": "4dabbd3f-418d-4fb3-b1c4-8252c712959a",
+        "name": "¿Es duplicado?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          1120,
+          0
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose"
+            },
+            "conditions": [
+              {
+                "leftValue": "={{ Number($json.affectedRows ?? 0) === 0 }}",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          }
+        }
+      },
+      {
+        "id": "6cc020ec-4b4b-4262-9472-42b9a3010ccd",
+        "name": "Guardar en cola de duplicados (MySQL)",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          1344,
+          0
+        ],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "{{ (() => { const p = $('Programar toque 1').item.json; const q = v => \"'\" + String(v ?? '').replace(/\\\\/g, '\\\\\\\\').replace(/'/g, \"\\\\'\") + \"'\"; return `INSERT INTO integracion_leads (company_id, integracion, flujo, external_id, crm_lead_id, telefono, nombre, modelo, crm, status, status_changed_at, reason, extra) SELECT 117, 'pilot', 'reenganche_duplicados', ${q(p.lead_id)}, ${q(p.lead_id)}, ${q(p.telefono)}, ${q(p.nombre)}, ${q(p.modelo)}, 'pilot', 'pendiente', UTC_TIMESTAMP(), 'segun_telefono', JSON_OBJECT('caso', 'ingreso', 'origen', 'webhook_pilot') FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM integracion_leads x WHERE x.company_id = 117 AND x.flujo IN ('reenganche_duplicados','reenganche_frios') AND x.external_id = ${q(p.lead_id)})`; })() }}",
+          "options": {}
+        },
+        "credentials": {
+          "mySql": {
+            "id": "pt3Y683lDuSK9vlt",
+            "name": "MySQL Suite"
+          }
+        }
+      },
+      {
+        "id": "1c4a5fa0-bcf0-4c32-a564-f8755cf8de6f",
+        "name": "Sticky Note 255ce72b",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          608,
+          192
+        ],
+        "parameters": {
+          "content": "## RE CO - Ingreso (Car One, company 117)\nRecibe el lead frío de Pilot (POST /webhook/re-ingreso), lo guarda en integracion_leads (flujo reenganche_frios) y programa el toque 1: 3 h después, ventana 9-20 L-V. Si el teléfono ya tiene secuencia abierta o está derivado (60 días), va a la cola de duplicados. Mismas reglas que Santa Rosa.",
+          "color": 4
+        }
+      }
+    ],
+    "connections": {
+      "Lead frío desde Pilot": {
+        "main": [
+          [
+            {
+              "node": "Normalizar lead",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Normalizar lead": {
+        "main": [
+          [
+            {
+              "node": "Tiene lead y teléfono",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Tiene lead y teléfono": {
+        "main": [
+          [
+            {
+              "node": "Programar toque 1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Programar toque 1": {
+        "main": [
+          [
+            {
+              "node": "Insertar en integracion_leads",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Insertar en integracion_leads": {
+        "main": [
+          [
+            {
+              "node": "¿Es duplicado?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "¿Es duplicado?": {
+        "main": [
+          [
+            {
+              "node": "Guardar en cola de duplicados (MySQL)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "Redoo Desarrollo (via MCP)",
+    "name": "Inicial (replica de Santa Rosa)",
+    "description": "Created with 8 nodes: Lead frío desde Pilot, Normalizar lead, Tiene lead y teléfono, Programar toque 1, Insertar en integracion_leads and 3 more",
+    "autosaved": false,
+    "createdAt": "2026-11-24T18:40:18.159Z",
+    "updatedAt": "2026-11-24T18:40:18.159Z"
+  },
+  "activeVersionId": "dbb37553-90d9-471d-a81d-a0997040bee1",
+  "connections": {
+    "Lead frío desde Pilot": {
+      "main": [
+        [
+          {
+            "node": "Normalizar lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar lead": {
+      "main": [
+        [
+          {
+            "node": "Tiene lead y teléfono",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tiene lead y teléfono": {
+      "main": [
+        [
+          {
+            "node": "Programar toque 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Programar toque 1": {
+      "main": [
+        [
+          {
+            "node": "Insertar en integracion_leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insertar en integracion_leads": {
+      "main": [
+        [
+          {
+            "node": "¿Es duplicado?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Es duplicado?": {
+      "main": [
+        [
+          {
+            "node": "Guardar en cola de duplicados (MySQL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-11-24T18:40:18.152Z",
+  "id": "t9AaWogksPWemEfd",
+  "isArchived": false,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "name": "RE CO - Ingreso",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "id": "7bdb3419-1acb-4285-980f-4d0f7c11a1a7",
+      "name": "Lead frío desde Pilot",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "re-ingreso",
+        "options": {}
+      },
+      "webhookId": "cde96835-181e-4bbc-aace-19046a6c36db"
+    },
+    {
+      "id": "60ccddd2-eb68-4c37-8c97-3142b3a4b25e",
+      "name": "Normalizar lead",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        224,
+        0
+      ],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "n1",
+              "name": "lead_id",
+              "type": "string",
+              "value": "={{ $json.body?.pilot_ID ?? $json.body?.pilot_id ?? $json.body?.pilot_tracking_id ?? $json.body?.lead_id ?? \"\" }}"
+            },
+            {
+              "id": "n2",
+              "name": "telefono",
+              "type": "string",
+              "value": "={{ (() => { const d = String($json.body?.pilot_cellphone || $json.body?.pilot_phone || $json.body?.telefono || '').replace(/\\D/g, ''); if (d.length === 9 && d.startsWith('0')) return '598' + d.slice(1); if (d.length === 8) return '598' + d; if (d.startsWith('598') && d.length === 12 && d[3] === '0') return '598' + d.slice(4); return d; })() }}"
+            },
+            {
+              "id": "n3",
+              "name": "nombre",
+              "type": "string",
+              "value": "={{ [($json.body?.pilot_firstname ?? \"\").trim(), ($json.body?.pilot_lastname ?? \"\").trim()].filter(Boolean).join(\" \") }}"
+            },
+            {
+              "id": "n4",
+              "name": "marca",
+              "type": "string",
+              "value": "={{ ($json.body?.pilot_marca || $json.body?.pilot_negocio || $json.body?.marca || \"\").trim().toUpperCase() }}"
+            },
+            {
+              "id": "n5",
+              "name": "modelo",
+              "type": "string",
+              "value": "={{ $json.body?.pilot_product_of_interest ?? $json.body?.pilot_modelo ?? $json.body?.modelo ?? \"\" }}"
+            },
+            {
+              "id": "n6",
+              "name": "grupo_original",
+              "type": "string",
+              "value": "={{ (() => { const b = $json.body || {}; if (b.grupo_original) return b.grupo_original; const n = String(b.pilot_notes || ''); const c = n.replace(/^\\s*Comentario:\\s*/i, '').split('// Fecha desistido')[0]; const i = c.lastIndexOf('|'); const deNotas = i >= 0 ? c.slice(i + 1).trim() : ''; if (deNotas) return deNotas; const g = String(b.pilot_group || '').trim(); return /calificaci[oó]n fr[ií]os/i.test(g) ? '' : g; })() }}"
+            },
+            {
+              "id": "n7",
+              "name": "fecha_consulta",
+              "type": "string",
+              "value": "={{ $json.body?.pilot_fecha || $json.body?.fecha_consulta || $now.toISO() }}"
+            },
+            {
+              "id": "n8",
+              "name": "ultimo_msg_lead",
+              "type": "string",
+              "value": "={{ $json.body?.ultimo_msg_lead || $json.body?.pilot_fecha || $now.toISO() }}"
+            },
+            {
+              "id": "n9",
+              "name": "notas_pilot",
+              "type": "string",
+              "value": "={{ $json.body?.pilot_notes ?? \"\" }}"
+            },
+            {
+              "id": "n10",
+              "name": "email",
+              "type": "string",
+              "value": "={{ $json.body?.pilot_email ?? \"\" }}"
+            },
+            {
+              "id": "n11",
+              "name": "origen",
+              "type": "string",
+              "value": "={{ $json.body?.pilot_origen ?? \"\" }}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "1d58a657-9105-424c-bb05-6a490422aa5f",
+      "name": "Tiene lead y teléfono",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.lead_id }}",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "leftValue": "={{ $json.telefono }}",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "64acf7f9-514a-4264-9dcf-5f8aceae1b6a",
+      "name": "Programar toque 1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// ===== CONFIG (igual que Santa Rosa) =====\nconst CFG = { zona: 'America/Montevideo', abre: 9, cierra: 20, dias: [1,2,3,4,5], feriados: [], horasToque1: 3, topeSesionHs: 24 };\nconst habil = d => CFG.dias.includes(d.weekday) && !CFG.feriados.includes(d.toISODate());\nconst abrir = d => d.set({ hour: CFG.abre, minute: 0, second: 0, millisecond: 0 });\nfunction ajustar(d) {\n  let x = d;\n  if (x.hour >= CFG.cierra) x = abrir(x.plus({ days: 1 }));\n  else if (x.hour < CFG.abre) x = abrir(x);\n  while (!habil(x)) x = abrir(x.plus({ days: 1 }));\n  return x;\n}\nconst ultimo = DateTime.fromISO($json.ultimo_msg_lead, { zone: CFG.zona });\nconst base = (ultimo.isValid ? ultimo : DateTime.now().setZone(CFG.zona)).plus({ hours: CFG.horasToque1 });\nlet envio = ajustar(base);\nif (ultimo.isValid && envio.diff(ultimo, 'hours').hours > CFG.topeSesionHs) {\n  envio = abrir(ultimo.plus({ days: 1 }));\n  if (envio < base) envio = base;\n}\nconst fila = { lead_id: $json.lead_id, nombre: ($json.nombre || '').split(' ')[0] || null, apellido: ($json.nombre || '').split(' ').slice(1).join(' ') || null, telefono: $json.telefono, email: $json.email || null, modelo: $json.modelo || null, origen: $json.origen || null, notas: $json.notas_pilot || null, proximo_envio_at: envio.toUTC().toFormat('yyyy-MM-dd HH:mm:ss'), extra: { marca: $json.marca || null, grupo_original: $json.grupo_original || null, fecha_consulta: $json.fecha_consulta, ultimo_msg_lead: $json.ultimo_msg_lead, toques: {} } };\nreturn { json: { ...$json, proximo_envio: envio.toISO(), fila: JSON.stringify(fila) } };"
+      }
+    },
+    {
+      "id": "66c72de2-9f22-4c04-9370-6a32bb57c4b7",
+      "name": "Insertar en integracion_leads",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        896,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "{{ (() => { const q = v => \"'\" + String(v ?? '').replace(/\\\\/g, '\\\\\\\\').replace(/'/g, \"\\\\'\") + \"'\"; return `INSERT INTO integracion_leads (company_id, integracion, flujo, external_id, nombre, apellido, telefono, email, modelo, origen, notas, crm, crm_lead_id, grado_interes, status, status_changed_at, proximo_toque, proximo_envio_at, extra) SELECT 117, 'pilot', 'reenganche_frios', JSON_UNQUOTE(JSON_EXTRACT(t.j, '$.lead_id')), NULLIF(JSON_UNQUOTE(JSON_EXTRACT(t.j, '$.nombre')), 'null'), NULLIF(JSON_UNQUOTE(JSON_EXTRACT(t.j, '$.apellido')), 'null'), JSON_UNQUOTE(JSON_EXTRACT(t.j, '$.telefono')), NULLIF(JSON_UNQUOTE(JSON_EXTRACT(t.j, '$.email')), 'null'), NULLIF(JSON_UNQUOTE(JSON_EXTRACT(t.j, '$.modelo')), 'null'), NULLIF(JSON_UNQUOTE(JSON_EXTRACT(t.j, '$.origen')), 'null'), NULLIF(JSON_UNQUOTE(JSON_EXTRACT(t.j, '$.notas')), 'null'), 'pilot', JSON_UNQUOTE(JSON_EXTRACT(t.j, '$.lead_id')), 'cold', 'en_secuencia', UTC_TIMESTAMP(), 1, JSON_UNQUOTE(JSON_EXTRACT(t.j, '$.proximo_envio_at')), JSON_EXTRACT(t.j, '$.extra') FROM (SELECT CAST(${q($json.fila)} AS JSON) AS j) t WHERE NOT EXISTS (SELECT 1 FROM integracion_leads x WHERE x.company_id = 117 AND x.flujo = 'reenganche_frios' AND x.telefono = JSON_UNQUOTE(JSON_EXTRACT(t.j, '$.telefono')) AND (x.status IN ('en_secuencia','respondio') OR (x.status = 'derivado' AND x.status_changed_at >= UTC_TIMESTAMP() - INTERVAL 60 DAY)))`; })() }}",
+        "options": {}
+      },
+      "credentials": {
+        "mySql": {
+          "id": "pt3Y683lDuSK9vlt",
+          "name": "MySQL Suite"
+        }
+      }
+    },
+    {
+      "id": "4dabbd3f-418d-4fb3-b1c4-8252c712959a",
+      "name": "¿Es duplicado?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1120,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ Number($json.affectedRows ?? 0) === 0 }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "6cc020ec-4b4b-4262-9472-42b9a3010ccd",
+      "name": "Guardar en cola de duplicados (MySQL)",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        1344,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "{{ (() => { const p = $('Programar toque 1').item.json; const q = v => \"'\" + String(v ?? '').replace(/\\\\/g, '\\\\\\\\').replace(/'/g, \"\\\\'\") + \"'\"; return `INSERT INTO integracion_leads (company_id, integracion, flujo, external_id, crm_lead_id, telefono, nombre, modelo, crm, status, status_changed_at, reason, extra) SELECT 117, 'pilot', 'reenganche_duplicados', ${q(p.lead_id)}, ${q(p.lead_id)}, ${q(p.telefono)}, ${q(p.nombre)}, ${q(p.modelo)}, 'pilot', 'pendiente', UTC_TIMESTAMP(), 'segun_telefono', JSON_OBJECT('caso', 'ingreso', 'origen', 'webhook_pilot') FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM integracion_leads x WHERE x.company_id = 117 AND x.flujo IN ('reenganche_duplicados','reenganche_frios') AND x.external_id = ${q(p.lead_id)})`; })() }}",
+        "options": {}
+      },
+      "credentials": {
+        "mySql": {
+          "id": "pt3Y683lDuSK9vlt",
+          "name": "MySQL Suite"
+        }
+      }
+    },
+    {
+      "id": "1c4a5fa0-bcf0-4c32-a564-f8755cf8de6f",
+      "name": "Sticky Note 255ce72b",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        608,
+        192
+      ],
+      "parameters": {
+        "content": "## RE CO - Ingreso (Car One, company 117)\nRecibe el lead frío de Pilot (POST /webhook/re-ingreso), lo guarda en integracion_leads (flujo reenganche_frios) y programa el toque 1: 3 h después, ventana 9-20 L-V. Si el teléfono ya tiene secuencia abierta o está derivado (60 días), va a la cola de duplicados. Mismas reglas que Santa Rosa.",
+        "color": 4
+      }
+    }
+  ],
+  "pinData": null,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "t9AaWogksPWemEfd",
+      "projectId": "bYM6Pqg31ODjetqU",
+      "createdAt": "2026-11-24T18:40:18.157Z",
+      "updatedAt": "2026-11-24T18:40:18.157Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2026-11-24T18:40:18.152Z",
+  "versionId": "dbb37553-90d9-471d-a81d-a0997040bee1"
+}
