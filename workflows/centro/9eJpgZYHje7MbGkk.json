@@ -1,0 +1,2206 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "5a5b2f1c-eda8-416b-abfc-40f6c5377c14",
+    "workflowId": "9eJpgZYHje7MbGkk",
+    "nodes": [
+      {
+        "parameters": {
+          "url": "=https://api.twilio.com/2010-04-01/Accounts/TWILIO_SID_OCULTO/Messages.json?DateSent={{ DateTime.local().format('yyyy-MM-dd') }}&PageSize=1000&from:whatsapp:+5491168362302",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpBasicAuth",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -480,
+          -80
+        ],
+        "id": "60e6a693-c13d-471b-a3f1-14741aa9ec94",
+        "name": "Get_Message_Twilio",
+        "credentials": {
+          "httpBasicAuth": {
+            "id": "6QCEn7UXgRKX0shU",
+            "name": "Unnamed credential"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\n\n// Función para validar y mantener el formato de fecha DD/MM/YYYY HH:mm\nfunction formatearFecha(fechaString) {\n  if (!fechaString) return '';\n  \n  try {\n    // Si la fecha ya está en formato DD/MM/YYYY HH:mm, la devolvemos tal cual\n    const formatoEsperado = /^\\d{1,2}\\/\\d{1,2}\\/\\d{4}\\s\\d{1,2}:\\d{1,2}$/;\n    if (formatoEsperado.test(fechaString)) {\n      return fechaString;\n    }\n    \n    // Si está en otro formato (como RFC 2822), intentamos convertirla\n    const fecha = new Date(fechaString);\n    \n    // Verificamos si la fecha es válida\n    if (isNaN(fecha.getTime())) {\n      return fechaString; // Si no es válida, devolvemos el string original\n    }\n    \n    const dia = fecha.getDate();\n    const mes = fecha.getMonth() + 1;\n    const anio = fecha.getFullYear();\n    const horas = fecha.getHours().toString().padStart(2, '0');\n    const minutos = fecha.getMinutes().toString().padStart(2, '0');\n    \n    return `${dia}/${mes}/${anio} ${horas}:${minutos}`;\n  } catch (error) {\n    return fechaString;\n  }\n}\n\n// Función para limpiar el prefijo \"whatsapp:\"\nfunction limpiarNumero(numero) {\n  if (!numero) return '';\n  return numero.replace('whatsapp:', '');\n}\n\n// Mapeamos cada item de entrada y extraemos solo los campos necesarios\nconst mensajesProcesados = items.map(item => {\n  const mensaje = item.json;\n  \n  return {\n    json: {\n      body: mensaje.body || '',\n      account_sid: mensaje.account_sid || '',\n      date_sent: formatearFecha(mensaje.date_sent),\n      date_updated: formatearFecha(mensaje.date_updated),\n      from: limpiarNumero(mensaje.from),\n      to: limpiarNumero(mensaje.to)\n    }\n  };\n});\n\nreturn mensajesProcesados;"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -80,
+          -80
+        ],
+        "id": "fa364383-fcb9-4317-8629-6d852c48ee5f",
+        "name": "limpiar_info",
+        "executeOnce": false,
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "triggerTimes": {
+            "item": [
+              {
+                "minute": 45
+              }
+            ]
+          }
+        },
+        "name": "Cron Diario1",
+        "type": "n8n-nodes-base.cron",
+        "typeVersion": 1,
+        "position": [
+          -656,
+          -80
+        ],
+        "id": "7a92db0a-c3c6-42de-bbce-568236eb2a93"
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\n\n// Función para convertir fecha de formato RFC 2822 a formato deseado\nfunction formatearFecha(fechaString) {\n  if (!fechaString) return '';\n  \n  try {\n    const fecha = new Date(fechaString);\n    \n    const dia = fecha.getDate();\n    const mes = fecha.getMonth() + 1;\n    const anio = fecha.getFullYear();\n    const horas = fecha.getHours().toString().padStart(2, '0');\n    const minutos = fecha.getMinutes().toString().padStart(2, '0');\n    \n    return `${dia}/${mes}/${anio} ${horas}:${minutos}`;\n  } catch (error) {\n    return fechaString;\n  }\n}\n\n// Función para limpiar el prefijo \"whatsapp:\"\nfunction limpiarNumero(numero) {\n  if (!numero) return '';\n  return numero.replace('whatsapp:', '');\n}\n\n// Procesar los mensajes del array anidado\nconst mensajesFiltrados = [];\nconst numerosUnicos = new Set(); // Para trackear números \"to\" únicos\n\nitems.forEach(item => {\n  const data = item.json;\n  \n  // Verificar si existe el array de messages\n  if (data.messages && Array.isArray(data.messages)) {\n    data.messages.forEach(mensaje => {\n      const numeroLimpio = limpiarNumero(mensaje.to);\n      \n      // Filtrar solo los mensajes que contengan el patrón buscado\n      // PERO que NO contengan \"RESPETAR EL HORARIO ASIGNADO\"\n      // Y que el número \"to\" no haya sido procesado antes\n      if (mensaje.body && \n          mensaje.body.includes('Nos comunicamos de CENTRO AUTOMOTORES para recordarle su turno en nuestro taller.') &&\n          !mensaje.body.includes('*RESPETAR EL HORARIO ASIGNADO*') &&\n          !numerosUnicos.has(numeroLimpio)) {\n        \n        // Agregar el número al Set para no procesarlo de nuevo\n        numerosUnicos.add(numeroLimpio);\n        \n        mensajesFiltrados.push({\n          json: {\n            body: mensaje.body || '',\n            account_sid: mensaje.account_sid || '',\n            date_sent: formatearFecha(mensaje.date_sent),\n            date_updated: formatearFecha(mensaje.date_updated),\n            from: limpiarNumero(mensaje.from),\n            to: numeroLimpio\n          }\n        });\n      }\n    });\n  }\n});\n\nreturn mensajesFiltrados;"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -288,
+          -80
+        ],
+        "id": "b3c985b3-2e1c-4c55-aab3-7f3e2df1c2db",
+        "name": "Buscar_en_confirmacion",
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "operation": "append",
+          "documentId": {
+            "__rl": true,
+            "value": "1SwBwlnuBzlRaLDtRvW515p-qjwBfnwLjF-RYBx3xqkI",
+            "mode": "list",
+            "cachedResultName": "Centro-PDF's",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1SwBwlnuBzlRaLDtRvW515p-qjwBfnwLjF-RYBx3xqkI/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "gid=0",
+            "mode": "list",
+            "cachedResultName": "Confirmación",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1SwBwlnuBzlRaLDtRvW515p-qjwBfnwLjF-RYBx3xqkI/edit#gid=0"
+          },
+          "dataMode": "autoMapInputData",
+          "options": {}
+        },
+        "name": "confirmacion",
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 3,
+        "position": [
+          80,
+          -80
+        ],
+        "id": "0c54dd74-1a97-4ef0-b508-dce2e0d2074b",
+        "retryOnFail": true,
+        "executeOnce": false,
+        "alwaysOutputData": true,
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "QzakxMlESuF8sdM4",
+            "name": "Google Sheets account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "documentId": {
+            "__rl": true,
+            "value": "1SwBwlnuBzlRaLDtRvW515p-qjwBfnwLjF-RYBx3xqkI",
+            "mode": "list",
+            "cachedResultName": "Centro-PDF's",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1SwBwlnuBzlRaLDtRvW515p-qjwBfnwLjF-RYBx3xqkI/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "gid=0",
+            "mode": "list",
+            "cachedResultName": "Confirmación",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1SwBwlnuBzlRaLDtRvW515p-qjwBfnwLjF-RYBx3xqkI/edit#gid=0"
+          },
+          "options": {}
+        },
+        "name": "Leer Google Sheet",
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 3,
+        "position": [
+          -416,
+          272
+        ],
+        "id": "5288320b-df5e-40cc-b028-f715befdfa57",
+        "retryOnFail": true,
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "QzakxMlESuF8sdM4",
+            "name": "Google Sheets account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "folderId": "13BWX5_mTn6Y0Gz1G_C7eoUHnfTW6HiH4",
+          "title": "=Mensajes del {{ DateTime.now().toFormat('dd-LL-yyyy') }} - Confirmación"
+        },
+        "name": "Crear Documento",
+        "type": "n8n-nodes-base.googleDocs",
+        "typeVersion": 2,
+        "position": [
+          -576,
+          272
+        ],
+        "id": "4625da66-ebeb-4e6f-a648-978cc27b26a6",
+        "retryOnFail": true,
+        "credentials": {
+          "googleDocsOAuth2Api": {
+            "id": "rsAe24q1yrwj8nDY",
+            "name": "Google Docs account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "update",
+          "documentURL": "={{ $('Crear Documento').first().json.id }}",
+          "actionsUi": {
+            "actionFields": [
+              {
+                "action": "insert",
+                "text": "=Destinatario: {{ $json.to }}\n\n{{ $json.body }}\n\nEnviado el: {{ $json.date_sent }}\n"
+              },
+              {
+                "object": "pageBreak",
+                "action": "insert"
+              }
+            ]
+          }
+        },
+        "name": "Actualizar Documento",
+        "type": "n8n-nodes-base.googleDocs",
+        "typeVersion": 2,
+        "position": [
+          112,
+          288
+        ],
+        "id": "72aa31ee-3748-4de9-8a8c-985c63211479",
+        "retryOnFail": true,
+        "credentials": {
+          "googleDocsOAuth2Api": {
+            "id": "rsAe24q1yrwj8nDY",
+            "name": "Google Docs account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "download",
+          "fileId": {
+            "__rl": true,
+            "value": "={{ $json.documentId }}",
+            "mode": "id"
+          },
+          "options": {
+            "googleFileConversion": {
+              "conversion": {
+                "docsToFormat": "application/pdf"
+              }
+            }
+          }
+        },
+        "name": "Descargar PDF",
+        "type": "n8n-nodes-base.googleDrive",
+        "typeVersion": 3,
+        "position": [
+          112,
+          144
+        ],
+        "id": "9d6bd5fe-931e-4ca9-851d-276ad3c3259d",
+        "executeOnce": true,
+        "credentials": {
+          "googleDriveOAuth2Api": {
+            "id": "hZHpxXTrCS0ZvG0Z",
+            "name": "Google Drive account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "options": {}
+        },
+        "type": "n8n-nodes-base.splitInBatches",
+        "typeVersion": 3,
+        "position": [
+          -80,
+          272
+        ],
+        "id": "24c4d5e0-8df2-4bc5-987d-2fec402b9bd3",
+        "name": "Loop Over Items",
+        "alwaysOutputData": false
+      },
+      {
+        "parameters": {
+          "content": "## CONFIRMACION",
+          "height": 80,
+          "width": 214
+        },
+        "type": "n8n-nodes-base.stickyNote",
+        "position": [
+          -720,
+          128
+        ],
+        "typeVersion": 1,
+        "id": "6adcda42-bbb6-4e58-9c07-eba9dc0fc99f",
+        "name": "Sticky Note4"
+      },
+      {
+        "parameters": {},
+        "type": "n8n-nodes-base.wait",
+        "typeVersion": 1.1,
+        "position": [
+          320,
+          288
+        ],
+        "id": "77cff066-a0ce-4164-963f-6dd2a66e4229",
+        "name": "Wait3",
+        "webhookId": "8f3c0535-5d34-43d1-9dc6-8d847d8f0ab6"
+      },
+      {
+        "parameters": {
+          "triggerTimes": {
+            "item": [
+              {
+                "hour": 15
+              }
+            ]
+          }
+        },
+        "name": "Cron Diario",
+        "type": "n8n-nodes-base.cron",
+        "typeVersion": 1,
+        "position": [
+          -720,
+          272
+        ],
+        "id": "6e8ef154-a947-41d7-bc95-7bd9315a8cf5"
+      },
+      {
+        "parameters": {
+          "sendTo": "turnos.cabrera@centroautomotores.com",
+          "subject": "Confirmación de turno",
+          "message": "Esto es un mensaje automatico",
+          "options": {
+            "appendAttribution": false,
+            "attachmentsUi": {
+              "attachmentsBinary": [
+                {}
+              ]
+            }
+          }
+        },
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2.1,
+        "position": [
+          864,
+          64
+        ],
+        "id": "8de380c9-7502-4bf6-92b6-72a1deed2fa9",
+        "name": "Send a message",
+        "webhookId": "10bb61fe-eddf-49a6-bd6e-380e6885a89b",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "RqObmNlujIjl5k1b",
+            "name": "Gmail account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "sendTo": "redoo2024@gmail.com",
+          "subject": "Confirmación de turno",
+          "message": "Esto es un mensaje automatico",
+          "options": {
+            "appendAttribution": false,
+            "attachmentsUi": {
+              "attachmentsBinary": [
+                {}
+              ]
+            }
+          }
+        },
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2.1,
+        "position": [
+          864,
+          208
+        ],
+        "id": "1bad54e0-1a87-48fe-9dd7-9e7a35c98915",
+        "name": "Send a message1",
+        "webhookId": "10bb61fe-eddf-49a6-bd6e-380e6885a89b",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "RqObmNlujIjl5k1b",
+            "name": "Gmail account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "sendTo": "ijcabaleiro@gmail.com",
+          "subject": "Confirmación de turno",
+          "message": "Esto es un mensaje automatico",
+          "options": {
+            "appendAttribution": false,
+            "attachmentsUi": {
+              "attachmentsBinary": [
+                {}
+              ]
+            }
+          }
+        },
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2.1,
+        "position": [
+          864,
+          -80
+        ],
+        "id": "52256725-ea90-47e6-8f89-d428c0aca5e9",
+        "name": "Send a message2",
+        "webhookId": "10bb61fe-eddf-49a6-bd6e-380e6885a89b",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "RqObmNlujIjl5k1b",
+            "name": "Gmail account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "url": "=https://api.twilio.com{{ $('Get_Message_Twilio').item.json.next_page_uri }}",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpBasicAuth",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          528,
+          -96
+        ],
+        "id": "86a287ac-ee3e-4e4b-8e96-2f58c20c8928",
+        "name": "Get_Message_Twilio1",
+        "credentials": {
+          "httpBasicAuth": {
+            "id": "6QCEn7UXgRKX0shU",
+            "name": "Unnamed credential"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "8e298915-f194-4c4c-8cf2-b13e0e1b25c7",
+                "leftValue": "={{ $('Get_Message_Twilio').item.json.next_page_uri }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "string",
+                  "operation": "notEmpty",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          272,
+          -80
+        ],
+        "id": "2240b1b1-cfe0-40e8-9062-8914cc518498",
+        "name": "If"
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\n\n// Función para validar y mantener el formato de fecha DD/MM/YYYY HH:mm\nfunction formatearFecha(fechaString) {\n  if (!fechaString) return '';\n  \n  try {\n    // Si la fecha ya está en formato DD/MM/YYYY HH:mm, la devolvemos tal cual\n    const formatoEsperado = /^\\d{1,2}\\/\\d{1,2}\\/\\d{4}\\s\\d{1,2}:\\d{1,2}$/;\n    if (formatoEsperado.test(fechaString)) {\n      return fechaString;\n    }\n    \n    // Si está en otro formato (como RFC 2822), intentamos convertirla\n    const fecha = new Date(fechaString);\n    \n    // Verificamos si la fecha es válida\n    if (isNaN(fecha.getTime())) {\n      return fechaString; // Si no es válida, devolvemos el string original\n    }\n    \n    const dia = fecha.getDate();\n    const mes = fecha.getMonth() + 1;\n    const anio = fecha.getFullYear();\n    const horas = fecha.getHours().toString().padStart(2, '0');\n    const minutos = fecha.getMinutes().toString().padStart(2, '0');\n    \n    return `${dia}/${mes}/${anio} ${horas}:${minutos}`;\n  } catch (error) {\n    return fechaString;\n  }\n}\n\n// Función para limpiar el prefijo \"whatsapp:\"\nfunction limpiarNumero(numero) {\n  if (!numero) return '';\n  return numero.replace('whatsapp:', '');\n}\n\n// Mapeamos cada item de entrada y extraemos solo los campos necesarios\nconst mensajesProcesados = items.map(item => {\n  const mensaje = item.json;\n  \n  return {\n    json: {\n      body: mensaje.body || '',\n      account_sid: mensaje.account_sid || '',\n      date_sent: formatearFecha(mensaje.date_sent),\n      date_updated: formatearFecha(mensaje.date_updated),\n      from: limpiarNumero(mensaje.from),\n      to: limpiarNumero(mensaje.to)\n    }\n  };\n});\n\nreturn mensajesProcesados;"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1088,
+          -240
+        ],
+        "id": "62f6db7b-f18a-4e60-a998-dc3dda401dc5",
+        "name": "limpiar_info1",
+        "executeOnce": true,
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\n\n// Función para convertir fecha de formato RFC 2822 a formato deseado\nfunction formatearFecha(fechaString) {\n  if (!fechaString) return '';\n  \n  try {\n    const fecha = new Date(fechaString);\n    \n    const dia = fecha.getDate();\n    const mes = fecha.getMonth() + 1;\n    const anio = fecha.getFullYear();\n    const horas = fecha.getHours().toString().padStart(2, '0');\n    const minutos = fecha.getMinutes().toString().padStart(2, '0');\n    \n    return `${dia}/${mes}/${anio} ${horas}:${minutos}`;\n  } catch (error) {\n    return fechaString;\n  }\n}\n\n// Función para limpiar el prefijo \"whatsapp:\"\nfunction limpiarNumero(numero) {\n  if (!numero) return '';\n  return numero.replace('whatsapp:', '');\n}\n\n// Procesar los mensajes del array anidado\nconst mensajesFiltrados = [];\nconst numerosUnicos = new Set(); // Para trackear números \"to\" únicos\n\nitems.forEach(item => {\n  const data = item.json;\n  \n  // Verificar si existe el array de messages\n  if (data.messages && Array.isArray(data.messages)) {\n    data.messages.forEach(mensaje => {\n      const numeroLimpio = limpiarNumero(mensaje.to);\n      \n      // Filtrar solo los mensajes que contengan el patrón buscado\n      // PERO que NO contengan \"RESPETAR EL HORARIO ASIGNADO\"\n      // Y que el número \"to\" no haya sido procesado antes\n      if (mensaje.body && \n          mensaje.body.includes('Nos comunicamos de CENTRO AUTOMOTORES para recordarle su turno en nuestro taller.') &&\n          !mensaje.body.includes('*RESPETAR EL HORARIO ASIGNADO*') &&\n          !numerosUnicos.has(numeroLimpio)) {\n        \n        // Agregar el número al Set para no procesarlo de nuevo\n        numerosUnicos.add(numeroLimpio);\n        \n        mensajesFiltrados.push({\n          json: {\n            body: mensaje.body || '',\n            account_sid: mensaje.account_sid || '',\n            date_sent: formatearFecha(mensaje.date_sent),\n            date_updated: formatearFecha(mensaje.date_updated),\n            from: limpiarNumero(mensaje.from),\n            to: numeroLimpio\n          }\n        });\n      }\n    });\n  }\n});\n\nreturn mensajesFiltrados;"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          880,
+          -240
+        ],
+        "id": "1ab680f1-eef7-4f14-8ef8-2531f712de59",
+        "name": "Buscar_en_confirmacion1",
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "operation": "append",
+          "documentId": {
+            "__rl": true,
+            "value": "1SwBwlnuBzlRaLDtRvW515p-qjwBfnwLjF-RYBx3xqkI",
+            "mode": "list",
+            "cachedResultName": "Centro-PDF's",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1SwBwlnuBzlRaLDtRvW515p-qjwBfnwLjF-RYBx3xqkI/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "gid=0",
+            "mode": "list",
+            "cachedResultName": "Confirmación",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1SwBwlnuBzlRaLDtRvW515p-qjwBfnwLjF-RYBx3xqkI/edit#gid=0"
+          },
+          "dataMode": "autoMapInputData",
+          "options": {}
+        },
+        "name": "confirmacion1",
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 3,
+        "position": [
+          1248,
+          -240
+        ],
+        "id": "2adacb18-0851-48c7-8efc-1f89eea41d0b",
+        "retryOnFail": true,
+        "executeOnce": false,
+        "alwaysOutputData": true,
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "QzakxMlESuF8sdM4",
+            "name": "Google Sheets account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "url": "=https://api.twilio.com{{ $('Get_Message_Twilio1').item.json.next_page_uri }}",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpBasicAuth",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1568,
+          192
+        ],
+        "id": "f6c6c23d-6291-46bc-a2a4-7d515ac9b0bb",
+        "name": "Get_Message_Twilio2",
+        "credentials": {
+          "httpBasicAuth": {
+            "id": "6QCEn7UXgRKX0shU",
+            "name": "Unnamed credential"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\n\n// Función para validar y mantener el formato de fecha DD/MM/YYYY HH:mm\nfunction formatearFecha(fechaString) {\n  if (!fechaString) return '';\n  \n  try {\n    // Si la fecha ya está en formato DD/MM/YYYY HH:mm, la devolvemos tal cual\n    const formatoEsperado = /^\\d{1,2}\\/\\d{1,2}\\/\\d{4}\\s\\d{1,2}:\\d{1,2}$/;\n    if (formatoEsperado.test(fechaString)) {\n      return fechaString;\n    }\n    \n    // Si está en otro formato (como RFC 2822), intentamos convertirla\n    const fecha = new Date(fechaString);\n    \n    // Verificamos si la fecha es válida\n    if (isNaN(fecha.getTime())) {\n      return fechaString; // Si no es válida, devolvemos el string original\n    }\n    \n    const dia = fecha.getDate();\n    const mes = fecha.getMonth() + 1;\n    const anio = fecha.getFullYear();\n    const horas = fecha.getHours().toString().padStart(2, '0');\n    const minutos = fecha.getMinutes().toString().padStart(2, '0');\n    \n    return `${dia}/${mes}/${anio} ${horas}:${minutos}`;\n  } catch (error) {\n    return fechaString;\n  }\n}\n\n// Función para limpiar el prefijo \"whatsapp:\"\nfunction limpiarNumero(numero) {\n  if (!numero) return '';\n  return numero.replace('whatsapp:', '');\n}\n\n// Mapeamos cada item de entrada y extraemos solo los campos necesarios\nconst mensajesProcesados = items.map(item => {\n  const mensaje = item.json;\n  \n  return {\n    json: {\n      body: mensaje.body || '',\n      account_sid: mensaje.account_sid || '',\n      date_sent: formatearFecha(mensaje.date_sent),\n      date_updated: formatearFecha(mensaje.date_updated),\n      from: limpiarNumero(mensaje.from),\n      to: limpiarNumero(mensaje.to)\n    }\n  };\n});\n\nreturn mensajesProcesados;"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2128,
+          48
+        ],
+        "id": "39df368c-3487-4ee7-88d6-819efdf078ea",
+        "name": "limpiar_info2",
+        "executeOnce": true,
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\n\n// Función para convertir fecha de formato RFC 2822 a formato deseado\nfunction formatearFecha(fechaString) {\n  if (!fechaString) return '';\n  \n  try {\n    const fecha = new Date(fechaString);\n    \n    const dia = fecha.getDate();\n    const mes = fecha.getMonth() + 1;\n    const anio = fecha.getFullYear();\n    const horas = fecha.getHours().toString().padStart(2, '0');\n    const minutos = fecha.getMinutes().toString().padStart(2, '0');\n    \n    return `${dia}/${mes}/${anio} ${horas}:${minutos}`;\n  } catch (error) {\n    return fechaString;\n  }\n}\n\n// Función para limpiar el prefijo \"whatsapp:\"\nfunction limpiarNumero(numero) {\n  if (!numero) return '';\n  return numero.replace('whatsapp:', '');\n}\n\n// Procesar los mensajes del array anidado\nconst mensajesFiltrados = [];\nconst numerosUnicos = new Set(); // Para trackear números \"to\" únicos\n\nitems.forEach(item => {\n  const data = item.json;\n  \n  // Verificar si existe el array de messages\n  if (data.messages && Array.isArray(data.messages)) {\n    data.messages.forEach(mensaje => {\n      const numeroLimpio = limpiarNumero(mensaje.to);\n      \n      // Filtrar solo los mensajes que contengan el patrón buscado\n      // PERO que NO contengan \"RESPETAR EL HORARIO ASIGNADO\"\n      // Y que el número \"to\" no haya sido procesado antes\n      if (mensaje.body && \n          mensaje.body.includes('Nos comunicamos de CENTRO AUTOMOTORES para recordarle su turno en nuestro taller.') &&\n          !mensaje.body.includes('*RESPETAR EL HORARIO ASIGNADO*') &&\n          !numerosUnicos.has(numeroLimpio)) {\n        \n        // Agregar el número al Set para no procesarlo de nuevo\n        numerosUnicos.add(numeroLimpio);\n        \n        mensajesFiltrados.push({\n          json: {\n            body: mensaje.body || '',\n            account_sid: mensaje.account_sid || '',\n            date_sent: formatearFecha(mensaje.date_sent),\n            date_updated: formatearFecha(mensaje.date_updated),\n            from: limpiarNumero(mensaje.from),\n            to: numeroLimpio\n          }\n        });\n      }\n    });\n  }\n});\n\nreturn mensajesFiltrados;"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1920,
+          48
+        ],
+        "id": "38be5b38-3534-43a4-9777-068f1abc2380",
+        "name": "Buscar_en_confirmacion2",
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "operation": "append",
+          "documentId": {
+            "__rl": true,
+            "value": "1SwBwlnuBzlRaLDtRvW515p-qjwBfnwLjF-RYBx3xqkI",
+            "mode": "list",
+            "cachedResultName": "Centro-PDF's",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1SwBwlnuBzlRaLDtRvW515p-qjwBfnwLjF-RYBx3xqkI/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "gid=0",
+            "mode": "list",
+            "cachedResultName": "Confirmación",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1SwBwlnuBzlRaLDtRvW515p-qjwBfnwLjF-RYBx3xqkI/edit#gid=0"
+          },
+          "dataMode": "autoMapInputData",
+          "options": {}
+        },
+        "name": "confirmacion2",
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 3,
+        "position": [
+          2288,
+          48
+        ],
+        "id": "eb5ca05c-f55b-4ad0-96b2-27b998b3a496",
+        "retryOnFail": true,
+        "executeOnce": false,
+        "alwaysOutputData": true,
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "QzakxMlESuF8sdM4",
+            "name": "Google Sheets account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "8e298915-f194-4c4c-8cf2-b13e0e1b25c7",
+                "leftValue": "={{ $('Get_Message_Twilio1').item.json.next_page_uri }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "string",
+                  "operation": "notEmpty",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          1520,
+          -48
+        ],
+        "id": "8b7c61ed-cbb9-4ebb-9d07-857b9e5b5138",
+        "name": "If1"
+      },
+      {
+        "parameters": {
+          "url": "=https://api.twilio.com{{ $('Get_Message_Twilio2').item.json.next_page_uri }}",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpBasicAuth",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2848,
+          656
+        ],
+        "id": "1f5bfa9a-7320-4212-9327-52c50705e8af",
+        "name": "Get_Message_Twilio3",
+        "credentials": {
+          "httpBasicAuth": {
+            "id": "6QCEn7UXgRKX0shU",
+            "name": "Unnamed credential"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\n\n// Función para validar y mantener el formato de fecha DD/MM/YYYY HH:mm\nfunction formatearFecha(fechaString) {\n  if (!fechaString) return '';\n  \n  try {\n    // Si la fecha ya está en formato DD/MM/YYYY HH:mm, la devolvemos tal cual\n    const formatoEsperado = /^\\d{1,2}\\/\\d{1,2}\\/\\d{4}\\s\\d{1,2}:\\d{1,2}$/;\n    if (formatoEsperado.test(fechaString)) {\n      return fechaString;\n    }\n    \n    // Si está en otro formato (como RFC 2822), intentamos convertirla\n    const fecha = new Date(fechaString);\n    \n    // Verificamos si la fecha es válida\n    if (isNaN(fecha.getTime())) {\n      return fechaString; // Si no es válida, devolvemos el string original\n    }\n    \n    const dia = fecha.getDate();\n    const mes = fecha.getMonth() + 1;\n    const anio = fecha.getFullYear();\n    const horas = fecha.getHours().toString().padStart(2, '0');\n    const minutos = fecha.getMinutes().toString().padStart(2, '0');\n    \n    return `${dia}/${mes}/${anio} ${horas}:${minutos}`;\n  } catch (error) {\n    return fechaString;\n  }\n}\n\n// Función para limpiar el prefijo \"whatsapp:\"\nfunction limpiarNumero(numero) {\n  if (!numero) return '';\n  return numero.replace('whatsapp:', '');\n}\n\n// Mapeamos cada item de entrada y extraemos solo los campos necesarios\nconst mensajesProcesados = items.map(item => {\n  const mensaje = item.json;\n  \n  return {\n    json: {\n      body: mensaje.body || '',\n      account_sid: mensaje.account_sid || '',\n      date_sent: formatearFecha(mensaje.date_sent),\n      date_updated: formatearFecha(mensaje.date_updated),\n      from: limpiarNumero(mensaje.from),\n      to: limpiarNumero(mensaje.to)\n    }\n  };\n});\n\nreturn mensajesProcesados;"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          3408,
+          512
+        ],
+        "id": "c77c6abb-7ab6-4eff-8d30-823d995f8150",
+        "name": "limpiar_info3",
+        "executeOnce": true,
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\n\n// Función para convertir fecha de formato RFC 2822 a formato deseado\nfunction formatearFecha(fechaString) {\n  if (!fechaString) return '';\n  \n  try {\n    const fecha = new Date(fechaString);\n    \n    const dia = fecha.getDate();\n    const mes = fecha.getMonth() + 1;\n    const anio = fecha.getFullYear();\n    const horas = fecha.getHours().toString().padStart(2, '0');\n    const minutos = fecha.getMinutes().toString().padStart(2, '0');\n    \n    return `${dia}/${mes}/${anio} ${horas}:${minutos}`;\n  } catch (error) {\n    return fechaString;\n  }\n}\n\n// Función para limpiar el prefijo \"whatsapp:\"\nfunction limpiarNumero(numero) {\n  if (!numero) return '';\n  return numero.replace('whatsapp:', '');\n}\n\n// Procesar los mensajes del array anidado\nconst mensajesFiltrados = [];\nconst numerosUnicos = new Set(); // Para trackear números \"to\" únicos\n\nitems.forEach(item => {\n  const data = item.json;\n  \n  // Verificar si existe el array de messages\n  if (data.messages && Array.isArray(data.messages)) {\n    data.messages.forEach(mensaje => {\n      const numeroLimpio = limpiarNumero(mensaje.to);\n      \n      // Filtrar solo los mensajes que contengan el patrón buscado\n      // PERO que NO contengan \"RESPETAR EL HORARIO ASIGNADO\"\n      // Y que el número \"to\" no haya sido procesado antes\n      if (mensaje.body && \n          mensaje.body.includes('Nos comunicamos de CENTRO AUTOMOTORES para recordarle su turno en nuestro taller.') &&\n          !mensaje.body.includes('*RESPETAR EL HORARIO ASIGNADO*') &&\n          !numerosUnicos.has(numeroLimpio)) {\n        \n        // Agregar el número al Set para no procesarlo de nuevo\n        numerosUnicos.add(numeroLimpio);\n        \n        mensajesFiltrados.push({\n          json: {\n            body: mensaje.body || '',\n            account_sid: mensaje.account_sid || '',\n            date_sent: formatearFecha(mensaje.date_sent),\n            date_updated: formatearFecha(mensaje.date_updated),\n            from: limpiarNumero(mensaje.from),\n            to: numeroLimpio\n          }\n        });\n      }\n    });\n  }\n});\n\nreturn mensajesFiltrados;"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          3200,
+          512
+        ],
+        "id": "e4cc9011-1501-4f72-9b74-e16449e4063d",
+        "name": "Buscar_en_confirmacion3",
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "operation": "append",
+          "documentId": {
+            "__rl": true,
+            "value": "1SwBwlnuBzlRaLDtRvW515p-qjwBfnwLjF-RYBx3xqkI",
+            "mode": "list",
+            "cachedResultName": "Centro-PDF's",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1SwBwlnuBzlRaLDtRvW515p-qjwBfnwLjF-RYBx3xqkI/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "gid=0",
+            "mode": "list",
+            "cachedResultName": "Confirmación",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1SwBwlnuBzlRaLDtRvW515p-qjwBfnwLjF-RYBx3xqkI/edit#gid=0"
+          },
+          "dataMode": "autoMapInputData",
+          "options": {}
+        },
+        "name": "confirmacion3",
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 3,
+        "position": [
+          3568,
+          512
+        ],
+        "id": "98714915-131b-4fbf-9449-08416b120ac5",
+        "retryOnFail": true,
+        "executeOnce": false,
+        "alwaysOutputData": true,
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "QzakxMlESuF8sdM4",
+            "name": "Google Sheets account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "8e298915-f194-4c4c-8cf2-b13e0e1b25c7",
+                "leftValue": "={{ $('Get_Message_Twilio2').item.json.next_page_uri }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "string",
+                  "operation": "notEmpty",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          2800,
+          416
+        ],
+        "id": "69573b7b-bf4e-4464-9692-47c9cdcb8104",
+        "name": "If2"
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\n// Obtener la fecha de hoy (solo día, mes y año)\nconst hoy = new Date();\nconst diaHoy = hoy.getDate();\nconst mesHoy = hoy.getMonth() + 1;\nconst anioHoy = hoy.getFullYear();\n// Filtrar solo los mensajes de hoy\nconst mensajesDeHoy = items.filter(item => {\n  const mensaje = item.json;\n  // Extraer la fecha del campo date_sent (formato: \"8/10/2025 13:42\")\n  if (!mensaje.date_sent) return false;\n  const partes = mensaje.date_sent.split(' ')[0].split('/');\n  const dia = parseInt(partes[0]);\n  const mes = parseInt(partes[1]);\n  const anio = parseInt(partes[2]);\n  // Comparar si es del día de hoy\n  return dia === diaHoy && mes === mesHoy && anio === anioHoy;\n});\nreturn mensajesDeHoy;"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -256,
+          272
+        ],
+        "id": "352c5f50-63b9-4d54-9449-6a2313f24f03",
+        "name": "Filtrar mensajes del dia"
+      }
+    ],
+    "connections": {
+      "Get_Message_Twilio": {
+        "main": [
+          [
+            {
+              "node": "Buscar_en_confirmacion",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "limpiar_info": {
+        "main": [
+          [
+            {
+              "node": "confirmacion",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Cron Diario1": {
+        "main": [
+          [
+            {
+              "node": "Get_Message_Twilio",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Buscar_en_confirmacion": {
+        "main": [
+          [
+            {
+              "node": "limpiar_info",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Leer Google Sheet": {
+        "main": [
+          [
+            {
+              "node": "Filtrar mensajes del dia",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Crear Documento": {
+        "main": [
+          [
+            {
+              "node": "Leer Google Sheet",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Actualizar Documento": {
+        "main": [
+          [
+            {
+              "node": "Wait3",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Loop Over Items": {
+        "main": [
+          [
+            {
+              "node": "Descargar PDF",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Actualizar Documento",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Wait3": {
+        "main": [
+          [
+            {
+              "node": "Loop Over Items",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Cron Diario": {
+        "main": [
+          [
+            {
+              "node": "Crear Documento",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Descargar PDF": {
+        "main": [
+          [
+            {
+              "node": "Send a message2",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Send a message",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Send a message1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get_Message_Twilio1": {
+        "main": [
+          [
+            {
+              "node": "Buscar_en_confirmacion1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "confirmacion": {
+        "main": [
+          [
+            {
+              "node": "If",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "If": {
+        "main": [
+          [
+            {
+              "node": "Get_Message_Twilio1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "limpiar_info1": {
+        "main": [
+          [
+            {
+              "node": "confirmacion1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Buscar_en_confirmacion1": {
+        "main": [
+          [
+            {
+              "node": "limpiar_info1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get_Message_Twilio2": {
+        "main": [
+          [
+            {
+              "node": "Buscar_en_confirmacion2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "limpiar_info2": {
+        "main": [
+          [
+            {
+              "node": "confirmacion2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Buscar_en_confirmacion2": {
+        "main": [
+          [
+            {
+              "node": "limpiar_info2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "confirmacion1": {
+        "main": [
+          [
+            {
+              "node": "If1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "If1": {
+        "main": [
+          [
+            {
+              "node": "Get_Message_Twilio2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get_Message_Twilio3": {
+        "main": [
+          [
+            {
+              "node": "Buscar_en_confirmacion3",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "limpiar_info3": {
+        "main": [
+          [
+            {
+              "node": "confirmacion3",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Buscar_en_confirmacion3": {
+        "main": [
+          [
+            {
+              "node": "limpiar_info3",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "If2": {
+        "main": [
+          [
+            {
+              "node": "Get_Message_Twilio3",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "confirmacion2": {
+        "main": [
+          [
+            {
+              "node": "If2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Filtrar mensajes del dia": {
+        "main": [
+          [
+            {
+              "node": "Loop Over Items",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "MARCELO AGUSTIN DRI",
+    "name": "Version 5a5b2f1c",
+    "description": "",
+    "autosaved": true,
+    "createdAt": "2026-11-06T18:30:09.876Z",
+    "updatedAt": "2026-11-06T18:30:11.000Z"
+  },
+  "activeVersionId": "5a5b2f1c-eda8-416b-abfc-40f6c5377c14",
+  "connections": {
+    "Get_Message_Twilio": {
+      "main": [
+        [
+          {
+            "node": "Buscar_en_confirmacion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "limpiar_info": {
+      "main": [
+        [
+          {
+            "node": "confirmacion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cron Diario1": {
+      "main": [
+        [
+          {
+            "node": "Get_Message_Twilio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar_en_confirmacion": {
+      "main": [
+        [
+          {
+            "node": "limpiar_info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer Google Sheet": {
+      "main": [
+        [
+          {
+            "node": "Filtrar mensajes del dia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crear Documento": {
+      "main": [
+        [
+          {
+            "node": "Leer Google Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Actualizar Documento": {
+      "main": [
+        [
+          {
+            "node": "Wait3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [
+          {
+            "node": "Descargar PDF",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Actualizar Documento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait3": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cron Diario": {
+      "main": [
+        [
+          {
+            "node": "Crear Documento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Descargar PDF": {
+      "main": [
+        [
+          {
+            "node": "Send a message2",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send a message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get_Message_Twilio1": {
+      "main": [
+        [
+          {
+            "node": "Buscar_en_confirmacion1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "confirmacion": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Get_Message_Twilio1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "limpiar_info1": {
+      "main": [
+        [
+          {
+            "node": "confirmacion1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar_en_confirmacion1": {
+      "main": [
+        [
+          {
+            "node": "limpiar_info1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get_Message_Twilio2": {
+      "main": [
+        [
+          {
+            "node": "Buscar_en_confirmacion2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "limpiar_info2": {
+      "main": [
+        [
+          {
+            "node": "confirmacion2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar_en_confirmacion2": {
+      "main": [
+        [
+          {
+            "node": "limpiar_info2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "confirmacion1": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Get_Message_Twilio2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get_Message_Twilio3": {
+      "main": [
+        [
+          {
+            "node": "Buscar_en_confirmacion3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "limpiar_info3": {
+      "main": [
+        [
+          {
+            "node": "confirmacion3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar_en_confirmacion3": {
+      "main": [
+        [
+          {
+            "node": "limpiar_info3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If2": {
+      "main": [
+        [
+          {
+            "node": "Get_Message_Twilio3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "confirmacion2": {
+      "main": [
+        [
+          {
+            "node": "If2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtrar mensajes del dia": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2025-10-09T17:21:07.947Z",
+  "id": "9eJpgZYHje7MbGkk",
+  "isArchived": false,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "name": "PDF's",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "url": "=https://api.twilio.com/2010-04-01/Accounts/TWILIO_SID_OCULTO/Messages.json?DateSent={{ DateTime.local().format('yyyy-MM-dd') }}&PageSize=1000&from:whatsapp:+5491168362302",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -480,
+        -80
+      ],
+      "id": "60e6a693-c13d-471b-a3f1-14741aa9ec94",
+      "name": "Get_Message_Twilio",
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "6QCEn7UXgRKX0shU",
+          "name": "Unnamed credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\n// Función para validar y mantener el formato de fecha DD/MM/YYYY HH:mm\nfunction formatearFecha(fechaString) {\n  if (!fechaString) return '';\n  \n  try {\n    // Si la fecha ya está en formato DD/MM/YYYY HH:mm, la devolvemos tal cual\n    const formatoEsperado = /^\\d{1,2}\\/\\d{1,2}\\/\\d{4}\\s\\d{1,2}:\\d{1,2}$/;\n    if (formatoEsperado.test(fechaString)) {\n      return fechaString;\n    }\n    \n    // Si está en otro formato (como RFC 2822), intentamos convertirla\n    const fecha = new Date(fechaString);\n    \n    // Verificamos si la fecha es válida\n    if (isNaN(fecha.getTime())) {\n      return fechaString; // Si no es válida, devolvemos el string original\n    }\n    \n    const dia = fecha.getDate();\n    const mes = fecha.getMonth() + 1;\n    const anio = fecha.getFullYear();\n    const horas = fecha.getHours().toString().padStart(2, '0');\n    const minutos = fecha.getMinutes().toString().padStart(2, '0');\n    \n    return `${dia}/${mes}/${anio} ${horas}:${minutos}`;\n  } catch (error) {\n    return fechaString;\n  }\n}\n\n// Función para limpiar el prefijo \"whatsapp:\"\nfunction limpiarNumero(numero) {\n  if (!numero) return '';\n  return numero.replace('whatsapp:', '');\n}\n\n// Mapeamos cada item de entrada y extraemos solo los campos necesarios\nconst mensajesProcesados = items.map(item => {\n  const mensaje = item.json;\n  \n  return {\n    json: {\n      body: mensaje.body || '',\n      account_sid: mensaje.account_sid || '',\n      date_sent: formatearFecha(mensaje.date_sent),\n      date_updated: formatearFecha(mensaje.date_updated),\n      from: limpiarNumero(mensaje.from),\n      to: limpiarNumero(mensaje.to)\n    }\n  };\n});\n\nreturn mensajesProcesados;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -80,
+        -80
+      ],
+      "id": "fa364383-fcb9-4317-8629-6d852c48ee5f",
+      "name": "limpiar_info",
+      "executeOnce": false,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            {
+              "minute": 45
+            }
+          ]
+        }
+      },
+      "name": "Cron Diario1",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [
+        -656,
+        -80
+      ],
+      "id": "7a92db0a-c3c6-42de-bbce-568236eb2a93"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\n// Función para convertir fecha de formato RFC 2822 a formato deseado\nfunction formatearFecha(fechaString) {\n  if (!fechaString) return '';\n  \n  try {\n    const fecha = new Date(fechaString);\n    \n    const dia = fecha.getDate();\n    const mes = fecha.getMonth() + 1;\n    const anio = fecha.getFullYear();\n    const horas = fecha.getHours().toString().padStart(2, '0');\n    const minutos = fecha.getMinutes().toString().padStart(2, '0');\n    \n    return `${dia}/${mes}/${anio} ${horas}:${minutos}`;\n  } catch (error) {\n    return fechaString;\n  }\n}\n\n// Función para limpiar el prefijo \"whatsapp:\"\nfunction limpiarNumero(numero) {\n  if (!numero) return '';\n  return numero.replace('whatsapp:', '');\n}\n\n// Procesar los mensajes del array anidado\nconst mensajesFiltrados = [];\nconst numerosUnicos = new Set(); // Para trackear números \"to\" únicos\n\nitems.forEach(item => {\n  const data = item.json;\n  \n  // Verificar si existe el array de messages\n  if (data.messages && Array.isArray(data.messages)) {\n    data.messages.forEach(mensaje => {\n      const numeroLimpio = limpiarNumero(mensaje.to);\n      \n      // Filtrar solo los mensajes que contengan el patrón buscado\n      // PERO que NO contengan \"RESPETAR EL HORARIO ASIGNADO\"\n      // Y que el número \"to\" no haya sido procesado antes\n      if (mensaje.body && \n          mensaje.body.includes('Nos comunicamos de CENTRO AUTOMOTORES para recordarle su turno en nuestro taller.') &&\n          !mensaje.body.includes('*RESPETAR EL HORARIO ASIGNADO*') &&\n          !numerosUnicos.has(numeroLimpio)) {\n        \n        // Agregar el número al Set para no procesarlo de nuevo\n        numerosUnicos.add(numeroLimpio);\n        \n        mensajesFiltrados.push({\n          json: {\n            body: mensaje.body || '',\n            account_sid: mensaje.account_sid || '',\n            date_sent: formatearFecha(mensaje.date_sent),\n            date_updated: formatearFecha(mensaje.date_updated),\n            from: limpiarNumero(mensaje.from),\n            to: numeroLimpio\n          }\n        });\n      }\n    });\n  }\n});\n\nreturn mensajesFiltrados;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -288,
+        -80
+      ],
+      "id": "b3c985b3-2e1c-4c55-aab3-7f3e2df1c2db",
+      "name": "Buscar_en_confirmacion",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1SwBwlnuBzlRaLDtRvW515p-qjwBfnwLjF-RYBx3xqkI",
+          "mode": "list",
+          "cachedResultName": "Centro-PDF's",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1SwBwlnuBzlRaLDtRvW515p-qjwBfnwLjF-RYBx3xqkI/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Confirmación",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1SwBwlnuBzlRaLDtRvW515p-qjwBfnwLjF-RYBx3xqkI/edit#gid=0"
+        },
+        "dataMode": "autoMapInputData",
+        "options": {}
+      },
+      "name": "confirmacion",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 3,
+      "position": [
+        80,
+        -80
+      ],
+      "id": "0c54dd74-1a97-4ef0-b508-dce2e0d2074b",
+      "retryOnFail": true,
+      "executeOnce": false,
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "QzakxMlESuF8sdM4",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1SwBwlnuBzlRaLDtRvW515p-qjwBfnwLjF-RYBx3xqkI",
+          "mode": "list",
+          "cachedResultName": "Centro-PDF's",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1SwBwlnuBzlRaLDtRvW515p-qjwBfnwLjF-RYBx3xqkI/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Confirmación",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1SwBwlnuBzlRaLDtRvW515p-qjwBfnwLjF-RYBx3xqkI/edit#gid=0"
+        },
+        "options": {}
+      },
+      "name": "Leer Google Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 3,
+      "position": [
+        -416,
+        272
+      ],
+      "id": "5288320b-df5e-40cc-b028-f715befdfa57",
+      "retryOnFail": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "QzakxMlESuF8sdM4",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "folderId": "13BWX5_mTn6Y0Gz1G_C7eoUHnfTW6HiH4",
+        "title": "=Mensajes del {{ DateTime.now().toFormat('dd-LL-yyyy') }} - Confirmación"
+      },
+      "name": "Crear Documento",
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        -576,
+        272
+      ],
+      "id": "4625da66-ebeb-4e6f-a648-978cc27b26a6",
+      "retryOnFail": true,
+      "credentials": {
+        "googleDocsOAuth2Api": {
+          "id": "rsAe24q1yrwj8nDY",
+          "name": "Google Docs account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentURL": "={{ $('Crear Documento').first().json.id }}",
+        "actionsUi": {
+          "actionFields": [
+            {
+              "action": "insert",
+              "text": "=Destinatario: {{ $json.to }}\n\n{{ $json.body }}\n\nEnviado el: {{ $json.date_sent }}\n"
+            },
+            {
+              "object": "pageBreak",
+              "action": "insert"
+            }
+          ]
+        }
+      },
+      "name": "Actualizar Documento",
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        112,
+        288
+      ],
+      "id": "72aa31ee-3748-4de9-8a8c-985c63211479",
+      "retryOnFail": true,
+      "credentials": {
+        "googleDocsOAuth2Api": {
+          "id": "rsAe24q1yrwj8nDY",
+          "name": "Google Docs account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json.documentId }}",
+          "mode": "id"
+        },
+        "options": {
+          "googleFileConversion": {
+            "conversion": {
+              "docsToFormat": "application/pdf"
+            }
+          }
+        }
+      },
+      "name": "Descargar PDF",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        112,
+        144
+      ],
+      "id": "9d6bd5fe-931e-4ca9-851d-276ad3c3259d",
+      "executeOnce": true,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "hZHpxXTrCS0ZvG0Z",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -80,
+        272
+      ],
+      "id": "24c4d5e0-8df2-4bc5-987d-2fec402b9bd3",
+      "name": "Loop Over Items",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "content": "## CONFIRMACION",
+        "height": 80,
+        "width": 214
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -720,
+        128
+      ],
+      "typeVersion": 1,
+      "id": "6adcda42-bbb6-4e58-9c07-eba9dc0fc99f",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        320,
+        288
+      ],
+      "id": "77cff066-a0ce-4164-963f-6dd2a66e4229",
+      "name": "Wait3",
+      "webhookId": "8f3c0535-5d34-43d1-9dc6-8d847d8f0ab6"
+    },
+    {
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            {
+              "hour": 15
+            }
+          ]
+        }
+      },
+      "name": "Cron Diario",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [
+        -720,
+        272
+      ],
+      "id": "6e8ef154-a947-41d7-bc95-7bd9315a8cf5"
+    },
+    {
+      "parameters": {
+        "sendTo": "turnos.cabrera@centroautomotores.com",
+        "subject": "Confirmación de turno",
+        "message": "Esto es un mensaje automatico",
+        "options": {
+          "appendAttribution": false,
+          "attachmentsUi": {
+            "attachmentsBinary": [
+              {}
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        864,
+        64
+      ],
+      "id": "8de380c9-7502-4bf6-92b6-72a1deed2fa9",
+      "name": "Send a message",
+      "webhookId": "10bb61fe-eddf-49a6-bd6e-380e6885a89b",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "RqObmNlujIjl5k1b",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "redoo2024@gmail.com",
+        "subject": "Confirmación de turno",
+        "message": "Esto es un mensaje automatico",
+        "options": {
+          "appendAttribution": false,
+          "attachmentsUi": {
+            "attachmentsBinary": [
+              {}
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        864,
+        208
+      ],
+      "id": "1bad54e0-1a87-48fe-9dd7-9e7a35c98915",
+      "name": "Send a message1",
+      "webhookId": "10bb61fe-eddf-49a6-bd6e-380e6885a89b",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "RqObmNlujIjl5k1b",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "ijcabaleiro@gmail.com",
+        "subject": "Confirmación de turno",
+        "message": "Esto es un mensaje automatico",
+        "options": {
+          "appendAttribution": false,
+          "attachmentsUi": {
+            "attachmentsBinary": [
+              {}
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        864,
+        -80
+      ],
+      "id": "52256725-ea90-47e6-8f89-d428c0aca5e9",
+      "name": "Send a message2",
+      "webhookId": "10bb61fe-eddf-49a6-bd6e-380e6885a89b",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "RqObmNlujIjl5k1b",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://api.twilio.com{{ $('Get_Message_Twilio').item.json.next_page_uri }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        528,
+        -96
+      ],
+      "id": "86a287ac-ee3e-4e4b-8e96-2f58c20c8928",
+      "name": "Get_Message_Twilio1",
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "6QCEn7UXgRKX0shU",
+          "name": "Unnamed credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "8e298915-f194-4c4c-8cf2-b13e0e1b25c7",
+              "leftValue": "={{ $('Get_Message_Twilio').item.json.next_page_uri }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        272,
+        -80
+      ],
+      "id": "2240b1b1-cfe0-40e8-9062-8914cc518498",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\n// Función para validar y mantener el formato de fecha DD/MM/YYYY HH:mm\nfunction formatearFecha(fechaString) {\n  if (!fechaString) return '';\n  \n  try {\n    // Si la fecha ya está en formato DD/MM/YYYY HH:mm, la devolvemos tal cual\n    const formatoEsperado = /^\\d{1,2}\\/\\d{1,2}\\/\\d{4}\\s\\d{1,2}:\\d{1,2}$/;\n    if (formatoEsperado.test(fechaString)) {\n      return fechaString;\n    }\n    \n    // Si está en otro formato (como RFC 2822), intentamos convertirla\n    const fecha = new Date(fechaString);\n    \n    // Verificamos si la fecha es válida\n    if (isNaN(fecha.getTime())) {\n      return fechaString; // Si no es válida, devolvemos el string original\n    }\n    \n    const dia = fecha.getDate();\n    const mes = fecha.getMonth() + 1;\n    const anio = fecha.getFullYear();\n    const horas = fecha.getHours().toString().padStart(2, '0');\n    const minutos = fecha.getMinutes().toString().padStart(2, '0');\n    \n    return `${dia}/${mes}/${anio} ${horas}:${minutos}`;\n  } catch (error) {\n    return fechaString;\n  }\n}\n\n// Función para limpiar el prefijo \"whatsapp:\"\nfunction limpiarNumero(numero) {\n  if (!numero) return '';\n  return numero.replace('whatsapp:', '');\n}\n\n// Mapeamos cada item de entrada y extraemos solo los campos necesarios\nconst mensajesProcesados = items.map(item => {\n  const mensaje = item.json;\n  \n  return {\n    json: {\n      body: mensaje.body || '',\n      account_sid: mensaje.account_sid || '',\n      date_sent: formatearFecha(mensaje.date_sent),\n      date_updated: formatearFecha(mensaje.date_updated),\n      from: limpiarNumero(mensaje.from),\n      to: limpiarNumero(mensaje.to)\n    }\n  };\n});\n\nreturn mensajesProcesados;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1088,
+        -240
+      ],
+      "id": "62f6db7b-f18a-4e60-a998-dc3dda401dc5",
+      "name": "limpiar_info1",
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\n// Función para convertir fecha de formato RFC 2822 a formato deseado\nfunction formatearFecha(fechaString) {\n  if (!fechaString) return '';\n  \n  try {\n    const fecha = new Date(fechaString);\n    \n    const dia = fecha.getDate();\n    const mes = fecha.getMonth() + 1;\n    const anio = fecha.getFullYear();\n    const horas = fecha.getHours().toString().padStart(2, '0');\n    const minutos = fecha.getMinutes().toString().padStart(2, '0');\n    \n    return `${dia}/${mes}/${anio} ${horas}:${minutos}`;\n  } catch (error) {\n    return fechaString;\n  }\n}\n\n// Función para limpiar el prefijo \"whatsapp:\"\nfunction limpiarNumero(numero) {\n  if (!numero) return '';\n  return numero.replace('whatsapp:', '');\n}\n\n// Procesar los mensajes del array anidado\nconst mensajesFiltrados = [];\nconst numerosUnicos = new Set(); // Para trackear números \"to\" únicos\n\nitems.forEach(item => {\n  const data = item.json;\n  \n  // Verificar si existe el array de messages\n  if (data.messages && Array.isArray(data.messages)) {\n    data.messages.forEach(mensaje => {\n      const numeroLimpio = limpiarNumero(mensaje.to);\n      \n      // Filtrar solo los mensajes que contengan el patrón buscado\n      // PERO que NO contengan \"RESPETAR EL HORARIO ASIGNADO\"\n      // Y que el número \"to\" no haya sido procesado antes\n      if (mensaje.body && \n          mensaje.body.includes('Nos comunicamos de CENTRO AUTOMOTORES para recordarle su turno en nuestro taller.') &&\n          !mensaje.body.includes('*RESPETAR EL HORARIO ASIGNADO*') &&\n          !numerosUnicos.has(numeroLimpio)) {\n        \n        // Agregar el número al Set para no procesarlo de nuevo\n        numerosUnicos.add(numeroLimpio);\n        \n        mensajesFiltrados.push({\n          json: {\n            body: mensaje.body || '',\n            account_sid: mensaje.account_sid || '',\n            date_sent: formatearFecha(mensaje.date_sent),\n            date_updated: formatearFecha(mensaje.date_updated),\n            from: limpiarNumero(mensaje.from),\n            to: numeroLimpio\n          }\n        });\n      }\n    });\n  }\n});\n\nreturn mensajesFiltrados;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        -240
+      ],
+      "id": "1ab680f1-eef7-4f14-8ef8-2531f712de59",
+      "name": "Buscar_en_confirmacion1",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1SwBwlnuBzlRaLDtRvW515p-qjwBfnwLjF-RYBx3xqkI",
+          "mode": "list",
+          "cachedResultName": "Centro-PDF's",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1SwBwlnuBzlRaLDtRvW515p-qjwBfnwLjF-RYBx3xqkI/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Confirmación",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1SwBwlnuBzlRaLDtRvW515p-qjwBfnwLjF-RYBx3xqkI/edit#gid=0"
+        },
+        "dataMode": "autoMapInputData",
+        "options": {}
+      },
+      "name": "confirmacion1",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 3,
+      "position": [
+        1248,
+        -240
+      ],
+      "id": "2adacb18-0851-48c7-8efc-1f89eea41d0b",
+      "retryOnFail": true,
+      "executeOnce": false,
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "QzakxMlESuF8sdM4",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://api.twilio.com{{ $('Get_Message_Twilio1').item.json.next_page_uri }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1568,
+        192
+      ],
+      "id": "f6c6c23d-6291-46bc-a2a4-7d515ac9b0bb",
+      "name": "Get_Message_Twilio2",
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "6QCEn7UXgRKX0shU",
+          "name": "Unnamed credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\n// Función para validar y mantener el formato de fecha DD/MM/YYYY HH:mm\nfunction formatearFecha(fechaString) {\n  if (!fechaString) return '';\n  \n  try {\n    // Si la fecha ya está en formato DD/MM/YYYY HH:mm, la devolvemos tal cual\n    const formatoEsperado = /^\\d{1,2}\\/\\d{1,2}\\/\\d{4}\\s\\d{1,2}:\\d{1,2}$/;\n    if (formatoEsperado.test(fechaString)) {\n      return fechaString;\n    }\n    \n    // Si está en otro formato (como RFC 2822), intentamos convertirla\n    const fecha = new Date(fechaString);\n    \n    // Verificamos si la fecha es válida\n    if (isNaN(fecha.getTime())) {\n      return fechaString; // Si no es válida, devolvemos el string original\n    }\n    \n    const dia = fecha.getDate();\n    const mes = fecha.getMonth() + 1;\n    const anio = fecha.getFullYear();\n    const horas = fecha.getHours().toString().padStart(2, '0');\n    const minutos = fecha.getMinutes().toString().padStart(2, '0');\n    \n    return `${dia}/${mes}/${anio} ${horas}:${minutos}`;\n  } catch (error) {\n    return fechaString;\n  }\n}\n\n// Función para limpiar el prefijo \"whatsapp:\"\nfunction limpiarNumero(numero) {\n  if (!numero) return '';\n  return numero.replace('whatsapp:', '');\n}\n\n// Mapeamos cada item de entrada y extraemos solo los campos necesarios\nconst mensajesProcesados = items.map(item => {\n  const mensaje = item.json;\n  \n  return {\n    json: {\n      body: mensaje.body || '',\n      account_sid: mensaje.account_sid || '',\n      date_sent: formatearFecha(mensaje.date_sent),\n      date_updated: formatearFecha(mensaje.date_updated),\n      from: limpiarNumero(mensaje.from),\n      to: limpiarNumero(mensaje.to)\n    }\n  };\n});\n\nreturn mensajesProcesados;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2128,
+        48
+      ],
+      "id": "39df368c-3487-4ee7-88d6-819efdf078ea",
+      "name": "limpiar_info2",
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\n// Función para convertir fecha de formato RFC 2822 a formato deseado\nfunction formatearFecha(fechaString) {\n  if (!fechaString) return '';\n  \n  try {\n    const fecha = new Date(fechaString);\n    \n    const dia = fecha.getDate();\n    const mes = fecha.getMonth() + 1;\n    const anio = fecha.getFullYear();\n    const horas = fecha.getHours().toString().padStart(2, '0');\n    const minutos = fecha.getMinutes().toString().padStart(2, '0');\n    \n    return `${dia}/${mes}/${anio} ${horas}:${minutos}`;\n  } catch (error) {\n    return fechaString;\n  }\n}\n\n// Función para limpiar el prefijo \"whatsapp:\"\nfunction limpiarNumero(numero) {\n  if (!numero) return '';\n  return numero.replace('whatsapp:', '');\n}\n\n// Procesar los mensajes del array anidado\nconst mensajesFiltrados = [];\nconst numerosUnicos = new Set(); // Para trackear números \"to\" únicos\n\nitems.forEach(item => {\n  const data = item.json;\n  \n  // Verificar si existe el array de messages\n  if (data.messages && Array.isArray(data.messages)) {\n    data.messages.forEach(mensaje => {\n      const numeroLimpio = limpiarNumero(mensaje.to);\n      \n      // Filtrar solo los mensajes que contengan el patrón buscado\n      // PERO que NO contengan \"RESPETAR EL HORARIO ASIGNADO\"\n      // Y que el número \"to\" no haya sido procesado antes\n      if (mensaje.body && \n          mensaje.body.includes('Nos comunicamos de CENTRO AUTOMOTORES para recordarle su turno en nuestro taller.') &&\n          !mensaje.body.includes('*RESPETAR EL HORARIO ASIGNADO*') &&\n          !numerosUnicos.has(numeroLimpio)) {\n        \n        // Agregar el número al Set para no procesarlo de nuevo\n        numerosUnicos.add(numeroLimpio);\n        \n        mensajesFiltrados.push({\n          json: {\n            body: mensaje.body || '',\n            account_sid: mensaje.account_sid || '',\n            date_sent: formatearFecha(mensaje.date_sent),\n            date_updated: formatearFecha(mensaje.date_updated),\n            from: limpiarNumero(mensaje.from),\n            to: numeroLimpio\n          }\n        });\n      }\n    });\n  }\n});\n\nreturn mensajesFiltrados;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        48
+      ],
+      "id": "38be5b38-3534-43a4-9777-068f1abc2380",
+      "name": "Buscar_en_confirmacion2",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1SwBwlnuBzlRaLDtRvW515p-qjwBfnwLjF-RYBx3xqkI",
+          "mode": "list",
+          "cachedResultName": "Centro-PDF's",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1SwBwlnuBzlRaLDtRvW515p-qjwBfnwLjF-RYBx3xqkI/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Confirmación",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1SwBwlnuBzlRaLDtRvW515p-qjwBfnwLjF-RYBx3xqkI/edit#gid=0"
+        },
+        "dataMode": "autoMapInputData",
+        "options": {}
+      },
+      "name": "confirmacion2",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 3,
+      "position": [
+        2288,
+        48
+      ],
+      "id": "eb5ca05c-f55b-4ad0-96b2-27b998b3a496",
+      "retryOnFail": true,
+      "executeOnce": false,
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "QzakxMlESuF8sdM4",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "8e298915-f194-4c4c-8cf2-b13e0e1b25c7",
+              "leftValue": "={{ $('Get_Message_Twilio1').item.json.next_page_uri }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1520,
+        -48
+      ],
+      "id": "8b7c61ed-cbb9-4ebb-9d07-857b9e5b5138",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.twilio.com{{ $('Get_Message_Twilio2').item.json.next_page_uri }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2848,
+        656
+      ],
+      "id": "1f5bfa9a-7320-4212-9327-52c50705e8af",
+      "name": "Get_Message_Twilio3",
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "6QCEn7UXgRKX0shU",
+          "name": "Unnamed credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\n// Función para validar y mantener el formato de fecha DD/MM/YYYY HH:mm\nfunction formatearFecha(fechaString) {\n  if (!fechaString) return '';\n  \n  try {\n    // Si la fecha ya está en formato DD/MM/YYYY HH:mm, la devolvemos tal cual\n    const formatoEsperado = /^\\d{1,2}\\/\\d{1,2}\\/\\d{4}\\s\\d{1,2}:\\d{1,2}$/;\n    if (formatoEsperado.test(fechaString)) {\n      return fechaString;\n    }\n    \n    // Si está en otro formato (como RFC 2822), intentamos convertirla\n    const fecha = new Date(fechaString);\n    \n    // Verificamos si la fecha es válida\n    if (isNaN(fecha.getTime())) {\n      return fechaString; // Si no es válida, devolvemos el string original\n    }\n    \n    const dia = fecha.getDate();\n    const mes = fecha.getMonth() + 1;\n    const anio = fecha.getFullYear();\n    const horas = fecha.getHours().toString().padStart(2, '0');\n    const minutos = fecha.getMinutes().toString().padStart(2, '0');\n    \n    return `${dia}/${mes}/${anio} ${horas}:${minutos}`;\n  } catch (error) {\n    return fechaString;\n  }\n}\n\n// Función para limpiar el prefijo \"whatsapp:\"\nfunction limpiarNumero(numero) {\n  if (!numero) return '';\n  return numero.replace('whatsapp:', '');\n}\n\n// Mapeamos cada item de entrada y extraemos solo los campos necesarios\nconst mensajesProcesados = items.map(item => {\n  const mensaje = item.json;\n  \n  return {\n    json: {\n      body: mensaje.body || '',\n      account_sid: mensaje.account_sid || '',\n      date_sent: formatearFecha(mensaje.date_sent),\n      date_updated: formatearFecha(mensaje.date_updated),\n      from: limpiarNumero(mensaje.from),\n      to: limpiarNumero(mensaje.to)\n    }\n  };\n});\n\nreturn mensajesProcesados;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3408,
+        512
+      ],
+      "id": "c77c6abb-7ab6-4eff-8d30-823d995f8150",
+      "name": "limpiar_info3",
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\n// Función para convertir fecha de formato RFC 2822 a formato deseado\nfunction formatearFecha(fechaString) {\n  if (!fechaString) return '';\n  \n  try {\n    const fecha = new Date(fechaString);\n    \n    const dia = fecha.getDate();\n    const mes = fecha.getMonth() + 1;\n    const anio = fecha.getFullYear();\n    const horas = fecha.getHours().toString().padStart(2, '0');\n    const minutos = fecha.getMinutes().toString().padStart(2, '0');\n    \n    return `${dia}/${mes}/${anio} ${horas}:${minutos}`;\n  } catch (error) {\n    return fechaString;\n  }\n}\n\n// Función para limpiar el prefijo \"whatsapp:\"\nfunction limpiarNumero(numero) {\n  if (!numero) return '';\n  return numero.replace('whatsapp:', '');\n}\n\n// Procesar los mensajes del array anidado\nconst mensajesFiltrados = [];\nconst numerosUnicos = new Set(); // Para trackear números \"to\" únicos\n\nitems.forEach(item => {\n  const data = item.json;\n  \n  // Verificar si existe el array de messages\n  if (data.messages && Array.isArray(data.messages)) {\n    data.messages.forEach(mensaje => {\n      const numeroLimpio = limpiarNumero(mensaje.to);\n      \n      // Filtrar solo los mensajes que contengan el patrón buscado\n      // PERO que NO contengan \"RESPETAR EL HORARIO ASIGNADO\"\n      // Y que el número \"to\" no haya sido procesado antes\n      if (mensaje.body && \n          mensaje.body.includes('Nos comunicamos de CENTRO AUTOMOTORES para recordarle su turno en nuestro taller.') &&\n          !mensaje.body.includes('*RESPETAR EL HORARIO ASIGNADO*') &&\n          !numerosUnicos.has(numeroLimpio)) {\n        \n        // Agregar el número al Set para no procesarlo de nuevo\n        numerosUnicos.add(numeroLimpio);\n        \n        mensajesFiltrados.push({\n          json: {\n            body: mensaje.body || '',\n            account_sid: mensaje.account_sid || '',\n            date_sent: formatearFecha(mensaje.date_sent),\n            date_updated: formatearFecha(mensaje.date_updated),\n            from: limpiarNumero(mensaje.from),\n            to: numeroLimpio\n          }\n        });\n      }\n    });\n  }\n});\n\nreturn mensajesFiltrados;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3200,
+        512
+      ],
+      "id": "e4cc9011-1501-4f72-9b74-e16449e4063d",
+      "name": "Buscar_en_confirmacion3",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1SwBwlnuBzlRaLDtRvW515p-qjwBfnwLjF-RYBx3xqkI",
+          "mode": "list",
+          "cachedResultName": "Centro-PDF's",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1SwBwlnuBzlRaLDtRvW515p-qjwBfnwLjF-RYBx3xqkI/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Confirmación",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1SwBwlnuBzlRaLDtRvW515p-qjwBfnwLjF-RYBx3xqkI/edit#gid=0"
+        },
+        "dataMode": "autoMapInputData",
+        "options": {}
+      },
+      "name": "confirmacion3",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 3,
+      "position": [
+        3568,
+        512
+      ],
+      "id": "98714915-131b-4fbf-9449-08416b120ac5",
+      "retryOnFail": true,
+      "executeOnce": false,
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "QzakxMlESuF8sdM4",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "8e298915-f194-4c4c-8cf2-b13e0e1b25c7",
+              "leftValue": "={{ $('Get_Message_Twilio2').item.json.next_page_uri }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2800,
+        416
+      ],
+      "id": "69573b7b-bf4e-4464-9692-47c9cdcb8104",
+      "name": "If2"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n// Obtener la fecha de hoy (solo día, mes y año)\nconst hoy = new Date();\nconst diaHoy = hoy.getDate();\nconst mesHoy = hoy.getMonth() + 1;\nconst anioHoy = hoy.getFullYear();\n// Filtrar solo los mensajes de hoy\nconst mensajesDeHoy = items.filter(item => {\n  const mensaje = item.json;\n  // Extraer la fecha del campo date_sent (formato: \"8/10/2025 13:42\")\n  if (!mensaje.date_sent) return false;\n  const partes = mensaje.date_sent.split(' ')[0].split('/');\n  const dia = parseInt(partes[0]);\n  const mes = parseInt(partes[1]);\n  const anio = parseInt(partes[2]);\n  // Comparar si es del día de hoy\n  return dia === diaHoy && mes === mesHoy && anio === anioHoy;\n});\nreturn mensajesDeHoy;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -256,
+        272
+      ],
+      "id": "352c5f50-63b9-4d54-9449-6a2313f24f03",
+      "name": "Filtrar mensajes del dia"
+    }
+  ],
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate"
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "9eJpgZYHje7MbGkk",
+      "projectId": "dgbNjiDWXZcaLo74",
+      "createdAt": "2025-10-09T17:21:07.950Z",
+      "updatedAt": "2025-10-09T17:21:07.950Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [
+    {
+      "id": "sdClOpUrbfB41jhe",
+      "name": "centro",
+      "createdAt": "2025-10-03T15:07:06.951Z",
+      "updatedAt": "2026-02-27T20:10:52.839Z"
+    }
+  ],
+  "triggerCount": 2,
+  "updatedAt": "2026-11-06T18:30:09.873Z",
+  "versionId": "5a5b2f1c-eda8-416b-abfc-40f6c5377c14"
+}
