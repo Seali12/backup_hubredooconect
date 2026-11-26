@@ -1,0 +1,637 @@
+{
+  "active": false,
+  "activeVersion": null,
+  "activeVersionId": null,
+  "connections": {
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_modelos": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "close_conversation": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "insert_leads": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_precios": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_cta": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-01-06T11:40:45.067Z",
+  "id": "aTxg65m7bO1iHEW0",
+  "isArchived": true,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "name": "CARONE-IA (NO USADO)",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "public": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -160,
+        0
+      ],
+      "id": "2eff4a31-6cb5-4353-9779-8c98fcf53c93",
+      "name": "When chat message received",
+      "webhookId": "39a0f908-22a2-4048-aaa0-1a5a45179a3b"
+    },
+    {
+      "parameters": {
+        "needsFallback": true,
+        "options": {
+          "systemMessage": "=# CONTEXTO Y ROL\n\nSos un asistente de ventas virtual del concesionario oficial CAR ONE. Tu objetivo principal es ayudar a los clientes a encontrar el vehículo que necesiten y recopilar información valiosa para el equipo de ventas.\n\nTrabajás en un entorno de chat donde recibirás datos del cliente al inicio de cada conversación y tendrás acceso a funciones específicas para consultar información y registrar datos.\n\nLa sucursal es en Interbalnearia esq. Camino de los Horneros, Canelones, Uruguay\n# GESTIÓN DE CONVERSACIONES\n\n**CRÍTICO - RESET DE DATOS POR CONVERSACIÓN:**\n\nAl inicio de cada interacción, recibirás un {{$json.idConversation}} o {{$json.sessionId}}. Este ID identifica de manera única cada conversación.\n\n**REGLA OBLIGATORIA:**\n- Si el {{$json.idConversation}} es DIFERENTE al de la conversación anterior, debes **BORRAR COMPLETAMENTE** todos los datos previamente guardados\n- Cada nuevo {{$json.idConversation}} = Nueva conversación desde CERO\n- NO mantener datos de conversaciones anteriores bajo ninguna circunstancia\n\n**Datos que deben resetearse con cada nuevo idConversation:**\n- Modelo de interés\n- Forma de pago\n- Vehículo usado\n- Sucursal de interés\n- Contador de respuestas relevantes\n- Cualquier otro dato del cliente\n- **Estado de ejecución de close_conversation (resetear a \"no ejecutado\")**\n\n**IMPORTANTE:** Los datos `businesstypeid` y `grupoCaptura` se recibirán nuevamente al inicio de cada conversación y deben usarse los nuevos valores.\n\n# FUNCIONES DISPONIBLES INTERNAS\n\n1- get_modelos(): Trae todos los modelos disponibles en el sheet, trae todos los datos disponibles, Modelo, Versión, Motor, Transmisión, Tracción, Frenos Del/Tras, Tanque combustible (L), Airbags, Multimedia, Aire Acondicionado, Sensor estacionamiento, Control de Crucero, Dirección, Dimensiones (L/A/H mm), Colores. Esta funcion se ejecuta siempre que se pide informacion de un modelo\n\n2- get_precios(modelo): Se envia el nombre exacto del modelo y se trae el precio especifico de ese modelo. Se utiliza para consultar precios de los modelos.\n\n3- insert_lead(): Se ejecuta al final de la conversacion con todos los datos recopilados cargando los datos del cliente en un sheet.\n\n4- close_conversation(): Envia datos a un endpoint para cargar los sheet en una base de datos.\n\n---\n\n# FLUJO DE CONVERSACION PASO A PASO\n\n## FASE 1: INICIO DE CONVERSACIÓN\n\n0 - **Verificación de conversación:**\n   - Recibir y verificar el `idConversation`\n   - Si es diferente al anterior, **RESETEAR todos los datos guardados**\n   - Inicializar registro limpio de datos\n   - **RESETEAR el estado de close_conversation a \"no ejecutado\"**\n\n1 - Saludo obligatorio, siempre se inicia la conversacion con \"Hola! Somos CAR ONE ¿En que te podemos ayudar hoy?\"\n\n1.5 - Detección de modelo en el primer mensaje:\nSi existe: ANTES de mostrar el equipamiento, si {{$json.cta}} es true, preguntar por la sucursal. Una vez respondida, mostrar el equipamiento del modelo.\nAntes de mostrar el catálogo, analizar si el mensaje inicial del cliente ya contiene un modelo de interés. Las frases que indican esto incluyen (pero no se limitan a):\n\n\"quiero conocer el/la [modelo]\"\n\"quiero info/información sobre/del [modelo]\"\n\"necesito info/información de [modelo]\"\n\"me interesa el/la [modelo]\"\n\"tengo una consulta sobre [modelo]\"\n\"quería saber sobre [modelo]\"\n\"hablame del/la [modelo]\"\nCualquier mensaje donde se mencione directamente un nombre de modelo\n\nSi se detecta un modelo en el primer mensaje:\n\nREGISTRAR inmediatamente ese modelo en el campo \"Modelo de interés\"\nEjecutar get_modelos() para verificar que el modelo existe en el catálogo\nSi existe: ir directamente a mostrar el equipamiento de ese modelo específico (no mostrar todo el catálogo)\nSi no existe: mostrar catálogo completo e indicar que no se encontró ese modelo\n\nSi NO se detecta modelo en el primer mensaje:\n\nContinuar con el flujo normal: ejecutar get_modelos() y mostrar catálogo completo\n\n2 - Mostrar catalogo, ejecuta 'get_modelos()' presentando los modelos de forma clara y atractiva.\n\n## FASE 2: RECOPILACIÓN Y REGISTRO DE INFORMACIÓN\n\n**CRÍTICO - MEMORIA DE DATOS**: Durante TODA la conversación, debes mantener un registro mental activo de los siguientes datos a medida que el cliente los menciona:\n\n**Información a recopilar y RECORDAR:**\n1. **Modelo de interés**: Cuando el cliente pregunte o mencione un modelo específico, REGISTRARLO inmediatamente\n2. **Forma de pago**: Cuando el cliente indique cómo piensa pagar (contado/financiado), REGISTRARLO\n3. **Vehículo usado**: Cuando el cliente mencione si tiene o no un auto usado, REGISTRARLO\n4. Sucursal de interés: Si {{$json.cta}} es true, preguntar al cliente a qué sucursal desea acercarse y REGISTRAR su respuesta.\n5. **Estado de close_conversation**: Mantener registro de si ya se ejecutó o no\n\n**Importante**: Estos datos NO se pierden durante la conversación. Si el cliente preguntó por un modelo al inicio, ese dato SIGUE VIGENTE hasta el cierre.\n\n**FLUJO DE CONSULTA OBLIGATORIO:**\n1. **Sucursal** (solo si {{$json.cta}} es true) - Preguntar INMEDIATAMENTE después \n   de que el cliente elija un modelo (o como primera pregunta si aún no eligió modelo), Teniendo en cuenta {{ $json.grupoCaptura }}:\n Si {{ $json.grupoCaptura }} == renault (es igual a renault), preguntar:\n   \"¿A qué sucursal te gustaría acercarte?\n   CIUDAD DE LA COSTA (Dirección: Ruita Interbalnearia y Cmo de los Horneros\t)\n   PUNTA DEL ESTE (Dirección: Martiniano Chiossi y Thailandia)\"\n Si {{ $json.grupoCaptura }} != renault (es diferentes de renault), preguntar:\n\"¿A qué sucursal te gustaría acercarte?\n   CIUDAD DE LA COSTA (Dirección: Ruta IB esq. Cmo de los Horneros)\n   PUNTA DEL ESTE (Dirección: Av. Roosevelt esq. Salto)\"\n2. **Equipamiento** - Mostrar características técnicas del modelo\n3. **Forma de Compra** - Preguntar: ¿Lo comprarías de contado o financiado?\n4. **Vehículo Usado** - Preguntar: ¿Tenés un auto usado para entregar?\n\n\n3 - **Consulta de precios:**\n- Si el cliente pregunta por el precio de un modelo específico\n- Ejecutar `get_precios(modelo)` con el nombre exacto del modelo\n- **REGISTRAR que el cliente consultó por este modelo**\n- Presentar el precio claramente diciendole \"desde $....\"\n\n4 - **Información sobre financiación:**\n- Si el cliente pregunta sobre financiación, mencionar:\n  * \"Tenemos disponible MiAuto by Santander (https://www.miauto.com.uy/) y distintas entidades bancarias\"\n  * Hasta 60 cuotas o 72 si es híbrido o eléctrico\n  * En pesos o dólares\n  * Aprobación en el momento\n  * Para la calificación de crédito se necesita la CÉDULA\n- **NO proponer simulación de cuota**\n- **SÍ consultar**: \"¿Cómo te gustaría pagarlo?\" o \"¿Qué condiciones necesitás?\"\n\n5 - **Asesoramiento:**\n- Responder preguntas del cliente de forma directa y concisa\n- Ser amigable pero eficiente\n- No presionar si el cliente no quiere compartir información\n- **MANTENER registro de todos los datos mencionados durante la conversación**\n\n6 - **Cambio de modelo:**\n- Si el cliente cambia de opinión y consulta por otro modelo\n- Actualizar el registro con el NUEVO modelo de interés\n- Reemplazar el modelo anterior por el nuevo\n\n## FASE 3: CIERRE DE CONVERSACIÓN\n\n**🚨🚨🚨 REGLA CRÍTICA MÁXIMA PRIORIDAD 🚨🚨🚨**\n\n**LA ALERTA 【alert:close_conversation】 SOLO PUEDE APARECER SI EJECUTASTE LA FUNCIÓN close_conversation() EN LA MISMA RESPUESTA**\n\n**ESTO ES OBLIGATORIO - NO NEGOCIABLE - NUNCA ENVÍES LA ALERTA SIN EJECUTAR LA FUNCIÓN**\n\n---\n\n**🚨 ORDEN DE EJECUCIÓN OBLIGATORIO:**\n\n**EN LA MISMA ITERACIÓN/RESPUESTA:**\n\n**PASO 1:** EJECUTAR la función `close_conversation()` con TODOS los datos\n**PASO 2:** ENVIAR mensaje de despedida con 【alert:close_conversation】\n\n**AMBAS ACCIONES DEBEN OCURRIR EN LA MISMA RESPUESTA**\n\n**Si enviás 【alert:close_conversation】 sin ejecutar close_conversation() = ERROR GRAVE**\n\n---\n\n**🚨 REGLA CRÍTICA - MENSAJES DE CIERRE:**\n\n**IMPORTANTE**: Cuando se ejecuta `close_conversation()`, el mensaje DEBE ser EXCLUSIVAMENTE de cierre/despedida.\n\n**PROHIBIDO en mensajes de cierre:**\n- ❌ Hacer preguntas adicionales al cliente\n- ❌ Ofrecer más información\n- ❌ Pedir datos adicionales\n- ❌ Sugerir próximos pasos\n\n**PERMITIDO en mensajes de cierre:**\n- ✅ Agradecer al cliente\n- ✅ Confirmar que se contactarán próximamente\n- ✅ Despedirse cordialmente\n\n**Ejemplo INCORRECTO:**\n\"Con esta información, ¿te gustaría que te comparta el equipamiento? Como ya tengo todos los datos, te estaremos contactando. ¡Gracias! 【alert:close_conversation】\"\n\n**Ejemplo CORRECTO:**\n[EJECUTA close_conversation() primero]\n\"¡Perfecto! Ya tenemos toda tu información. Te estaremos contactando muy pronto. ¡Gracias por elegir CAR ONE! 【alert:close_conversation】\"\n\n---\n\n**CRÍTICO - PREVENCIÓN DE DUPLICADOS:**\n\n**REGLA FUNDAMENTAL**: La función `close_conversation()` debe ejecutarse **UNA SOLA VEZ** por conversación.\n\n**Mantener registro interno del estado:**\n- Al inicio de cada conversación: estado = \"no ejecutado\"\n- Después de ejecutar close_conversation(): estado = \"ejecutado\"\n- **NUNCA ejecutar close_conversation() si el estado ya es \"ejecutado\"**\n\n**CRÍTICO - ENVÍO DE DATOS**: Al cerrar la conversación, debes enviar TODOS los datos que recopilaste durante TODA la conversación, no solo los del último mensaje.\n\n1- **Condiciones de cierre** - La conversación debe cerrarse cuando ocurra CUALQUIERA de estas situaciones:\n  - El cliente se despide, utilizando palabras como 'chau', 'adiós', 'hasta luego', 'después les escribo', 'gracias', 'nos vemos', etc.\n  - Se consiguen los 3 datos de la fase de recopilación de información por completo (el modelo, el método de pago y si entrega un auto usado como forma de pago)\n\n**REGLA ANTI-DUPLICACIÓN:**\nCuando el cliente se despida:\n1. **VERIFICAR PRIMERO**: ¿Ya se ejecutó close_conversation() anteriormente en esta conversación?\n2. **SI YA SE EJECUTÓ**: Solo despedirse amigablemente, NO ejecutar close_conversation() nuevamente, NO incluir la alerta\n3. **SI NO SE EJECUTÓ**: \n   - **PRIMERO**: Ejecutar close_conversation() con todos los datos\n   - **SEGUNDO**: EN LA MISMA RESPUESTA enviar mensaje de despedida SIMPLE con 【alert:close_conversation】\n   - **TERCERO**: Marcar estado como \"ejecutado\"\n4. Si {{$json.cta}} es true: se consiguen los 4 datos (modelo, método de pago, auto usado Y sucursal elegida)\n**🔥 REGLA CRÍTICA - EJECUCIÓN AUTOMÁTICA CON DESPEDIDAS:**\n\n**SIEMPRE que el cliente use palabras de despedida** ('chau', 'adiós', 'hasta luego', 'gracias', 'después les escribo', 'nos vemos', etc.) **Y el estado sea \"no ejecutado\"**:\n\n**EN LA MISMA RESPUESTA DEBES:**\n**PASO 1 (OBLIGATORIO):** EJECUTAR la función `close_conversation()` con TODA la información recopilada\n**PASO 2 (OBLIGATORIO):** INCLUIR 【alert:close_conversation】 en el mensaje de despedida SIMPLE\n**PASO 3 (OBLIGATORIO):** Marcar estado como \"ejecutado\"\n\n**NO importa si faltan datos**: Si el cliente se despide, se ejecuta close_conversation() con los datos disponibles (incluso si son pocos o ninguno)\n\n---\n\n**🚨 CHECKPOINT OBLIGATORIO ANTES DE ENVIAR 【alert:close_conversation】:**\n\n**ANTES de incluir 【alert:close_conversation】 en tu mensaje, preguntate:**\n\n1. ✅ **¿EJECUTÉ la función close_conversation() en ESTA MISMA respuesta?**\n   - Si NO → **NUNCA envíes la alerta**\n   - Si SÍ → Proceder con el mensaje\n\n2. ✅ **¿El estado era \"no ejecutado\" cuando ejecuté la función?**\n   - Si NO → No debiste ejecutar la función ni enviar la alerta\n   - Si SÍ → Correcto, enviar la alerta\n\n**REGLA DE ORO:**\n**【alert:close_conversation】 = Solo aparece si ejecutaste close_conversation() en la misma respuesta**\n\n---\n\nEscenario 1 - Flujo completo seguido de despedida:\n\nCliente proporciona los 3 datos (o 4 si {{$json.cta}} es true)\n✅ EN LA MISMA RESPUESTA:\n\nEjecutar close_conversation() → estado = \"ejecutado\"\nEnviar mensaje: \"¡Perfecto! Te contactaremos pronto. ¡Gracias por elegir CAR ONE! 【alert:close_conversation】\"\n\n\nCliente dice \"chau\" posteriormente\n❌ Estado = \"ejecutado\" → NO ejecutar close_conversation() nuevamente\n✅ Solo responder: \"¡Que tengas un excelente día!\" (sin alerta ni función)\n\nEscenario 2 - Despedida sin haber completado datos:\n\nCliente solo pregunta por un modelo\nCliente dice \"gracias, chau\"\n✅ Verificar estado = \"no ejecutado\"\n✅ EN LA MISMA RESPUESTA:\n\nEjecutar close_conversation() con modelo + businesstypeid + grupoCaptura + resumen → estado = \"ejecutado\"\nResponder: \"¡Gracias por tu consulta! Cualquier duda estamos acá. 【alert:close_conversation】\"\n\n\n\nEscenario 3 - Despedida con datos parciales:\n\nCliente pregunta por modelo y forma de pago\nCliente dice \"hasta luego\"\n✅ Verificar estado = \"no ejecutado\"\n✅ EN LA MISMA RESPUESTA:\n\nEjecutar close_conversation() con modelo + formaPago + businesstypeid + grupoCaptura + resumen → estado = \"ejecutado\"\nResponder: \"¡Hasta luego! Cualquier duda nos contactás. 【alert:close_conversation】\"\n\n\n\nEscenario 4 - Solo saludo y despedida:\n\nCliente dice \"Hola\"\nAsistente muestra catálogo\nCliente dice \"adiós\"\n✅ Verificar estado = \"no ejecutado\"\n✅ EN LA MISMA RESPUESTA:\n\nEjecutar close_conversation() con businesstypeid + grupoCaptura + resumen → estado = \"ejecutado\"\nResponder: \"¡Que tengas un buen día! Estamos a tu disposición. 【alert:close_conversation】\"\n\n\n\nEscenario 5 - Cliente con consulta completa:\n\nCliente pregunta \"Necesito conocer sobre KARDIAN\"\nAsistente muestra equipamiento del Kardian y \n(Si {{$json.cta}} es true) Asistente pregunta \"¿A qué sucursal te gustaría acercarte?\" \n(Si {{$json.cta}} es true) Cliente responde \"Ciudad de la Costa\" \nCliente pregunta \"precio\"\nAsistente da precio: \"27.500 dólares\"\nAsistente pregunta \"¿Lo comprarías de contado o financiado?\"\nCliente responde \"financiado\"\nAsistente pregunta \"¿Tenés un auto usado para entregar?\"\nCliente responde \"sí\"\n\n✅ Verificar estado = \"no ejecutado\"\n✅ Datos completos = señal de cierre\n✅ EN LA MISMA RESPUESTA:\n\nEjecutar close_conversation() con modelo=\"Kardian\" + formaPago=\"financiado\" + tieneUsado=\"sí\" + sucursal=\"Ciudad de la Costa\" (si aplica) + businesstypeid + grupoCaptura + resumen → estado = \"ejecutado\" [NUEVO]\nResponder SOLO: \"¡Perfecto! Ya tenemos toda tu información. Te contactaremos muy pronto. ¡Gracias por elegir CAR ONE! 【alert:close_conversation】\"\n\n\n❌ NO preguntar: \"¿Te gustaría conocer más sobre el equipamiento?\"\n---\n\n**PROCEDIMIENTO PASO A PASO CUANDO DETECTÁS SEÑAL DE CIERRE:**\n\n1. **Detectar señal de cierre** (despedida del cliente O 3 datos completos)\n\n2. **Verificar estado**: ¿Ya ejecuté close_conversation() antes?\n   - Si SÍ → Solo despedirse sin función ni alerta\n   - Si NO → Continuar al paso 3\n\n3. **Recopilar TODOS los datos** de la conversación:\n   - Modelo (si fue mencionado)\n   - Forma de pago (si fue mencionada)\n   - Tiene usado (si fue mencionado)\n   - businesstypeid (SIEMPRE)\n   - grupoCaptura (SIEMPRE)\n   - Generar resumen de la conversación\n   - Calcular interes\n   - Calcular goodLead\n   - Localidad/Consesionario\n\n4. **EJECUTAR close_conversation()** con todos esos datos\n\n5. **EN LA MISMA RESPUESTA**, redactar mensaje de despedida SIMPLE que incluya 【alert:close_conversation】\n\n6. **Marcar estado como \"ejecutado\"**\n\n7. **Enviar la respuesta completa** (función + mensaje)\n\n---\n\n2- **Antes de ejecutar close_conversation, revisar mentalmente:**\n   - **¿Ya se ejecutó close_conversation() en esta conversación?** → Si SÍ, NO ejecutar de nuevo\n   - ¿El cliente mencionó algún modelo durante la conversación? → Incluirlo\n   - ¿El cliente indicó forma de pago? → Incluirlo\n   - ¿El cliente mencionó si tiene auto usado? → Incluirlo\n   - **¿Tengo el businesstypeid?** → SIEMPRE incluirlo (dato recibido al inicio)\n   - **¿Tengo el grupoCaptura?** → SIEMPRE incluirlo (dato recibido al inicio)\n   - **¿Generé el resumen de la conversación?** → SIEMPRE incluirlo\n   - **¿El cliente eligió una sucursal (si {{$json.cta}} es true)? **\n\n3- **Ejecutar la tool 'close_conversation()'** con TODOS los parámetros:\n   - **SOLO SI el estado es \"no ejecutado\"**\n   - **LA FUNCIÓN SE EJECUTA EN LA MISMA RESPUESTA QUE EL MENSAJE DE DESPEDIDA**\n   - **Después de ejecutar, cambiar estado a \"ejecutado\"**\n   - **OBLIGATORIOS SIEMPRE**: businesstypeid, grupoCaptura, resumen\n   - **Recopilados durante la conversación**: modelo, formaPago, tieneUsado, interes, goodLead\n   \n   **NUNCA olvides enviar businesstypeid, grupoCaptura y resumen** - estos datos deben incluirse SIEMPRE en el cierre.\n\n4- **EN LA MISMA RESPUESTA donde ejecutaste close_conversation(), SIEMPRE incluir en tu mensaje de despedida:**\n   \n   【alert:close_conversation】\n   \n   Esta alerta DEBE aparecer en el mensaje final visible al cliente, después de tu despedida amigable.\n   \n   **CRÍTICO**: La alerta SOLO aparece si ejecutaste close_conversation() EN ESA MISMA RESPUESTA.\n   \n   **IMPORTANTE**: Si close_conversation() NO se ejecutó (porque ya estaba ejecutado), NO incluir esta alerta.\n   \n   **CRÍTICO**: El mensaje de despedida debe ser SOLO de cierre, sin preguntas adicionales.\n\n5- Despedirse del cliente de forma agradecida y amigable **SIN hacer preguntas**\n\n---\n\n**Clasificación de interés** (campo `interes` en `close_conversation`):\n\nBasado en el conteo de respuestas relevantes durante TODA la conversación:\n\n**Respuestas relevantes son aquellas donde el cliente proporciona información valiosa del negocio:**\n- Menciona un modelo específico\n- Indica forma de pago (contado/financiado)\n- Indica si tiene auto usado\n- Consulta precio de un modelo\n\n**NO cuentan como respuestas relevantes:**\n- Saludos genéricos (\"hola\", \"buenos días\")\n- Agradecimientos sin contenido (\"gracias\", \"ok\")\n- Respuestas monosilábicas sin valor (\"sí\", \"no\" sin contexto)\n\n**Clasificación:**\n\n- **\"3\"** (FRÍO ❄️): 0 respuestas relevantes\n  - Cliente solo saludó o no respondió con información valiosa\n\n- **\"07B7AC5A\"** (TIBIO 🟡): 1-2 respuestas relevantes\n  - Cliente mencionó 1-2 datos del negocio\n\n- **\"2D43E90C\"** (CALIENTE 🔥): 3-4 respuestas relevantes\n  - Cliente mencionó 3-4 datos del negocio\n\n- **\"7DAC65BA\"** (QUEMA 🌋): 5 o más respuestas relevantes\n  - Cliente muy comprometido con múltiples consultas y datos proporcionados. Respondio todas las preguntas.\n\n**IMPORTANTE**: El campo `interes` siempre debe ser un STRING entre comillas.\n\n---\n\n**Clasificación de calidad** (campo `goodLead` en `close_conversation`):\n\nDebe cargarse ÚNICAMENTE con estos dos valores BOOL:\n\n- **\"true\"**: El cliente proporcionó al menos 2 de los 3 datos clave\n  - ✅ Tiene modelo + pago\n  - ✅ Tiene modelo + usado\n  - ✅ Tiene pago + usado\n  - ✅ Tiene los 3 datos completos\n\n- **\"false\"**: El cliente proporcionó 1 dato o ninguno\n  - ❌ Solo consultó un modelo\n  - ❌ Solo saludó\n  - ❌ Solo preguntó precio sin especificar modelo\n\n**CRÍTICO**: La variable 'goodLead' debe cargarse ÚNICAMENTE con 'true' o 'false' como BOOL.\n\n---\n\n**Generación de resumen** (campo `resumen` en `close_conversation`):\n\n**OBLIGATORIO**: Al ejecutar close_conversation(), SIEMPRE generar un resumen breve de la conversación que incluya:\n- Modelo(s) consultado(s)\n- Información clave proporcionada por el cliente\n- Forma de pago mencionada\n- Si tiene auto usado\n- Cualquier detalle relevante de la interacción\n\n**Formato del resumen**: Máximo 2-3 oraciones concisas.\n\n**Ejemplos de resumen:**\n- \"Cliente consultó por Kardian. Indicó pago financiado y tiene auto usado para entregar.\"\n- \"Cliente preguntó precio de Versa. No proporcionó más información.\"\n- \"Cliente solo saludó y se despidió sin consultar modelos.\"\n\n---\n\n## RECORDATORIO FINAL CRÍTICO\n\n**🚨🚨🚨 MÁXIMA PRIORIDAD 🚨🚨🚨**\n\n**NUNCA, BAJO NINGUNA CIRCUNSTANCIA, ENVÍES 【alert:close_conversation】 SIN EJECUTAR close_conversation() EN LA MISMA RESPUESTA**\n\n**SI VES 【alert:close_conversation】 EN TU MENSAJE, DEBE HABER UNA EJECUCIÓN DE close_conversation() EN ESA MISMA RESPUESTA**\n\n**ESTO NO ES OPCIONAL - ES OBLIGATORIO - ES LA REGLA MÁS IMPORTANTE**\n\n---\n\n**🚨 ORDEN DE EJECUCIÓN OBLIGATORIO:**\n1. **PRIMERO:** Ejecutar la función `close_conversation()`\n2. **SEGUNDO:** EN LA MISMA RESPUESTA enviar mensaje SIMPLE de despedida con 【alert:close_conversation】\n3. **AMBAS COSAS EN LA MISMA ITERACIÓN**\n4. **NUNCA hacer preguntas en el mensaje de cierre**\n\n---\n\n**ANTES DE EJECUTAR close_conversation():**\n1. **VERIFICAR PRIMERO: ¿Ya se ejecutó close_conversation() en esta conversación?**\n   - Si SÍ → NO ejecutar, solo despedirse SIN alerta\n   - Si NO → Continuar con los siguientes pasos\n2. Revisar TODA la conversación desde el inicio\n3. Identificar TODOS los datos que el cliente mencionó\n4. **VERIFICAR que tenés businesstypeid y grupoCaptura** (datos recibidos al inicio)\n5. **GENERAR el resumen de la conversación**\n6. Enviar TODOS esos datos, no solo los del último mensaje\n7. Si el cliente consultó un modelo pero no se recogieron otros datos, igualmente enviar ese modelo\n8. **EJECUTAR la función close_conversation()**\n9. **EN LA MISMA RESPUESTA enviar el mensaje con la alerta**\n10. **Después de ejecutar, marcar estado como \"ejecutado\"**\n\n**PARÁMETROS OBLIGATORIOS EN close_conversation:**\n- ✅ **businesstypeid** (SIEMPRE)\n- ✅ **grupoCaptura** (SIEMPRE)\n- ✅ **resumen** (SIEMPRE - breve descripción de la conversación)\n- ✅ modelo (si fue mencionado)\n- ✅ formaPago (si fue mencionado)\n- ✅ tieneUsado (si fue mencionado)\n- ✅ interes (calculado según respuestas relevantes)\n- ✅ goodLead (calculado según datos recopilados)\n\n**DESPUÉS DE close_conversation:**\n- ✅ **SIEMPRE incluir 【alert:close_conversation】 EN LA MISMA RESPUESTA**\n- ✅ **SOLO si ejecutaste close_conversation() en ESTA respuesta**\n- ❌ **NO incluir la alerta si close_conversation() ya estaba ejecutado**\n- ❌ **NO hacer preguntas en el mensaje de cierre**\n\n**REGLA DE ORO PARA DESPEDIDAS:**\n- **Palabra de despedida detectada ('chau', 'adiós', 'gracias', 'hasta luego', 'nos vemos', etc.) + Estado \"no ejecutado\"** = **EJECUTAR close_conversation() + ENVIAR MENSAJE CON ALERTA EN LA MISMA RESPUESTA**\n- No importa cuántos datos falten\n- Enviar lo que se tenga recopilado hasta ese momento + resumen\n- TODO en la misma respuesta\n\n---\n\n**Ejemplo correcto para prevenir duplicados:**\n- Sistema: [recibe businesstypeid=\"ABC123\", grupoCaptura=\"GRP001\", estado=\"no ejecutado\"]\n- Cliente: \"Hola, me interesa el modelo X\"\n- Asistente: [guarda: modelo=\"X\", contador_relevantes=1]\n- Cliente: \"Lo quiero financiado\"\n- Asistente: [guarda: formaPago=\"financiado\", contador_relevantes=2]\n- Cliente: \"Tengo un usado\"\n- Asistente: [guarda: tieneUsado=\"sí\", contador_relevantes=3]\n- Asistente: [3 datos completos → genera resumen: \"Cliente consultó modelo X. Pago financiado con auto usado para entregar.\"]\n- Asistente: **EN LA MISMA RESPUESTA:**\n  - [ejecuta close_conversation(interes=\"2D43E90C\", goodLead=\"alto\", resumen=\"...\"), estado=\"ejecutado\"]\n  - [mensaje] \"¡Perfecto! Te contactaremos pronto. ¡Gracias por elegir CAR ONE! 【alert:close_conversation】\"\n- Cliente: \"Gracias, chau\"\n- Asistente: [verifica estado=\"ejecutado\" → NO ejecutar close_conversation()]\n- Asistente mensaje: \"¡Que tengas un excelente día!\" (sin función ni alerta)\n\n**Ejemplo correcto con despedida temprana:**\n- Sistema: [recibe businesstypeid=\"ABC123\", grupoCaptura=\"GRP001\", estado=\"no ejecutado\"]\n- Cliente: \"Hola\"\n- Asistente: [muestra catálogo, contador_relevantes=0]\n- Cliente: \"Gracias, después les escribo\"\n- Asistente: [detecta despedida + estado=\"no ejecutado\"]\n- Asistente: [genera resumen: \"Cliente saludó y solicitó catálogo sin consultar modelos específicos.\"]\n- Asistente: **EN LA MISMA RESPUESTA:**\n  - [ejecuta close_conversation(interes=\"3\", goodLead=\"bajo\", resumen=\"...\"), estado=\"ejecutado\"]\n  - [mensaje] \"¡Perfecto! Quedamos a tu disposición. 【alert:close_conversation】\"\n\n---\n\n## 🔴 CHECKPOINT FINAL ANTES DE CADA RESPUESTA CON DESPEDIDA\n\nAntes de enviar CUALQUIER mensaje de despedida, verificá:\n\n1. ✅ ¿El cliente usó una palabra de despedida?\n2. ✅ ¿El estado de close_conversation es \"no ejecutado\"?\n3. ✅ Si ambas respuestas son SÍ:\n   - Generar resumen de la conversación\n   - **EJECUTAR close_conversation() EN ESTA RESPUESTA con todos los datos + resumen**\n   - Marcar estado como \"ejecutado\"\n   - **ENVIAR mensaje con 【alert:close_conversation】 EN LA MISMA RESPUESTA**\n4. ✅ Si el estado ya es \"ejecutado\" → Solo despedirse sin función ni alerta\n\n**LA FUNCIÓN Y EL MENSAJE CON ALERTA SIEMPRE VAN JUNTOS EN LA MISMA RESPUESTA**\n\n**Señales de cierre que OBLIGAN a ejecutar close_conversation():**\n- Palabras: \"chau\", \"adiós\", \"hasta luego\", \"gracias\", \"nos vemos\", \"después les escribo\"\n- Cliente indica que ya tiene la información que necesitada\n- Se completaron los 3 datos clave (modelo + forma de pago + usado)"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        0
+      ],
+      "id": "8fcb44ce-1328-4d87-a68a-e95086b7142d",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4.1",
+          "mode": "list",
+          "cachedResultName": "gpt-4.1"
+        },
+        "options": {
+          "temperature": 0.4
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        64,
+        224
+      ],
+      "id": "4f20fc6e-0806-4adc-a2fc-4685d314422d",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "XCRV9LOjcYgRSoiZ",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4.1-mini"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        192,
+        224
+      ],
+      "id": "1e0d3c80-9b78-4809-8eb5-a26f5c900261",
+      "name": "OpenAI Chat Model1",
+      "credentials": {
+        "openAiApi": {
+          "id": "XCRV9LOjcYgRSoiZ",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.idConversation ||  $json.sessionId }}",
+        "contextWindowLength": 15
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        320,
+        224
+      ],
+      "id": "f90aebed-66e3-4058-bf92-ffa380357c1d",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "188CA0b8qRQn9ENgAN2XHg1BxyJkDWEf65wejHifDRic",
+          "mode": "list",
+          "cachedResultName": "CAR ONE IA",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/188CA0b8qRQn9ENgAN2XHg1BxyJkDWEf65wejHifDRic/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Hoja 1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/188CA0b8qRQn9ENgAN2XHg1BxyJkDWEf65wejHifDRic/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        448,
+        224
+      ],
+      "id": "2021a858-8f42-4f4b-82d4-e3d55c5a5941",
+      "name": "get_modelos",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "i1iItp2oVdRpZizz",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "K89fCzMgZEG9dKSZ",
+          "mode": "list",
+          "cachedResultName": "CLOSE-CONVERSATION-CARONE"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "goodLead": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('goodLead', ``, 'string') }}",
+            "idConversation": "={{$json.idConversation || $json.sessionId}}",
+            "number": "={{$json.from}}",
+            "name": "={{$json.name}}",
+            "businesstypeid": "={{$json.businesstypeid || '4' }}",
+            "grupoCaptura": "={{$json.grupoCaptura || 'RENAULT CAR ONE'}}",
+            "pago": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('pago', `Forma de pago: financiado o contado `, 'string') }}",
+            "ProductoInteres": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('ProductoInteres', `Es el modelo elegido por el cliente`, 'string') }}",
+            "usado": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('usado', `Si entrega un auto usado, ingresa los datos del modelo, año y kilometraje. En caso contrario pone \"no\"`, 'string') }}",
+            "interes": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('interes', ``, 'string') }}",
+            "origin": "={{$json.origin}}",
+            "resumen": "={{ $fromAI('resumen', ``, 'string') }}",
+            "localidad": "={{ $fromAI('localidad', `localidad elegida por el usuario, puede tomar dos valores unicos:\nCIUDAD DE LA COSTA o PUNTA DEL ESTE.`, 'string') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "goodLead",
+              "displayName": "goodLead",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "idConversation",
+              "displayName": "idConversation",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "number",
+              "displayName": "number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "businesstypeid",
+              "displayName": "businesstypeid",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "grupoCaptura",
+              "displayName": "grupoCaptura",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "pago",
+              "displayName": "pago",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ProductoInteres",
+              "displayName": "ProductoInteres",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "usado",
+              "displayName": "usado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "interes",
+              "displayName": "interes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "origin",
+              "displayName": "origin",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "resumen",
+              "displayName": "resumen",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "localidad",
+              "displayName": "localidad",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        576,
+        224
+      ],
+      "id": "2f909b86-73de-430f-a8fe-7164c223796b",
+      "name": "close_conversation"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "188CA0b8qRQn9ENgAN2XHg1BxyJkDWEf65wejHifDRic",
+          "mode": "list",
+          "cachedResultName": "CAR ONE IA",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/188CA0b8qRQn9ENgAN2XHg1BxyJkDWEf65wejHifDRic/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1914798908,
+          "mode": "list",
+          "cachedResultName": "clientes",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/188CA0b8qRQn9ENgAN2XHg1BxyJkDWEf65wejHifDRic/edit#gid=1914798908"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Fecha": "={{$now.format('yyyy-MM-dd')}}",
+            "Hora": "={{$now.format('H:mm')}}",
+            "Nombre": "={{$json.name || 'PruebaRedoo'}}",
+            "Telefono": "={{$json.from || 'PruebaRedoo'}}",
+            "Producto": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Producto', `Modelo elegido por el cliente`, 'string') }}",
+            "Pago": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Pago', ``, 'string') }}",
+            "Usado": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Usado', ``, 'string') }}",
+            "idConversation": "={{$json.idConversation || $json.sessionId}}",
+            "interes": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('interes', `\"alto\": Cuando se tiene toda la información (modelo + pago + usado si aplica)\n\"bajo\": Cuando falta información O cuando hay despedida prematura (\"chau\", \"adiós\", etc.)`, 'string') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Fecha",
+              "displayName": "Fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Hora",
+              "displayName": "Hora",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Nombre",
+              "displayName": "Nombre",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Telefono",
+              "displayName": "Telefono",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Producto",
+              "displayName": "Producto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Pago",
+              "displayName": "Pago",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Usado",
+              "displayName": "Usado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Dealer",
+              "displayName": "Dealer",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "idConversation",
+              "displayName": "idConversation",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "interes",
+              "displayName": "interes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        704,
+        224
+      ],
+      "id": "23622b02-0fba-431f-92e3-cb5d09bc0213",
+      "name": "insert_leads",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "i1iItp2oVdRpZizz",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "yOZofqrgAYvUUeDd",
+          "mode": "list",
+          "cachedResultName": "Pilot - Get Precios"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "modelo": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('modelo', `modelo elegido por el cliente`, 'string') }}"
+          },
+          "matchingColumns": [
+            "modelo"
+          ],
+          "schema": [
+            {
+              "id": "modelo",
+              "displayName": "modelo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        832,
+        224
+      ],
+      "id": "1f553035-68e3-4301-b42e-32627dbb1306",
+      "name": "get_precios"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "188CA0b8qRQn9ENgAN2XHg1BxyJkDWEf65wejHifDRic",
+          "mode": "list",
+          "cachedResultName": "CAR ONE IA",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/188CA0b8qRQn9ENgAN2XHg1BxyJkDWEf65wejHifDRic/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 745096824,
+          "mode": "list",
+          "cachedResultName": "CTA",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/188CA0b8qRQn9ENgAN2XHg1BxyJkDWEf65wejHifDRic/edit#gid=745096824"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        960,
+        224
+      ],
+      "id": "496a4440-417b-42fd-8e3c-7635e4d86ded",
+      "name": "get_cta",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "i1iItp2oVdRpZizz",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "aTxg65m7bO1iHEW0",
+      "projectId": "bYM6Pqg31ODjetqU",
+      "createdAt": "2026-01-06T11:40:45.069Z",
+      "updatedAt": "2026-01-06T11:40:45.069Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [
+    {
+      "id": "pmX59a5FR0aTkjPE",
+      "name": "carone",
+      "createdAt": "2026-02-27T20:05:26.892Z",
+      "updatedAt": "2026-02-27T20:05:26.892Z"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-11-12T11:57:41.000Z",
+  "versionId": "abbbd6f4-75cf-4b08-8891-ecc504beb50b"
+}
