@@ -1,0 +1,2121 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "479e9fac-8464-429c-bebb-482df524b9d6",
+    "workflowId": "qj6Nblc2kFFJ4oSi",
+    "nodes": [
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "minutes",
+                "minutesInterval": 10
+              }
+            ]
+          }
+        },
+        "id": "69770209-9eb3-4416-aa7f-3b1faf116970",
+        "name": "⏰ Schedule Trigger",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          -1040,
+          16
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT l.*, t.access_token, i.destino, i.destino_config, i.origen_sf \nFROM meli_leads l \nJOIN meli_tokens t ON l.user_id = t.user_id \nJOIN meli_integraciones i ON l.user_id = i.user_id \nWHERE l.status = 'active' \nAND l.buyer_id IS NOT NULL \nAND l.buyer_id != 0\nAND l.buyer_nombre IS NOT NULL\nAND l.user_id = 3505679485\nLIMIT 100",
+          "options": {}
+        },
+        "id": "7c0fd5b9-55a6-4db8-940e-48c6549dae92",
+        "name": "🗄️ Buscar leads pending",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          -848,
+          16
+        ],
+        "credentials": {
+          "mySql": {
+            "id": "FezTcDnLo3SqPHvd",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {},
+            "conditions": [
+              {
+                "leftValue": "={{ $input.all().length }}",
+                "rightValue": 0,
+                "operator": {
+                  "type": "number",
+                  "operation": "gt"
+                }
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "bbcaeab7-55de-4173-bae8-d66aa5b1900a",
+        "name": "🔍 Hay leads?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          -576,
+          16
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const lead = $input.item.json;\n\nconst normalizarTel = (tel) => {\n  if (!tel) return null;\n  const digits = tel.toString().replace(/\\D/g, '');\n  return digits.slice(-8);\n};\n\nconst sufijo1 = normalizarTel(lead.asesor_phone);\nconst sufijo2 = normalizarTel(lead.asesor_phone2);\n\nreturn {\n  json: {\n    ...lead,\n    asesor_sufijo1: sufijo1 || '',\n    asesor_sufijo2: sufijo2 || ''\n  }\n};"
+        },
+        "id": "5c438bdb-86e3-4a8e-a46c-e543e693613b",
+        "name": "⚙️ Normalizar teléfonos",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -176,
+          16
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT * FROM meli_asesores \nWHERE user_id = {{ $json.user_id }} \nAND (\n  RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo1 }}'\n  OR RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo2 }}'\n  OR telefono IS NULL\n  OR telefono = ''\n)\nORDER BY \n  CASE \n    WHEN RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo1 }}' THEN 0\n    WHEN RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo2 }}' THEN 1\n    ELSE 2 \n  END\nLIMIT 1",
+          "options": {}
+        },
+        "id": "f4b0733d-0c7c-4a4b-ba35-3595cd2ae2aa",
+        "name": "🗄️ Buscar asesor",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          32,
+          16
+        ],
+        "alwaysOutputData": true,
+        "credentials": {
+          "mySql": {
+            "id": "FezTcDnLo3SqPHvd",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "leftValue": "={{ $json.destino }}",
+                "rightValue": "salesforce",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals"
+                },
+                "id": "bc74d2f0-c4d2-458c-9eba-f8482032f809"
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "798e1a24-7b5f-4358-bd84-873a194b61e1",
+        "name": "🔍 Destino?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          384,
+          16
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const sfResponse = $input.item.json;\nconst prev = $('🧩 PayloadFCA').item.json;\n\nconst sfLeadId = sfResponse?.LeadId || sfResponse?.id || sfResponse?.leadId || sfResponse?.prospect_id || null;\nconst success = sfResponse && !sfResponse.error && !sfResponse.message?.toLowerCase().includes('error');\n\nreturn {\n  json: {\n    lead_id: prev.lead_id,\n    sf_lead_id: sfLeadId,\n    new_status: success ? 'sent' : 'error',\n    sf_response: JSON.stringify(sfResponse)\n  }\n};"
+        },
+        "id": "a626c5ef-a844-4520-b2e5-645b15a1e29a",
+        "name": "⚙️ Procesar respuesta SF",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          880,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "{{ $json.query }}",
+          "options": {}
+        },
+        "id": "ac182a74-eb5f-47fd-b1fa-24b5321b588d",
+        "name": "💾 Update status MySQL",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          1280,
+          0
+        ],
+        "credentials": {
+          "mySql": {
+            "id": "FezTcDnLo3SqPHvd",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "UPDATE meli_leads SET status = 'skipped' WHERE id = '{{ $('Loop leads').item.json.id }}'",
+          "options": {}
+        },
+        "id": "9531c4d2-eb2a-40bf-bc65-21213b615046",
+        "name": "💾 Marcar skipped",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          688,
+          160
+        ],
+        "credentials": {
+          "mySql": {
+            "id": "FezTcDnLo3SqPHvd",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "parameters": {},
+        "id": "d2936da1-d49f-44ac-a7d2-db2801150f55",
+        "name": "✅ Volver al loop",
+        "type": "n8n-nodes-base.noOp",
+        "typeVersion": 1,
+        "position": [
+          880,
+          160
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const data = $input.item.json;\n\nconst sfLeadId = data.sf_lead_id ? `'${data.sf_lead_id}'` : 'NULL';\nconst sfResponse = (data.sf_response || '').replace(/'/g, \"''\");\n\nreturn {\n  json: {\n    query: `UPDATE meli_leads SET status = '${data.new_status}', sf_lead_id = ${sfLeadId}, sf_response = '${sfResponse}' WHERE id = '${data.lead_id}'`\n  }\n};"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1088,
+          0
+        ],
+        "id": "d3f1d44a-e35b-412c-9ee2-1d2600306270",
+        "name": "⚙️ Preparar query update"
+      },
+      {
+        "parameters": {
+          "options": {}
+        },
+        "id": "35f1e07a-3dd5-4174-ad9e-0187ed64ca7f",
+        "name": "Loop leads",
+        "type": "n8n-nodes-base.splitInBatches",
+        "typeVersion": 3,
+        "position": [
+          -336,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://lead.fcalatam.com.br/HubMicroservices",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "name": "client_id",
+                "value": "5RlB_-BUJJMMf7TPa8PT97uFrcRWu_QQrfCMB1xwqDE"
+              },
+              {
+                "name": "client_secret",
+                "value": "taZJyRk-vrppiVp7X1uRRVloGpmjekB3yNFmmgAfKXpGwzyHED33vfy6qDPZWDBy"
+              }
+            ]
+          },
+          "sendBody": true,
+          "contentType": "raw",
+          "rawContentType": "application/json",
+          "body": "={{ JSON.stringify($('🧩 PayloadFCA').item.json.payload) }}",
+          "options": {
+            "allowUnauthorizedCerts": true
+          }
+        },
+        "id": "30004c17-1e77-4f59-bc8d-b0a201a51e92",
+        "name": "🚀 POST FCA Salesforce",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          640,
+          0
+        ],
+        "alwaysOutputData": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "const asesor = $input.item.json;\nconst lead = $('⚙️ Normalizar teléfonos').item.json;\n\nconst origen = asesor?.origen_sf || lead.origen_sf || 'Mercado Libre';\nconst asesorEmail = asesor?.email || null;\nconst asesorNombre = asesor?.nombre || null;\n\nconst nombreParts = (lead.buyer_nombre || '').trim().split(' ');\nconst firstName = nombreParts.slice(0, -1).join(' ') || nombreParts[0] || '';\nconst lastName = nombreParts.slice(-1)[0] || '';\n\n// Concesionarios Leapmotor (data real de Stellantis, marca LEAPMOTOR, no bloqueados)\n// Excluidos: ELTA TRANSPORTES (blocked:true), DEALER TEST LEAP (dealer de pruebas)\nconst DEALERS = [\n  { nombre: 'TECH DRIVE S.A. (Coghlan)', direccion: 'AV. RICARDO BALBIN 2841 COGHLAN', cp: 1428, lat: -34.560145, lng: -58.470554, dealerCode: '0800110001' },\n  { nombre: 'TECH DRIVE S.A. (Devoto)', direccion: 'AV. FRANCISCO BEIRO 3870 VILLA DEVOTO', cp: 1419, lat: -34.6030705, lng: -58.507159, dealerCode: '0800110000' },\n  { nombre: 'DECA ELECTRICOS S.A. AVEC', direccion: 'AV. CASEROS 100 BIS', cp: 2000, lat: -32.927679, lng: -60.663495, dealerCode: '0800040000' },\n  { nombre: 'DECA ELECTRICOS S.A.', direccion: 'AV SAN MARTIN 2780', cp: 2000, lat: -32.9698277, lng: -60.642888, dealerCode: '0800040001' },\n  { nombre: 'VERNON S.A.', direccion: 'AV. LURO 1911', cp: 6304, lat: -36.6355749, lng: -64.2810137, dealerCode: '0800120000' },\n  { nombre: 'DAMVILLE S.A. (Rivadavia 16496)', direccion: 'AV. RIVADAVIA 16496', cp: 1704, lat: -34.6465372, lng: -58.5967828, dealerCode: '0800050000' },\n  { nombre: 'DAMVILLE S.A. (Rivadavia 17258)', direccion: 'AV.RIVADAVIA 17258', cp: 1706, lat: -34.6478896, lng: -58.6064395, dealerCode: '0800050001' },\n  { nombre: 'NORTHSTELLA S.A. E-CARS (Ruta Panam.)', direccion: 'RUTA PANAM. KM 49,5', cp: 1629, lat: -34.448325, lng: -58.887424, dealerCode: '0800010000' },\n  { nombre: 'NORTHSTELLA S.A. (Uspallata)', direccion: 'USPALLATA 230', cp: 1629, lat: -34.4447486, lng: -58.8881269, dealerCode: '0800010001' },\n  { nombre: 'GOMAFE S.A. CAR DISTRICT', direccion: 'AV. DEL LIBERTADOR 1930', cp: 1638, lat: -34.513428, lng: -58.477408, dealerCode: '0800100000' },\n  { nombre: 'SVA S.A.C.I.F.I. (Salguero)', direccion: 'SALGUERO 2904 PALERMO', cp: 1425, lat: -34.578286, lng: -58.4073015, dealerCode: '0800020000' },\n  { nombre: 'SVA S.A.C.I.F.I. (Rocamora)', direccion: 'ROCAMORA 1184 ALMAGRO', cp: 1414, lat: -34.599143, lng: -58.4284203, dealerCode: '0800020001' },\n  { nombre: 'AUTO VOLT S.A. (6139)', direccion: 'AV. AGUSTIN GARCIA 6139', cp: 1670, lat: -34.4021049, lng: -58.6328141, dealerCode: '0800030000' },\n  { nombre: 'AUTO VOLT S.A. (6051)', direccion: 'AV AGUSTIN GARCIA 6051', cp: 1624, lat: -34.4025873, lng: -58.6320521, dealerCode: '0800030001' },\n  { nombre: 'GRAND BENOIT S.A. (San Martin Sur)', direccion: 'AV. SAN MARTIN SUR 6995', cp: 5505, lat: -32.969184, lng: -68.8785491, dealerCode: '0800070000' },\n  { nombre: 'GRAND BENOIT S.A. (Bandera de los Andes)', direccion: 'AV. BANDERA DE LOS ANDES 1531', cp: 5521, lat: -32.8952981, lng: -68.815301, dealerCode: '0800070001' },\n  { nombre: 'AVANT S.A. (6569)', direccion: 'AV. SANTA ANA 6569', cp: 5002, lat: -31.4134352, lng: -64.2684274, dealerCode: '0800060000' },\n  { nombre: 'AVANT S.A. (6363)', direccion: 'AV. SANTA ANA 6363', cp: 5000, lat: -31.4131412, lng: -64.2688298, dealerCode: '0800060001' },\n  { nombre: 'ALIZZE S.A. GIAMA', direccion: 'AV. LA PLATA 767', cp: 1235, lat: -34.624533, lng: -58.42733, dealerCode: '0800090001' },\n  { nombre: 'GM CARS S.A. ALLIANCE', direccion: 'RUTA 5 KM 0,01', cp: 3400, lat: -27.4835671, lng: -58.7813306, dealerCode: '0800140000' },\n  { nombre: 'LE MANS AUTOMOVILES S.A. NAVE MOTORS', direccion: 'HIPOLITO YRIGOYEN 310', cp: 1878, lat: -34.7184494, lng: -58.263596, dealerCode: '0800080000' },\n  { nombre: 'LE MANS AUTOMOVILES S.A. (277)', direccion: 'AV. HIPOLITO YRIGOYEN 277', cp: 1878, lat: -34.7187375, lng: -58.26395, dealerCode: '0800080001' },\n  { nombre: 'TOEGUEP S.R.L.', direccion: 'HIPOLITO IRIGOYEN 4138', cp: 8000, lat: -38.6867807, lng: -62.2284629, dealerCode: '0800150000' },\n  { nombre: 'GUILLEN GROUP S.A.S.', direccion: 'CALLE PERIODISTAS SANJUANINOS S/N', cp: 5400, lat: -31.553827, lng: -68.52742, dealerCode: '0800130000' },\n  { nombre: 'FAMOV S.A. FAMILIA PARRA', direccion: 'EJERCITO DE LOS ANDES 1228', cp: 5700, lat: -33.30325, lng: -66.33555, dealerCode: '0800170000' },\n  { nombre: 'ILON S.A. AUTOTERRA', direccion: 'EUSTAQUIO MOLINA 3035', cp: 9000, lat: -45.8805259, lng: -67.5110148, dealerCode: '0800180000' },\n  { nombre: 'ARMORIQUE MOTORS S.A.', direccion: 'COLECTORA FORTIN 1RA DIVISION 461', cp: 8324, lat: -38.943889, lng: -68.0102567, dealerCode: '0800160000' },\n];\n\nconst normalize = (s) =>\n  (s || '')\n    .toString()\n    .toLowerCase()\n    .normalize('NFD')\n    .replace(/[\\u0300-\\u036f]/g, '') // saca tildes\n    .replace(/[^a-z0-9\\s]/g, ' ')\n    .replace(/\\s+/g, ' ')\n    .trim();\n\n// distancia real en km entre dos coordenadas (fórmula de Haversine)\nconst haversineKm = (lat1, lng1, lat2, lng2) => {\n  const toRad = (deg) => (deg * Math.PI) / 180;\n  const R = 6371; // radio de la Tierra en km\n  const dLat = toRad(lat2 - lat1);\n  const dLng = toRad(lng2 - lng1);\n  const a =\n    Math.sin(dLat / 2) ** 2 +\n    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;\n  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));\n  return R * c;\n};\n\nconst resolveDealerCode = (sellerZip, sellerAddress, sellerLat, sellerLng) => {\n  const zipNum = parseInt(sellerZip, 10);\n\n  // 1) match exacto por CP\n  if (!isNaN(zipNum)) {\n    const exact = DEALERS.find((d) => d.cp === zipNum);\n    if (exact) return { dealerCode: exact.dealerCode, matchType: 'cp_exacto', dealer: exact.nombre };\n  }\n\n  // 2) match por dirección (coincidencia de palabras significativas, ej calle/barrio)\n  const addrNorm = normalize(sellerAddress);\n  const addrWords = addrNorm.split(' ').filter((w) => w.length > 3); // ignora palabras cortas (av, de, s.a, etc)\n  if (addrWords.length) {\n    let best = null;\n    let bestScore = 0;\n    for (const d of DEALERS) {\n      const dNorm = normalize(d.direccion);\n      const score = addrWords.filter((w) => dNorm.includes(w)).length;\n      if (score > bestScore) {\n        bestScore = score;\n        best = d;\n      }\n    }\n    if (best && bestScore > 0) {\n      return { dealerCode: best.dealerCode, matchType: 'direccion', dealer: best.nombre };\n    }\n  }\n\n  // 3) fallback: dealer geográficamente más cercano (distancia real por lat/lng, Haversine)\n  const lat = parseFloat(sellerLat);\n  const lng = parseFloat(sellerLng);\n  if (!isNaN(lat) && !isNaN(lng)) {\n    let nearest = null;\n    let minDist = Infinity;\n    for (const d of DEALERS) {\n      const dist = haversineKm(lat, lng, d.lat, d.lng);\n      if (dist < minDist) {\n        minDist = dist;\n        nearest = d;\n      }\n    }\n    if (nearest) {\n      return { dealerCode: nearest.dealerCode, matchType: 'geo_cercano', dealer: nearest.nombre, distanciaKm: Math.round(minDist * 10) / 10 };\n    }\n  }\n\n  return { dealerCode: '', matchType: 'sin_match', dealer: null };\n};\n\n// --- Cálculo viejo (CP / dirección / geo), se mantiene solo para comparar en logs ---\nconst { dealerCode: dealerCodeCalculado, matchType, dealer, distanciaKm } = resolveDealerCode(\n  lead.seller_zip,\n  lead.seller_address,\n  lead.seller_lat,\n  lead.seller_lng\n);\n\n// --- Dealer code real que va al payload: viene directo del campo lead.dealership ---\nconst dealerCode = lead.dealership || '';\n\n// Producto Leapmotor\nconst getProductCode = (titulo) => {\n  const t = (titulo || '').toLowerCase();\n  if (t.includes('c10')) return '488CAG2';\n  if (t.includes('b10')) return '487VAE2';\n  return '';\n};\n\nconst phoneDigits = (lead.buyer_phone || '').replace(/[^\\d]/g, '');\n\nconst payload = {\n  firstName,\n  lastName,\n  email: lead.buyer_email || '',\n  phone: phoneDigits,\n  mobile: phoneDigits,\n  cpf: lead.buyer_cuit || '',\n  origin: 'Internet',\n  SubOrigem__c: 'Mercado Libre',\n  form: `Publicación: ${lead.item_id} | Precio: ${lead.item_precio} ${lead.item_currency} | Link: ${lead.item_permalink || ''}`,\n  productGroup: 'Vendas',\n  dealersCode: dealerCode,\n  productCode: getProductCode(lead.item_titulo),\n  indEmailContact: !!lead.buyer_email,\n  indPhoneContact: !!lead.buyer_phone,\n  lang: 'es',\n  country: 'Argentina',\n  homePhone: phoneDigits,\n  description: `Publicación: ${lead.item_id} | Precio: ${lead.item_precio} ${lead.item_currency} | Link: ${lead.item_permalink || ''}`,\n  callback: 'JSONPCallback',\n  Medium: 'Mercado Libre',\n  Content: 'Mercado Libre',\n  Campaing: 'Mercado Libre',\n  Source: 'Internet',\n  Term: 'Mercado Libre',\n  msc_ano_modelo: '2027',\n  client: '5RlB_-BUJJMMf7TPa8PT97uFrcRWu_QQrfCMB1xwqDE',\n  secret: 'taZJyRk-vrppiVpZ7X1uRRVloGpmjekB3yNFmmgAfKXpGwzyHED33vfy6qDPZWDBy',\n};\n\nreturn {\n  json: {\n    lead_id: lead.id,\n    user_id: lead.user_id,\n    destino: lead.destino,\n    dealer_match: { dealerCodeUsado: dealerCode, dealerCodeCalculado, matchType, dealer, distanciaKm }, // debug/logs, no va al payload de Salesforce\n    payload,\n    asesor_email: asesorEmail,\n    asesor_nombre: asesorNombre,\n  },\n};"
+        },
+        "id": "88a43f5c-f97c-42a7-9fd1-8e3221b65e84",
+        "name": "🧩 PayloadFCA",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          192,
+          16
+        ]
+      },
+      {
+        "parameters": {},
+        "type": "n8n-nodes-base.manualTrigger",
+        "typeVersion": 1,
+        "position": [
+          -832,
+          192
+        ],
+        "id": "72cb834a-8308-4077-90b9-6cf666cb8bc0",
+        "name": "When clicking ‘Execute workflow’"
+      },
+      {
+        "parameters": {
+          "url": "https://dealer-service.k8s.fcalatam.com.br/dealerws/dealer?brandName=leapmotor&market=es-AR",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "name": "client_id",
+                "value": "5RlB_-BUJJMMf7TPa8PT97uFrcRWu_QQrfCMB1xwqDE"
+              },
+              {
+                "name": "client_secret",
+                "value": "taZJyRk-vrppiVp7X1uRRVloGpmjekB3yNFmmgAfKXpGwzyHED33vfy6qDPZWDBy"
+              }
+            ]
+          },
+          "options": {
+            "allowUnauthorizedCerts": true
+          }
+        },
+        "id": "a7149af6-8483-423f-87b2-f207b3216083",
+        "name": "🚀 POST FCA Salesforce1",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -848,
+          -240
+        ],
+        "alwaysOutputData": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "id": "982e960a-5b53-4f22-920a-80e920f2d2b0",
+        "name": "⏰ Schedule Trigger JEEP",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          -1040,
+          716
+        ],
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "minutes",
+                "minutesInterval": 10
+              }
+            ]
+          }
+        },
+        "disabled": false
+      },
+      {
+        "id": "f8efd28a-1faa-4483-89c2-3f0d7ce42ecc",
+        "name": "🗄️ Buscar leads pending JEEP",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          -848,
+          716
+        ],
+        "parameters": {
+          "operation": "executeQuery",
+          "options": {},
+          "query": "SELECT l.*, t.access_token, i.destino, i.destino_config, i.origen_sf \nFROM meli_leads l \nJOIN meli_tokens t ON l.user_id = t.user_id \nJOIN meli_integraciones i ON l.user_id = i.user_id \nWHERE l.status = 'active' \nAND l.buyer_id IS NOT NULL \nAND l.buyer_id != 0\nAND l.buyer_nombre IS NOT NULL\nAND l.user_id = 3559045435\nLIMIT 100"
+        },
+        "credentials": {
+          "mySql": {
+            "id": "FezTcDnLo3SqPHvd",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "id": "75d6092c-16b2-4673-be72-ea4892abb12e",
+        "name": "🔍 Hay leads? JEEP",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          -576,
+          716
+        ],
+        "parameters": {
+          "conditions": {
+            "conditions": [
+              {
+                "leftValue": "={{ $input.all().length }}",
+                "operator": {
+                  "operation": "gt",
+                  "type": "number"
+                },
+                "rightValue": 0
+              }
+            ],
+            "options": {},
+            "combinator": "and"
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "ee76557c-a586-4ffc-9a37-767fd65e6303",
+        "name": "⚙️ Normalizar teléfonos JEEP",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -176,
+          716
+        ],
+        "parameters": {
+          "jsCode": "const lead = $input.item.json;\n\nconst normalizarTel = (tel) => {\n  if (!tel) return null;\n  const digits = tel.toString().replace(/\\D/g, '');\n  return digits.slice(-8);\n};\n\nconst sufijo1 = normalizarTel(lead.asesor_phone);\nconst sufijo2 = normalizarTel(lead.asesor_phone2);\n\nreturn {\n  json: {\n    ...lead,\n    asesor_sufijo1: sufijo1 || '',\n    asesor_sufijo2: sufijo2 || ''\n  }\n};"
+        }
+      },
+      {
+        "id": "3958e717-7332-432b-b7a4-c1d134b60864",
+        "name": "🗄️ Buscar asesor JEEP",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          32,
+          716
+        ],
+        "parameters": {
+          "operation": "executeQuery",
+          "options": {},
+          "query": "SELECT * FROM meli_asesores \nWHERE user_id = {{ $json.user_id }} \nAND (\n  RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo1 }}'\n  OR RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo2 }}'\n  OR telefono IS NULL\n  OR telefono = ''\n)\nORDER BY \n  CASE \n    WHEN RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo1 }}' THEN 0\n    WHEN RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo2 }}' THEN 1\n    ELSE 2 \n  END\nLIMIT 1"
+        },
+        "credentials": {
+          "mySql": {
+            "id": "FezTcDnLo3SqPHvd",
+            "name": "MySQL account"
+          }
+        },
+        "alwaysOutputData": true
+      },
+      {
+        "id": "34353b7e-5b22-46f8-8bf4-442e727cd276",
+        "name": "🔍 Destino? JEEP",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          384,
+          716
+        ],
+        "parameters": {
+          "conditions": {
+            "combinator": "and",
+            "conditions": [
+              {
+                "id": "bc74d2f0-c4d2-458c-9eba-f8482032f809",
+                "leftValue": "={{ $json.destino }}",
+                "operator": {
+                  "operation": "equals",
+                  "type": "string"
+                },
+                "rightValue": "salesforce"
+              }
+            ],
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            }
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "85193bbb-6cdc-4990-babc-f273b1c111de",
+        "name": "⚙️ Procesar respuesta SF JEEP",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          880,
+          700
+        ],
+        "parameters": {
+          "jsCode": "const sfResponse = $input.item.json;\nconst prev = $('🧩 PayloadFCA JEEP').item.json;\n\nconst sfLeadId = sfResponse?.LeadId || sfResponse?.id || sfResponse?.leadId || sfResponse?.prospect_id || null;\nconst success = sfResponse && !sfResponse.error && !sfResponse.message?.toLowerCase().includes('error');\n\nreturn {\n  json: {\n    lead_id: prev.lead_id,\n    sf_lead_id: sfLeadId,\n    new_status: success ? 'sent' : 'error',\n    sf_response: JSON.stringify(sfResponse)\n  }\n};"
+        }
+      },
+      {
+        "id": "a5ab6352-9327-42b3-944f-45bc6929372b",
+        "name": "💾 Update status MySQL JEEP",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          1280,
+          700
+        ],
+        "parameters": {
+          "operation": "executeQuery",
+          "options": {},
+          "query": "{{ $json.query }}"
+        },
+        "credentials": {
+          "mySql": {
+            "id": "FezTcDnLo3SqPHvd",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "id": "59ee8d05-40b6-44b4-a8a6-a7d555fee107",
+        "name": "💾 Marcar skipped JEEP",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.4,
+        "position": [
+          688,
+          860
+        ],
+        "parameters": {
+          "operation": "executeQuery",
+          "options": {},
+          "query": "UPDATE meli_leads SET status = 'skipped' WHERE id = '{{ $('Loop leads JEEP').item.json.id }}'"
+        },
+        "credentials": {
+          "mySql": {
+            "id": "FezTcDnLo3SqPHvd",
+            "name": "MySQL account"
+          }
+        }
+      },
+      {
+        "id": "68899847-7785-4332-ad18-61045a5355c4",
+        "name": "✅ Volver al loop JEEP",
+        "type": "n8n-nodes-base.noOp",
+        "typeVersion": 1,
+        "position": [
+          880,
+          860
+        ],
+        "parameters": {}
+      },
+      {
+        "id": "0ae38dab-057c-41aa-a0b7-e96f7cd20ec5",
+        "name": "⚙️ Preparar query update JEEP",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1088,
+          700
+        ],
+        "parameters": {
+          "jsCode": "const data = $input.item.json;\n\nconst sfLeadId = data.sf_lead_id ? `'${data.sf_lead_id}'` : 'NULL';\nconst sfResponse = (data.sf_response || '').replace(/'/g, \"''\");\n\nreturn {\n  json: {\n    query: `UPDATE meli_leads SET status = '${data.new_status}', sf_lead_id = ${sfLeadId}, sf_response = '${sfResponse}' WHERE id = '${data.lead_id}'`\n  }\n};"
+        }
+      },
+      {
+        "id": "cee0a7ad-03c9-4918-8e7b-861a5e0b0cb7",
+        "name": "Loop leads JEEP",
+        "type": "n8n-nodes-base.splitInBatches",
+        "typeVersion": 3,
+        "position": [
+          -336,
+          700
+        ],
+        "parameters": {
+          "options": {}
+        }
+      },
+      {
+        "id": "f7ef59d1-48be-4525-8db2-3344832206df",
+        "name": "🚀 POST FCA Salesforce JEEP",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          640,
+          700
+        ],
+        "parameters": {
+          "body": "={{ JSON.stringify($('🚙 Versión Avenger JEEP').item.json.payload) }}",
+          "contentType": "raw",
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "name": "client_id",
+                "value": "5RlB_-BUJJMMf7TPa8PT97uFrcRWu_QQrfCMB1xwqDE"
+              },
+              {
+                "name": "client_secret",
+                "value": "taZJyRk-vrppiVp7X1uRRVloGpmjekB3yNFmmgAfKXpGwzyHED33vfy6qDPZWDBy"
+              }
+            ]
+          },
+          "method": "POST",
+          "options": {
+            "allowUnauthorizedCerts": true
+          },
+          "rawContentType": "application/json",
+          "sendBody": true,
+          "sendHeaders": true,
+          "url": "https://lead.fcalatam.com.br/HubMicroservices"
+        },
+        "onError": "continueRegularOutput",
+        "alwaysOutputData": true
+      },
+      {
+        "id": "ec7b288b-855c-4490-bc95-ba7ea1a3be21",
+        "name": "🧩 PayloadFCA JEEP",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          192,
+          716
+        ],
+        "parameters": {
+          "jsCode": "const asesor = $input.item.json;\nconst lead = $('⚙️ Normalizar teléfonos JEEP').item.json;\n\nconst origen = asesor?.origen_sf || lead.origen_sf || 'Mercado Libre';\nconst asesorEmail = asesor?.email || null;\nconst asesorNombre = asesor?.nombre || null;\n\nconst nombreParts = (lead.buyer_nombre || '').trim().split(' ');\nconst firstName = nombreParts.slice(0, -1).join(' ') || nombreParts[0] || '';\nconst lastName = nombreParts.slice(-1)[0] || '';\n\n// Concesionarios JEEP (Excel MELI_JEEP_CODIGOS_SALESFORCE_ACTUALIZADO_11Nov)\nconst DEALERS = [\n  {\"nombre\": \"A. Russoniello - A. Russoniello S.A. (Junín)\", \"direccion\": \"Colectora Rawson de Dellepiane 289\", \"cp\": 6000, \"lat\": -34.600462, \"lng\": -60.969776, \"dealerCode\": \"0730090000\"},\n  {\"nombre\": \"A. Russoniello - A. Russoniello S.A. (Tigre)\", \"direccion\": \"Av. Agustin M. Garcia 6061 (RP27), Rincon de Milberg\", \"cp\": 1648, \"lat\": -34.4025953294263, \"lng\": -58.631951657671, \"dealerCode\": \"0730090004\"},\n  {\"nombre\": \"SportCars - Abington S.A. (CABA)\", \"direccion\": \"Av. Del Libertador 6065\", \"cp\": 1428, \"lat\": -34.556127, \"lng\": -58.448175, \"dealerCode\": \"0730002000\"},\n  {\"nombre\": \"NeoStar - Alco Rosario S.A. (Rosario)\", \"direccion\": \"Av. Eva Peron 5346\", \"cp\": 2008, \"lat\": -32.935905, \"lng\": -60.696805, \"dealerCode\": \"0734952000\"},\n  {\"nombre\": \"Auto Road - Auto Road S.A. (San Fernando)\", \"direccion\": \"Juan Bellavia SN esquina Napoleón Castro\", \"cp\": 4751, \"lat\": -28.460968, \"lng\": -65.764792, \"dealerCode\": \"0730050000\"},\n  {\"nombre\": \"Autoterra - Autoterra S.A. (Comodoro Rivadavia)\", \"direccion\": \"Hipolito Yrigoyen 2338\", \"cp\": 9003, \"lat\": -45.880608, \"lng\": -67.5112846, \"dealerCode\": \"0730170000\"},\n  {\"nombre\": \"Big Car - Big Car S.A. (Río Gallegos)\", \"direccion\": \"Angel Vicente Peñaloza 3648\", \"cp\": 9400, \"lat\": -51.617649, \"lng\": -69.271567, \"dealerCode\": \"0730005000\"},\n  {\"nombre\": \"Brook Motors - Brook Motors S.A. (Salta)\", \"direccion\": \"Ruta Nacional N° 9 km 1592\", \"cp\": 4400, \"lat\": -24.789728, \"lng\": -65.361038, \"dealerCode\": \"0716990002\"},\n  {\"nombre\": \"Brook Motors - Brook Motors S.A. (San Miguel de Tucuman)\", \"direccion\": \"Adolfo de la Vega 388\", \"cp\": 4000, \"lat\": -26.8263799000505, \"lng\": -65.2522428712428, \"dealerCode\": \"0716990004\"},\n  {\"nombre\": \"Center Valley - Cabowe S.A. (Olavarría)\", \"direccion\": \"Colectora RN 226\", \"cp\": 7400, \"lat\": -36.87797, \"lng\": -60.302736, \"dealerCode\": \"0730007000\"},\n  {\"nombre\": \"SportCars - Chester S.A. (Quilmes)\", \"direccion\": \"Hipolito Yrigoyen 224\", \"cp\": 1878, \"lat\": -34.717229, \"lng\": -58.264757, \"dealerCode\": \"0712164000\"},\n  {\"nombre\": \"SportCars - Chester S.A. (La Plata)\", \"direccion\": \"Avenida 44 1784\", \"cp\": 1900, \"lat\": -34.932927, \"lng\": -57.979414, \"dealerCode\": \"0712164003\"},\n  {\"nombre\": \"Meucci - Dallas Motors S.A. (Corrientes)\", \"direccion\": \"Av. Ferré 1899\", \"cp\": 3400, \"lat\": -27.476656, \"lng\": -58.827326, \"dealerCode\": \"0730080000\"},\n  {\"nombre\": \"Meucci - Dallas Motors S.A. (Resistencia)\", \"direccion\": \"Ruta Nacional 16 Km 9,8\", \"cp\": null, \"lat\": -27.430388, \"lng\": -58.931868, \"dealerCode\": \"0730080003\"},\n  {\"nombre\": \"Giama - Detroit 1925 S.A. (Mar del Plata)\", \"direccion\": \"Av. Champagnat 2745\", \"cp\": 7604, \"lat\": -37.989312, \"lng\": -57.589997, \"dealerCode\": \"0730008000\"},\n  {\"nombre\": \"Giama - Detroit 1925 S.A. (CABA)\", \"direccion\": \"Av. San Juan 1685\", \"cp\": 1148, \"lat\": -34.622431, \"lng\": -58.389686, \"dealerCode\": \"0730008003\"},\n  {\"nombre\": \"Euronoa - Euronoa S.A. (La Rioja)\", \"direccion\": \"Clodulfa Ozan 481 y esquina Artigas\", \"cp\": 5300, \"lat\": -29.4389025, \"lng\": -66.8531994, \"dealerCode\": \"0717020000\"},\n  {\"nombre\": \"Familia Parra - Fap Cuatro S.A. (San Luis)\", \"direccion\": \"Juan Gilberto Funes 352\", \"cp\": 5700, \"lat\": -33.308531, \"lng\": -66.3263798, \"dealerCode\": \"0735120001\"},\n  {\"nombre\": \"Fiorasi - Fiorasi Motors S.A. (Trelew)\", \"direccion\": \"España 344\", \"cp\": 9100, \"lat\": -43.2498009, \"lng\": -65.30167, \"dealerCode\": \"0730009003\"},\n  {\"nombre\": \"Car One - Gaulois Automotores S.A. (Tortuguitas)\", \"direccion\": \"Ruta Panamericana Km. 35.5\", \"cp\": 1667, \"lat\": -34.4578629, \"lng\": -58.7191964, \"dealerCode\": \"0717010000\"},\n  {\"nombre\": \"Grand Car - Grand Car S.A. (Concordia)\", \"direccion\": \"Av. Eva Perón 2544\", \"cp\": 3200, \"lat\": -31.3635202773852, \"lng\": -58.0103266817442, \"dealerCode\": \"0730020002\"},\n  {\"nombre\": \"AutoDrive - Guarniel S.A. (CABA)\", \"direccion\": \"Av. Corrientes 4567\", \"cp\": 1001, \"lat\": -34.60218, \"lng\": -58.42959, \"dealerCode\": \"0713248001\"},\n  {\"nombre\": \"AutoDrive - Guarniel S.A. (CABA)\", \"direccion\": \"Av. San Martín 5700\", \"cp\": 1419, \"lat\": -34.59679158, \"lng\": -58.49713238, \"dealerCode\": \"0713248009\"},\n  {\"nombre\": \"Resasco - Hector Resasco S.A. (Santa Rosa)\", \"direccion\": \"Av. Pedro Luro 2095\", \"cp\": 6300, \"lat\": -36.635433, \"lng\": -64.28221, \"dealerCode\": \"0710940002\"},\n  {\"nombre\": \"Jack Cars - Jack Cars S.A. (Avellaneda)\", \"direccion\": \"Belgrano 775\", \"cp\": 1870, \"lat\": -34.66623, \"lng\": -58.358106, \"dealerCode\": \"0730006000\"},\n  {\"nombre\": \"Jack Cars - Jack Cars S.A. (Canning Ezeiza)\", \"direccion\": \"Mariano Castex 2427\", \"cp\": 1804, \"lat\": -34.874127, \"lng\": -58.502966, \"dealerCode\": \"0730006001\"},\n  {\"nombre\": \"JEA - JEA S.A. (Rafaela)\", \"direccion\": \"Colón 208\", \"cp\": 2300, \"lat\": -31.2544231, \"lng\": -61.4933135, \"dealerCode\": \"0730040000\"},\n  {\"nombre\": \"JEA - JEA S.A. (San Francisco)\", \"direccion\": \"Bv. 25 de Mayo 1200\", \"cp\": 2400, \"lat\": -31.430207, \"lng\": -62.07968, \"dealerCode\": \"0730040002\"},\n  {\"nombre\": \"Montironi - Landcar S.A. (Jesús María)\", \"direccion\": \"Pedro J. Frías 85\", \"cp\": 5220, \"lat\": -30.97925, \"lng\": -64.08613, \"dealerCode\": \"0730120000\"},\n  {\"nombre\": \"Le Mont - Le Mont S.A. (Tres Arroyos)\", \"direccion\": \"Lucio V. Lopez 350\", \"cp\": 7500, \"lat\": -38.374769491715, \"lng\": -60.2715189644342, \"dealerCode\": \"0735130001\"},\n  {\"nombre\": \"Le Rocher - Le Rocher S.A. (Formosa)\", \"direccion\": \"Av. Gutnisky 1902\", \"cp\": 3600, \"lat\": -26.1893621180776, \"lng\": -58.1860774291886, \"dealerCode\": \"0717000000\"},\n  {\"nombre\": \"Lonco-Hue - Lonco-Hue Automotores S.A. (Lanús)\", \"direccion\": \"Av. H. Yrigoyen 3454\", \"cp\": 1824, \"lat\": -34.695531, \"lng\": -58.390677, \"dealerCode\": \"0711424000\"},\n  {\"nombre\": \"Lorwest - Lorwest CI S.A. (Rawson)\", \"direccion\": \"Lateral Este de Acceso Sur esq. Las Cañitas\", \"cp\": 5425, \"lat\": -31.55872, \"lng\": -68.512276, \"dealerCode\": \"0730100000\"},\n  {\"nombre\": \"Fadua - Majacen S.A. (San Salvador de Jujuy)\", \"direccion\": \"Colectora Ruta Nac. 9 -  Km. 1008\", \"cp\": 4603, \"lat\": -24.2159465859743, \"lng\": -65.2806115042786, \"dealerCode\": \"0717040000\"},\n  {\"nombre\": \"Automision - Marchena S.A. (Posadas)\", \"direccion\": \"Suecia 2915\", \"cp\": 3300, \"lat\": -27.39272, \"lng\": -55.90885, \"dealerCode\": \"0735000000\"},\n  {\"nombre\": \"Freeway - Moena S.A. (Adrogue)\", \"direccion\": \"Yrigoyen 12520\", \"cp\": 1846, \"lat\": -34.801257, \"lng\": -58.407387, \"dealerCode\": \"0730015000\"},\n  {\"nombre\": \"Motorville - Motorville S.A. (Vicente López)\", \"direccion\": \"Av. Del Libertador 1560\", \"cp\": 1638, \"lat\": -34.518951, \"lng\": -58.474903, \"dealerCode\": \"0730000000\"},\n  {\"nombre\": \"Nation - Nation Motors S.A. (Paraná)\", \"direccion\": \"Av. Almafuerte 555\", \"cp\": 3100, \"lat\": -31.7467054, \"lng\": -60.5102123, \"dealerCode\": \"0730180004\"},\n  {\"nombre\": \"Nation - Nation Motors S.A. (Santa Fe)\", \"direccion\": \"Las Heras 2633\", \"cp\": 3000, \"lat\": -31.6461291, \"lng\": -60.7003738, \"dealerCode\": \"0730180000\"},\n  {\"nombre\": \"Nation - Nation Motors S.A. (Reconquista)\", \"direccion\": \"Colectora paralela a Ruta Nacional Nro.11 - Nro. 2810\", \"cp\": 3560, \"lat\": -29.1659234, \"lng\": -59.6634007, \"dealerCode\": \"0730180005\"},\n  {\"nombre\": \"Northville - Northville S.A. (Pilar)\", \"direccion\": \"Ruta Panamericana Colectora Este Km 52\", \"cp\": 1629, \"lat\": -34.445731, \"lng\": -58.8872, \"dealerCode\": \"0734997000\"},\n  {\"nombre\": \"Novo Cars - Novo Cars S.A. (Ituzaingó)\", \"direccion\": \"Presidente perón 8725\", \"cp\": 1714, \"lat\": -34.62795, \"lng\": -58.694057, \"dealerCode\": \"0730010000\"},\n  {\"nombre\": \"Novo Cars - Novo Cars S.A. (Ramos Mejía)\", \"direccion\": \"Av. Rivadavia 13038\", \"cp\": 1704, \"lat\": -34.64027477, \"lng\": -58.55013635, \"dealerCode\": \"0730010003\"},\n  {\"nombre\": \"Giama - Ohio 1941 S.A. (CABA)\", \"direccion\": \"Carlos Pellegrini 1594 - Local: 2\", \"cp\": 2741, \"lat\": -34.589495, \"lng\": -58.38116, \"dealerCode\": \"0717050000\"},\n  {\"nombre\": \"Giama - Ohio 1941 S.A. (CABA)\", \"direccion\": \"Av. Alicia Moreau De Justo 2034\", \"cp\": 1107, \"lat\": -34.622515, \"lng\": -58.364996, \"dealerCode\": \"0717050001\"},\n  {\"nombre\": \"Overland Motors - Overland Motors S.A. (Trenque Lauquen)\", \"direccion\": \"Garcia Salinas 1561\", \"cp\": 6400, \"lat\": -35.9842440592279, \"lng\": -62.725182657671, \"dealerCode\": \"0735150004\"},\n  {\"nombre\": \"Overland Motors - Overland Motors S.A. (Coronel Suarez)\", \"direccion\": \"Lavalle 20 (y Av. E. Casey)\", \"cp\": 7540, \"lat\": -37.4594717425692, \"lng\": -61.9296140424335, \"dealerCode\": \"0735150001\"},\n  {\"nombre\": \"Panamer - Panamer S.A. (Campana)\", \"direccion\": \"Cruce Ruta Panamericana y Ruta N° 6\", \"cp\": 2804, \"lat\": -34.181011, \"lng\": -58.963208, \"dealerCode\": \"0733087001\"},\n  {\"nombre\": \"Rubic - Rubic S.A. (Córdoba)\", \"direccion\": \"Av. Santa Ana 6363\", \"cp\": 5000, \"lat\": -31.4137336, \"lng\": -64.268898, \"dealerCode\": \"0730030001\"},\n  {\"nombre\": \"Rubic - Rubic S.A. (Río Cuarto)\", \"direccion\": \"Enlace de Ruta A 005 - Calle Estado de Palestina 2086 km 3,1\", \"cp\": 5800, \"lat\": -33.082386, \"lng\": -64.341276, \"dealerCode\": \"0730030000\"},\n  {\"nombre\": \"Car District - S. Trepat Automóviles S.A. (Martinez)\", \"direccion\": \"Av. Del Libertador 14323\", \"cp\": 1640, \"lat\": -34.4802256, \"lng\": -58.4924028, \"dealerCode\": \"0730003002\"},\n  {\"nombre\": \"Car District - S. Trepat Automóviles S.A. (Tigre)\", \"direccion\": \"Colectora Este 29.089, El Talar de Pacheco\", \"cp\": 1617, \"lat\": -34.478803, \"lng\": -58.648169, \"dealerCode\": \"0730003000\"},\n  {\"nombre\": \"Sidway - Sidway S.A. (CABA)\", \"direccion\": \"Av. Del Libertador 4498\", \"cp\": 1426, \"lat\": -34.566893, \"lng\": -58.43132, \"dealerCode\": \"0713694001\"},\n  {\"nombre\": \"Sidway - Sidway S.A. (CABA)\", \"direccion\": \"Av. De Los Incas 4831\", \"cp\": 1427, \"lat\": -34.584102, \"lng\": -58.47849, \"dealerCode\": \"0713694004\"},\n  {\"nombre\": \"Taraborelli - Taraborelli Cars S.A. (CABA)\", \"direccion\": \"Av. Rivadavia 6140\", \"cp\": 1406, \"lat\": -34.625374, \"lng\": -58.452245, \"dealerCode\": \"0730070000\"},\n  {\"nombre\": \"Trailcar - Trailcar S.A. (Bahía Blanca)\", \"direccion\": \"Montevideo 87\", \"cp\": 8000, \"lat\": -38.729356, \"lng\": -62.2547258, \"dealerCode\": \"0730150000\"},\n  {\"nombre\": \"Trailcar - Trailcar S.A. (Tandil)\", \"direccion\": \"Av. Marconi 1443\", \"cp\": 7000, \"lat\": -35.9842440592279, \"lng\": -62.725182657671, \"dealerCode\": \"0730150006\"},\n  {\"nombre\": \"Pire Rayen - Valley Star´s S.A. (Neuquén)\", \"direccion\": \"Andres Vela 3781\", \"cp\": 8300, \"lat\": -38.895814984343, \"lng\": -68.0887436079087, \"dealerCode\": \"0733269005\"},\n  {\"nombre\": \"Vespasiani - Vespasiani Automotores S.A. (Córdoba)\", \"direccion\": \"Sagrada Familia 434\", \"cp\": 5003, \"lat\": -31.395104, \"lng\": -64.234436, \"dealerCode\": \"0710994000\"},\n  {\"nombre\": \"Vespasiani - Vespasiani Automotores S.A. (Río Tercero)\", \"direccion\": \"Av. Gral. Savio 1350\", \"cp\": 5850, \"lat\": -32.16975, \"lng\": -64.134593, \"dealerCode\": \"0710994001\"},\n  {\"nombre\": \"Viaña - Viaña Automotores S.A. (Ushuaia)\", \"direccion\": \"Belgrano 58\", \"cp\": 9410, \"lat\": -54.809084, \"lng\": -68.314375, \"dealerCode\": \"0712153000\"},\n  {\"nombre\": \"Viaña - Viaña Automotores S.A. (Río Grande)\", \"direccion\": \"Piedra Buena 415\", \"cp\": 9420, \"lat\": -53.782899, \"lng\": -67.700321, \"dealerCode\": \"0712153001\"},\n  {\"nombre\": \"Giama - Detroit 1925 S.A. (Mar del Plata)\", \"direccion\": \"Garay 1698\", \"cp\": 7600, \"lat\": -38.0130193205957, \"lng\": -57.545069, \"dealerCode\": \"0730008006\"},\n  {\"nombre\": \"Lorenzo - Lorwest CI S.A. (Chacras de Coria)\", \"direccion\": \"Ruta Provincial 82 Km.51 - Chacras Park\", \"cp\": 5505, \"lat\": -32.9679755763356, \"lng\": -68.8781498144404, \"dealerCode\": \"0730100004\"},\n  {\"nombre\": \"Freeway Plan - Moena S.A. (Banfield)\", \"direccion\": \"Hipolito Yrigoyen 7101/5\", \"cp\": 1832, \"lat\": -34.73765, \"lng\": -58.397957, \"dealerCode\": \"0730015004\"},\n  {\"nombre\": \"Novo Cars Plan - Novo Cars S.A. (Caseros)\", \"direccion\": \"Av. Urquiza 4505\", \"cp\": 1678, \"lat\": -34.605914, \"lng\": -58.558968, \"dealerCode\": \"0730010002\"},\n  {\"nombre\": \"Trailcar - Trailcar S.A. (Bahia Blanca)\", \"direccion\": \"Av. Hipolito Irigoyen 4081\", \"cp\": 8002, \"lat\": -38.687233, \"lng\": -62.229191, \"dealerCode\": \"0730150007\"},\n  {\"nombre\": \"Vespasiani - Vespasiani Automotores S.A. (Córdoba)\", \"direccion\": \"Colectora Externa 3741\", \"cp\": 5003, \"lat\": -31.353705528, \"lng\": -64.217404325, \"dealerCode\": \"0710994002\"},\n  {\"nombre\": \"Sur France - Sur France Motors S.A.S. (Godoy Cruz)\", \"direccion\": \"SAN MARTIN 535\", \"cp\": 5501, \"lat\": -32.9183401, \"lng\": -68.8465353, \"dealerCode\": \"0717060000\"}\n];\n\nconst normalize = (s) =>\n  (s || '')\n    .toString()\n    .toLowerCase()\n    .normalize('NFD')\n    .replace(/[̀-ͯ]/g, '') // saca tildes\n    .replace(/[^a-z0-9\\s]/g, ' ')\n    .replace(/\\s+/g, ' ')\n    .trim();\n\n// distancia real en km entre dos coordenadas (fórmula de Haversine)\nconst haversineKm = (lat1, lng1, lat2, lng2) => {\n  const toRad = (deg) => (deg * Math.PI) / 180;\n  const R = 6371; // radio de la Tierra en km\n  const dLat = toRad(lat2 - lat1);\n  const dLng = toRad(lng2 - lng1);\n  const a =\n    Math.sin(dLat / 2) ** 2 +\n    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;\n  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));\n  return R * c;\n};\n\nconst resolveDealerCode = (sellerZip, sellerAddress, sellerLat, sellerLng) => {\n  const zipNum = parseInt(sellerZip, 10);\n\n  // 1) match exacto por CP\n  if (!isNaN(zipNum)) {\n    const exact = DEALERS.find((d) => d.cp === zipNum);\n    if (exact) return { dealerCode: exact.dealerCode, matchType: 'cp_exacto', dealer: exact.nombre };\n  }\n\n  // 2) match por dirección (coincidencia de palabras significativas, ej calle/barrio)\n  const addrNorm = normalize(sellerAddress);\n  const addrWords = addrNorm.split(' ').filter((w) => w.length > 3); // ignora palabras cortas (av, de, s.a, etc)\n  if (addrWords.length) {\n    let best = null;\n    let bestScore = 0;\n    for (const d of DEALERS) {\n      const dNorm = normalize(d.direccion);\n      const score = addrWords.filter((w) => dNorm.includes(w)).length;\n      if (score > bestScore) {\n        bestScore = score;\n        best = d;\n      }\n    }\n    if (best && bestScore > 0) {\n      return { dealerCode: best.dealerCode, matchType: 'direccion', dealer: best.nombre };\n    }\n  }\n\n  // 3) fallback: dealer geográficamente más cercano (distancia real por lat/lng, Haversine)\n  const lat = parseFloat(sellerLat);\n  const lng = parseFloat(sellerLng);\n  if (!isNaN(lat) && !isNaN(lng)) {\n    let nearest = null;\n    let minDist = Infinity;\n    for (const d of DEALERS) {\n      const dist = haversineKm(lat, lng, d.lat, d.lng);\n      if (dist < minDist) {\n        minDist = dist;\n        nearest = d;\n      }\n    }\n    if (nearest) {\n      return { dealerCode: nearest.dealerCode, matchType: 'geo_cercano', dealer: nearest.nombre, distanciaKm: Math.round(minDist * 10) / 10 };\n    }\n  }\n\n  return { dealerCode: '', matchType: 'sin_match', dealer: null };\n};\n\n// --- Cálculo viejo (CP / dirección / geo), se mantiene solo para comparar en logs ---\nconst { dealerCode: dealerCodeCalculado, matchType, dealer, distanciaKm } = resolveDealerCode(\n  lead.seller_zip,\n  lead.seller_address,\n  lead.seller_lat,\n  lead.seller_lng\n);\n\n// --- Dealer code: usa lead.dealership si viene; si no, el calculado por CP/dirección/geo con dealers JEEP ---\nconst dealerCode = lead.dealership || dealerCodeCalculado || '';\n\n// Producto JEEP — código Salesforce informado por Publicis (Avenger Altitude T200, año 2027)\n// Por ahora todas las versiones de Avenger (Longitude / Altitude / Limited) van con este código\nconst getProductCode = (titulo) => {\n  const t = (titulo || '').toLowerCase();\n  if (t.includes('avenger')) return '6571DA';\n  return '';\n};\n\nconst phoneDigits = (lead.buyer_phone || '').replace(/[^\\d]/g, '');\n\nconst payload = {\n  firstName,\n  lastName,\n  email: lead.buyer_email || '',\n  phone: phoneDigits,\n  mobile: phoneDigits,\n  cpf: lead.buyer_cuit || '',\n  origin: 'Internet',\n  SubOrigem__c: 'Mercado Libre',\n  form: `Publicación: ${lead.item_id} | Precio: ${lead.item_precio} ${lead.item_currency} | Link: ${lead.item_permalink || ''}`,\n  productGroup: 'Vendas',\n  dealersCode: dealerCode,\n  productCode: getProductCode(lead.item_titulo),\n  indEmailContact: !!lead.buyer_email,\n  indPhoneContact: !!lead.buyer_phone,\n  lang: 'es',\n  country: 'Argentina',\n  homePhone: phoneDigits,\n  description: `Publicación: ${lead.item_id} | Precio: ${lead.item_precio} ${lead.item_currency} | Link: ${lead.item_permalink || ''}`,\n  callback: 'JSONPCallback',\n  Medium: 'Mercado Libre',\n  Content: 'Mercado Libre',\n  Campaing: 'Mercado Libre',\n  Source: 'Internet',\n  Term: 'Mercado Libre',\n  msc_ano_modelo: '2027',\n  client: '5RlB_-BUJJMMf7TPa8PT97uFrcRWu_QQrfCMB1xwqDE',\n  secret: 'taZJyRk-vrppiVpZ7X1uRRVloGpmjekB3yNFmmgAfKXpGwzyHED33vfy6qDPZWDBy',\n};\n\nreturn {\n  json: {\n    lead_id: lead.id,\n    user_id: lead.user_id,\n    destino: lead.destino,\n    dealer_match: { dealerCodeUsado: dealerCode, dealerCodeCalculado, matchType, dealer, distanciaKm }, // debug/logs, no va al payload de Salesforce\n    payload,\n    asesor_email: asesorEmail,\n    asesor_nombre: asesorNombre,\n  },\n};"
+        }
+      },
+      {
+        "id": "2c3ad7d5-df02-44a0-8fdb-e94e010fd22f",
+        "name": "🚀 POST FCA Salesforce1 JEEP",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -848,
+          460
+        ],
+        "parameters": {
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "name": "client_id",
+                "value": "5RlB_-BUJJMMf7TPa8PT97uFrcRWu_QQrfCMB1xwqDE"
+              },
+              {
+                "name": "client_secret",
+                "value": "taZJyRk-vrppiVp7X1uRRVloGpmjekB3yNFmmgAfKXpGwzyHED33vfy6qDPZWDBy"
+              }
+            ]
+          },
+          "options": {
+            "allowUnauthorizedCerts": true
+          },
+          "sendHeaders": true,
+          "url": "https://dealer-service.k8s.fcalatam.com.br/dealerws/dealer?brandName=jeep&market=es-AR"
+        },
+        "onError": "continueRegularOutput",
+        "alwaysOutputData": true
+      },
+      {
+        "id": "48b33a06-4912-4c63-806c-501855d46e59",
+        "name": "Sticky JEEP",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          -1120,
+          380
+        ],
+        "parameters": {
+          "color": 5,
+          "content": "# JEEP\nIntegración MELI → Salesforce FCA para JEEP Avenger (cuenta MELI 3559045435).\nVersión por publicación en nodo 🚙 (msc_modelo / msc_versao / msc_serie). dealersCode a 10 dígitos.",
+          "height": 660,
+          "width": 2560
+        }
+      },
+      {
+        "id": "5dbbedcd-7ccb-436e-8fa6-5b9cf7b7b90e",
+        "name": "🚙 Versión Avenger JEEP",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          288,
+          540
+        ],
+        "parameters": {
+          "jsCode": "// Versiones Jeep Avenger por publicación de Mercado Libre (todas se titulan \"JEEP AVENGER\")\n// Valores según catálogo de productos de Salesforce FCA: Modelo / Versión / Código / Série\nconst VERSIONES = {\n  MLA4204614038: { msc_modelo: 'Avenger', msc_versao: 'Avenger Longitude T200', productCode: '6571HA0', msc_serie: '0' }, // $41.990.000\n  MLA4204614948: { msc_modelo: 'Avenger', msc_versao: 'Avenger Altitude T200',  productCode: '6571DA0', msc_serie: '0' }, // $44.660.000\n  MLA4129434878: { msc_modelo: 'Avenger', msc_versao: 'Avenger Limited T200',   productCode: '6571PA0', msc_serie: '0' }, // $47.610.000\n};\n// Si aparece una publicación nueva: se intenta por título y si no, Altitude (modelo de campaña)\nconst porTitulo = (t) => {\n  t = (t || '').toLowerCase();\n  if (t.includes('limited')) return VERSIONES.MLA4129434878;\n  if (t.includes('longitude')) return VERSIONES.MLA4204614038;\n  return VERSIONES.MLA4204614948;\n};\n\nconst data = $input.item.json;\nconst lead = $('⚙️ Normalizar teléfonos JEEP').item.json;\nconst v = VERSIONES[lead.item_id] || porTitulo(lead.item_titulo);\n\nreturn {\n  json: {\n    ...data,\n    version_match: VERSIONES[lead.item_id] ? 'item_id' : 'fallback',\n    payload: {\n      ...data.payload,\n      dealersCode: String(data.payload.dealersCode || '').padStart(10, '0'),\n      productCode: v.productCode,\n      msc_modelo: v.msc_modelo,\n      msc_versao: v.msc_versao,\n      msc_serie: v.msc_serie,\n      msc_ano_modelo: '2027',\n    },\n  },\n};"
+        }
+      }
+    ],
+    "connections": {
+      "⏰ Schedule Trigger": {
+        "main": [
+          [
+            {
+              "node": "🗄️ Buscar leads pending",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🗄️ Buscar leads pending": {
+        "main": [
+          [
+            {
+              "node": "🔍 Hay leads?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🔍 Hay leads?": {
+        "main": [
+          [
+            {
+              "node": "Loop leads",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "⚙️ Normalizar teléfonos": {
+        "main": [
+          [
+            {
+              "node": "🗄️ Buscar asesor",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🗄️ Buscar asesor": {
+        "main": [
+          [
+            {
+              "node": "🧩 PayloadFCA",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🔍 Destino?": {
+        "main": [
+          [
+            {
+              "node": "🚀 POST FCA Salesforce",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          []
+        ]
+      },
+      "⚙️ Procesar respuesta SF": {
+        "main": [
+          [
+            {
+              "node": "⚙️ Preparar query update",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "💾 Update status MySQL": {
+        "main": [
+          [
+            {
+              "node": "Loop leads",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "💾 Marcar skipped": {
+        "main": [
+          [
+            {
+              "node": "✅ Volver al loop",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "✅ Volver al loop": {
+        "main": [
+          [
+            {
+              "node": "Loop leads",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "⚙️ Preparar query update": {
+        "main": [
+          [
+            {
+              "node": "💾 Update status MySQL",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Loop leads": {
+        "main": [
+          [],
+          [
+            {
+              "node": "⚙️ Normalizar teléfonos",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🧩 PayloadFCA": {
+        "main": [
+          [
+            {
+              "node": "🔍 Destino?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🚀 POST FCA Salesforce": {
+        "main": [
+          [
+            {
+              "node": "⚙️ Procesar respuesta SF",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "When clicking ‘Execute workflow’": {
+        "main": [
+          [
+            {
+              "node": "🔍 Hay leads?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "⏰ Schedule Trigger JEEP": {
+        "main": [
+          [
+            {
+              "node": "🗄️ Buscar leads pending JEEP",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🗄️ Buscar leads pending JEEP": {
+        "main": [
+          [
+            {
+              "node": "🔍 Hay leads? JEEP",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🔍 Hay leads? JEEP": {
+        "main": [
+          [
+            {
+              "node": "Loop leads JEEP",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "⚙️ Normalizar teléfonos JEEP": {
+        "main": [
+          [
+            {
+              "node": "🗄️ Buscar asesor JEEP",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🗄️ Buscar asesor JEEP": {
+        "main": [
+          [
+            {
+              "node": "🧩 PayloadFCA JEEP",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🔍 Destino? JEEP": {
+        "main": [
+          [
+            {
+              "node": "🚀 POST FCA Salesforce JEEP",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          []
+        ]
+      },
+      "⚙️ Procesar respuesta SF JEEP": {
+        "main": [
+          [
+            {
+              "node": "⚙️ Preparar query update JEEP",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "💾 Update status MySQL JEEP": {
+        "main": [
+          [
+            {
+              "node": "Loop leads JEEP",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "💾 Marcar skipped JEEP": {
+        "main": [
+          [
+            {
+              "node": "✅ Volver al loop JEEP",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "✅ Volver al loop JEEP": {
+        "main": [
+          [
+            {
+              "node": "Loop leads JEEP",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "⚙️ Preparar query update JEEP": {
+        "main": [
+          [
+            {
+              "node": "💾 Update status MySQL JEEP",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Loop leads JEEP": {
+        "main": [
+          null,
+          [
+            {
+              "node": "⚙️ Normalizar teléfonos JEEP",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🚀 POST FCA Salesforce JEEP": {
+        "main": [
+          [
+            {
+              "node": "⚙️ Procesar respuesta SF JEEP",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🧩 PayloadFCA JEEP": {
+        "main": [
+          [
+            {
+              "node": "🚙 Versión Avenger JEEP",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🚙 Versión Avenger JEEP": {
+        "main": [
+          [
+            {
+              "node": "🔍 Destino? JEEP",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "MARCELO AGUSTIN DRI (via MCP)",
+    "name": "JEEP: msc_* según catálogo Salesforce (modelo Avenger, serie 0)",
+    "description": "Updated nodes: 🚙 Versión Avenger JEEP",
+    "autosaved": false,
+    "createdAt": "2026-11-25T13:57:51.802Z",
+    "updatedAt": "2026-11-25T13:57:51.802Z"
+  },
+  "activeVersionId": "479e9fac-8464-429c-bebb-482df524b9d6",
+  "connections": {
+    "⏰ Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "🗄️ Buscar leads pending",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🗄️ Buscar leads pending": {
+      "main": [
+        [
+          {
+            "node": "🔍 Hay leads?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔍 Hay leads?": {
+      "main": [
+        [
+          {
+            "node": "Loop leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⚙️ Normalizar teléfonos": {
+      "main": [
+        [
+          {
+            "node": "🗄️ Buscar asesor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🗄️ Buscar asesor": {
+      "main": [
+        [
+          {
+            "node": "🧩 PayloadFCA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔍 Destino?": {
+      "main": [
+        [
+          {
+            "node": "🚀 POST FCA Salesforce",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "⚙️ Procesar respuesta SF": {
+      "main": [
+        [
+          {
+            "node": "⚙️ Preparar query update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "💾 Update status MySQL": {
+      "main": [
+        [
+          {
+            "node": "Loop leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "💾 Marcar skipped": {
+      "main": [
+        [
+          {
+            "node": "✅ Volver al loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "✅ Volver al loop": {
+      "main": [
+        [
+          {
+            "node": "Loop leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⚙️ Preparar query update": {
+      "main": [
+        [
+          {
+            "node": "💾 Update status MySQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop leads": {
+      "main": [
+        [],
+        [
+          {
+            "node": "⚙️ Normalizar teléfonos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧩 PayloadFCA": {
+      "main": [
+        [
+          {
+            "node": "🔍 Destino?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🚀 POST FCA Salesforce": {
+      "main": [
+        [
+          {
+            "node": "⚙️ Procesar respuesta SF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "🔍 Hay leads?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⏰ Schedule Trigger JEEP": {
+      "main": [
+        [
+          {
+            "node": "🗄️ Buscar leads pending JEEP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🗄️ Buscar leads pending JEEP": {
+      "main": [
+        [
+          {
+            "node": "🔍 Hay leads? JEEP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔍 Hay leads? JEEP": {
+      "main": [
+        [
+          {
+            "node": "Loop leads JEEP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⚙️ Normalizar teléfonos JEEP": {
+      "main": [
+        [
+          {
+            "node": "🗄️ Buscar asesor JEEP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🗄️ Buscar asesor JEEP": {
+      "main": [
+        [
+          {
+            "node": "🧩 PayloadFCA JEEP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔍 Destino? JEEP": {
+      "main": [
+        [
+          {
+            "node": "🚀 POST FCA Salesforce JEEP",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "⚙️ Procesar respuesta SF JEEP": {
+      "main": [
+        [
+          {
+            "node": "⚙️ Preparar query update JEEP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "💾 Update status MySQL JEEP": {
+      "main": [
+        [
+          {
+            "node": "Loop leads JEEP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "💾 Marcar skipped JEEP": {
+      "main": [
+        [
+          {
+            "node": "✅ Volver al loop JEEP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "✅ Volver al loop JEEP": {
+      "main": [
+        [
+          {
+            "node": "Loop leads JEEP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⚙️ Preparar query update JEEP": {
+      "main": [
+        [
+          {
+            "node": "💾 Update status MySQL JEEP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop leads JEEP": {
+      "main": [
+        null,
+        [
+          {
+            "node": "⚙️ Normalizar teléfonos JEEP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🚀 POST FCA Salesforce JEEP": {
+      "main": [
+        [
+          {
+            "node": "⚙️ Procesar respuesta SF JEEP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧩 PayloadFCA JEEP": {
+      "main": [
+        [
+          {
+            "node": "🚙 Versión Avenger JEEP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🚙 Versión Avenger JEEP": {
+      "main": [
+        [
+          {
+            "node": "🔍 Destino? JEEP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-07-14T14:38:30.281Z",
+  "id": "qj6Nblc2kFFJ4oSi",
+  "isArchived": false,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "name": "STELLANTIS MELI",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 10
+            }
+          ]
+        }
+      },
+      "id": "69770209-9eb3-4416-aa7f-3b1faf116970",
+      "name": "⏰ Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1040,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT l.*, t.access_token, i.destino, i.destino_config, i.origen_sf \nFROM meli_leads l \nJOIN meli_tokens t ON l.user_id = t.user_id \nJOIN meli_integraciones i ON l.user_id = i.user_id \nWHERE l.status = 'active' \nAND l.buyer_id IS NOT NULL \nAND l.buyer_id != 0\nAND l.buyer_nombre IS NOT NULL\nAND l.user_id = 3505679485\nLIMIT 100",
+        "options": {}
+      },
+      "id": "7c0fd5b9-55a6-4db8-940e-48c6549dae92",
+      "name": "🗄️ Buscar leads pending",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        -848,
+        16
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "FezTcDnLo3SqPHvd",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {},
+          "conditions": [
+            {
+              "leftValue": "={{ $input.all().length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "bbcaeab7-55de-4173-bae8-d66aa5b1900a",
+      "name": "🔍 Hay leads?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -576,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $input.item.json;\n\nconst normalizarTel = (tel) => {\n  if (!tel) return null;\n  const digits = tel.toString().replace(/\\D/g, '');\n  return digits.slice(-8);\n};\n\nconst sufijo1 = normalizarTel(lead.asesor_phone);\nconst sufijo2 = normalizarTel(lead.asesor_phone2);\n\nreturn {\n  json: {\n    ...lead,\n    asesor_sufijo1: sufijo1 || '',\n    asesor_sufijo2: sufijo2 || ''\n  }\n};"
+      },
+      "id": "5c438bdb-86e3-4a8e-a46c-e543e693613b",
+      "name": "⚙️ Normalizar teléfonos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -176,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM meli_asesores \nWHERE user_id = {{ $json.user_id }} \nAND (\n  RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo1 }}'\n  OR RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo2 }}'\n  OR telefono IS NULL\n  OR telefono = ''\n)\nORDER BY \n  CASE \n    WHEN RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo1 }}' THEN 0\n    WHEN RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo2 }}' THEN 1\n    ELSE 2 \n  END\nLIMIT 1",
+        "options": {}
+      },
+      "id": "f4b0733d-0c7c-4a4b-ba35-3595cd2ae2aa",
+      "name": "🗄️ Buscar asesor",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        32,
+        16
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "mySql": {
+          "id": "FezTcDnLo3SqPHvd",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.destino }}",
+              "rightValue": "salesforce",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "id": "bc74d2f0-c4d2-458c-9eba-f8482032f809"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "798e1a24-7b5f-4358-bd84-873a194b61e1",
+      "name": "🔍 Destino?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        384,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const sfResponse = $input.item.json;\nconst prev = $('🧩 PayloadFCA').item.json;\n\nconst sfLeadId = sfResponse?.LeadId || sfResponse?.id || sfResponse?.leadId || sfResponse?.prospect_id || null;\nconst success = sfResponse && !sfResponse.error && !sfResponse.message?.toLowerCase().includes('error');\n\nreturn {\n  json: {\n    lead_id: prev.lead_id,\n    sf_lead_id: sfLeadId,\n    new_status: success ? 'sent' : 'error',\n    sf_response: JSON.stringify(sfResponse)\n  }\n};"
+      },
+      "id": "a626c5ef-a844-4520-b2e5-645b15a1e29a",
+      "name": "⚙️ Procesar respuesta SF",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "{{ $json.query }}",
+        "options": {}
+      },
+      "id": "ac182a74-eb5f-47fd-b1fa-24b5321b588d",
+      "name": "💾 Update status MySQL",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        1280,
+        0
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "FezTcDnLo3SqPHvd",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE meli_leads SET status = 'skipped' WHERE id = '{{ $('Loop leads').item.json.id }}'",
+        "options": {}
+      },
+      "id": "9531c4d2-eb2a-40bf-bc65-21213b615046",
+      "name": "💾 Marcar skipped",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        688,
+        160
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "FezTcDnLo3SqPHvd",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "d2936da1-d49f-44ac-a7d2-db2801150f55",
+      "name": "✅ Volver al loop",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        880,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.item.json;\n\nconst sfLeadId = data.sf_lead_id ? `'${data.sf_lead_id}'` : 'NULL';\nconst sfResponse = (data.sf_response || '').replace(/'/g, \"''\");\n\nreturn {\n  json: {\n    query: `UPDATE meli_leads SET status = '${data.new_status}', sf_lead_id = ${sfLeadId}, sf_response = '${sfResponse}' WHERE id = '${data.lead_id}'`\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1088,
+        0
+      ],
+      "id": "d3f1d44a-e35b-412c-9ee2-1d2600306270",
+      "name": "⚙️ Preparar query update"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "35f1e07a-3dd5-4174-ad9e-0187ed64ca7f",
+      "name": "Loop leads",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -336,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://lead.fcalatam.com.br/HubMicroservices",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/x-www-form-urlencoded"
+            },
+            {
+              "name": "client_id",
+              "value": "5RlB_-BUJJMMf7TPa8PT97uFrcRWu_QQrfCMB1xwqDE"
+            },
+            {
+              "name": "client_secret",
+              "value": "taZJyRk-vrppiVp7X1uRRVloGpmjekB3yNFmmgAfKXpGwzyHED33vfy6qDPZWDBy"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify($('🧩 PayloadFCA').item.json.payload) }}",
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "id": "30004c17-1e77-4f59-bc8d-b0a201a51e92",
+      "name": "🚀 POST FCA Salesforce",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        640,
+        0
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const asesor = $input.item.json;\nconst lead = $('⚙️ Normalizar teléfonos').item.json;\n\nconst origen = asesor?.origen_sf || lead.origen_sf || 'Mercado Libre';\nconst asesorEmail = asesor?.email || null;\nconst asesorNombre = asesor?.nombre || null;\n\nconst nombreParts = (lead.buyer_nombre || '').trim().split(' ');\nconst firstName = nombreParts.slice(0, -1).join(' ') || nombreParts[0] || '';\nconst lastName = nombreParts.slice(-1)[0] || '';\n\n// Concesionarios Leapmotor (data real de Stellantis, marca LEAPMOTOR, no bloqueados)\n// Excluidos: ELTA TRANSPORTES (blocked:true), DEALER TEST LEAP (dealer de pruebas)\nconst DEALERS = [\n  { nombre: 'TECH DRIVE S.A. (Coghlan)', direccion: 'AV. RICARDO BALBIN 2841 COGHLAN', cp: 1428, lat: -34.560145, lng: -58.470554, dealerCode: '0800110001' },\n  { nombre: 'TECH DRIVE S.A. (Devoto)', direccion: 'AV. FRANCISCO BEIRO 3870 VILLA DEVOTO', cp: 1419, lat: -34.6030705, lng: -58.507159, dealerCode: '0800110000' },\n  { nombre: 'DECA ELECTRICOS S.A. AVEC', direccion: 'AV. CASEROS 100 BIS', cp: 2000, lat: -32.927679, lng: -60.663495, dealerCode: '0800040000' },\n  { nombre: 'DECA ELECTRICOS S.A.', direccion: 'AV SAN MARTIN 2780', cp: 2000, lat: -32.9698277, lng: -60.642888, dealerCode: '0800040001' },\n  { nombre: 'VERNON S.A.', direccion: 'AV. LURO 1911', cp: 6304, lat: -36.6355749, lng: -64.2810137, dealerCode: '0800120000' },\n  { nombre: 'DAMVILLE S.A. (Rivadavia 16496)', direccion: 'AV. RIVADAVIA 16496', cp: 1704, lat: -34.6465372, lng: -58.5967828, dealerCode: '0800050000' },\n  { nombre: 'DAMVILLE S.A. (Rivadavia 17258)', direccion: 'AV.RIVADAVIA 17258', cp: 1706, lat: -34.6478896, lng: -58.6064395, dealerCode: '0800050001' },\n  { nombre: 'NORTHSTELLA S.A. E-CARS (Ruta Panam.)', direccion: 'RUTA PANAM. KM 49,5', cp: 1629, lat: -34.448325, lng: -58.887424, dealerCode: '0800010000' },\n  { nombre: 'NORTHSTELLA S.A. (Uspallata)', direccion: 'USPALLATA 230', cp: 1629, lat: -34.4447486, lng: -58.8881269, dealerCode: '0800010001' },\n  { nombre: 'GOMAFE S.A. CAR DISTRICT', direccion: 'AV. DEL LIBERTADOR 1930', cp: 1638, lat: -34.513428, lng: -58.477408, dealerCode: '0800100000' },\n  { nombre: 'SVA S.A.C.I.F.I. (Salguero)', direccion: 'SALGUERO 2904 PALERMO', cp: 1425, lat: -34.578286, lng: -58.4073015, dealerCode: '0800020000' },\n  { nombre: 'SVA S.A.C.I.F.I. (Rocamora)', direccion: 'ROCAMORA 1184 ALMAGRO', cp: 1414, lat: -34.599143, lng: -58.4284203, dealerCode: '0800020001' },\n  { nombre: 'AUTO VOLT S.A. (6139)', direccion: 'AV. AGUSTIN GARCIA 6139', cp: 1670, lat: -34.4021049, lng: -58.6328141, dealerCode: '0800030000' },\n  { nombre: 'AUTO VOLT S.A. (6051)', direccion: 'AV AGUSTIN GARCIA 6051', cp: 1624, lat: -34.4025873, lng: -58.6320521, dealerCode: '0800030001' },\n  { nombre: 'GRAND BENOIT S.A. (San Martin Sur)', direccion: 'AV. SAN MARTIN SUR 6995', cp: 5505, lat: -32.969184, lng: -68.8785491, dealerCode: '0800070000' },\n  { nombre: 'GRAND BENOIT S.A. (Bandera de los Andes)', direccion: 'AV. BANDERA DE LOS ANDES 1531', cp: 5521, lat: -32.8952981, lng: -68.815301, dealerCode: '0800070001' },\n  { nombre: 'AVANT S.A. (6569)', direccion: 'AV. SANTA ANA 6569', cp: 5002, lat: -31.4134352, lng: -64.2684274, dealerCode: '0800060000' },\n  { nombre: 'AVANT S.A. (6363)', direccion: 'AV. SANTA ANA 6363', cp: 5000, lat: -31.4131412, lng: -64.2688298, dealerCode: '0800060001' },\n  { nombre: 'ALIZZE S.A. GIAMA', direccion: 'AV. LA PLATA 767', cp: 1235, lat: -34.624533, lng: -58.42733, dealerCode: '0800090001' },\n  { nombre: 'GM CARS S.A. ALLIANCE', direccion: 'RUTA 5 KM 0,01', cp: 3400, lat: -27.4835671, lng: -58.7813306, dealerCode: '0800140000' },\n  { nombre: 'LE MANS AUTOMOVILES S.A. NAVE MOTORS', direccion: 'HIPOLITO YRIGOYEN 310', cp: 1878, lat: -34.7184494, lng: -58.263596, dealerCode: '0800080000' },\n  { nombre: 'LE MANS AUTOMOVILES S.A. (277)', direccion: 'AV. HIPOLITO YRIGOYEN 277', cp: 1878, lat: -34.7187375, lng: -58.26395, dealerCode: '0800080001' },\n  { nombre: 'TOEGUEP S.R.L.', direccion: 'HIPOLITO IRIGOYEN 4138', cp: 8000, lat: -38.6867807, lng: -62.2284629, dealerCode: '0800150000' },\n  { nombre: 'GUILLEN GROUP S.A.S.', direccion: 'CALLE PERIODISTAS SANJUANINOS S/N', cp: 5400, lat: -31.553827, lng: -68.52742, dealerCode: '0800130000' },\n  { nombre: 'FAMOV S.A. FAMILIA PARRA', direccion: 'EJERCITO DE LOS ANDES 1228', cp: 5700, lat: -33.30325, lng: -66.33555, dealerCode: '0800170000' },\n  { nombre: 'ILON S.A. AUTOTERRA', direccion: 'EUSTAQUIO MOLINA 3035', cp: 9000, lat: -45.8805259, lng: -67.5110148, dealerCode: '0800180000' },\n  { nombre: 'ARMORIQUE MOTORS S.A.', direccion: 'COLECTORA FORTIN 1RA DIVISION 461', cp: 8324, lat: -38.943889, lng: -68.0102567, dealerCode: '0800160000' },\n];\n\nconst normalize = (s) =>\n  (s || '')\n    .toString()\n    .toLowerCase()\n    .normalize('NFD')\n    .replace(/[\\u0300-\\u036f]/g, '') // saca tildes\n    .replace(/[^a-z0-9\\s]/g, ' ')\n    .replace(/\\s+/g, ' ')\n    .trim();\n\n// distancia real en km entre dos coordenadas (fórmula de Haversine)\nconst haversineKm = (lat1, lng1, lat2, lng2) => {\n  const toRad = (deg) => (deg * Math.PI) / 180;\n  const R = 6371; // radio de la Tierra en km\n  const dLat = toRad(lat2 - lat1);\n  const dLng = toRad(lng2 - lng1);\n  const a =\n    Math.sin(dLat / 2) ** 2 +\n    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;\n  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));\n  return R * c;\n};\n\nconst resolveDealerCode = (sellerZip, sellerAddress, sellerLat, sellerLng) => {\n  const zipNum = parseInt(sellerZip, 10);\n\n  // 1) match exacto por CP\n  if (!isNaN(zipNum)) {\n    const exact = DEALERS.find((d) => d.cp === zipNum);\n    if (exact) return { dealerCode: exact.dealerCode, matchType: 'cp_exacto', dealer: exact.nombre };\n  }\n\n  // 2) match por dirección (coincidencia de palabras significativas, ej calle/barrio)\n  const addrNorm = normalize(sellerAddress);\n  const addrWords = addrNorm.split(' ').filter((w) => w.length > 3); // ignora palabras cortas (av, de, s.a, etc)\n  if (addrWords.length) {\n    let best = null;\n    let bestScore = 0;\n    for (const d of DEALERS) {\n      const dNorm = normalize(d.direccion);\n      const score = addrWords.filter((w) => dNorm.includes(w)).length;\n      if (score > bestScore) {\n        bestScore = score;\n        best = d;\n      }\n    }\n    if (best && bestScore > 0) {\n      return { dealerCode: best.dealerCode, matchType: 'direccion', dealer: best.nombre };\n    }\n  }\n\n  // 3) fallback: dealer geográficamente más cercano (distancia real por lat/lng, Haversine)\n  const lat = parseFloat(sellerLat);\n  const lng = parseFloat(sellerLng);\n  if (!isNaN(lat) && !isNaN(lng)) {\n    let nearest = null;\n    let minDist = Infinity;\n    for (const d of DEALERS) {\n      const dist = haversineKm(lat, lng, d.lat, d.lng);\n      if (dist < minDist) {\n        minDist = dist;\n        nearest = d;\n      }\n    }\n    if (nearest) {\n      return { dealerCode: nearest.dealerCode, matchType: 'geo_cercano', dealer: nearest.nombre, distanciaKm: Math.round(minDist * 10) / 10 };\n    }\n  }\n\n  return { dealerCode: '', matchType: 'sin_match', dealer: null };\n};\n\n// --- Cálculo viejo (CP / dirección / geo), se mantiene solo para comparar en logs ---\nconst { dealerCode: dealerCodeCalculado, matchType, dealer, distanciaKm } = resolveDealerCode(\n  lead.seller_zip,\n  lead.seller_address,\n  lead.seller_lat,\n  lead.seller_lng\n);\n\n// --- Dealer code real que va al payload: viene directo del campo lead.dealership ---\nconst dealerCode = lead.dealership || '';\n\n// Producto Leapmotor\nconst getProductCode = (titulo) => {\n  const t = (titulo || '').toLowerCase();\n  if (t.includes('c10')) return '488CAG2';\n  if (t.includes('b10')) return '487VAE2';\n  return '';\n};\n\nconst phoneDigits = (lead.buyer_phone || '').replace(/[^\\d]/g, '');\n\nconst payload = {\n  firstName,\n  lastName,\n  email: lead.buyer_email || '',\n  phone: phoneDigits,\n  mobile: phoneDigits,\n  cpf: lead.buyer_cuit || '',\n  origin: 'Internet',\n  SubOrigem__c: 'Mercado Libre',\n  form: `Publicación: ${lead.item_id} | Precio: ${lead.item_precio} ${lead.item_currency} | Link: ${lead.item_permalink || ''}`,\n  productGroup: 'Vendas',\n  dealersCode: dealerCode,\n  productCode: getProductCode(lead.item_titulo),\n  indEmailContact: !!lead.buyer_email,\n  indPhoneContact: !!lead.buyer_phone,\n  lang: 'es',\n  country: 'Argentina',\n  homePhone: phoneDigits,\n  description: `Publicación: ${lead.item_id} | Precio: ${lead.item_precio} ${lead.item_currency} | Link: ${lead.item_permalink || ''}`,\n  callback: 'JSONPCallback',\n  Medium: 'Mercado Libre',\n  Content: 'Mercado Libre',\n  Campaing: 'Mercado Libre',\n  Source: 'Internet',\n  Term: 'Mercado Libre',\n  msc_ano_modelo: '2027',\n  client: '5RlB_-BUJJMMf7TPa8PT97uFrcRWu_QQrfCMB1xwqDE',\n  secret: 'taZJyRk-vrppiVpZ7X1uRRVloGpmjekB3yNFmmgAfKXpGwzyHED33vfy6qDPZWDBy',\n};\n\nreturn {\n  json: {\n    lead_id: lead.id,\n    user_id: lead.user_id,\n    destino: lead.destino,\n    dealer_match: { dealerCodeUsado: dealerCode, dealerCodeCalculado, matchType, dealer, distanciaKm }, // debug/logs, no va al payload de Salesforce\n    payload,\n    asesor_email: asesorEmail,\n    asesor_nombre: asesorNombre,\n  },\n};"
+      },
+      "id": "88a43f5c-f97c-42a7-9fd1-8e3221b65e84",
+      "name": "🧩 PayloadFCA",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        192,
+        16
+      ]
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -832,
+        192
+      ],
+      "id": "72cb834a-8308-4077-90b9-6cf666cb8bc0",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "url": "https://dealer-service.k8s.fcalatam.com.br/dealerws/dealer?brandName=leapmotor&market=es-AR",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/x-www-form-urlencoded"
+            },
+            {
+              "name": "client_id",
+              "value": "5RlB_-BUJJMMf7TPa8PT97uFrcRWu_QQrfCMB1xwqDE"
+            },
+            {
+              "name": "client_secret",
+              "value": "taZJyRk-vrppiVp7X1uRRVloGpmjekB3yNFmmgAfKXpGwzyHED33vfy6qDPZWDBy"
+            }
+          ]
+        },
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "id": "a7149af6-8483-423f-87b2-f207b3216083",
+      "name": "🚀 POST FCA Salesforce1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -848,
+        -240
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "982e960a-5b53-4f22-920a-80e920f2d2b0",
+      "name": "⏰ Schedule Trigger JEEP",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1040,
+        716
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 10
+            }
+          ]
+        }
+      },
+      "disabled": false
+    },
+    {
+      "id": "f8efd28a-1faa-4483-89c2-3f0d7ce42ecc",
+      "name": "🗄️ Buscar leads pending JEEP",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        -848,
+        716
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "options": {},
+        "query": "SELECT l.*, t.access_token, i.destino, i.destino_config, i.origen_sf \nFROM meli_leads l \nJOIN meli_tokens t ON l.user_id = t.user_id \nJOIN meli_integraciones i ON l.user_id = i.user_id \nWHERE l.status = 'active' \nAND l.buyer_id IS NOT NULL \nAND l.buyer_id != 0\nAND l.buyer_nombre IS NOT NULL\nAND l.user_id = 3559045435\nLIMIT 100"
+      },
+      "credentials": {
+        "mySql": {
+          "id": "FezTcDnLo3SqPHvd",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "id": "75d6092c-16b2-4673-be72-ea4892abb12e",
+      "name": "🔍 Hay leads? JEEP",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -576,
+        716
+      ],
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $input.all().length }}",
+              "operator": {
+                "operation": "gt",
+                "type": "number"
+              },
+              "rightValue": 0
+            }
+          ],
+          "options": {},
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "ee76557c-a586-4ffc-9a37-767fd65e6303",
+      "name": "⚙️ Normalizar teléfonos JEEP",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -176,
+        716
+      ],
+      "parameters": {
+        "jsCode": "const lead = $input.item.json;\n\nconst normalizarTel = (tel) => {\n  if (!tel) return null;\n  const digits = tel.toString().replace(/\\D/g, '');\n  return digits.slice(-8);\n};\n\nconst sufijo1 = normalizarTel(lead.asesor_phone);\nconst sufijo2 = normalizarTel(lead.asesor_phone2);\n\nreturn {\n  json: {\n    ...lead,\n    asesor_sufijo1: sufijo1 || '',\n    asesor_sufijo2: sufijo2 || ''\n  }\n};"
+      }
+    },
+    {
+      "id": "3958e717-7332-432b-b7a4-c1d134b60864",
+      "name": "🗄️ Buscar asesor JEEP",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        32,
+        716
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "options": {},
+        "query": "SELECT * FROM meli_asesores \nWHERE user_id = {{ $json.user_id }} \nAND (\n  RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo1 }}'\n  OR RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo2 }}'\n  OR telefono IS NULL\n  OR telefono = ''\n)\nORDER BY \n  CASE \n    WHEN RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo1 }}' THEN 0\n    WHEN RIGHT(REGEXP_REPLACE(telefono, '[^0-9]', ''), 8) = '{{ $json.asesor_sufijo2 }}' THEN 1\n    ELSE 2 \n  END\nLIMIT 1"
+      },
+      "credentials": {
+        "mySql": {
+          "id": "FezTcDnLo3SqPHvd",
+          "name": "MySQL account"
+        }
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "id": "34353b7e-5b22-46f8-8bf4-442e727cd276",
+      "name": "🔍 Destino? JEEP",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        384,
+        716
+      ],
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "bc74d2f0-c4d2-458c-9eba-f8482032f809",
+              "leftValue": "={{ $json.destino }}",
+              "operator": {
+                "operation": "equals",
+                "type": "string"
+              },
+              "rightValue": "salesforce"
+            }
+          ],
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          }
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "85193bbb-6cdc-4990-babc-f273b1c111de",
+      "name": "⚙️ Procesar respuesta SF JEEP",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        700
+      ],
+      "parameters": {
+        "jsCode": "const sfResponse = $input.item.json;\nconst prev = $('🧩 PayloadFCA JEEP').item.json;\n\nconst sfLeadId = sfResponse?.LeadId || sfResponse?.id || sfResponse?.leadId || sfResponse?.prospect_id || null;\nconst success = sfResponse && !sfResponse.error && !sfResponse.message?.toLowerCase().includes('error');\n\nreturn {\n  json: {\n    lead_id: prev.lead_id,\n    sf_lead_id: sfLeadId,\n    new_status: success ? 'sent' : 'error',\n    sf_response: JSON.stringify(sfResponse)\n  }\n};"
+      }
+    },
+    {
+      "id": "a5ab6352-9327-42b3-944f-45bc6929372b",
+      "name": "💾 Update status MySQL JEEP",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        1280,
+        700
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "options": {},
+        "query": "{{ $json.query }}"
+      },
+      "credentials": {
+        "mySql": {
+          "id": "FezTcDnLo3SqPHvd",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "id": "59ee8d05-40b6-44b4-a8a6-a7d555fee107",
+      "name": "💾 Marcar skipped JEEP",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        688,
+        860
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "options": {},
+        "query": "UPDATE meli_leads SET status = 'skipped' WHERE id = '{{ $('Loop leads JEEP').item.json.id }}'"
+      },
+      "credentials": {
+        "mySql": {
+          "id": "FezTcDnLo3SqPHvd",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "id": "68899847-7785-4332-ad18-61045a5355c4",
+      "name": "✅ Volver al loop JEEP",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        880,
+        860
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "0ae38dab-057c-41aa-a0b7-e96f7cd20ec5",
+      "name": "⚙️ Preparar query update JEEP",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1088,
+        700
+      ],
+      "parameters": {
+        "jsCode": "const data = $input.item.json;\n\nconst sfLeadId = data.sf_lead_id ? `'${data.sf_lead_id}'` : 'NULL';\nconst sfResponse = (data.sf_response || '').replace(/'/g, \"''\");\n\nreturn {\n  json: {\n    query: `UPDATE meli_leads SET status = '${data.new_status}', sf_lead_id = ${sfLeadId}, sf_response = '${sfResponse}' WHERE id = '${data.lead_id}'`\n  }\n};"
+      }
+    },
+    {
+      "id": "cee0a7ad-03c9-4918-8e7b-861a5e0b0cb7",
+      "name": "Loop leads JEEP",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -336,
+        700
+      ],
+      "parameters": {
+        "options": {}
+      }
+    },
+    {
+      "id": "f7ef59d1-48be-4525-8db2-3344832206df",
+      "name": "🚀 POST FCA Salesforce JEEP",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        640,
+        700
+      ],
+      "parameters": {
+        "body": "={{ JSON.stringify($('🚙 Versión Avenger JEEP').item.json.payload) }}",
+        "contentType": "raw",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/x-www-form-urlencoded"
+            },
+            {
+              "name": "client_id",
+              "value": "5RlB_-BUJJMMf7TPa8PT97uFrcRWu_QQrfCMB1xwqDE"
+            },
+            {
+              "name": "client_secret",
+              "value": "taZJyRk-vrppiVp7X1uRRVloGpmjekB3yNFmmgAfKXpGwzyHED33vfy6qDPZWDBy"
+            }
+          ]
+        },
+        "method": "POST",
+        "options": {
+          "allowUnauthorizedCerts": true
+        },
+        "rawContentType": "application/json",
+        "sendBody": true,
+        "sendHeaders": true,
+        "url": "https://lead.fcalatam.com.br/HubMicroservices"
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "id": "ec7b288b-855c-4490-bc95-ba7ea1a3be21",
+      "name": "🧩 PayloadFCA JEEP",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        192,
+        716
+      ],
+      "parameters": {
+        "jsCode": "const asesor = $input.item.json;\nconst lead = $('⚙️ Normalizar teléfonos JEEP').item.json;\n\nconst origen = asesor?.origen_sf || lead.origen_sf || 'Mercado Libre';\nconst asesorEmail = asesor?.email || null;\nconst asesorNombre = asesor?.nombre || null;\n\nconst nombreParts = (lead.buyer_nombre || '').trim().split(' ');\nconst firstName = nombreParts.slice(0, -1).join(' ') || nombreParts[0] || '';\nconst lastName = nombreParts.slice(-1)[0] || '';\n\n// Concesionarios JEEP (Excel MELI_JEEP_CODIGOS_SALESFORCE_ACTUALIZADO_11Nov)\nconst DEALERS = [\n  {\"nombre\": \"A. Russoniello - A. Russoniello S.A. (Junín)\", \"direccion\": \"Colectora Rawson de Dellepiane 289\", \"cp\": 6000, \"lat\": -34.600462, \"lng\": -60.969776, \"dealerCode\": \"0730090000\"},\n  {\"nombre\": \"A. Russoniello - A. Russoniello S.A. (Tigre)\", \"direccion\": \"Av. Agustin M. Garcia 6061 (RP27), Rincon de Milberg\", \"cp\": 1648, \"lat\": -34.4025953294263, \"lng\": -58.631951657671, \"dealerCode\": \"0730090004\"},\n  {\"nombre\": \"SportCars - Abington S.A. (CABA)\", \"direccion\": \"Av. Del Libertador 6065\", \"cp\": 1428, \"lat\": -34.556127, \"lng\": -58.448175, \"dealerCode\": \"0730002000\"},\n  {\"nombre\": \"NeoStar - Alco Rosario S.A. (Rosario)\", \"direccion\": \"Av. Eva Peron 5346\", \"cp\": 2008, \"lat\": -32.935905, \"lng\": -60.696805, \"dealerCode\": \"0734952000\"},\n  {\"nombre\": \"Auto Road - Auto Road S.A. (San Fernando)\", \"direccion\": \"Juan Bellavia SN esquina Napoleón Castro\", \"cp\": 4751, \"lat\": -28.460968, \"lng\": -65.764792, \"dealerCode\": \"0730050000\"},\n  {\"nombre\": \"Autoterra - Autoterra S.A. (Comodoro Rivadavia)\", \"direccion\": \"Hipolito Yrigoyen 2338\", \"cp\": 9003, \"lat\": -45.880608, \"lng\": -67.5112846, \"dealerCode\": \"0730170000\"},\n  {\"nombre\": \"Big Car - Big Car S.A. (Río Gallegos)\", \"direccion\": \"Angel Vicente Peñaloza 3648\", \"cp\": 9400, \"lat\": -51.617649, \"lng\": -69.271567, \"dealerCode\": \"0730005000\"},\n  {\"nombre\": \"Brook Motors - Brook Motors S.A. (Salta)\", \"direccion\": \"Ruta Nacional N° 9 km 1592\", \"cp\": 4400, \"lat\": -24.789728, \"lng\": -65.361038, \"dealerCode\": \"0716990002\"},\n  {\"nombre\": \"Brook Motors - Brook Motors S.A. (San Miguel de Tucuman)\", \"direccion\": \"Adolfo de la Vega 388\", \"cp\": 4000, \"lat\": -26.8263799000505, \"lng\": -65.2522428712428, \"dealerCode\": \"0716990004\"},\n  {\"nombre\": \"Center Valley - Cabowe S.A. (Olavarría)\", \"direccion\": \"Colectora RN 226\", \"cp\": 7400, \"lat\": -36.87797, \"lng\": -60.302736, \"dealerCode\": \"0730007000\"},\n  {\"nombre\": \"SportCars - Chester S.A. (Quilmes)\", \"direccion\": \"Hipolito Yrigoyen 224\", \"cp\": 1878, \"lat\": -34.717229, \"lng\": -58.264757, \"dealerCode\": \"0712164000\"},\n  {\"nombre\": \"SportCars - Chester S.A. (La Plata)\", \"direccion\": \"Avenida 44 1784\", \"cp\": 1900, \"lat\": -34.932927, \"lng\": -57.979414, \"dealerCode\": \"0712164003\"},\n  {\"nombre\": \"Meucci - Dallas Motors S.A. (Corrientes)\", \"direccion\": \"Av. Ferré 1899\", \"cp\": 3400, \"lat\": -27.476656, \"lng\": -58.827326, \"dealerCode\": \"0730080000\"},\n  {\"nombre\": \"Meucci - Dallas Motors S.A. (Resistencia)\", \"direccion\": \"Ruta Nacional 16 Km 9,8\", \"cp\": null, \"lat\": -27.430388, \"lng\": -58.931868, \"dealerCode\": \"0730080003\"},\n  {\"nombre\": \"Giama - Detroit 1925 S.A. (Mar del Plata)\", \"direccion\": \"Av. Champagnat 2745\", \"cp\": 7604, \"lat\": -37.989312, \"lng\": -57.589997, \"dealerCode\": \"0730008000\"},\n  {\"nombre\": \"Giama - Detroit 1925 S.A. (CABA)\", \"direccion\": \"Av. San Juan 1685\", \"cp\": 1148, \"lat\": -34.622431, \"lng\": -58.389686, \"dealerCode\": \"0730008003\"},\n  {\"nombre\": \"Euronoa - Euronoa S.A. (La Rioja)\", \"direccion\": \"Clodulfa Ozan 481 y esquina Artigas\", \"cp\": 5300, \"lat\": -29.4389025, \"lng\": -66.8531994, \"dealerCode\": \"0717020000\"},\n  {\"nombre\": \"Familia Parra - Fap Cuatro S.A. (San Luis)\", \"direccion\": \"Juan Gilberto Funes 352\", \"cp\": 5700, \"lat\": -33.308531, \"lng\": -66.3263798, \"dealerCode\": \"0735120001\"},\n  {\"nombre\": \"Fiorasi - Fiorasi Motors S.A. (Trelew)\", \"direccion\": \"España 344\", \"cp\": 9100, \"lat\": -43.2498009, \"lng\": -65.30167, \"dealerCode\": \"0730009003\"},\n  {\"nombre\": \"Car One - Gaulois Automotores S.A. (Tortuguitas)\", \"direccion\": \"Ruta Panamericana Km. 35.5\", \"cp\": 1667, \"lat\": -34.4578629, \"lng\": -58.7191964, \"dealerCode\": \"0717010000\"},\n  {\"nombre\": \"Grand Car - Grand Car S.A. (Concordia)\", \"direccion\": \"Av. Eva Perón 2544\", \"cp\": 3200, \"lat\": -31.3635202773852, \"lng\": -58.0103266817442, \"dealerCode\": \"0730020002\"},\n  {\"nombre\": \"AutoDrive - Guarniel S.A. (CABA)\", \"direccion\": \"Av. Corrientes 4567\", \"cp\": 1001, \"lat\": -34.60218, \"lng\": -58.42959, \"dealerCode\": \"0713248001\"},\n  {\"nombre\": \"AutoDrive - Guarniel S.A. (CABA)\", \"direccion\": \"Av. San Martín 5700\", \"cp\": 1419, \"lat\": -34.59679158, \"lng\": -58.49713238, \"dealerCode\": \"0713248009\"},\n  {\"nombre\": \"Resasco - Hector Resasco S.A. (Santa Rosa)\", \"direccion\": \"Av. Pedro Luro 2095\", \"cp\": 6300, \"lat\": -36.635433, \"lng\": -64.28221, \"dealerCode\": \"0710940002\"},\n  {\"nombre\": \"Jack Cars - Jack Cars S.A. (Avellaneda)\", \"direccion\": \"Belgrano 775\", \"cp\": 1870, \"lat\": -34.66623, \"lng\": -58.358106, \"dealerCode\": \"0730006000\"},\n  {\"nombre\": \"Jack Cars - Jack Cars S.A. (Canning Ezeiza)\", \"direccion\": \"Mariano Castex 2427\", \"cp\": 1804, \"lat\": -34.874127, \"lng\": -58.502966, \"dealerCode\": \"0730006001\"},\n  {\"nombre\": \"JEA - JEA S.A. (Rafaela)\", \"direccion\": \"Colón 208\", \"cp\": 2300, \"lat\": -31.2544231, \"lng\": -61.4933135, \"dealerCode\": \"0730040000\"},\n  {\"nombre\": \"JEA - JEA S.A. (San Francisco)\", \"direccion\": \"Bv. 25 de Mayo 1200\", \"cp\": 2400, \"lat\": -31.430207, \"lng\": -62.07968, \"dealerCode\": \"0730040002\"},\n  {\"nombre\": \"Montironi - Landcar S.A. (Jesús María)\", \"direccion\": \"Pedro J. Frías 85\", \"cp\": 5220, \"lat\": -30.97925, \"lng\": -64.08613, \"dealerCode\": \"0730120000\"},\n  {\"nombre\": \"Le Mont - Le Mont S.A. (Tres Arroyos)\", \"direccion\": \"Lucio V. Lopez 350\", \"cp\": 7500, \"lat\": -38.374769491715, \"lng\": -60.2715189644342, \"dealerCode\": \"0735130001\"},\n  {\"nombre\": \"Le Rocher - Le Rocher S.A. (Formosa)\", \"direccion\": \"Av. Gutnisky 1902\", \"cp\": 3600, \"lat\": -26.1893621180776, \"lng\": -58.1860774291886, \"dealerCode\": \"0717000000\"},\n  {\"nombre\": \"Lonco-Hue - Lonco-Hue Automotores S.A. (Lanús)\", \"direccion\": \"Av. H. Yrigoyen 3454\", \"cp\": 1824, \"lat\": -34.695531, \"lng\": -58.390677, \"dealerCode\": \"0711424000\"},\n  {\"nombre\": \"Lorwest - Lorwest CI S.A. (Rawson)\", \"direccion\": \"Lateral Este de Acceso Sur esq. Las Cañitas\", \"cp\": 5425, \"lat\": -31.55872, \"lng\": -68.512276, \"dealerCode\": \"0730100000\"},\n  {\"nombre\": \"Fadua - Majacen S.A. (San Salvador de Jujuy)\", \"direccion\": \"Colectora Ruta Nac. 9 -  Km. 1008\", \"cp\": 4603, \"lat\": -24.2159465859743, \"lng\": -65.2806115042786, \"dealerCode\": \"0717040000\"},\n  {\"nombre\": \"Automision - Marchena S.A. (Posadas)\", \"direccion\": \"Suecia 2915\", \"cp\": 3300, \"lat\": -27.39272, \"lng\": -55.90885, \"dealerCode\": \"0735000000\"},\n  {\"nombre\": \"Freeway - Moena S.A. (Adrogue)\", \"direccion\": \"Yrigoyen 12520\", \"cp\": 1846, \"lat\": -34.801257, \"lng\": -58.407387, \"dealerCode\": \"0730015000\"},\n  {\"nombre\": \"Motorville - Motorville S.A. (Vicente López)\", \"direccion\": \"Av. Del Libertador 1560\", \"cp\": 1638, \"lat\": -34.518951, \"lng\": -58.474903, \"dealerCode\": \"0730000000\"},\n  {\"nombre\": \"Nation - Nation Motors S.A. (Paraná)\", \"direccion\": \"Av. Almafuerte 555\", \"cp\": 3100, \"lat\": -31.7467054, \"lng\": -60.5102123, \"dealerCode\": \"0730180004\"},\n  {\"nombre\": \"Nation - Nation Motors S.A. (Santa Fe)\", \"direccion\": \"Las Heras 2633\", \"cp\": 3000, \"lat\": -31.6461291, \"lng\": -60.7003738, \"dealerCode\": \"0730180000\"},\n  {\"nombre\": \"Nation - Nation Motors S.A. (Reconquista)\", \"direccion\": \"Colectora paralela a Ruta Nacional Nro.11 - Nro. 2810\", \"cp\": 3560, \"lat\": -29.1659234, \"lng\": -59.6634007, \"dealerCode\": \"0730180005\"},\n  {\"nombre\": \"Northville - Northville S.A. (Pilar)\", \"direccion\": \"Ruta Panamericana Colectora Este Km 52\", \"cp\": 1629, \"lat\": -34.445731, \"lng\": -58.8872, \"dealerCode\": \"0734997000\"},\n  {\"nombre\": \"Novo Cars - Novo Cars S.A. (Ituzaingó)\", \"direccion\": \"Presidente perón 8725\", \"cp\": 1714, \"lat\": -34.62795, \"lng\": -58.694057, \"dealerCode\": \"0730010000\"},\n  {\"nombre\": \"Novo Cars - Novo Cars S.A. (Ramos Mejía)\", \"direccion\": \"Av. Rivadavia 13038\", \"cp\": 1704, \"lat\": -34.64027477, \"lng\": -58.55013635, \"dealerCode\": \"0730010003\"},\n  {\"nombre\": \"Giama - Ohio 1941 S.A. (CABA)\", \"direccion\": \"Carlos Pellegrini 1594 - Local: 2\", \"cp\": 2741, \"lat\": -34.589495, \"lng\": -58.38116, \"dealerCode\": \"0717050000\"},\n  {\"nombre\": \"Giama - Ohio 1941 S.A. (CABA)\", \"direccion\": \"Av. Alicia Moreau De Justo 2034\", \"cp\": 1107, \"lat\": -34.622515, \"lng\": -58.364996, \"dealerCode\": \"0717050001\"},\n  {\"nombre\": \"Overland Motors - Overland Motors S.A. (Trenque Lauquen)\", \"direccion\": \"Garcia Salinas 1561\", \"cp\": 6400, \"lat\": -35.9842440592279, \"lng\": -62.725182657671, \"dealerCode\": \"0735150004\"},\n  {\"nombre\": \"Overland Motors - Overland Motors S.A. (Coronel Suarez)\", \"direccion\": \"Lavalle 20 (y Av. E. Casey)\", \"cp\": 7540, \"lat\": -37.4594717425692, \"lng\": -61.9296140424335, \"dealerCode\": \"0735150001\"},\n  {\"nombre\": \"Panamer - Panamer S.A. (Campana)\", \"direccion\": \"Cruce Ruta Panamericana y Ruta N° 6\", \"cp\": 2804, \"lat\": -34.181011, \"lng\": -58.963208, \"dealerCode\": \"0733087001\"},\n  {\"nombre\": \"Rubic - Rubic S.A. (Córdoba)\", \"direccion\": \"Av. Santa Ana 6363\", \"cp\": 5000, \"lat\": -31.4137336, \"lng\": -64.268898, \"dealerCode\": \"0730030001\"},\n  {\"nombre\": \"Rubic - Rubic S.A. (Río Cuarto)\", \"direccion\": \"Enlace de Ruta A 005 - Calle Estado de Palestina 2086 km 3,1\", \"cp\": 5800, \"lat\": -33.082386, \"lng\": -64.341276, \"dealerCode\": \"0730030000\"},\n  {\"nombre\": \"Car District - S. Trepat Automóviles S.A. (Martinez)\", \"direccion\": \"Av. Del Libertador 14323\", \"cp\": 1640, \"lat\": -34.4802256, \"lng\": -58.4924028, \"dealerCode\": \"0730003002\"},\n  {\"nombre\": \"Car District - S. Trepat Automóviles S.A. (Tigre)\", \"direccion\": \"Colectora Este 29.089, El Talar de Pacheco\", \"cp\": 1617, \"lat\": -34.478803, \"lng\": -58.648169, \"dealerCode\": \"0730003000\"},\n  {\"nombre\": \"Sidway - Sidway S.A. (CABA)\", \"direccion\": \"Av. Del Libertador 4498\", \"cp\": 1426, \"lat\": -34.566893, \"lng\": -58.43132, \"dealerCode\": \"0713694001\"},\n  {\"nombre\": \"Sidway - Sidway S.A. (CABA)\", \"direccion\": \"Av. De Los Incas 4831\", \"cp\": 1427, \"lat\": -34.584102, \"lng\": -58.47849, \"dealerCode\": \"0713694004\"},\n  {\"nombre\": \"Taraborelli - Taraborelli Cars S.A. (CABA)\", \"direccion\": \"Av. Rivadavia 6140\", \"cp\": 1406, \"lat\": -34.625374, \"lng\": -58.452245, \"dealerCode\": \"0730070000\"},\n  {\"nombre\": \"Trailcar - Trailcar S.A. (Bahía Blanca)\", \"direccion\": \"Montevideo 87\", \"cp\": 8000, \"lat\": -38.729356, \"lng\": -62.2547258, \"dealerCode\": \"0730150000\"},\n  {\"nombre\": \"Trailcar - Trailcar S.A. (Tandil)\", \"direccion\": \"Av. Marconi 1443\", \"cp\": 7000, \"lat\": -35.9842440592279, \"lng\": -62.725182657671, \"dealerCode\": \"0730150006\"},\n  {\"nombre\": \"Pire Rayen - Valley Star´s S.A. (Neuquén)\", \"direccion\": \"Andres Vela 3781\", \"cp\": 8300, \"lat\": -38.895814984343, \"lng\": -68.0887436079087, \"dealerCode\": \"0733269005\"},\n  {\"nombre\": \"Vespasiani - Vespasiani Automotores S.A. (Córdoba)\", \"direccion\": \"Sagrada Familia 434\", \"cp\": 5003, \"lat\": -31.395104, \"lng\": -64.234436, \"dealerCode\": \"0710994000\"},\n  {\"nombre\": \"Vespasiani - Vespasiani Automotores S.A. (Río Tercero)\", \"direccion\": \"Av. Gral. Savio 1350\", \"cp\": 5850, \"lat\": -32.16975, \"lng\": -64.134593, \"dealerCode\": \"0710994001\"},\n  {\"nombre\": \"Viaña - Viaña Automotores S.A. (Ushuaia)\", \"direccion\": \"Belgrano 58\", \"cp\": 9410, \"lat\": -54.809084, \"lng\": -68.314375, \"dealerCode\": \"0712153000\"},\n  {\"nombre\": \"Viaña - Viaña Automotores S.A. (Río Grande)\", \"direccion\": \"Piedra Buena 415\", \"cp\": 9420, \"lat\": -53.782899, \"lng\": -67.700321, \"dealerCode\": \"0712153001\"},\n  {\"nombre\": \"Giama - Detroit 1925 S.A. (Mar del Plata)\", \"direccion\": \"Garay 1698\", \"cp\": 7600, \"lat\": -38.0130193205957, \"lng\": -57.545069, \"dealerCode\": \"0730008006\"},\n  {\"nombre\": \"Lorenzo - Lorwest CI S.A. (Chacras de Coria)\", \"direccion\": \"Ruta Provincial 82 Km.51 - Chacras Park\", \"cp\": 5505, \"lat\": -32.9679755763356, \"lng\": -68.8781498144404, \"dealerCode\": \"0730100004\"},\n  {\"nombre\": \"Freeway Plan - Moena S.A. (Banfield)\", \"direccion\": \"Hipolito Yrigoyen 7101/5\", \"cp\": 1832, \"lat\": -34.73765, \"lng\": -58.397957, \"dealerCode\": \"0730015004\"},\n  {\"nombre\": \"Novo Cars Plan - Novo Cars S.A. (Caseros)\", \"direccion\": \"Av. Urquiza 4505\", \"cp\": 1678, \"lat\": -34.605914, \"lng\": -58.558968, \"dealerCode\": \"0730010002\"},\n  {\"nombre\": \"Trailcar - Trailcar S.A. (Bahia Blanca)\", \"direccion\": \"Av. Hipolito Irigoyen 4081\", \"cp\": 8002, \"lat\": -38.687233, \"lng\": -62.229191, \"dealerCode\": \"0730150007\"},\n  {\"nombre\": \"Vespasiani - Vespasiani Automotores S.A. (Córdoba)\", \"direccion\": \"Colectora Externa 3741\", \"cp\": 5003, \"lat\": -31.353705528, \"lng\": -64.217404325, \"dealerCode\": \"0710994002\"},\n  {\"nombre\": \"Sur France - Sur France Motors S.A.S. (Godoy Cruz)\", \"direccion\": \"SAN MARTIN 535\", \"cp\": 5501, \"lat\": -32.9183401, \"lng\": -68.8465353, \"dealerCode\": \"0717060000\"}\n];\n\nconst normalize = (s) =>\n  (s || '')\n    .toString()\n    .toLowerCase()\n    .normalize('NFD')\n    .replace(/[̀-ͯ]/g, '') // saca tildes\n    .replace(/[^a-z0-9\\s]/g, ' ')\n    .replace(/\\s+/g, ' ')\n    .trim();\n\n// distancia real en km entre dos coordenadas (fórmula de Haversine)\nconst haversineKm = (lat1, lng1, lat2, lng2) => {\n  const toRad = (deg) => (deg * Math.PI) / 180;\n  const R = 6371; // radio de la Tierra en km\n  const dLat = toRad(lat2 - lat1);\n  const dLng = toRad(lng2 - lng1);\n  const a =\n    Math.sin(dLat / 2) ** 2 +\n    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;\n  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));\n  return R * c;\n};\n\nconst resolveDealerCode = (sellerZip, sellerAddress, sellerLat, sellerLng) => {\n  const zipNum = parseInt(sellerZip, 10);\n\n  // 1) match exacto por CP\n  if (!isNaN(zipNum)) {\n    const exact = DEALERS.find((d) => d.cp === zipNum);\n    if (exact) return { dealerCode: exact.dealerCode, matchType: 'cp_exacto', dealer: exact.nombre };\n  }\n\n  // 2) match por dirección (coincidencia de palabras significativas, ej calle/barrio)\n  const addrNorm = normalize(sellerAddress);\n  const addrWords = addrNorm.split(' ').filter((w) => w.length > 3); // ignora palabras cortas (av, de, s.a, etc)\n  if (addrWords.length) {\n    let best = null;\n    let bestScore = 0;\n    for (const d of DEALERS) {\n      const dNorm = normalize(d.direccion);\n      const score = addrWords.filter((w) => dNorm.includes(w)).length;\n      if (score > bestScore) {\n        bestScore = score;\n        best = d;\n      }\n    }\n    if (best && bestScore > 0) {\n      return { dealerCode: best.dealerCode, matchType: 'direccion', dealer: best.nombre };\n    }\n  }\n\n  // 3) fallback: dealer geográficamente más cercano (distancia real por lat/lng, Haversine)\n  const lat = parseFloat(sellerLat);\n  const lng = parseFloat(sellerLng);\n  if (!isNaN(lat) && !isNaN(lng)) {\n    let nearest = null;\n    let minDist = Infinity;\n    for (const d of DEALERS) {\n      const dist = haversineKm(lat, lng, d.lat, d.lng);\n      if (dist < minDist) {\n        minDist = dist;\n        nearest = d;\n      }\n    }\n    if (nearest) {\n      return { dealerCode: nearest.dealerCode, matchType: 'geo_cercano', dealer: nearest.nombre, distanciaKm: Math.round(minDist * 10) / 10 };\n    }\n  }\n\n  return { dealerCode: '', matchType: 'sin_match', dealer: null };\n};\n\n// --- Cálculo viejo (CP / dirección / geo), se mantiene solo para comparar en logs ---\nconst { dealerCode: dealerCodeCalculado, matchType, dealer, distanciaKm } = resolveDealerCode(\n  lead.seller_zip,\n  lead.seller_address,\n  lead.seller_lat,\n  lead.seller_lng\n);\n\n// --- Dealer code: usa lead.dealership si viene; si no, el calculado por CP/dirección/geo con dealers JEEP ---\nconst dealerCode = lead.dealership || dealerCodeCalculado || '';\n\n// Producto JEEP — código Salesforce informado por Publicis (Avenger Altitude T200, año 2027)\n// Por ahora todas las versiones de Avenger (Longitude / Altitude / Limited) van con este código\nconst getProductCode = (titulo) => {\n  const t = (titulo || '').toLowerCase();\n  if (t.includes('avenger')) return '6571DA';\n  return '';\n};\n\nconst phoneDigits = (lead.buyer_phone || '').replace(/[^\\d]/g, '');\n\nconst payload = {\n  firstName,\n  lastName,\n  email: lead.buyer_email || '',\n  phone: phoneDigits,\n  mobile: phoneDigits,\n  cpf: lead.buyer_cuit || '',\n  origin: 'Internet',\n  SubOrigem__c: 'Mercado Libre',\n  form: `Publicación: ${lead.item_id} | Precio: ${lead.item_precio} ${lead.item_currency} | Link: ${lead.item_permalink || ''}`,\n  productGroup: 'Vendas',\n  dealersCode: dealerCode,\n  productCode: getProductCode(lead.item_titulo),\n  indEmailContact: !!lead.buyer_email,\n  indPhoneContact: !!lead.buyer_phone,\n  lang: 'es',\n  country: 'Argentina',\n  homePhone: phoneDigits,\n  description: `Publicación: ${lead.item_id} | Precio: ${lead.item_precio} ${lead.item_currency} | Link: ${lead.item_permalink || ''}`,\n  callback: 'JSONPCallback',\n  Medium: 'Mercado Libre',\n  Content: 'Mercado Libre',\n  Campaing: 'Mercado Libre',\n  Source: 'Internet',\n  Term: 'Mercado Libre',\n  msc_ano_modelo: '2027',\n  client: '5RlB_-BUJJMMf7TPa8PT97uFrcRWu_QQrfCMB1xwqDE',\n  secret: 'taZJyRk-vrppiVpZ7X1uRRVloGpmjekB3yNFmmgAfKXpGwzyHED33vfy6qDPZWDBy',\n};\n\nreturn {\n  json: {\n    lead_id: lead.id,\n    user_id: lead.user_id,\n    destino: lead.destino,\n    dealer_match: { dealerCodeUsado: dealerCode, dealerCodeCalculado, matchType, dealer, distanciaKm }, // debug/logs, no va al payload de Salesforce\n    payload,\n    asesor_email: asesorEmail,\n    asesor_nombre: asesorNombre,\n  },\n};"
+      }
+    },
+    {
+      "id": "2c3ad7d5-df02-44a0-8fdb-e94e010fd22f",
+      "name": "🚀 POST FCA Salesforce1 JEEP",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -848,
+        460
+      ],
+      "parameters": {
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/x-www-form-urlencoded"
+            },
+            {
+              "name": "client_id",
+              "value": "5RlB_-BUJJMMf7TPa8PT97uFrcRWu_QQrfCMB1xwqDE"
+            },
+            {
+              "name": "client_secret",
+              "value": "taZJyRk-vrppiVp7X1uRRVloGpmjekB3yNFmmgAfKXpGwzyHED33vfy6qDPZWDBy"
+            }
+          ]
+        },
+        "options": {
+          "allowUnauthorizedCerts": true
+        },
+        "sendHeaders": true,
+        "url": "https://dealer-service.k8s.fcalatam.com.br/dealerws/dealer?brandName=jeep&market=es-AR"
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "id": "48b33a06-4912-4c63-806c-501855d46e59",
+      "name": "Sticky JEEP",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1120,
+        380
+      ],
+      "parameters": {
+        "color": 5,
+        "content": "# JEEP\nIntegración MELI → Salesforce FCA para JEEP Avenger (cuenta MELI 3559045435).\nVersión por publicación en nodo 🚙 (msc_modelo / msc_versao / msc_serie). dealersCode a 10 dígitos.",
+        "height": 660,
+        "width": 2560
+      }
+    },
+    {
+      "id": "5dbbedcd-7ccb-436e-8fa6-5b9cf7b7b90e",
+      "name": "🚙 Versión Avenger JEEP",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        288,
+        540
+      ],
+      "parameters": {
+        "jsCode": "// Versiones Jeep Avenger por publicación de Mercado Libre (todas se titulan \"JEEP AVENGER\")\n// Valores según catálogo de productos de Salesforce FCA: Modelo / Versión / Código / Série\nconst VERSIONES = {\n  MLA4204614038: { msc_modelo: 'Avenger', msc_versao: 'Avenger Longitude T200', productCode: '6571HA0', msc_serie: '0' }, // $41.990.000\n  MLA4204614948: { msc_modelo: 'Avenger', msc_versao: 'Avenger Altitude T200',  productCode: '6571DA0', msc_serie: '0' }, // $44.660.000\n  MLA4129434878: { msc_modelo: 'Avenger', msc_versao: 'Avenger Limited T200',   productCode: '6571PA0', msc_serie: '0' }, // $47.610.000\n};\n// Si aparece una publicación nueva: se intenta por título y si no, Altitude (modelo de campaña)\nconst porTitulo = (t) => {\n  t = (t || '').toLowerCase();\n  if (t.includes('limited')) return VERSIONES.MLA4129434878;\n  if (t.includes('longitude')) return VERSIONES.MLA4204614038;\n  return VERSIONES.MLA4204614948;\n};\n\nconst data = $input.item.json;\nconst lead = $('⚙️ Normalizar teléfonos JEEP').item.json;\nconst v = VERSIONES[lead.item_id] || porTitulo(lead.item_titulo);\n\nreturn {\n  json: {\n    ...data,\n    version_match: VERSIONES[lead.item_id] ? 'item_id' : 'fallback',\n    payload: {\n      ...data.payload,\n      dealersCode: String(data.payload.dealersCode || '').padStart(10, '0'),\n      productCode: v.productCode,\n      msc_modelo: v.msc_modelo,\n      msc_versao: v.msc_versao,\n      msc_serie: v.msc_serie,\n      msc_ano_modelo: '2027',\n    },\n  },\n};"
+      }
+    }
+  ],
+  "pinData": {
+    "When clicking ‘Execute workflow’": [
+      {
+        "json": {
+          "id": "2028abc6-6067-49e6-bb06-121355a2efee",
+          "user_id": 3505679485,
+          "nombre_cuenta": null,
+          "item_id": "MLA3608385912",
+          "item_titulo": "Leapmotor B10 Ultra-híbrido",
+          "item_precio": 31990,
+          "item_permalink": "https://auto.mercadolibre.com.ar/MLA-3608385912-leapmotor-b10-ultra-hibrido-_JM",
+          "item_condition": "new",
+          "item_thumbnail": "http://http2.mlstatic.com/D_794308-MLA113687401022_072026-I.webp",
+          "item_currency": "USD",
+          "item_status": "active",
+          "buyer_id": 361070382,
+          "buyer_nombre": "MARTINA SIGLER",
+          "buyer_email": "martinasigler99@gmail.com",
+          "buyer_phone": "+54 1131479531",
+          "buyer_cuit": "27421457218",
+          "asesor_phone": null,
+          "asesor_phone2": null,
+          "contact_type": "contact_request",
+          "status": "active",
+          "seller_address": "Av Libertador 2442",
+          "seller_zip": "1636",
+          "seller_lat": "-34.508427",
+          "seller_lng": "-58.479349",
+          "received_at": "2026-08-06 18:52:19",
+          "created_at": "2026-08-06 18:52:21",
+          "sf_lead_id": null,
+          "pilot_lead_id": null,
+          "sf_response": null,
+          "bot_uploaded": 0,
+          "access_token": "APP_USR-5782358665537188-080614-b987e61d787a3b7228b401771ca40057-3505679485",
+          "destino": "salesforce",
+          "destino_config": {},
+          "origen_sf": "Mercado Libre Redoo"
+        }
+      }
+    ]
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "qj6Nblc2kFFJ4oSi",
+      "projectId": "K8p6XEqA0L6D2uVt",
+      "createdAt": "2026-07-14T14:38:30.285Z",
+      "updatedAt": "2026-07-14T14:38:30.285Z"
+    }
+  ],
+  "staticData": {
+    "node:⏰ Schedule Trigger": {
+      "recurrenceRules": [
+        null
+      ],
+      "recurrenceRuleSignatures": [
+        null
+      ]
+    },
+    "node:⏰ Schedule Trigger JEEP": {
+      "recurrenceRules": [
+        null
+      ],
+      "recurrenceRuleSignatures": [
+        null
+      ]
+    }
+  },
+  "tags": [],
+  "triggerCount": 2,
+  "updatedAt": "2026-11-25T13:57:51.797Z",
+  "versionId": "479e9fac-8464-429c-bebb-482df524b9d6"
+}
