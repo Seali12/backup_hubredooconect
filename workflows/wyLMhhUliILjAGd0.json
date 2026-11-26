@@ -1,0 +1,214 @@
+{
+  "active": false,
+  "activeVersion": null,
+  "activeVersionId": null,
+  "connections": {
+    "Webhook prompt": {
+      "main": [
+        [
+          {
+            "node": "Leer workflow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer workflow": {
+      "main": [
+        [
+          {
+            "node": "Reemplazar textos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reemplazar textos": {
+      "main": [
+        [
+          {
+            "node": "Aplicar?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aplicar?": {
+      "main": [
+        [
+          {
+            "node": "Guardar workflow",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Solo resumen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-11-24T16:41:08.293Z",
+  "id": "wyLMhhUliILjAGd0",
+  "isArchived": true,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "name": "CO - TEMP reemplazo de textos (borrar)",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "id": "75c635a3-f6fd-44db-8076-545cd54ee7a9",
+      "name": "Webhook prompt",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        96
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "co-temp-reemplazo-prompt-k4p9",
+        "responseMode": "lastNode",
+        "responseData": "firstEntryJson",
+        "options": {}
+      },
+      "webhookId": "0806bbfc-bf1a-4bbf-8ec2-9f2bf7513a3b"
+    },
+    {
+      "id": "ba976d57-aa16-4df0-9e96-d62dffccaf60",
+      "name": "Leer workflow",
+      "type": "n8n-nodes-base.n8n",
+      "typeVersion": 1,
+      "position": [
+        224,
+        96
+      ],
+      "parameters": {
+        "resource": "workflow",
+        "operation": "get",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.body.workflowId }}"
+        }
+      },
+      "credentials": {
+        "n8nApi": {
+          "id": "mJ8D9N4Z4zZIbbww",
+          "name": "n8n account"
+        }
+      }
+    },
+    {
+      "id": "8c70eeaf-f7f9-4cb3-9bd3-169d882575f9",
+      "name": "Reemplazar textos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        96
+      ],
+      "parameters": {
+        "jsCode": "const wf = $input.first().json;\nconst body = $('Webhook prompt').first().json.body || {};\nconst aplicar = body.aplicar === true;\nconst cambios = body.cambios || [];\nconst nodo = wf.nodes.find(n => n.name === body.nodo);\nif (!nodo) return [{ json: { aplicar: false, error: 'nodo no encontrado', nodos: wf.nodes.map(n => n.name) } }];\nconst campo = body.campo || ['parameters', 'jsCode'];\nlet obj = nodo; for (const k of campo.slice(0, -1)) obj = obj[k];\nconst last = campo[campo.length - 1];\nlet p = obj[last];\nif (body.leer) return [{ json: { aplicar: false, texto: p } }];\nconst antes = p.length;\nconst conteos = cambios.map(([a]) => p.split(a).length - 1);\nif (!cambios.length || conteos.some(c => c !== 1)) return [{ json: { aplicar: false, error: 'algun texto no aparece exactamente 1 vez', conteos } }];\nfor (const [a, b] of cambios) p = p.replace(a, () => b);\nobj[last] = p;\nconst OK = ['saveExecutionProgress','saveManualExecutions','saveDataErrorExecution','saveDataSuccessExecution','executionTimeout','errorWorkflow','timezone','executionOrder','callerPolicy','callerIds','timeSavedPerExecution'];\nconst settings = Object.fromEntries(Object.entries(wf.settings || {}).filter(([k]) => OK.includes(k)));\nreturn [{ json: { aplicar, resumen: { workflow: wf.name, conteos, antes, despues: p.length, active: wf.active }, workflowObject: { name: wf.name, nodes: wf.nodes, connections: wf.connections, settings } } }];"
+      }
+    },
+    {
+      "id": "f58f3ca3-ae0f-42a7-9780-81cba05e1020",
+      "name": "Aplicar?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        672,
+        96
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.aplicar }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "febecb1e-2292-4f88-89d7-9726311a5a8c",
+      "name": "Guardar workflow",
+      "type": "n8n-nodes-base.n8n",
+      "typeVersion": 1,
+      "position": [
+        896,
+        0
+      ],
+      "parameters": {
+        "resource": "workflow",
+        "operation": "update",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Webhook prompt').first().json.body.workflowId }}"
+        },
+        "workflowObject": "={{ JSON.stringify($json.workflowObject) }}"
+      },
+      "credentials": {
+        "n8nApi": {
+          "id": "mJ8D9N4Z4zZIbbww",
+          "name": "n8n account"
+        }
+      }
+    },
+    {
+      "id": "2ae59793-1ebc-4e57-9d1b-7a0b72bab312",
+      "name": "Solo resumen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        192
+      ],
+      "parameters": {
+        "jsCode": "const j = $input.first().json; return [{ json: { simulacion: true, error: j.error, conteos: j.conteos, resumen: j.resumen, texto: j.texto, nodos: j.nodos } }];"
+      }
+    }
+  ],
+  "pinData": null,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "wyLMhhUliILjAGd0",
+      "projectId": "bYM6Pqg31ODjetqU",
+      "createdAt": "2026-11-24T16:41:08.301Z",
+      "updatedAt": "2026-11-24T16:41:08.301Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2026-11-24T16:44:01.000Z",
+  "versionId": "a27b7451-24aa-4784-8273-53ffaa1db499"
+}
