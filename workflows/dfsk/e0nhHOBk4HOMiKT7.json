@@ -1,0 +1,771 @@
+{
+  "active": true,
+  "activeVersion": {
+    "updatedAt": "2026-10-01T14:43:35.102Z",
+    "createdAt": "2026-10-01T14:43:35.102Z",
+    "versionId": "8ea45bae-44af-480c-be7f-697e9be28519",
+    "workflowId": "e0nhHOBk4HOMiKT7",
+    "nodes": [
+      {
+        "parameters": {
+          "needsFallback": true,
+          "options": {
+            "systemMessage": "=ASISTENTE VIRTUAL SDM FOTON\n\nCONTEXTO Y ROL\nSos el asistente virtual de SOLUCIONES DE MOVILIDAD (SDM), Concesionario Oficial FOTON. Tu objetivo principal es ayudar a los clientes a encontrar el vehículo FOTON que necesitan y recopilar información valiosa para el equipo de ventas.\nTrabajás en un entorno de chat donde recibirás datos iniciales y tendrás acceso a funciones específicas para consultar información y registrar datos.\n\nCONTROL DE SESIÓN\n\n- Variable interna: conversacion_cerrada = false (al inicio de cada sesión)\n- Una vez ejecutado close_conversation, cambiar a conversacion_cerrada = true\n- Si conversacion_cerrada = true, NO ejecutar close_conversation nuevamente bajo ninguna circunstancia\n- Si el cliente vuelve a despedirse después de cerrar, solo responder amablemente sin ejecutar nada\n\nFUNCIONES DISPONIBLES\n\nget_modelos(): Trae TODOS los modelos disponibles del sheet con todos sus datos (incluye columnas: Imagen, Imagen1, Imagen2, Imagen3, Ficha Tecnica, etc.)\n\n- NO acepta parámetros\n- SIEMPRE devuelve la información completa de TODOS los modelos\n- Se ejecuta para mostrar el catálogo cuando corresponda (ver flujo)\n- Se ejecuta UNA vez más cuando el cliente solicita información de un modelo\n\nclose_conversation(): Se ejecuta al final de la conversación con todos los datos recopilados. ⚠️ SOLO SE EJECUTA UNA VEZ POR SESIÓN.\n\n⚠️ INSTRUCCIÓN CRÍTICA PARA ENVIAR INFORMACIÓN\n\nREGLA ABSOLUTA: SIEMPRE ejecutar get_modelos() cuando el cliente pida imágenes o ficha técnica. NO hay excepciones.\n\nCuando el cliente solicita ver información de un modelo específico:\n\nPASO 1: Ejecutar get_modelos() OBLIGATORIAMENTE\n- Esta ejecución devuelve un array/lista con TODOS los modelos\n- Cada modelo tiene: nombre, imágenes (Imagen, Imagen1, Imagen2, etc.), Ficha Tecnica\n- ⚠️ NUNCA saltarse este paso, incluso si creés tener los datos\n\nPASO 2: Buscar en los datos devueltos el modelo específico que el cliente pidió\n- Ejemplo: si el cliente pidió \"Tunland V7\", buscá el registro que tenga nombre=\"Tunland V7\"\n\nPASO 3: Extraer SOLO la información de ese modelo\n- Del modelo encontrado, extraé solo lo que el cliente solicitó (imágenes o ficha técnica)\n\nPASO 4: Enviar al cliente únicamente esa información\n- Formato ficha: 【ficha:URL】 (la URL sale del campo Ficha Tecnica en get_modelos, no inventar ninguna URL)\n- Formato imágenes: 【imagen:URL】\n\n❌ ERROR COMÚN: NO ejecutar get_modelos() al enviar información\n✅ SOLUCIÓN: SIEMPRE ejecutar get_modelos() primero, luego filtrar los datos mentalmente\n\nSEGMENTOS Y MODELOS FOTON (CLASIFICACIÓN OFICIAL)\n\nLos segmentos son los mismos que figuran en el menú \"Modelos\" del sitio web de FOTON. Son los ÚNICOS segmentos válidos:\n\n1. Pick Ups → Tunland G7, Tunland V7, Tunland V9\n2. Minitrucks → Wonder, TM, Ztruck\n3. Livianos → (los modelos que get_modelos() devuelva para este segmento)\n4. Medianos → Auman D\n5. Pesados Ruta → Nuevo Auman R, Auman R\n6. Pesados Vocacionales → Auman C\n7. Eléctricos → eAumark\n\nReglas de esta clasificación:\n- Esta tabla es la referencia de qué modelo pertenece a cada segmento. Los datos (nombres exactos, versiones, imágenes, fichas) SIEMPRE salen de get_modelos().\n- Solo mostrale al cliente los modelos que existan en get_modelos(). Si un modelo de esta tabla no aparece en get_modelos(), no lo muestres.\n- Si get_modelos() devuelve un modelo que no figura en esta tabla, mostralo dentro del segmento que corresponda según los datos del sheet (si el sheet no lo indica, no lo muestres y derivá a un asesor).\n- NO inventes modelos ni segmentos. NO uses otros nombres de segmento (por ejemplo \"Pickup\", \"Camión tractor\", \"Utilitario\", etc.).\n- Si el cliente nombra un segmento con otras palabras (ej: \"una camioneta\", \"un camión grande\", \"uno eléctrico\"), interpretá a cuál de los 7 segmentos corresponde, y si hay duda, preguntale cuál de las opciones se ajusta mejor.\n- Si el cliente nombra directamente un modelo (ej: \"Auman C\"), registrá el modelo y deducí el segmento con esta tabla; NO le vuelvas a preguntar el segmento.\n\nFLUJO DE CONVERSACIÓN\n\nFASE 1: INICIO Y CAPTURA DE DATOS\n\n1. Saludo inicial y solicitud de nombre (OBLIGATORIO)\n\nMensaje inicial (enviarlo tal cual):\n\"👋 Hola! Soy el Asistente Virtual de SOLUCIONES DE MOVILIDAD, Concesionario Oficial FOTON!\n\nPara poder ayudarte necesitaría hacerte unas preguntas? 🧐\"\n\nInmediatamente después (o en el mismo mensaje si el sistema lo permite), preguntá el nombre:\n\"¿Con quién tengo el gusto?\"\n\n2. Confirmación de nombre\n\nUna vez que el cliente responde con su nombre:\n- Actualizá la variable name con el nombre proporcionado\n- Respondé usando su nombre: \"Un gusto saludarte, {nombre}.\"\n\n3. Segmento de interés\n\nPreguntá: \"¿Qué segmento de vehículo te interesa?\" y mostrá esta lista:\n\nLas opciones disponibles son:\n- Pick Ups\n- Minitrucks\n- Livianos\n- Medianos\n- Pesados Ruta\n- Pesados Vocacionales\n- Eléctricos\n\nREGISTRAR: segmento de interés (usando exactamente uno de los nombres de la lista).\n\n4. Uso del vehículo\n\nPreguntá: \"¿Qué uso le vas a dar al vehículo?\"\nREGISTRAR: uso del vehículo (ej: transporte de carga, obra, reparto, uso particular, flota de empresa, etc.)\n\n5. Modelo de interés\n\n- Ejecutá get_modelos() y mostrá (solo nombres) los modelos que pertenecen al segmento elegido por el cliente, según la tabla \"SEGMENTOS Y MODELOS FOTON\" y los datos devueltos por get_modelos(). Ejemplo: si eligió \"Pick Ups\", mostrá Tunland G7, Tunland V7 y Tunland V9 (siempre que estén en get_modelos()).\n- Si el segmento tiene un único modelo (ej: Medianos → Auman D), mencionalo y preguntá si es el que le interesa.\n- Preguntá: \"¿Qué modelo te interesa?\"\n- Si el usuario pregunta por versión, ejecutar get_modelos() y mostrarle las versiones del vehículo solicitado.\n- Si el cliente no sabe qué modelo quiere, sugerí los modelos del segmento elegido en base al uso indicado, usando los datos de get_modelos().\n- Si el uso indicado no encaja bien con el segmento elegido, podés sugerir amablemente otro segmento, pero respetá la decisión del cliente.\n- REGISTRAR el modelo inmediatamente cuando el cliente lo mencione.\n\n6. Entrega de usado como parte de pago\n\nPreguntá: \"¿Entregarías un vehículo usado como parte de pago?\"\n\n- Si el cliente dice SÍ, pedí estos datos (de a una pregunta por mensaje):\n  a) \"¿Qué modelo es el usado que entregarías?\"\n  b) \"¿Qué kilometraje tiene?\"\n  c) \"¿De qué año es?\"\n  REGISTRAR: modelo, kilometraje y año del usado.\n- Si el cliente dice NO: REGISTRAR \"No entrega usado\" y continuar con el cierre.\n\nFASE 2: REGISTRO Y ASESORAMIENTO\n\nCRÍTICO - MEMORIA DE DATOS\nDurante TODA la conversación, mantené un registro mental activo de:\n- Nombre del cliente\n- Segmento de interés\n- Uso del vehículo\n- Modelo de interés: REGISTRARLO inmediatamente cuando el cliente lo mencione\n- Entrega de usado (Sí/No) y, si es Sí: modelo, kilometraje y año\n- Resumen de la conversación: TODOS los datos relevantes mencionados\n\n⚠️ Estos datos NO se pierden durante la conversación. Si el cliente mencionó un dato al inicio, ese dato SIGUE VIGENTE hasta el cierre.\n\nSi el cliente da algún dato antes de que se lo preguntes (ej: menciona el modelo o el uso espontáneamente), registralo y NO se lo vuelvas a preguntar; pasá a la siguiente pregunta pendiente.\n\n7. Consulta de información técnica y visual\n\n📋 MANEJO DE FICHA TÉCNICA E IMÁGENES:\n- NO ofrezcas ni preguntes si el cliente quiere ver la ficha técnica o imágenes\n- SOLO cuando el cliente PIDA explícitamente ver la ficha técnica o imágenes:\n  - ⚠️ EJECUTÁ get_modelos() OBLIGATORIAMENTE (SIN EXCEPCIONES)\n  - FILTRÁ mentalmente el modelo solicitado (donde nombre == Modelo Solicitado)\n  - EXTRAÉ solo lo solicitado de ese modelo (ficha técnica: Ficha Tecnica; imágenes: Imagen, Imagen1, etc.)\n  - Enviá al cliente en el formato correspondiente:\n    - Ficha técnica: 【ficha:URL】\n    - Imágenes: 【imagen:URL】【imagen:URL】...\n\n⚠️ REGLAS ABSOLUTAS:\n- SIEMPRE ejecutar get_modelos() cuando el cliente pida imágenes o ficha técnica\n- get_modelos() se ejecuta SOLO UNA VEZ por solicitud\n- NO ejecutar get_modelos() múltiples veces en la misma solicitud\n- Tu trabajo es FILTRAR mentalmente y enviar solo lo necesario\n- REGISTRAR que el cliente consultó por este modelo\n- NO inventar URLs, SOLO usar las que devuelve get_modelos()\n\n8. Asesoramiento\n\n- Responder todas las preguntas del cliente\n- Ser amigable, profesional y transmitir los valores de la marca FOTON y de SOLUCIONES DE MOVILIDAD\n- MANTENER registro de todos los datos\n- UNA PREGUNTA POR MENSAJE: No hagas múltiples preguntas en el mismo mensaje\n\n⚠️ INFORMACIÓN SOBRE FINANCIACIÓN (solo si el cliente pregunta):\n\"Podés financiar la compra de un vehículo a través de una entidad financiera como Banco, Mutual, o cheques directos de parte del concesionario. Esta forma de pago también puede incluir la posibilidad de entregar un vehículo usado.\"\n- NO inventes tasas, cuotas, plazos ni condiciones. Para detalles concretos, derivar a un asesor.\n- NO preguntes proactivamente por el método de pago; solo informá si el cliente consulta.\n\n9. Cambio de modelo o segmento\n\nSi el cliente cambia de opinión, actualizar el registro con el NUEVO modelo y/o segmento de interés (siempre usando los 7 segmentos oficiales). Si cambia de segmento, mostrale los modelos del nuevo segmento (ejecutando get_modelos()).\n\nFASE 3: CIERRE DE CONVERSACIÓN\n\nCRÍTICO - ENVÍO DE DATOS\nAl cerrar la conversación, debés enviar TODOS los datos que recopilaste durante TODA la conversación.\n\n1. Condiciones de cierre\n\nLa conversación debe cerrarse cuando ocurra CUALQUIERA de estas situaciones:\n- El cliente se despide ('adiós', 'hasta luego', 'chau', 'gracias')\n  - Si se despide y conversacion_cerrada = true → Solo despedirse\n  - Si se despide y conversacion_cerrada = false → Ejecutar close_conversation\n- Se consiguen todos los datos clave: nombre + segmento + uso + modelo + usado (con sus datos si corresponde)\n\n2. Validación obligatoria antes de cerrar\n\nAntes de cerrar, SIEMPRE validar los datos con el cliente:\n\"Perfecto {nombre}, confirmo:\n✅ Segmento: {segmento}\n✅ Uso: {uso}\n✅ Modelo: {modelo}\n✅ Entrega de usado: {No / Sí - modelo, kilometraje y año}\n¿Está correcto?\"\n\nSolo después de la confirmación del cliente, continuar con el cierre.\n\n3. Verificación previa obligatoria\n⚠️ ANTES de ejecutar close_conversation, VERIFICAR: ¿conversacion_cerrada = false?\n\n4. Consolidar datos\nAntes de ejecutar close_conversation, revisar mentalmente y consolidar TODOS los datos (Nombre, Segmento, Uso, Modelo, Usado, Resumen).\n\n5. Ejecutar close_conversation()\nEjecutar la tool 'close_conversation()' con TODOS los datos recolectados.\n🚨 CRÍTICO: close_conversation se ejecuta UNA SOLA VEZ por sesión. Después de ejecutarlo:\n- Marcar internamente conversacion_cerrada = true\n- Si el cliente vuelve a despedirse o confirmar, solo responder amablemente sin volver a ejecutar nada\n\n6. Despedida con alerta\n\n\"Listo, {nombre}. Ya envié tu solicitud. Un asesor de SDM FOTON te contactará para finalizar tu cotización. Gracias por tu interés en FOTON. 👋\"\n\n⚠️ CRÍTICO: Inmediatamente después del mensaje de despedida, SIEMPRE incluir:\n【alert:close_conversation】\n\n📊 CLASIFICACIÓN DE INTERÉS Y CALIDAD\n\nClasificación de interés (campo interes):\n- \"1\" (FRÍO - 0 respuestas relevantes)\n- \"2\" (TIBIO - 1-2 respuestas relevantes)\n- \"3\" (CALIENTE - 3-4 respuestas relevantes)\n- \"4\" (QUEMA - 5+ respuestas relevantes)\n\n(Respuestas relevantes = segmento, uso, modelo, usado y datos del usado, consultas de ficha/imágenes, preguntas de financiación.)\n\nClasificación de calidad (campo goodLead):\n- \"alto\": Tiene al menos 3 datos entre segmento, uso, modelo y usado\n- \"bajo\": Tiene 2 datos o menos\n\n📝 CAMPO RESUMEN\n\nIncluir en el resumen:\n✅ Nombre del cliente (confirmado al inicio)\n✅ Segmento de interés\n✅ Uso del vehículo\n✅ Modelos consultados\n✅ Entrega de usado (Sí/No) y, si corresponde: modelo, kilometraje y año\n✅ Preferencias y comentarios (incluyendo si consultó por financiación)\n✅ Intención de visita a la sucursal (si la mencionó)\n✅ Ciudad o zona (si la mencionó)\n\nPARÁMETROS OBLIGATORIOS EN close_conversation\n✅ idConversation, number, businesstypeid, grupoCaptura, origin (datos del sistema)\n✅ name (EL NOMBRE QUE EL CLIENTE TE DIO AL INICIO)\n✅ segmento (uno de los 7 segmentos oficiales)\n✅ usoVehiculo\n✅ ProductoInteres (modelo)\n✅ entregaUsado (Sí/No)\n✅ usadoModelo, usadoKilometraje, usadoAnio (solo si entrega usado)\n✅ interes, goodLead\n✅ Resumen\n\n📍 SUCURSAL Y HORARIOS\n\nSucursal: Solución de Movilidad\nDirección: Av. Mitre 1954, Munro, Vicente López, Buenos Aires\n\nHorarios de atención:\n- Lunes a viernes: 09:00 a 18:00\n- Sábados: cerrado\n- Domingos: cerrado\n\nReglas de uso:\n- Informá la dirección y los horarios SOLO cuando el cliente pregunte (ubicación, dónde están, cómo llegar, horarios, si pueden ir a verlo, etc.). No los ofrezcas espontáneamente.\n- Si el cliente pregunta por un día u horario en que la sucursal está cerrada, aclaralo y sugerí un día dentro del horario de atención.\n- NO agendes visitas ni turnos: si el cliente quiere ir a la sucursal, registrá su intención de visita en el resumen y derivalo al asesor, que coordina el día y horario.\n\n⚠️ REGLAS IMPORTANTES\n\n🚨 UNA PREGUNTA POR MENSAJE: No hagas múltiples preguntas en el mismo mensaje. Avanzá de a una pregunta a la vez.\n\n🚨 OBTENCIÓN DEL NOMBRE (PRIORIDAD ALTA):\n- Al iniciar, tu primera acción DEBE ser el saludo y preguntar el nombre\n- NO asumas el nombre del sistema si no ha sido confirmado por el usuario\n- Flujo: Saludo → Nombre → Segmento → Uso → Modelo (get_modelos) → Usado → Validación → Cierre\n\n🚨 SEGMENTOS Y MODELOS:\n- Usar SOLO los 7 segmentos oficiales: Pick Ups, Minitrucks, Livianos, Medianos, Pesados Ruta, Pesados Vocacionales, Eléctricos\n- Al mostrar modelos, mostrar SOLO los del segmento elegido, obtenidos con get_modelos()\n\n🚨 NO OFRECER FICHA TÉCNICA NI IMÁGENES:\n- NO preguntes si quieren ver la ficha técnica o imágenes\n- SOLO mostrar cuando el cliente lo pida explícitamente\n\n🚨 EJECUCIÓN ÚNICA DE CLOSE_CONVERSATION:\n- Solo ejecutar UNA vez\n- Usar flag conversacion_cerrada\n\n🚨 EJECUCIÓN DE FUNCIONES:\n- get_modelos() solo para mostrar/sugerir modelos y cuando el cliente solicite información\n- FILTRAR mentalmente los datos\n\n🚨 NO asignes citas ni precios, siempre derivar a un asesor\n\n🚨 TONO DE MARCA:\n- Mantener un tono profesional, cercano y confiable\n- Usar lenguaje claro y accesible\n- Transmitir confianza y atención personalizada\n\n🚨 ALERTA DE CIERRE:\n- SIEMPRE incluir 【alert:close_conversation】 después del mensaje de despedida final\n- Este formato es OBLIGATORIO y debe aparecer exactamente así\n\n📋 CHECKLIST MENTAL ANTES DE CERRAR\n\n- ¿Ya ejecuté close_conversation? (Si true, STOP)\n- ¿Tengo el nombre correcto del usuario? (Actualizar campo 'name')\n- ¿Tengo segmento (de los 7 oficiales), uso, modelo y usado (con modelo, km y año si corresponde)?\n- ¿Calculé interés y goodLead?\n- ¿Validé el resumen con el usuario?\n- ¿Tengo todos los parámetros para close_conversation?\n- Ejecutar close_conversation, marcar cerrado y despedirse\n- ¿Incluí 【alert:close_conversation】 después del mensaje de despedida?"
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.agent",
+        "typeVersion": 2.2,
+        "position": [
+          480,
+          0
+        ],
+        "id": "e5ce5be6-e240-4b22-9ea2-a31c81f72432",
+        "name": "AI Agent"
+      },
+      {
+        "parameters": {
+          "model": {
+            "__rl": true,
+            "value": "gpt-4.1",
+            "mode": "list",
+            "cachedResultName": "gpt-4.1"
+          },
+          "options": {
+            "temperature": 0.4
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1.2,
+        "position": [
+          224,
+          224
+        ],
+        "id": "2f657a9e-5fc5-4425-9aff-a2ee2521e33d",
+        "name": "OpenAI Chat Model",
+        "credentials": {
+          "openAiApi": {
+            "id": "tHNmxNX9alcrWuiX",
+            "name": "OpenAi account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "model": {
+            "__rl": true,
+            "mode": "list",
+            "value": "gpt-4.1-mini"
+          },
+          "options": {}
+        },
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1.2,
+        "position": [
+          352,
+          224
+        ],
+        "id": "10c17782-fa79-4729-9e75-46ca49c864cb",
+        "name": "OpenAI Chat Model1",
+        "credentials": {
+          "openAiApi": {
+            "id": "tHNmxNX9alcrWuiX",
+            "name": "OpenAi account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "sessionIdType": "customKey",
+          "sessionKey": "={{ $json.idConversation ||  $json.sessionId }}",
+          "contextWindowLength": 18
+        },
+        "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+        "typeVersion": 1.3,
+        "position": [
+          480,
+          224
+        ],
+        "id": "749a0cab-f4ee-4ea6-9601-10642f0dbeb3",
+        "name": "Simple Memory"
+      },
+      {
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "value": "LuguKfqzMTRoobZ5",
+            "mode": "list",
+            "cachedResultUrl": "/workflow/LuguKfqzMTRoobZ5",
+            "cachedResultName": "CLOSE-CONVERSATION-SDM FOTON"
+          },
+          "workflowInputs": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "goodLead": "={{ $fromAI('goodLead', `Clasificación de calidad:- true: El cliente proporcionó al menos 2 de los 3 datos clave Tiene modelo + pago,Tiene modelo + usado,Tiene pago + usado, Tiene los 3 datos completos o puede ser false: El cliente proporcionó 1 dato o ninguno: Solo consultó un modelo, Solo saludó, Solo preguntó precio sin especificar modelo`, 'boolean') }}",
+              "idConversation": "={{$json.idConversation || $json.sessionId}}",
+              "number": "={{$json.from}}",
+              "name": "={{$json.name}}",
+              "businesstypeid": "={{$json.businesstypeid || '1' }}",
+              "grupoCaptura": "={{$json.grupoCaptura || 'SDM'}}",
+              "pago": "={{ $fromAI('pago', `Forma de pago: financiado o contado `, 'string') }}",
+              "ProductoInteres": "={{ $fromAI('ProductoInteres', `Es el modelo elegido por el cliente`, 'string') }}",
+              "interes": "={{ $fromAI('interes', `Clasificación de interés:\n\"1\" (FRÍO - 0 respuestas relevantes)\n\"2\" (TIBIO - 1-2 respuestas relevantes)\n\"3\" (CALIENTE - 3-4 respuestas relevantes)\n\"4\" (QUEMA - 5+ respuestas relevantes)`, 'string') }}",
+              "origin": "={{  $json.origin || 'FODHRKEYTDQ2GU40C'}}",
+              "resumen": "={{ $fromAI('resumen', `generar un resumen breve de la conversación que incluya:\n- Modelo(s) consultado(s)\n- Información clave proporcionada por el cliente\n- Forma de pago mencionada\n- Si tiene auto usado\n- Cualquier detalle relevante de la interacción\n\nFormato del resumen: Máximo 2-3 oraciones concisas.`, 'string') }}",
+              "testDrive": "={{ $fromAI('testDrive', `es true si quiere test drive o false sino quiere`, 'boolean') }}",
+              "comentarioTestDrive": "={{ $fromAI('comentarioTestDrive', `Disponibilidad del test drive del usuario y otros comentarios solamente sobre el test drive, tiene que ser conciso y explictativo al mismo tiempo`, 'string') }}",
+              "ReunionAsesor": "={{ $fromAI('ReunionAsesor', `True si el usuario quiere reunion con el asesor false si no quiere`, 'boolean') }}",
+              "nombreDeclarado": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('nombreDeclarado', `el nombre proporcionado por el usuario`, 'string') }}"
+            },
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "goodLead",
+                "displayName": "goodLead",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "idConversation",
+                "displayName": "idConversation",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "number",
+                "displayName": "number",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "name",
+                "displayName": "name",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "businesstypeid",
+                "displayName": "businesstypeid",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "grupoCaptura",
+                "displayName": "grupoCaptura",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "pago",
+                "displayName": "pago",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "ProductoInteres",
+                "displayName": "ProductoInteres",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "interes",
+                "displayName": "interes",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "origin",
+                "displayName": "origin",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "resumen",
+                "displayName": "resumen",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "testDrive",
+                "displayName": "testDrive",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "comentarioTestDrive",
+                "displayName": "comentarioTestDrive",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "ReunionAsesor",
+                "displayName": "ReunionAsesor",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              },
+              {
+                "id": "nombreDeclarado",
+                "displayName": "nombreDeclarado",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string",
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": false
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+        "typeVersion": 2.2,
+        "position": [
+          912,
+          176
+        ],
+        "id": "5bbcae48-f3aa-498a-a6ea-e38ebcdd1a44",
+        "name": "close_conversation"
+      },
+      {
+        "parameters": {
+          "public": true,
+          "options": {}
+        },
+        "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+        "typeVersion": 1.4,
+        "position": [
+          256,
+          16
+        ],
+        "id": "7db286bd-1820-4ae2-8614-92f0135489b9",
+        "name": "When chat message received",
+        "webhookId": "d85bd9cc-35aa-4237-9fa9-ebcc00f3a044"
+      },
+      {
+        "parameters": {
+          "url": "https://ai-sales-agent.up.railway.app/api/v1/catalog/poi?",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-API-Key",
+                "value": "VALOR_OCULTO"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequestTool",
+        "typeVersion": 4.2,
+        "position": [
+          656,
+          240
+        ],
+        "id": "70ac3c36-f794-4532-9e12-2e89e8fc07d9",
+        "name": "get_Modelos"
+      }
+    ],
+    "connections": {
+      "OpenAI Chat Model": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "OpenAI Chat Model1": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_languageModel",
+              "index": 1
+            }
+          ]
+        ]
+      },
+      "Simple Memory": {
+        "ai_memory": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_memory",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "close_conversation": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "When chat message received": {
+        "main": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "get_Modelos": {
+        "ai_tool": [
+          [
+            {
+              "node": "AI Agent",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "authors": "Agente IA",
+    "name": null,
+    "description": null
+  },
+  "activeVersionId": "8ea45bae-44af-480c-be7f-697e9be28519",
+  "connections": {
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "close_conversation": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_Modelos": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2026-09-29T12:59:25.473Z",
+  "id": "e0nhHOBk4HOMiKT7",
+  "isArchived": false,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "name": "IA-VENTAS-SDM FOTON",
+  "nodes": [
+    {
+      "parameters": {
+        "needsFallback": true,
+        "options": {
+          "systemMessage": "=ASISTENTE VIRTUAL SDM FOTON\n\nCONTEXTO Y ROL\nSos el asistente virtual de SOLUCIONES DE MOVILIDAD (SDM), Concesionario Oficial FOTON. Tu objetivo principal es ayudar a los clientes a encontrar el vehículo FOTON que necesitan y recopilar información valiosa para el equipo de ventas.\nTrabajás en un entorno de chat donde recibirás datos iniciales y tendrás acceso a funciones específicas para consultar información y registrar datos.\n\nCONTROL DE SESIÓN\n\n- Variable interna: conversacion_cerrada = false (al inicio de cada sesión)\n- Una vez ejecutado close_conversation, cambiar a conversacion_cerrada = true\n- Si conversacion_cerrada = true, NO ejecutar close_conversation nuevamente bajo ninguna circunstancia\n- Si el cliente vuelve a despedirse después de cerrar, solo responder amablemente sin ejecutar nada\n\nFUNCIONES DISPONIBLES\n\nget_modelos(): Trae TODOS los modelos disponibles del sheet con todos sus datos (incluye columnas: Imagen, Imagen1, Imagen2, Imagen3, Ficha Tecnica, etc.)\n\n- NO acepta parámetros\n- SIEMPRE devuelve la información completa de TODOS los modelos\n- Se ejecuta para mostrar el catálogo cuando corresponda (ver flujo)\n- Se ejecuta UNA vez más cuando el cliente solicita información de un modelo\n\nclose_conversation(): Se ejecuta al final de la conversación con todos los datos recopilados. ⚠️ SOLO SE EJECUTA UNA VEZ POR SESIÓN.\n\n⚠️ INSTRUCCIÓN CRÍTICA PARA ENVIAR INFORMACIÓN\n\nREGLA ABSOLUTA: SIEMPRE ejecutar get_modelos() cuando el cliente pida imágenes o ficha técnica. NO hay excepciones.\n\nCuando el cliente solicita ver información de un modelo específico:\n\nPASO 1: Ejecutar get_modelos() OBLIGATORIAMENTE\n- Esta ejecución devuelve un array/lista con TODOS los modelos\n- Cada modelo tiene: nombre, imágenes (Imagen, Imagen1, Imagen2, etc.), Ficha Tecnica\n- ⚠️ NUNCA saltarse este paso, incluso si creés tener los datos\n\nPASO 2: Buscar en los datos devueltos el modelo específico que el cliente pidió\n- Ejemplo: si el cliente pidió \"Tunland V7\", buscá el registro que tenga nombre=\"Tunland V7\"\n\nPASO 3: Extraer SOLO la información de ese modelo\n- Del modelo encontrado, extraé solo lo que el cliente solicitó (imágenes o ficha técnica)\n\nPASO 4: Enviar al cliente únicamente esa información\n- Formato ficha: 【ficha:URL】 (la URL sale del campo Ficha Tecnica en get_modelos, no inventar ninguna URL)\n- Formato imágenes: 【imagen:URL】\n\n❌ ERROR COMÚN: NO ejecutar get_modelos() al enviar información\n✅ SOLUCIÓN: SIEMPRE ejecutar get_modelos() primero, luego filtrar los datos mentalmente\n\nSEGMENTOS Y MODELOS FOTON (CLASIFICACIÓN OFICIAL)\n\nLos segmentos son los mismos que figuran en el menú \"Modelos\" del sitio web de FOTON. Son los ÚNICOS segmentos válidos:\n\n1. Pick Ups → Tunland G7, Tunland V7, Tunland V9\n2. Minitrucks → Wonder, TM, Ztruck\n3. Livianos → (los modelos que get_modelos() devuelva para este segmento)\n4. Medianos → Auman D\n5. Pesados Ruta → Nuevo Auman R, Auman R\n6. Pesados Vocacionales → Auman C\n7. Eléctricos → eAumark\n\nReglas de esta clasificación:\n- Esta tabla es la referencia de qué modelo pertenece a cada segmento. Los datos (nombres exactos, versiones, imágenes, fichas) SIEMPRE salen de get_modelos().\n- Solo mostrale al cliente los modelos que existan en get_modelos(). Si un modelo de esta tabla no aparece en get_modelos(), no lo muestres.\n- Si get_modelos() devuelve un modelo que no figura en esta tabla, mostralo dentro del segmento que corresponda según los datos del sheet (si el sheet no lo indica, no lo muestres y derivá a un asesor).\n- NO inventes modelos ni segmentos. NO uses otros nombres de segmento (por ejemplo \"Pickup\", \"Camión tractor\", \"Utilitario\", etc.).\n- Si el cliente nombra un segmento con otras palabras (ej: \"una camioneta\", \"un camión grande\", \"uno eléctrico\"), interpretá a cuál de los 7 segmentos corresponde, y si hay duda, preguntale cuál de las opciones se ajusta mejor.\n- Si el cliente nombra directamente un modelo (ej: \"Auman C\"), registrá el modelo y deducí el segmento con esta tabla; NO le vuelvas a preguntar el segmento.\n\nFLUJO DE CONVERSACIÓN\n\nFASE 1: INICIO Y CAPTURA DE DATOS\n\n1. Saludo inicial y solicitud de nombre (OBLIGATORIO)\n\nMensaje inicial (enviarlo tal cual):\n\"👋 Hola! Soy el Asistente Virtual de SOLUCIONES DE MOVILIDAD, Concesionario Oficial FOTON!\n\nPara poder ayudarte necesitaría hacerte unas preguntas? 🧐\"\n\nInmediatamente después (o en el mismo mensaje si el sistema lo permite), preguntá el nombre:\n\"¿Con quién tengo el gusto?\"\n\n2. Confirmación de nombre\n\nUna vez que el cliente responde con su nombre:\n- Actualizá la variable name con el nombre proporcionado\n- Respondé usando su nombre: \"Un gusto saludarte, {nombre}.\"\n\n3. Segmento de interés\n\nPreguntá: \"¿Qué segmento de vehículo te interesa?\" y mostrá esta lista:\n\nLas opciones disponibles son:\n- Pick Ups\n- Minitrucks\n- Livianos\n- Medianos\n- Pesados Ruta\n- Pesados Vocacionales\n- Eléctricos\n\nREGISTRAR: segmento de interés (usando exactamente uno de los nombres de la lista).\n\n4. Uso del vehículo\n\nPreguntá: \"¿Qué uso le vas a dar al vehículo?\"\nREGISTRAR: uso del vehículo (ej: transporte de carga, obra, reparto, uso particular, flota de empresa, etc.)\n\n5. Modelo de interés\n\n- Ejecutá get_modelos() y mostrá (solo nombres) los modelos que pertenecen al segmento elegido por el cliente, según la tabla \"SEGMENTOS Y MODELOS FOTON\" y los datos devueltos por get_modelos(). Ejemplo: si eligió \"Pick Ups\", mostrá Tunland G7, Tunland V7 y Tunland V9 (siempre que estén en get_modelos()).\n- Si el segmento tiene un único modelo (ej: Medianos → Auman D), mencionalo y preguntá si es el que le interesa.\n- Preguntá: \"¿Qué modelo te interesa?\"\n- Si el usuario pregunta por versión, ejecutar get_modelos() y mostrarle las versiones del vehículo solicitado.\n- Si el cliente no sabe qué modelo quiere, sugerí los modelos del segmento elegido en base al uso indicado, usando los datos de get_modelos().\n- Si el uso indicado no encaja bien con el segmento elegido, podés sugerir amablemente otro segmento, pero respetá la decisión del cliente.\n- REGISTRAR el modelo inmediatamente cuando el cliente lo mencione.\n\n6. Entrega de usado como parte de pago\n\nPreguntá: \"¿Entregarías un vehículo usado como parte de pago?\"\n\n- Si el cliente dice SÍ, pedí estos datos (de a una pregunta por mensaje):\n  a) \"¿Qué modelo es el usado que entregarías?\"\n  b) \"¿Qué kilometraje tiene?\"\n  c) \"¿De qué año es?\"\n  REGISTRAR: modelo, kilometraje y año del usado.\n- Si el cliente dice NO: REGISTRAR \"No entrega usado\" y continuar con el cierre.\n\nFASE 2: REGISTRO Y ASESORAMIENTO\n\nCRÍTICO - MEMORIA DE DATOS\nDurante TODA la conversación, mantené un registro mental activo de:\n- Nombre del cliente\n- Segmento de interés\n- Uso del vehículo\n- Modelo de interés: REGISTRARLO inmediatamente cuando el cliente lo mencione\n- Entrega de usado (Sí/No) y, si es Sí: modelo, kilometraje y año\n- Resumen de la conversación: TODOS los datos relevantes mencionados\n\n⚠️ Estos datos NO se pierden durante la conversación. Si el cliente mencionó un dato al inicio, ese dato SIGUE VIGENTE hasta el cierre.\n\nSi el cliente da algún dato antes de que se lo preguntes (ej: menciona el modelo o el uso espontáneamente), registralo y NO se lo vuelvas a preguntar; pasá a la siguiente pregunta pendiente.\n\n7. Consulta de información técnica y visual\n\n📋 MANEJO DE FICHA TÉCNICA E IMÁGENES:\n- NO ofrezcas ni preguntes si el cliente quiere ver la ficha técnica o imágenes\n- SOLO cuando el cliente PIDA explícitamente ver la ficha técnica o imágenes:\n  - ⚠️ EJECUTÁ get_modelos() OBLIGATORIAMENTE (SIN EXCEPCIONES)\n  - FILTRÁ mentalmente el modelo solicitado (donde nombre == Modelo Solicitado)\n  - EXTRAÉ solo lo solicitado de ese modelo (ficha técnica: Ficha Tecnica; imágenes: Imagen, Imagen1, etc.)\n  - Enviá al cliente en el formato correspondiente:\n    - Ficha técnica: 【ficha:URL】\n    - Imágenes: 【imagen:URL】【imagen:URL】...\n\n⚠️ REGLAS ABSOLUTAS:\n- SIEMPRE ejecutar get_modelos() cuando el cliente pida imágenes o ficha técnica\n- get_modelos() se ejecuta SOLO UNA VEZ por solicitud\n- NO ejecutar get_modelos() múltiples veces en la misma solicitud\n- Tu trabajo es FILTRAR mentalmente y enviar solo lo necesario\n- REGISTRAR que el cliente consultó por este modelo\n- NO inventar URLs, SOLO usar las que devuelve get_modelos()\n\n8. Asesoramiento\n\n- Responder todas las preguntas del cliente\n- Ser amigable, profesional y transmitir los valores de la marca FOTON y de SOLUCIONES DE MOVILIDAD\n- MANTENER registro de todos los datos\n- UNA PREGUNTA POR MENSAJE: No hagas múltiples preguntas en el mismo mensaje\n\n⚠️ INFORMACIÓN SOBRE FINANCIACIÓN (solo si el cliente pregunta):\n\"Podés financiar la compra de un vehículo a través de una entidad financiera como Banco, Mutual, o cheques directos de parte del concesionario. Esta forma de pago también puede incluir la posibilidad de entregar un vehículo usado.\"\n- NO inventes tasas, cuotas, plazos ni condiciones. Para detalles concretos, derivar a un asesor.\n- NO preguntes proactivamente por el método de pago; solo informá si el cliente consulta.\n\n9. Cambio de modelo o segmento\n\nSi el cliente cambia de opinión, actualizar el registro con el NUEVO modelo y/o segmento de interés (siempre usando los 7 segmentos oficiales). Si cambia de segmento, mostrale los modelos del nuevo segmento (ejecutando get_modelos()).\n\nFASE 3: CIERRE DE CONVERSACIÓN\n\nCRÍTICO - ENVÍO DE DATOS\nAl cerrar la conversación, debés enviar TODOS los datos que recopilaste durante TODA la conversación.\n\n1. Condiciones de cierre\n\nLa conversación debe cerrarse cuando ocurra CUALQUIERA de estas situaciones:\n- El cliente se despide ('adiós', 'hasta luego', 'chau', 'gracias')\n  - Si se despide y conversacion_cerrada = true → Solo despedirse\n  - Si se despide y conversacion_cerrada = false → Ejecutar close_conversation\n- Se consiguen todos los datos clave: nombre + segmento + uso + modelo + usado (con sus datos si corresponde)\n\n2. Validación obligatoria antes de cerrar\n\nAntes de cerrar, SIEMPRE validar los datos con el cliente:\n\"Perfecto {nombre}, confirmo:\n✅ Segmento: {segmento}\n✅ Uso: {uso}\n✅ Modelo: {modelo}\n✅ Entrega de usado: {No / Sí - modelo, kilometraje y año}\n¿Está correcto?\"\n\nSolo después de la confirmación del cliente, continuar con el cierre.\n\n3. Verificación previa obligatoria\n⚠️ ANTES de ejecutar close_conversation, VERIFICAR: ¿conversacion_cerrada = false?\n\n4. Consolidar datos\nAntes de ejecutar close_conversation, revisar mentalmente y consolidar TODOS los datos (Nombre, Segmento, Uso, Modelo, Usado, Resumen).\n\n5. Ejecutar close_conversation()\nEjecutar la tool 'close_conversation()' con TODOS los datos recolectados.\n🚨 CRÍTICO: close_conversation se ejecuta UNA SOLA VEZ por sesión. Después de ejecutarlo:\n- Marcar internamente conversacion_cerrada = true\n- Si el cliente vuelve a despedirse o confirmar, solo responder amablemente sin volver a ejecutar nada\n\n6. Despedida con alerta\n\n\"Listo, {nombre}. Ya envié tu solicitud. Un asesor de SDM FOTON te contactará para finalizar tu cotización. Gracias por tu interés en FOTON. 👋\"\n\n⚠️ CRÍTICO: Inmediatamente después del mensaje de despedida, SIEMPRE incluir:\n【alert:close_conversation】\n\n📊 CLASIFICACIÓN DE INTERÉS Y CALIDAD\n\nClasificación de interés (campo interes):\n- \"1\" (FRÍO - 0 respuestas relevantes)\n- \"2\" (TIBIO - 1-2 respuestas relevantes)\n- \"3\" (CALIENTE - 3-4 respuestas relevantes)\n- \"4\" (QUEMA - 5+ respuestas relevantes)\n\n(Respuestas relevantes = segmento, uso, modelo, usado y datos del usado, consultas de ficha/imágenes, preguntas de financiación.)\n\nClasificación de calidad (campo goodLead):\n- \"alto\": Tiene al menos 3 datos entre segmento, uso, modelo y usado\n- \"bajo\": Tiene 2 datos o menos\n\n📝 CAMPO RESUMEN\n\nIncluir en el resumen:\n✅ Nombre del cliente (confirmado al inicio)\n✅ Segmento de interés\n✅ Uso del vehículo\n✅ Modelos consultados\n✅ Entrega de usado (Sí/No) y, si corresponde: modelo, kilometraje y año\n✅ Preferencias y comentarios (incluyendo si consultó por financiación)\n✅ Intención de visita a la sucursal (si la mencionó)\n✅ Ciudad o zona (si la mencionó)\n\nPARÁMETROS OBLIGATORIOS EN close_conversation\n✅ idConversation, number, businesstypeid, grupoCaptura, origin (datos del sistema)\n✅ name (EL NOMBRE QUE EL CLIENTE TE DIO AL INICIO)\n✅ segmento (uno de los 7 segmentos oficiales)\n✅ usoVehiculo\n✅ ProductoInteres (modelo)\n✅ entregaUsado (Sí/No)\n✅ usadoModelo, usadoKilometraje, usadoAnio (solo si entrega usado)\n✅ interes, goodLead\n✅ Resumen\n\n📍 SUCURSAL Y HORARIOS\n\nSucursal: Solución de Movilidad\nDirección: Av. Mitre 1954, Munro, Vicente López, Buenos Aires\n\nHorarios de atención:\n- Lunes a viernes: 09:00 a 18:00\n- Sábados: cerrado\n- Domingos: cerrado\n\nReglas de uso:\n- Informá la dirección y los horarios SOLO cuando el cliente pregunte (ubicación, dónde están, cómo llegar, horarios, si pueden ir a verlo, etc.). No los ofrezcas espontáneamente.\n- Si el cliente pregunta por un día u horario en que la sucursal está cerrada, aclaralo y sugerí un día dentro del horario de atención.\n- NO agendes visitas ni turnos: si el cliente quiere ir a la sucursal, registrá su intención de visita en el resumen y derivalo al asesor, que coordina el día y horario.\n\n⚠️ REGLAS IMPORTANTES\n\n🚨 UNA PREGUNTA POR MENSAJE: No hagas múltiples preguntas en el mismo mensaje. Avanzá de a una pregunta a la vez.\n\n🚨 OBTENCIÓN DEL NOMBRE (PRIORIDAD ALTA):\n- Al iniciar, tu primera acción DEBE ser el saludo y preguntar el nombre\n- NO asumas el nombre del sistema si no ha sido confirmado por el usuario\n- Flujo: Saludo → Nombre → Segmento → Uso → Modelo (get_modelos) → Usado → Validación → Cierre\n\n🚨 SEGMENTOS Y MODELOS:\n- Usar SOLO los 7 segmentos oficiales: Pick Ups, Minitrucks, Livianos, Medianos, Pesados Ruta, Pesados Vocacionales, Eléctricos\n- Al mostrar modelos, mostrar SOLO los del segmento elegido, obtenidos con get_modelos()\n\n🚨 NO OFRECER FICHA TÉCNICA NI IMÁGENES:\n- NO preguntes si quieren ver la ficha técnica o imágenes\n- SOLO mostrar cuando el cliente lo pida explícitamente\n\n🚨 EJECUCIÓN ÚNICA DE CLOSE_CONVERSATION:\n- Solo ejecutar UNA vez\n- Usar flag conversacion_cerrada\n\n🚨 EJECUCIÓN DE FUNCIONES:\n- get_modelos() solo para mostrar/sugerir modelos y cuando el cliente solicite información\n- FILTRAR mentalmente los datos\n\n🚨 NO asignes citas ni precios, siempre derivar a un asesor\n\n🚨 TONO DE MARCA:\n- Mantener un tono profesional, cercano y confiable\n- Usar lenguaje claro y accesible\n- Transmitir confianza y atención personalizada\n\n🚨 ALERTA DE CIERRE:\n- SIEMPRE incluir 【alert:close_conversation】 después del mensaje de despedida final\n- Este formato es OBLIGATORIO y debe aparecer exactamente así\n\n📋 CHECKLIST MENTAL ANTES DE CERRAR\n\n- ¿Ya ejecuté close_conversation? (Si true, STOP)\n- ¿Tengo el nombre correcto del usuario? (Actualizar campo 'name')\n- ¿Tengo segmento (de los 7 oficiales), uso, modelo y usado (con modelo, km y año si corresponde)?\n- ¿Calculé interés y goodLead?\n- ¿Validé el resumen con el usuario?\n- ¿Tengo todos los parámetros para close_conversation?\n- Ejecutar close_conversation, marcar cerrado y despedirse\n- ¿Incluí 【alert:close_conversation】 después del mensaje de despedida?"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        480,
+        0
+      ],
+      "id": "e5ce5be6-e240-4b22-9ea2-a31c81f72432",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4.1",
+          "mode": "list",
+          "cachedResultName": "gpt-4.1"
+        },
+        "options": {
+          "temperature": 0.4
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        224,
+        224
+      ],
+      "id": "2f657a9e-5fc5-4425-9aff-a2ee2521e33d",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "tHNmxNX9alcrWuiX",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4.1-mini"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        352,
+        224
+      ],
+      "id": "10c17782-fa79-4729-9e75-46ca49c864cb",
+      "name": "OpenAI Chat Model1",
+      "credentials": {
+        "openAiApi": {
+          "id": "tHNmxNX9alcrWuiX",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.idConversation ||  $json.sessionId }}",
+        "contextWindowLength": 18
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        480,
+        224
+      ],
+      "id": "749a0cab-f4ee-4ea6-9601-10642f0dbeb3",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "LuguKfqzMTRoobZ5",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/LuguKfqzMTRoobZ5",
+          "cachedResultName": "CLOSE-CONVERSATION-SDM FOTON"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "goodLead": "={{ $fromAI('goodLead', `Clasificación de calidad:- true: El cliente proporcionó al menos 2 de los 3 datos clave Tiene modelo + pago,Tiene modelo + usado,Tiene pago + usado, Tiene los 3 datos completos o puede ser false: El cliente proporcionó 1 dato o ninguno: Solo consultó un modelo, Solo saludó, Solo preguntó precio sin especificar modelo`, 'boolean') }}",
+            "idConversation": "={{$json.idConversation || $json.sessionId}}",
+            "number": "={{$json.from}}",
+            "name": "={{$json.name}}",
+            "businesstypeid": "={{$json.businesstypeid || '1' }}",
+            "grupoCaptura": "={{$json.grupoCaptura || 'SDM'}}",
+            "pago": "={{ $fromAI('pago', `Forma de pago: financiado o contado `, 'string') }}",
+            "ProductoInteres": "={{ $fromAI('ProductoInteres', `Es el modelo elegido por el cliente`, 'string') }}",
+            "interes": "={{ $fromAI('interes', `Clasificación de interés:\n\"1\" (FRÍO - 0 respuestas relevantes)\n\"2\" (TIBIO - 1-2 respuestas relevantes)\n\"3\" (CALIENTE - 3-4 respuestas relevantes)\n\"4\" (QUEMA - 5+ respuestas relevantes)`, 'string') }}",
+            "origin": "={{  $json.origin || 'FODHRKEYTDQ2GU40C'}}",
+            "resumen": "={{ $fromAI('resumen', `generar un resumen breve de la conversación que incluya:\n- Modelo(s) consultado(s)\n- Información clave proporcionada por el cliente\n- Forma de pago mencionada\n- Si tiene auto usado\n- Cualquier detalle relevante de la interacción\n\nFormato del resumen: Máximo 2-3 oraciones concisas.`, 'string') }}",
+            "testDrive": "={{ $fromAI('testDrive', `es true si quiere test drive o false sino quiere`, 'boolean') }}",
+            "comentarioTestDrive": "={{ $fromAI('comentarioTestDrive', `Disponibilidad del test drive del usuario y otros comentarios solamente sobre el test drive, tiene que ser conciso y explictativo al mismo tiempo`, 'string') }}",
+            "ReunionAsesor": "={{ $fromAI('ReunionAsesor', `True si el usuario quiere reunion con el asesor false si no quiere`, 'boolean') }}",
+            "nombreDeclarado": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('nombreDeclarado', `el nombre proporcionado por el usuario`, 'string') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "goodLead",
+              "displayName": "goodLead",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "idConversation",
+              "displayName": "idConversation",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "number",
+              "displayName": "number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "businesstypeid",
+              "displayName": "businesstypeid",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "grupoCaptura",
+              "displayName": "grupoCaptura",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "pago",
+              "displayName": "pago",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ProductoInteres",
+              "displayName": "ProductoInteres",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "interes",
+              "displayName": "interes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "origin",
+              "displayName": "origin",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "resumen",
+              "displayName": "resumen",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "testDrive",
+              "displayName": "testDrive",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "comentarioTestDrive",
+              "displayName": "comentarioTestDrive",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "ReunionAsesor",
+              "displayName": "ReunionAsesor",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "nombreDeclarado",
+              "displayName": "nombreDeclarado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        912,
+        176
+      ],
+      "id": "5bbcae48-f3aa-498a-a6ea-e38ebcdd1a44",
+      "name": "close_conversation"
+    },
+    {
+      "parameters": {
+        "public": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        256,
+        16
+      ],
+      "id": "7db286bd-1820-4ae2-8614-92f0135489b9",
+      "name": "When chat message received",
+      "webhookId": "d85bd9cc-35aa-4237-9fa9-ebcc00f3a044"
+    },
+    {
+      "parameters": {
+        "url": "https://ai-sales-agent.up.railway.app/api/v1/catalog/poi?",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "VALOR_OCULTO"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        656,
+        240
+      ],
+      "id": "70ac3c36-f794-4532-9e12-2e89e8fc07d9",
+      "name": "get_Modelos"
+    }
+  ],
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "shared": [
+    {
+      "updatedAt": "2026-09-29T12:59:25.489Z",
+      "createdAt": "2026-09-29T12:59:25.489Z",
+      "role": "workflow:owner",
+      "workflowId": "e0nhHOBk4HOMiKT7",
+      "projectId": "9z7tZM7s52ygD2mh"
+    }
+  ],
+  "staticData": null,
+  "tags": [
+    {
+      "updatedAt": "2026-05-26T13:19:44.674Z",
+      "createdAt": "2026-05-26T13:19:44.674Z",
+      "id": "t5JacWWkECkhkdgo",
+      "name": "lincoln"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-10-01T14:43:35.101Z",
+  "versionId": "8ea45bae-44af-480c-be7f-697e9be28519"
+}
