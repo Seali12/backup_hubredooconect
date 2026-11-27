@@ -1,0 +1,265 @@
+{
+  "active": true,
+  "activeVersion": {
+    "versionId": "706655cb-afe5-4c2f-addc-13e1026378e1",
+    "workflowId": "2BJYPeW2IzNq0XrO",
+    "nodes": [
+      {
+        "parameters": {
+          "inputSource": "passthrough"
+        },
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "typeVersion": 1.1,
+        "position": [
+          -144,
+          -128
+        ],
+        "id": "8fc272f9-20f9-4ec9-a8c4-0b2439622912",
+        "name": "When Executed by Another Workflow"
+      },
+      {
+        "parameters": {},
+        "type": "n8n-nodes-base.manualTrigger",
+        "typeVersion": 1,
+        "position": [
+          -144,
+          16
+        ],
+        "id": "0151ce0f-d66d-4778-9c52-f7c2d2ee974c",
+        "name": "When clicking ‘Execute workflow’",
+        "disabled": true
+      },
+      {
+        "parameters": {
+          "documentId": {
+            "__rl": true,
+            "value": "1EeZEMfQ2mBM7K1Hkd9v4SgXgd1ec2TuLbEqhSYoGH88",
+            "mode": "list",
+            "cachedResultName": "ByBGas",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1EeZEMfQ2mBM7K1Hkd9v4SgXgd1ec2TuLbEqhSYoGH88/edit?usp=drivesdk"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": 2007522017,
+            "mode": "list",
+            "cachedResultName": "Historial_Pedidos",
+            "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1EeZEMfQ2mBM7K1Hkd9v4SgXgd1ec2TuLbEqhSYoGH88/edit#gid=2007522017"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.7,
+        "position": [
+          64,
+          16
+        ],
+        "id": "d71d3087-863a-46fa-96a2-0ea330788b28",
+        "name": "Get row(s) in sheet",
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "gm64KqUW1Qm1C4h5",
+            "name": "Google Sheets account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "// ====================================\n// OBTENER NEXT ID\n// ====================================\nconst filas = $input.all();\nif (!filas || filas.length === 0) {\n  return [{ nextId: 1 }];\n}\nconst ids = filas.map(fila => {\n  const primerValor = Object.values(fila.json)[1];\n  return parseInt(primerValor) || 0;\n});\nconst nextId = Math.max(...ids) + 1;\n\n// ====================================\n// FECHA Y HORA ARGENTINA\n// ====================================\nconst ahora = new Date();\nconst ahoraAR = new Date(\n  ahora.toLocaleString(\"en-US\", { timeZone: \"America/Argentina/Buenos_Aires\" })\n);\nconst diaSemana = ahoraAR.getDay();\nconst horaMin = ahoraAR.getHours() * 60 + ahoraAR.getMinutes();\n\n// ====================================\n// FERIADOS ARGENTINA 2026\n// ====================================\nconst feriados = [\n  \"2026-01-01\",\"2026-02-16\",\"2026-02-17\",\"2026-03-24\",\n  \"2026-04-02\",\"2026-04-03\",\"2026-05-01\",\"2026-05-25\",\n  \"2026-06-15\",\"2026-06-20\",\"2026-07-09\",\"2026-12-08\",\"2026-12-25\"\n];\n\nfunction esFeriado(date) {\n  const iso = date.getFullYear() + \"-\" +\n    (date.getMonth()+1).toString().padStart(2,\"0\") + \"-\" +\n    date.getDate().toString().padStart(2,\"0\");\n  return feriados.includes(iso);\n}\n\nfunction esFinDeSemana(date) {\n  return date.getDay() === 0; // solo domingo\n}\n\nfunction avanzarADiaHabil(date) {\n  const d = new Date(date);\n  while (esFeriado(d) || esFinDeSemana(d)) {\n    d.setDate(d.getDate() + 1);\n  }\n  return d;\n}\n\n// ====================================\n// CALCULAR PRIMERA FECHA DE ENTREGA\n// ====================================\nlet primeraFecha = new Date(ahoraAR);\n\n// Regla especial 30/12/2025\nif (\n  ahoraAR.getFullYear() === 2025 &&\n  ahoraAR.getMonth() === 11 &&\n  ahoraAR.getDate() === 30\n) {\n  if (horaMin <= 16 * 60) {\n    primeraFecha = new Date(\"2025-12-31T00:00:00\");\n  } else {\n    primeraFecha = new Date(\"2026-01-02T00:00:00\");\n  }\n} else {\n  if (diaSemana >= 1 && diaSemana <= 5) {\n    if (horaMin > 7 * 60) {\n      primeraFecha.setDate(primeraFecha.getDate() + 1);\n    }\n  } else if (diaSemana === 6) {\n    if (horaMin > 7 * 60) {\n      primeraFecha.setDate(primeraFecha.getDate() + 2);\n    }\n  } else {\n    primeraFecha.setDate(primeraFecha.getDate() + 1);\n  }\n}\n\nprimeraFecha = avanzarADiaHabil(primeraFecha);\n\n// ====================================\n// GENERAR LOS 5 TURNOS SIGUIENTES\n// ====================================\nconst dias = [\"Domingo\",\"Lunes\",\"Martes\",\"Miércoles\",\"Jueves\",\"Viernes\",\"Sábado\"];\n\nconst turnos = [];\nlet fechaActual = new Date(primeraFecha);\n\nfor (let i = 0; i < 5; i++) {\n  const iso = fechaActual.getFullYear() + \"-\" +\n    (fechaActual.getMonth()+1).toString().padStart(2,\"0\") + \"-\" +\n    fechaActual.getDate().toString().padStart(2,\"0\");\n\n  const formateada =\n    dias[fechaActual.getDay()] + \" \" +\n    fechaActual.getDate().toString().padStart(2,\"0\") + \"/\" +\n    (fechaActual.getMonth()+1).toString().padStart(2,\"0\") + \"/\" +\n    fechaActual.getFullYear();\n\n  turnos.push({\n    turno: i + 1,\n    fechaISO: iso,\n    fechaFormateada: formateada\n  });\n\n  // Avanzar al siguiente día hábil\n  fechaActual.setDate(fechaActual.getDate() + 1);\n  fechaActual = avanzarADiaHabil(fechaActual);\n}\n\n// ====================================\n// RETORNO FINAL\n// ====================================\nreturn [{\n  nextId,\n  turnos,                                      // array con los 5 turnos\n  turno1: turnos[0].fechaFormateada,           // acceso directo para el prompt\n  turno2: turnos[1].fechaFormateada,\n  turno3: turnos[2].fechaFormateada,\n  turno4: turnos[3].fechaFormateada,\n  turno5: turnos[4].fechaFormateada,\n  fechaEntregaISO: turnos[0].fechaISO,         // primera fecha (default)\n  fechaEntregaFormateada: turnos[0].fechaFormateada,\n  diaSemana: dias[ahoraAR.getDay()],\n  horaActual:\n    ahoraAR.getHours().toString().padStart(2,\"0\") + \":\" +\n    ahoraAR.getMinutes().toString().padStart(2,\"0\"),\n  fechaActualISO: ahoraAR.toISOString()\n}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          304,
+          16
+        ],
+        "id": "0be7c687-fa16-4b42-ae46-7205fa6b926a",
+        "name": "Code"
+      }
+    ],
+    "connections": {
+      "When Executed by Another Workflow": {
+        "main": [
+          [
+            {
+              "node": "Get row(s) in sheet",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "When clicking ‘Execute workflow’": {
+        "main": [
+          [
+            {
+              "node": "Get row(s) in sheet",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get row(s) in sheet": {
+        "main": [
+          [
+            {
+              "node": "Code",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "system migration",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-10-16T15:15:11.475Z",
+    "updatedAt": "2026-10-16T15:15:11.475Z"
+  },
+  "activeVersionId": "706655cb-afe5-4c2f-addc-13e1026378e1",
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2025-10-14T19:21:01.429Z",
+  "id": "2BJYPeW2IzNq0XrO",
+  "isArchived": false,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "name": "GETIDPROD",
+  "nodeGroups": [],
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -144,
+        -128
+      ],
+      "id": "8fc272f9-20f9-4ec9-a8c4-0b2439622912",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -144,
+        16
+      ],
+      "id": "0151ce0f-d66d-4778-9c52-f7c2d2ee974c",
+      "name": "When clicking ‘Execute workflow’",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1EeZEMfQ2mBM7K1Hkd9v4SgXgd1ec2TuLbEqhSYoGH88",
+          "mode": "list",
+          "cachedResultName": "ByBGas",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1EeZEMfQ2mBM7K1Hkd9v4SgXgd1ec2TuLbEqhSYoGH88/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 2007522017,
+          "mode": "list",
+          "cachedResultName": "Historial_Pedidos",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1EeZEMfQ2mBM7K1Hkd9v4SgXgd1ec2TuLbEqhSYoGH88/edit#gid=2007522017"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        64,
+        16
+      ],
+      "id": "d71d3087-863a-46fa-96a2-0ea330788b28",
+      "name": "Get row(s) in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "gm64KqUW1Qm1C4h5",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ====================================\n// OBTENER NEXT ID\n// ====================================\nconst filas = $input.all();\nif (!filas || filas.length === 0) {\n  return [{ nextId: 1 }];\n}\nconst ids = filas.map(fila => {\n  const primerValor = Object.values(fila.json)[1];\n  return parseInt(primerValor) || 0;\n});\nconst nextId = Math.max(...ids) + 1;\n\n// ====================================\n// FECHA Y HORA ARGENTINA\n// ====================================\nconst ahora = new Date();\nconst ahoraAR = new Date(\n  ahora.toLocaleString(\"en-US\", { timeZone: \"America/Argentina/Buenos_Aires\" })\n);\nconst diaSemana = ahoraAR.getDay();\nconst horaMin = ahoraAR.getHours() * 60 + ahoraAR.getMinutes();\n\n// ====================================\n// FERIADOS ARGENTINA 2026\n// ====================================\nconst feriados = [\n  \"2026-01-01\",\"2026-02-16\",\"2026-02-17\",\"2026-03-24\",\n  \"2026-04-02\",\"2026-04-03\",\"2026-05-01\",\"2026-05-25\",\n  \"2026-06-15\",\"2026-06-20\",\"2026-07-09\",\"2026-12-08\",\"2026-12-25\"\n];\n\nfunction esFeriado(date) {\n  const iso = date.getFullYear() + \"-\" +\n    (date.getMonth()+1).toString().padStart(2,\"0\") + \"-\" +\n    date.getDate().toString().padStart(2,\"0\");\n  return feriados.includes(iso);\n}\n\nfunction esFinDeSemana(date) {\n  return date.getDay() === 0; // solo domingo\n}\n\nfunction avanzarADiaHabil(date) {\n  const d = new Date(date);\n  while (esFeriado(d) || esFinDeSemana(d)) {\n    d.setDate(d.getDate() + 1);\n  }\n  return d;\n}\n\n// ====================================\n// CALCULAR PRIMERA FECHA DE ENTREGA\n// ====================================\nlet primeraFecha = new Date(ahoraAR);\n\n// Regla especial 30/12/2025\nif (\n  ahoraAR.getFullYear() === 2025 &&\n  ahoraAR.getMonth() === 11 &&\n  ahoraAR.getDate() === 30\n) {\n  if (horaMin <= 16 * 60) {\n    primeraFecha = new Date(\"2025-12-31T00:00:00\");\n  } else {\n    primeraFecha = new Date(\"2026-01-02T00:00:00\");\n  }\n} else {\n  if (diaSemana >= 1 && diaSemana <= 5) {\n    if (horaMin > 7 * 60) {\n      primeraFecha.setDate(primeraFecha.getDate() + 1);\n    }\n  } else if (diaSemana === 6) {\n    if (horaMin > 7 * 60) {\n      primeraFecha.setDate(primeraFecha.getDate() + 2);\n    }\n  } else {\n    primeraFecha.setDate(primeraFecha.getDate() + 1);\n  }\n}\n\nprimeraFecha = avanzarADiaHabil(primeraFecha);\n\n// ====================================\n// GENERAR LOS 5 TURNOS SIGUIENTES\n// ====================================\nconst dias = [\"Domingo\",\"Lunes\",\"Martes\",\"Miércoles\",\"Jueves\",\"Viernes\",\"Sábado\"];\n\nconst turnos = [];\nlet fechaActual = new Date(primeraFecha);\n\nfor (let i = 0; i < 5; i++) {\n  const iso = fechaActual.getFullYear() + \"-\" +\n    (fechaActual.getMonth()+1).toString().padStart(2,\"0\") + \"-\" +\n    fechaActual.getDate().toString().padStart(2,\"0\");\n\n  const formateada =\n    dias[fechaActual.getDay()] + \" \" +\n    fechaActual.getDate().toString().padStart(2,\"0\") + \"/\" +\n    (fechaActual.getMonth()+1).toString().padStart(2,\"0\") + \"/\" +\n    fechaActual.getFullYear();\n\n  turnos.push({\n    turno: i + 1,\n    fechaISO: iso,\n    fechaFormateada: formateada\n  });\n\n  // Avanzar al siguiente día hábil\n  fechaActual.setDate(fechaActual.getDate() + 1);\n  fechaActual = avanzarADiaHabil(fechaActual);\n}\n\n// ====================================\n// RETORNO FINAL\n// ====================================\nreturn [{\n  nextId,\n  turnos,                                      // array con los 5 turnos\n  turno1: turnos[0].fechaFormateada,           // acceso directo para el prompt\n  turno2: turnos[1].fechaFormateada,\n  turno3: turnos[2].fechaFormateada,\n  turno4: turnos[3].fechaFormateada,\n  turno5: turnos[4].fechaFormateada,\n  fechaEntregaISO: turnos[0].fechaISO,         // primera fecha (default)\n  fechaEntregaFormateada: turnos[0].fechaFormateada,\n  diaSemana: dias[ahoraAR.getDay()],\n  horaActual:\n    ahoraAR.getHours().toString().padStart(2,\"0\") + \":\" +\n    ahoraAR.getMinutes().toString().padStart(2,\"0\"),\n  fechaActualISO: ahoraAR.toISOString()\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        304,
+        16
+      ],
+      "id": "0be7c687-fa16-4b42-ae46-7205fa6b926a",
+      "name": "Code"
+    }
+  ],
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "2BJYPeW2IzNq0XrO",
+      "projectId": "RePbapJNnXQ2CRH1",
+      "createdAt": "2025-10-14T19:21:01.435Z",
+      "updatedAt": "2025-10-14T19:21:01.435Z"
+    }
+  ],
+  "staticData": null,
+  "tags": [
+    {
+      "id": "0iwvOmMStztmuDZh",
+      "name": "gas",
+      "createdAt": "2026-02-25T19:23:22.393Z",
+      "updatedAt": "2026-02-25T19:23:22.393Z"
+    }
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2026-10-16T15:19:21.169Z",
+  "versionId": "706655cb-afe5-4c2f-addc-13e1026378e1"
+}
