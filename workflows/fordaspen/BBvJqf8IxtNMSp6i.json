@@ -1,7 +1,7 @@
 {
   "active": true,
   "activeVersion": {
-    "versionId": "80e2d139-f30a-40ec-ad0f-3aa195023760",
+    "versionId": "d23679d4-af2d-45d1-a5aa-804c5e2d439e",
     "workflowId": "BBvJqf8IxtNMSp6i",
     "nodes": [
       {
@@ -2224,7 +2224,7 @@
               {
                 "id": "b8d7b1c7-26c0-4f79-aa84-53f86627ef16",
                 "name": "mensaje",
-                "value": "INSTRUCCIÓN INTERNA — no mostrar este texto al usuario. Llamá de nuevo a la tool get_user, con action='get_user', la misma patente, y agregá el parámetro id_conversation (ya está disponible en el contexto de esta conversación). No le pidas nada al cliente ni le informes de este reintento.",
+                "value": "INSTRUCCIÓN INTERNA — no mostrar este texto al usuario. No hay una sucursal guardada para esta conversación. Si el cliente ya dijo en qué sucursal quiere el turno (Campana o Pilar), ejecutá saveSucursal con su código (244 Campana / 60834 Pilar) y volvé a llamar a get_user con la misma patente, idSucursal con ese código e id_conversation. Si el cliente todavía no dijo la sucursal, preguntale SOLO '¿En qué sucursal querés gestionar tu turno, Campana o Pilar?' y, con su respuesta, ejecutá saveSucursal y get_user con la patente que ya te dio (sin volver a pedírsela). No le informes de este reintento.",
                 "type": "string"
               }
             ]
@@ -2397,7 +2397,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// ==========================================================\n// Code34 - Payload para crear el turno a partir de \"Turno ofrecido\"\n// ==========================================================\n// Usuario de Agenda Ford con el que se crea el turno (pedido de Aspen: V-MOURE2).\nconst CREATE_USER = 'V-MOURE2';\nconst SUCURSALES = { '134': 'Bahía Blanca', '60099': 'Santa Rosa' };\nconst NOMBRE_GRAL_PICO = 'General Pico — Servicio Móvil';\nconst IDS_MANTENIMIENTO = [5, 111];\n\nfunction toHourNumber(hora) { return Number(String(hora).trim().replace(':', '')); }\nfunction cleanHHMM(hora)   { return String(hora).trim().replace(':', '').padStart(4, '0'); }\nfunction getCreateSTimestamp() {\n  const now = new Date();\n  return `${now.toISOString().slice(0, 19)}.${String(now.getMilliseconds()).padStart(3, '0')}0`;\n}\nconst norm = (v) => String(v ?? '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase().replace(/\\s+/g, ' ').trim();\n\n// 1. Nodos de origen de datos\nconst turno = $('Turno ofrecido').first().json;\nconst tabla = $('Select rows from a table4').first().json;\nconst trigger = $('When Executed by Another Workflow').first().json;\nconst cotizacionNode = $('HTTP Request33').first().json;\nconst especialistas = $('HTTP Request').first().json?.result?.technicalSpecialists || [];\n\n// Si no se encontró el turno ofrecido, no creamos nada\nif (turno.turnosEncontrados === 0 || !turno.horarioRecepcion) {\n  throw new Error(`No se encontró el turno ofrecido: ${turno.mensaje || 'sin datos'}`);\n}\n\n// 2. Horarios y Fechas\nconst scheduleDate = turno.fecha;\nconst scheduleHourNum = toHourNumber(turno.horarioRecepcion);\n\n// 3. Asesor de recepción\nconst advisorId = Number(turno.asesorId);\n\n// 4. Mecánico y Especialidad de Taller (se buscan por nombre en el HTTP Request de mecánicos)\nconst mecanico = especialistas.find(e => norm(e.advisorName) === norm(turno.mecanicoNombre));\nif (!mecanico) {\n  throw new Error(`No se encontró el ID del mecánico \"${turno.mecanicoNombre}\" en el HTTP Request`);\n}\nconst productiveId = Number(mecanico.advisorId);\n\nconst [horaInicioMec, horaFinMec] = String(turno.huecoMecanico).split(/[-–—]/).map(s => s.trim());\nconst productiveAttendanceHour = cleanHHMM(horaInicioMec);\nconst productiveAttendanceEndHour = cleanHHMM(horaFinMec);\n\nconst specialtyIds = (mecanico.specialties || []).map(s => s.id);\nconst serviceTypeIdWorkshop = Number(\n  specialtyIds.find(id => IDS_MANTENIMIENTO.includes(id)) ?? specialtyIds[0] ?? 5\n);\n\n// 5. Cotización y Servicios Ofrecidos\nconst quotationScheduleVO = cotizacionNode.result?.quotationScheduleVO || cotizacionNode.quotationScheduleVO;\nconst serviceIdComercial = Number(quotationScheduleVO.quotationVOs[0].serviceId);\n\n// 6. Concesionario, Vehículo y Cliente\nconst dealerCode = Number(tabla.sucursal);\nconst customerId = Number(tabla.customerK);\nconst vehiclePlate = trigger.patente || tabla.plate || null;\nconst vehicleVin = tabla.chassi;\nconst modelGroup = Number(tabla.model_id);\n\n// 6b. Concesionario al que asiste el cliente.\nconst esGralPico =\n  norm(trigger.gralPico) === 'si' ||\n  norm(trigger.resumen).includes('general pico') ||\n  norm(trigger.nombre_asesor).includes('gral pico') ||\n  norm(trigger.nombre_asesor).includes('general pico');\nconst nombreConcesionario = esGralPico\n  ? NOMBRE_GRAL_PICO\n  : (SUCURSALES[String(tabla.sucursal)] || `Sucursal ${tabla.sucursal}`);\n\nconst nombreCliente = [tabla.firstname, tabla.lastname].filter(Boolean).join(' ').trim();\nconst kmDeclarados = (String(trigger.resumen || '').match(/km declarados:\\s*(\\d(?:[\\d.]*\\d)?)/i) || [])[1];\nconst lastKm = kmDeclarados ? Number(String(kmDeclarados).replace(/\\./g, '')) : null;\n\n// 6b2. Nota del asistente sobre el precio (precio aproximado / circular / sin precio),\n// guardada por get_detail_servicios en la data table notas_turno_af para este servicio\nlet notaAsistente = '';\ntry {\n  const n = $('Nota AF').first().json || {};\n  if (n.nota && (!n.service_id || Number(n.service_id) === Number(tabla.service_id))) notaAsistente = String(n.nota);\n} catch (e) {}\n// Si Ford no trae precio en el presupuesto (por ejemplo, turnos de un mes que todavía no tiene precios cargados),\n// la nota del asesor lleva el precio que el bot le informó al cliente. Si Ford trae precio, esa nota no hace falta.\n// Turno de Diagnóstico (opción 4): al cliente NO se le informó precio. Se agenda con el service por km,\n// la nota del asesor lo aclara y no se carga en el presupuesto ningún precio informado por el bot.\nconst resumenTxt = String(trigger.resumen || '');\nconst esDiagnostico = /tipo de turno:\\s*diagn[oó]stico/i.test(resumenTxt);\nconst detalleDiag = esDiagnostico\n  ? ((resumenTxt.match(/Detalle del cliente:\\s*(.+?)(?:\\.\\s*(?:Service|Km declarados|No se le inform)|$)/i) || [])[1] || '').trim()\n  : '';\nif (esDiagnostico) notaAsistente = '';\nconst precioFord = Number(quotationScheduleVO?.quotationVOs?.[0]?.price) > 0;\nif (/Precio informado al cliente/i.test(notaAsistente) && precioFord) notaAsistente = '';\n// Y en ese caso se carga en el presupuesto del turno el mismo precio, para que la Agenda no muestre \"Precio a confirmar\".\n// Ford acepta el precio en centavos en price y discount (mismo formato que devuelve cuando tiene el precio).\n// Precio que el bot le dijo al cliente, según la nota guardada:\n//  - plan de Ford: \"Precio informado al cliente: $575.680\"\n//  - fallback con precio de la circular: \"Se le informó al cliente $333.950 según la circular\"\n//  - fallback con precio aproximado: \"Se le informó como referencia el precio de <versión>: $589.680\"\nconst notaTxt = String(notaAsistente);\nconst mPrecio = notaTxt.match(/Precio informado al cliente:\\s*\\$\\s?([\\d.,]+)/i)\n  || notaTxt.match(/Se le inform[oó] al cliente\\s*\\$\\s?([\\d.,]+)/i)\n  || notaTxt.match(/como referencia el precio de[^$]*\\$\\s?([\\d.,]+)/i);\nconst qv = quotationScheduleVO?.quotationVOs?.[0];\nif (!precioFord && mPrecio && qv) {\n  const precioInformado = Number(String(mPrecio[1]).replace(/[^\\d]/g, ''));\n  if (precioInformado > 0) { qv.price = precioInformado * 100; qv.discount = precioInformado * 100; }\n}\n\n// 6c. Observaciones — customerRemark = bloque \"Cliente\", advisorRemark = bloque \"Concesionario\"\n// Ford rechaza el turno con SCHEDULING.BAD_REQUEST si advisorRemark supera ~200 caracteres\n// (probado el 18/11: 200 entra, 250 no). customerRemark acepta al menos 300.\nconst MAX_OBS_ASESOR = 200;\nconst MAX_OBS_CLIENTE = 300;\nconst limpiar = (s) => String(s || '').replace(/\\s+/g, ' ').trim();\nconst recortar = (s, max) => (s.length <= max ? s : s.slice(0, max - 1).trimEnd() + '…');\n\nconst obsCliente = recortar(limpiar([\n  String(trigger.resumen || '').trim(),\n  `Concesionario: ${nombreConcesionario}.`,\n  vehiclePlate ? `Patente: ${vehiclePlate}.` : '',\n].filter(Boolean).join(' ')), MAX_OBS_CLIENTE);\n\n// Para el asesor: primero lo imprescindible y la nota del precio; el resto se agrega solo si entra.\nconst notaCorta = limpiar(notaAsistente)\n  .replace(/^\\[Asistente\\]\\s*/, 'Asistente: ')\n  .replace(/Ford no informó precio por API\\.\\s*/i, 'Ford sin precio. ')\n  .replace(/Se le informó al cliente/i, 'Se informó al cliente')\n  .replace(/según la circular de Ford/i, 'según circular Ford')\n  .replace(/Precio informado al cliente:/i, 'Precio informado al cliente (Ford no lo trae):');\nconst notaDiag = esDiagnostico\n  ? [\n      'DIAGNÓSTICO: el cliente eligió la opción 4. NO se le informó precio.',\n      `Falla: ${recortar(limpiar(detalleDiag).replace(/\\.$/, '') || 'sin detalle', 70)}`.replace(/([^…])$/, '$1.'),\n    ]\n  : [];\nconst obsBase = [\n  esDiagnostico ? 'Turno WhatsApp.' : 'Turno del asistente de WhatsApp.',\n  ...notaDiag,\n  vehiclePlate ? `Patente: ${vehiclePlate}.` : '',\n  kmDeclarados ? `KM: ${kmDeclarados}.` : '',\n].filter(Boolean);\nconst obsOpcionales = [\n  nombreCliente ? `Cliente: ${nombreCliente}.` : '',\n  tabla.model ? `Vehículo: ${tabla.model}.` : '',\n  `Concesionario: ${nombreConcesionario}.`,\n].filter(Boolean);\nlet partesAsesor = notaCorta ? [...obsBase, notaCorta] : [...obsBase];\nfor (const p of obsOpcionales) {\n  const prueba = notaCorta ? [...partesAsesor.slice(0, -1), p, notaCorta] : [...partesAsesor, p];\n  if (limpiar(prueba.join(' ')).length <= MAX_OBS_ASESOR) partesAsesor = prueba;\n}\nconst obsConcesionario = recortar(limpiar(partesAsesor.join(' ')), MAX_OBS_ASESOR);\n\n// 7. Armado del payload con la estructura exacta de la API\nconst payload = {\n  country: \"ARG\",\n  dealer: dealerCode,\n  division: 1,\n  scheduleDate: scheduleDate,\n  scheduleHour: scheduleHourNum,\n  vin: vehicleVin,\n  offeredServices: [serviceIdComercial],\n  quotationScheduleVO: quotationScheduleVO,\n  advisor: advisorId,\n  createUser: CREATE_USER,\n  sendEmail: true,\n  contactCountry: \"ARG\",\n  vehiclePlate: vehiclePlate,\n  contactCustomerId: customerId,\n  customerId: customerId,\n  customerRemark: obsCliente,\n  advisorRemark: obsConcesionario,\n  isDriverInformation: null,\n  scheduleSource: \"D\",\n  scheduleType: \"R\",\n  model: \"\",\n  group: modelGroup,\n  createS: getCreateSTimestamp(),\n  campaignsId: [],\n  lastKm: lastKm,\n  oilLifeRemaining: null,\n  iolmMonths: null,\n  referredBy: 0,\n  // Campos que manda hoy la agenda de Ford (formato nuevo de create-schedule-and-workshop)\n  iolmParts: [],\n  recallVOs: [],\n  returned: \"N\",\n  towTruckNeeded: \"N\",\n  towTruckType: null,\n  towingReason: null,\n  scheduleWorkshop: [\n    {\n      openSchedule: false,\n      noShow: false,\n      productiveId: productiveId,\n      productiveAttendanceHour: productiveAttendanceHour,\n      productiveAttendanceEndHour: productiveAttendanceEndHour,\n      productiveAttendance: scheduleDate,\n      assignedService: [{ id: serviceTypeIdWorkshop, duration: 60 }],\n      status: \"SCHEDULED\",\n      statusSchedule: \"SCHEDULED\",\n      delay: false,\n      height: 138.88888888888889\n    }\n  ]\n};\n\nreturn [{ json: { body: payload } }];"
+          "jsCode": "// ==========================================================\n// Code34 - Payload para crear el turno a partir de \"Turno ofrecido\"\n// ==========================================================\n// Usuario de Agenda Ford con el que se crea el turno (pedido de Aspen: V-MOURE2).\nconst CREATE_USER = 'V-MOURE2';\nconst SUCURSALES = { '60834': 'Pilar', '244': 'Campana' };\nconst NOMBRE_GRAL_PICO = 'General Pico — Servicio Móvil';\nconst IDS_MANTENIMIENTO = [5, 111];\n\nfunction toHourNumber(hora) { return Number(String(hora).trim().replace(':', '')); }\nfunction cleanHHMM(hora)   { return String(hora).trim().replace(':', '').padStart(4, '0'); }\nfunction getCreateSTimestamp() {\n  const now = new Date();\n  return `${now.toISOString().slice(0, 19)}.${String(now.getMilliseconds()).padStart(3, '0')}0`;\n}\nconst norm = (v) => String(v ?? '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase().replace(/\\s+/g, ' ').trim();\n\n// 1. Nodos de origen de datos\nconst turno = $('Turno ofrecido').first().json;\nconst tabla = $('Select rows from a table4').first().json;\nconst trigger = $('When Executed by Another Workflow').first().json;\nconst cotizacionNode = $('HTTP Request33').first().json;\nconst especialistas = $('HTTP Request').first().json?.result?.technicalSpecialists || [];\n\n// Si no se encontró el turno ofrecido, no creamos nada\nif (turno.turnosEncontrados === 0 || !turno.horarioRecepcion) {\n  throw new Error(`No se encontró el turno ofrecido: ${turno.mensaje || 'sin datos'}`);\n}\n\n// 2. Horarios y Fechas\nconst scheduleDate = turno.fecha;\nconst scheduleHourNum = toHourNumber(turno.horarioRecepcion);\n\n// 3. Asesor de recepción\nconst advisorId = Number(turno.asesorId);\n\n// 4. Mecánico y Especialidad de Taller (se buscan por nombre en el HTTP Request de mecánicos)\nconst mecanico = especialistas.find(e => norm(e.advisorName) === norm(turno.mecanicoNombre));\nif (!mecanico) {\n  throw new Error(`No se encontró el ID del mecánico \"${turno.mecanicoNombre}\" en el HTTP Request`);\n}\nconst productiveId = Number(mecanico.advisorId);\n\nconst [horaInicioMec, horaFinMec] = String(turno.huecoMecanico).split(/[-–—]/).map(s => s.trim());\nconst productiveAttendanceHour = cleanHHMM(horaInicioMec);\nconst productiveAttendanceEndHour = cleanHHMM(horaFinMec);\n\nconst specialtyIds = (mecanico.specialties || []).map(s => s.id);\nconst serviceTypeIdWorkshop = Number(\n  specialtyIds.find(id => IDS_MANTENIMIENTO.includes(id)) ?? specialtyIds[0] ?? 5\n);\n\n// 5. Cotización y Servicios Ofrecidos\nconst quotationScheduleVO = cotizacionNode.result?.quotationScheduleVO || cotizacionNode.quotationScheduleVO;\nconst serviceIdComercial = Number(quotationScheduleVO.quotationVOs[0].serviceId);\n\n// 6. Concesionario, Vehículo y Cliente\nconst dealerCode = Number(tabla.sucursal);\nconst customerId = Number(tabla.customerK);\nconst vehiclePlate = trigger.patente || tabla.plate || null;\nconst vehicleVin = tabla.chassi;\nconst modelGroup = Number(tabla.model_id);\n\n// 6b. Concesionario al que asiste el cliente.\nconst esGralPico =\n  norm(trigger.gralPico) === 'si' ||\n  norm(trigger.resumen).includes('general pico') ||\n  norm(trigger.nombre_asesor).includes('gral pico') ||\n  norm(trigger.nombre_asesor).includes('general pico');\nconst nombreConcesionario = esGralPico\n  ? NOMBRE_GRAL_PICO\n  : (SUCURSALES[String(tabla.sucursal)] || `Sucursal ${tabla.sucursal}`);\n\nconst nombreCliente = [tabla.firstname, tabla.lastname].filter(Boolean).join(' ').trim();\nconst kmDeclarados = (String(trigger.resumen || '').match(/km declarados:\\s*(\\d(?:[\\d.]*\\d)?)/i) || [])[1];\nconst lastKm = kmDeclarados ? Number(String(kmDeclarados).replace(/\\./g, '')) : null;\n\n// 6b2. Nota del asistente sobre el precio (precio aproximado / circular / sin precio),\n// guardada por get_detail_servicios en la data table notas_turno_af para este servicio\nlet notaAsistente = '';\ntry {\n  const n = $('Nota AF').first().json || {};\n  if (n.nota && (!n.service_id || Number(n.service_id) === Number(tabla.service_id))) notaAsistente = String(n.nota);\n} catch (e) {}\n// Si Ford no trae precio en el presupuesto (por ejemplo, turnos de un mes que todavía no tiene precios cargados),\n// la nota del asesor lleva el precio que el bot le informó al cliente. Si Ford trae precio, esa nota no hace falta.\n// Turno de Diagnóstico (opción 4): al cliente NO se le informó precio. Se agenda con el service por km,\n// la nota del asesor lo aclara y no se carga en el presupuesto ningún precio informado por el bot.\nconst resumenTxt = String(trigger.resumen || '');\nconst esDiagnostico = /tipo de turno:\\s*diagn[oó]stico/i.test(resumenTxt);\nconst detalleDiag = esDiagnostico\n  ? ((resumenTxt.match(/Detalle del cliente:\\s*(.+?)(?:\\.\\s*(?:Service|Km declarados|No se le inform)|$)/i) || [])[1] || '').trim()\n  : '';\nif (esDiagnostico) notaAsistente = '';\nconst precioFord = Number(quotationScheduleVO?.quotationVOs?.[0]?.price) > 0;\nif (/Precio informado al cliente/i.test(notaAsistente) && precioFord) notaAsistente = '';\n// Y en ese caso se carga en el presupuesto del turno el mismo precio, para que la Agenda no muestre \"Precio a confirmar\".\n// Ford acepta el precio en centavos en price y discount (mismo formato que devuelve cuando tiene el precio).\n// Precio que el bot le dijo al cliente, según la nota guardada:\n//  - plan de Ford: \"Precio informado al cliente: $575.680\"\n//  - fallback con precio de la circular: \"Se le informó al cliente $333.950 según la circular\"\n//  - fallback con precio aproximado: \"Se le informó como referencia el precio de <versión>: $589.680\"\nconst notaTxt = String(notaAsistente);\nconst mPrecio = notaTxt.match(/Precio informado al cliente:\\s*\\$\\s?([\\d.,]+)/i)\n  || notaTxt.match(/Se le inform[oó] al cliente\\s*\\$\\s?([\\d.,]+)/i)\n  || notaTxt.match(/como referencia el precio de[^$]*\\$\\s?([\\d.,]+)/i);\nconst qv = quotationScheduleVO?.quotationVOs?.[0];\nif (!precioFord && mPrecio && qv) {\n  const precioInformado = Number(String(mPrecio[1]).replace(/[^\\d]/g, ''));\n  if (precioInformado > 0) { qv.price = precioInformado * 100; qv.discount = precioInformado * 100; }\n}\n\n// 6c. Observaciones — customerRemark = bloque \"Cliente\", advisorRemark = bloque \"Concesionario\"\n// Ford rechaza el turno con SCHEDULING.BAD_REQUEST si advisorRemark supera ~200 caracteres\n// (probado el 18/11: 200 entra, 250 no). customerRemark acepta al menos 300.\nconst MAX_OBS_ASESOR = 200;\nconst MAX_OBS_CLIENTE = 300;\nconst limpiar = (s) => String(s || '').replace(/\\s+/g, ' ').trim();\nconst recortar = (s, max) => (s.length <= max ? s : s.slice(0, max - 1).trimEnd() + '…');\n\nconst obsCliente = recortar(limpiar([\n  String(trigger.resumen || '').trim(),\n  `Concesionario: ${nombreConcesionario}.`,\n  vehiclePlate ? `Patente: ${vehiclePlate}.` : '',\n].filter(Boolean).join(' ')), MAX_OBS_CLIENTE);\n\n// Para el asesor: primero lo imprescindible y la nota del precio; el resto se agrega solo si entra.\nconst notaCorta = limpiar(notaAsistente)\n  .replace(/^\\[Asistente\\]\\s*/, 'Asistente: ')\n  .replace(/Ford no informó precio por API\\.\\s*/i, 'Ford sin precio. ')\n  .replace(/Se le informó al cliente/i, 'Se informó al cliente')\n  .replace(/según la circular de Ford/i, 'según circular Ford')\n  .replace(/Precio informado al cliente:/i, 'Precio informado al cliente (Ford no lo trae):');\nconst notaDiag = esDiagnostico\n  ? [\n      'DIAGNÓSTICO: el cliente eligió la opción 4. NO se le informó precio.',\n      `Falla: ${recortar(limpiar(detalleDiag).replace(/\\.$/, '') || 'sin detalle', 70)}`.replace(/([^…])$/, '$1.'),\n    ]\n  : [];\nconst obsBase = [\n  esDiagnostico ? 'Turno WhatsApp.' : 'Turno del asistente de WhatsApp.',\n  ...notaDiag,\n  vehiclePlate ? `Patente: ${vehiclePlate}.` : '',\n  kmDeclarados ? `KM: ${kmDeclarados}.` : '',\n].filter(Boolean);\nconst obsOpcionales = [\n  nombreCliente ? `Cliente: ${nombreCliente}.` : '',\n  tabla.model ? `Vehículo: ${tabla.model}.` : '',\n  `Concesionario: ${nombreConcesionario}.`,\n].filter(Boolean);\nlet partesAsesor = notaCorta ? [...obsBase, notaCorta] : [...obsBase];\nfor (const p of obsOpcionales) {\n  const prueba = notaCorta ? [...partesAsesor.slice(0, -1), p, notaCorta] : [...partesAsesor, p];\n  if (limpiar(prueba.join(' ')).length <= MAX_OBS_ASESOR) partesAsesor = prueba;\n}\nconst obsConcesionario = recortar(limpiar(partesAsesor.join(' ')), MAX_OBS_ASESOR);\n\n// 7. Armado del payload con la estructura exacta de la API\nconst payload = {\n  country: \"ARG\",\n  dealer: dealerCode,\n  division: 1,\n  scheduleDate: scheduleDate,\n  scheduleHour: scheduleHourNum,\n  vin: vehicleVin,\n  offeredServices: [serviceIdComercial],\n  quotationScheduleVO: quotationScheduleVO,\n  advisor: advisorId,\n  createUser: CREATE_USER,\n  sendEmail: true,\n  contactCountry: \"ARG\",\n  vehiclePlate: vehiclePlate,\n  contactCustomerId: customerId,\n  customerId: customerId,\n  customerRemark: obsCliente,\n  advisorRemark: obsConcesionario,\n  isDriverInformation: null,\n  scheduleSource: \"D\",\n  scheduleType: \"R\",\n  model: \"\",\n  group: modelGroup,\n  createS: getCreateSTimestamp(),\n  campaignsId: [],\n  lastKm: lastKm,\n  oilLifeRemaining: null,\n  iolmMonths: null,\n  referredBy: 0,\n  // Campos que manda hoy la agenda de Ford (formato nuevo de create-schedule-and-workshop)\n  iolmParts: [],\n  recallVOs: [],\n  returned: \"N\",\n  towTruckNeeded: \"N\",\n  towTruckType: null,\n  towingReason: null,\n  scheduleWorkshop: [\n    {\n      openSchedule: false,\n      noShow: false,\n      productiveId: productiveId,\n      productiveAttendanceHour: productiveAttendanceHour,\n      productiveAttendanceEndHour: productiveAttendanceEndHour,\n      productiveAttendance: scheduleDate,\n      assignedService: [{ id: serviceTypeIdWorkshop, duration: 60 }],\n      status: \"SCHEDULED\",\n      statusSchedule: \"SCHEDULED\",\n      delay: false,\n      height: 138.88888888888889\n    }\n  ]\n};\n\nreturn [{ json: { body: payload } }];"
         },
         "type": "n8n-nodes-base.code",
         "typeVersion": 2,
@@ -3736,6 +3736,82 @@
           },
           "options": {}
         }
+      },
+      {
+        "id": "6d40512e-c9f0-414e-bdc3-779e32fb29df",
+        "name": "Llegó sucursal válida?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          1184,
+          552
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "a1c2e3f4-0b1d-4e2f-9a3b-sucursalvalid1",
+                "leftValue": "={{ ['244', '60834'].includes(String($('When Executed by Another Workflow').first().json.idSucursal ?? '').trim()) }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        }
+      },
+      {
+        "id": "a16d4578-5178-4a28-8211-0a2093aeaaec",
+        "name": "Guardar sucursal de get_user",
+        "type": "n8n-nodes-base.mySql",
+        "typeVersion": 2.5,
+        "position": [
+          1424,
+          552
+        ],
+        "parameters": {
+          "operation": "upsert",
+          "table": {
+            "__rl": true,
+            "value": "agenda_ford",
+            "mode": "list",
+            "cachedResultName": "agenda_ford"
+          },
+          "dataMode": "defineBelow",
+          "columnToMatchOn": "id_conversation",
+          "valueToMatchOn": "={{ String($('When Executed by Another Workflow').first().json.id_conversation) }}",
+          "valuesToSend": {
+            "values": [
+              {
+                "column": "sucursal",
+                "value": "={{ String($('When Executed by Another Workflow').first().json.idSucursal).trim() }}"
+              },
+              {
+                "column": "company",
+                "value": "2"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "credentials": {
+          "mySql": {
+            "id": "MYmGGfM8lz7xrUC9",
+            "name": "MySQL account"
+          }
+        }
       }
     ],
     "connections": {
@@ -4424,7 +4500,7 @@
           ],
           [
             {
-              "node": "Edit Fields1",
+              "node": "Llegó sucursal válida?",
               "type": "main",
               "index": 0
             }
@@ -4892,17 +4968,46 @@
             }
           ]
         ]
+      },
+      "Llegó sucursal válida?": {
+        "main": [
+          [
+            {
+              "node": "Guardar sucursal de get_user",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Edit Fields1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Guardar sucursal de get_user": {
+        "main": [
+          [
+            {
+              "node": "HTTP Request25",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       }
     },
     "nodeGroups": [],
     "authors": "Redoo redoo (via MCP)",
-    "name": "Added Hay turno elegido?, Falta turno elegido",
-    "description": "Added nodes: Hay turno elegido?, Falta turno elegido\nConnections: 3 added, 1 removed",
+    "name": "Rewired connections",
+    "description": "Connections: 1 added, 1 removed",
     "autosaved": false,
-    "createdAt": "2026-11-25T19:49:25.535Z",
-    "updatedAt": "2026-11-25T19:49:25.535Z"
+    "createdAt": "2026-11-27T13:44:32.707Z",
+    "updatedAt": "2026-11-27T13:44:32.707Z"
   },
-  "activeVersionId": "80e2d139-f30a-40ec-ad0f-3aa195023760",
+  "activeVersionId": "d23679d4-af2d-45d1-a5aa-804c5e2d439e",
   "connections": {
     "Ford - Buscar Vehiculo1": {
       "main": [
@@ -5589,7 +5694,7 @@
         ],
         [
           {
-            "node": "Edit Fields1",
+            "node": "Llegó sucursal válida?",
             "type": "main",
             "index": 0
           }
@@ -6052,6 +6157,35 @@
         [
           {
             "node": "Falta turno elegido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Llegó sucursal válida?": {
+      "main": [
+        [
+          {
+            "node": "Guardar sucursal de get_user",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Edit Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar sucursal de get_user": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request25",
             "type": "main",
             "index": 0
           }
@@ -8290,7 +8424,7 @@
             {
               "id": "b8d7b1c7-26c0-4f79-aa84-53f86627ef16",
               "name": "mensaje",
-              "value": "INSTRUCCIÓN INTERNA — no mostrar este texto al usuario. Llamá de nuevo a la tool get_user, con action='get_user', la misma patente, y agregá el parámetro id_conversation (ya está disponible en el contexto de esta conversación). No le pidas nada al cliente ni le informes de este reintento.",
+              "value": "INSTRUCCIÓN INTERNA — no mostrar este texto al usuario. No hay una sucursal guardada para esta conversación. Si el cliente ya dijo en qué sucursal quiere el turno (Campana o Pilar), ejecutá saveSucursal con su código (244 Campana / 60834 Pilar) y volvé a llamar a get_user con la misma patente, idSucursal con ese código e id_conversation. Si el cliente todavía no dijo la sucursal, preguntale SOLO '¿En qué sucursal querés gestionar tu turno, Campana o Pilar?' y, con su respuesta, ejecutá saveSucursal y get_user con la patente que ya te dio (sin volver a pedírsela). No le informes de este reintento.",
               "type": "string"
             }
           ]
@@ -8463,7 +8597,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// ==========================================================\n// Code34 - Payload para crear el turno a partir de \"Turno ofrecido\"\n// ==========================================================\n// Usuario de Agenda Ford con el que se crea el turno (pedido de Aspen: V-MOURE2).\nconst CREATE_USER = 'V-MOURE2';\nconst SUCURSALES = { '134': 'Bahía Blanca', '60099': 'Santa Rosa' };\nconst NOMBRE_GRAL_PICO = 'General Pico — Servicio Móvil';\nconst IDS_MANTENIMIENTO = [5, 111];\n\nfunction toHourNumber(hora) { return Number(String(hora).trim().replace(':', '')); }\nfunction cleanHHMM(hora)   { return String(hora).trim().replace(':', '').padStart(4, '0'); }\nfunction getCreateSTimestamp() {\n  const now = new Date();\n  return `${now.toISOString().slice(0, 19)}.${String(now.getMilliseconds()).padStart(3, '0')}0`;\n}\nconst norm = (v) => String(v ?? '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase().replace(/\\s+/g, ' ').trim();\n\n// 1. Nodos de origen de datos\nconst turno = $('Turno ofrecido').first().json;\nconst tabla = $('Select rows from a table4').first().json;\nconst trigger = $('When Executed by Another Workflow').first().json;\nconst cotizacionNode = $('HTTP Request33').first().json;\nconst especialistas = $('HTTP Request').first().json?.result?.technicalSpecialists || [];\n\n// Si no se encontró el turno ofrecido, no creamos nada\nif (turno.turnosEncontrados === 0 || !turno.horarioRecepcion) {\n  throw new Error(`No se encontró el turno ofrecido: ${turno.mensaje || 'sin datos'}`);\n}\n\n// 2. Horarios y Fechas\nconst scheduleDate = turno.fecha;\nconst scheduleHourNum = toHourNumber(turno.horarioRecepcion);\n\n// 3. Asesor de recepción\nconst advisorId = Number(turno.asesorId);\n\n// 4. Mecánico y Especialidad de Taller (se buscan por nombre en el HTTP Request de mecánicos)\nconst mecanico = especialistas.find(e => norm(e.advisorName) === norm(turno.mecanicoNombre));\nif (!mecanico) {\n  throw new Error(`No se encontró el ID del mecánico \"${turno.mecanicoNombre}\" en el HTTP Request`);\n}\nconst productiveId = Number(mecanico.advisorId);\n\nconst [horaInicioMec, horaFinMec] = String(turno.huecoMecanico).split(/[-–—]/).map(s => s.trim());\nconst productiveAttendanceHour = cleanHHMM(horaInicioMec);\nconst productiveAttendanceEndHour = cleanHHMM(horaFinMec);\n\nconst specialtyIds = (mecanico.specialties || []).map(s => s.id);\nconst serviceTypeIdWorkshop = Number(\n  specialtyIds.find(id => IDS_MANTENIMIENTO.includes(id)) ?? specialtyIds[0] ?? 5\n);\n\n// 5. Cotización y Servicios Ofrecidos\nconst quotationScheduleVO = cotizacionNode.result?.quotationScheduleVO || cotizacionNode.quotationScheduleVO;\nconst serviceIdComercial = Number(quotationScheduleVO.quotationVOs[0].serviceId);\n\n// 6. Concesionario, Vehículo y Cliente\nconst dealerCode = Number(tabla.sucursal);\nconst customerId = Number(tabla.customerK);\nconst vehiclePlate = trigger.patente || tabla.plate || null;\nconst vehicleVin = tabla.chassi;\nconst modelGroup = Number(tabla.model_id);\n\n// 6b. Concesionario al que asiste el cliente.\nconst esGralPico =\n  norm(trigger.gralPico) === 'si' ||\n  norm(trigger.resumen).includes('general pico') ||\n  norm(trigger.nombre_asesor).includes('gral pico') ||\n  norm(trigger.nombre_asesor).includes('general pico');\nconst nombreConcesionario = esGralPico\n  ? NOMBRE_GRAL_PICO\n  : (SUCURSALES[String(tabla.sucursal)] || `Sucursal ${tabla.sucursal}`);\n\nconst nombreCliente = [tabla.firstname, tabla.lastname].filter(Boolean).join(' ').trim();\nconst kmDeclarados = (String(trigger.resumen || '').match(/km declarados:\\s*(\\d(?:[\\d.]*\\d)?)/i) || [])[1];\nconst lastKm = kmDeclarados ? Number(String(kmDeclarados).replace(/\\./g, '')) : null;\n\n// 6b2. Nota del asistente sobre el precio (precio aproximado / circular / sin precio),\n// guardada por get_detail_servicios en la data table notas_turno_af para este servicio\nlet notaAsistente = '';\ntry {\n  const n = $('Nota AF').first().json || {};\n  if (n.nota && (!n.service_id || Number(n.service_id) === Number(tabla.service_id))) notaAsistente = String(n.nota);\n} catch (e) {}\n// Si Ford no trae precio en el presupuesto (por ejemplo, turnos de un mes que todavía no tiene precios cargados),\n// la nota del asesor lleva el precio que el bot le informó al cliente. Si Ford trae precio, esa nota no hace falta.\n// Turno de Diagnóstico (opción 4): al cliente NO se le informó precio. Se agenda con el service por km,\n// la nota del asesor lo aclara y no se carga en el presupuesto ningún precio informado por el bot.\nconst resumenTxt = String(trigger.resumen || '');\nconst esDiagnostico = /tipo de turno:\\s*diagn[oó]stico/i.test(resumenTxt);\nconst detalleDiag = esDiagnostico\n  ? ((resumenTxt.match(/Detalle del cliente:\\s*(.+?)(?:\\.\\s*(?:Service|Km declarados|No se le inform)|$)/i) || [])[1] || '').trim()\n  : '';\nif (esDiagnostico) notaAsistente = '';\nconst precioFord = Number(quotationScheduleVO?.quotationVOs?.[0]?.price) > 0;\nif (/Precio informado al cliente/i.test(notaAsistente) && precioFord) notaAsistente = '';\n// Y en ese caso se carga en el presupuesto del turno el mismo precio, para que la Agenda no muestre \"Precio a confirmar\".\n// Ford acepta el precio en centavos en price y discount (mismo formato que devuelve cuando tiene el precio).\n// Precio que el bot le dijo al cliente, según la nota guardada:\n//  - plan de Ford: \"Precio informado al cliente: $575.680\"\n//  - fallback con precio de la circular: \"Se le informó al cliente $333.950 según la circular\"\n//  - fallback con precio aproximado: \"Se le informó como referencia el precio de <versión>: $589.680\"\nconst notaTxt = String(notaAsistente);\nconst mPrecio = notaTxt.match(/Precio informado al cliente:\\s*\\$\\s?([\\d.,]+)/i)\n  || notaTxt.match(/Se le inform[oó] al cliente\\s*\\$\\s?([\\d.,]+)/i)\n  || notaTxt.match(/como referencia el precio de[^$]*\\$\\s?([\\d.,]+)/i);\nconst qv = quotationScheduleVO?.quotationVOs?.[0];\nif (!precioFord && mPrecio && qv) {\n  const precioInformado = Number(String(mPrecio[1]).replace(/[^\\d]/g, ''));\n  if (precioInformado > 0) { qv.price = precioInformado * 100; qv.discount = precioInformado * 100; }\n}\n\n// 6c. Observaciones — customerRemark = bloque \"Cliente\", advisorRemark = bloque \"Concesionario\"\n// Ford rechaza el turno con SCHEDULING.BAD_REQUEST si advisorRemark supera ~200 caracteres\n// (probado el 18/11: 200 entra, 250 no). customerRemark acepta al menos 300.\nconst MAX_OBS_ASESOR = 200;\nconst MAX_OBS_CLIENTE = 300;\nconst limpiar = (s) => String(s || '').replace(/\\s+/g, ' ').trim();\nconst recortar = (s, max) => (s.length <= max ? s : s.slice(0, max - 1).trimEnd() + '…');\n\nconst obsCliente = recortar(limpiar([\n  String(trigger.resumen || '').trim(),\n  `Concesionario: ${nombreConcesionario}.`,\n  vehiclePlate ? `Patente: ${vehiclePlate}.` : '',\n].filter(Boolean).join(' ')), MAX_OBS_CLIENTE);\n\n// Para el asesor: primero lo imprescindible y la nota del precio; el resto se agrega solo si entra.\nconst notaCorta = limpiar(notaAsistente)\n  .replace(/^\\[Asistente\\]\\s*/, 'Asistente: ')\n  .replace(/Ford no informó precio por API\\.\\s*/i, 'Ford sin precio. ')\n  .replace(/Se le informó al cliente/i, 'Se informó al cliente')\n  .replace(/según la circular de Ford/i, 'según circular Ford')\n  .replace(/Precio informado al cliente:/i, 'Precio informado al cliente (Ford no lo trae):');\nconst notaDiag = esDiagnostico\n  ? [\n      'DIAGNÓSTICO: el cliente eligió la opción 4. NO se le informó precio.',\n      `Falla: ${recortar(limpiar(detalleDiag).replace(/\\.$/, '') || 'sin detalle', 70)}`.replace(/([^…])$/, '$1.'),\n    ]\n  : [];\nconst obsBase = [\n  esDiagnostico ? 'Turno WhatsApp.' : 'Turno del asistente de WhatsApp.',\n  ...notaDiag,\n  vehiclePlate ? `Patente: ${vehiclePlate}.` : '',\n  kmDeclarados ? `KM: ${kmDeclarados}.` : '',\n].filter(Boolean);\nconst obsOpcionales = [\n  nombreCliente ? `Cliente: ${nombreCliente}.` : '',\n  tabla.model ? `Vehículo: ${tabla.model}.` : '',\n  `Concesionario: ${nombreConcesionario}.`,\n].filter(Boolean);\nlet partesAsesor = notaCorta ? [...obsBase, notaCorta] : [...obsBase];\nfor (const p of obsOpcionales) {\n  const prueba = notaCorta ? [...partesAsesor.slice(0, -1), p, notaCorta] : [...partesAsesor, p];\n  if (limpiar(prueba.join(' ')).length <= MAX_OBS_ASESOR) partesAsesor = prueba;\n}\nconst obsConcesionario = recortar(limpiar(partesAsesor.join(' ')), MAX_OBS_ASESOR);\n\n// 7. Armado del payload con la estructura exacta de la API\nconst payload = {\n  country: \"ARG\",\n  dealer: dealerCode,\n  division: 1,\n  scheduleDate: scheduleDate,\n  scheduleHour: scheduleHourNum,\n  vin: vehicleVin,\n  offeredServices: [serviceIdComercial],\n  quotationScheduleVO: quotationScheduleVO,\n  advisor: advisorId,\n  createUser: CREATE_USER,\n  sendEmail: true,\n  contactCountry: \"ARG\",\n  vehiclePlate: vehiclePlate,\n  contactCustomerId: customerId,\n  customerId: customerId,\n  customerRemark: obsCliente,\n  advisorRemark: obsConcesionario,\n  isDriverInformation: null,\n  scheduleSource: \"D\",\n  scheduleType: \"R\",\n  model: \"\",\n  group: modelGroup,\n  createS: getCreateSTimestamp(),\n  campaignsId: [],\n  lastKm: lastKm,\n  oilLifeRemaining: null,\n  iolmMonths: null,\n  referredBy: 0,\n  // Campos que manda hoy la agenda de Ford (formato nuevo de create-schedule-and-workshop)\n  iolmParts: [],\n  recallVOs: [],\n  returned: \"N\",\n  towTruckNeeded: \"N\",\n  towTruckType: null,\n  towingReason: null,\n  scheduleWorkshop: [\n    {\n      openSchedule: false,\n      noShow: false,\n      productiveId: productiveId,\n      productiveAttendanceHour: productiveAttendanceHour,\n      productiveAttendanceEndHour: productiveAttendanceEndHour,\n      productiveAttendance: scheduleDate,\n      assignedService: [{ id: serviceTypeIdWorkshop, duration: 60 }],\n      status: \"SCHEDULED\",\n      statusSchedule: \"SCHEDULED\",\n      delay: false,\n      height: 138.88888888888889\n    }\n  ]\n};\n\nreturn [{ json: { body: payload } }];"
+        "jsCode": "// ==========================================================\n// Code34 - Payload para crear el turno a partir de \"Turno ofrecido\"\n// ==========================================================\n// Usuario de Agenda Ford con el que se crea el turno (pedido de Aspen: V-MOURE2).\nconst CREATE_USER = 'V-MOURE2';\nconst SUCURSALES = { '60834': 'Pilar', '244': 'Campana' };\nconst NOMBRE_GRAL_PICO = 'General Pico — Servicio Móvil';\nconst IDS_MANTENIMIENTO = [5, 111];\n\nfunction toHourNumber(hora) { return Number(String(hora).trim().replace(':', '')); }\nfunction cleanHHMM(hora)   { return String(hora).trim().replace(':', '').padStart(4, '0'); }\nfunction getCreateSTimestamp() {\n  const now = new Date();\n  return `${now.toISOString().slice(0, 19)}.${String(now.getMilliseconds()).padStart(3, '0')}0`;\n}\nconst norm = (v) => String(v ?? '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase().replace(/\\s+/g, ' ').trim();\n\n// 1. Nodos de origen de datos\nconst turno = $('Turno ofrecido').first().json;\nconst tabla = $('Select rows from a table4').first().json;\nconst trigger = $('When Executed by Another Workflow').first().json;\nconst cotizacionNode = $('HTTP Request33').first().json;\nconst especialistas = $('HTTP Request').first().json?.result?.technicalSpecialists || [];\n\n// Si no se encontró el turno ofrecido, no creamos nada\nif (turno.turnosEncontrados === 0 || !turno.horarioRecepcion) {\n  throw new Error(`No se encontró el turno ofrecido: ${turno.mensaje || 'sin datos'}`);\n}\n\n// 2. Horarios y Fechas\nconst scheduleDate = turno.fecha;\nconst scheduleHourNum = toHourNumber(turno.horarioRecepcion);\n\n// 3. Asesor de recepción\nconst advisorId = Number(turno.asesorId);\n\n// 4. Mecánico y Especialidad de Taller (se buscan por nombre en el HTTP Request de mecánicos)\nconst mecanico = especialistas.find(e => norm(e.advisorName) === norm(turno.mecanicoNombre));\nif (!mecanico) {\n  throw new Error(`No se encontró el ID del mecánico \"${turno.mecanicoNombre}\" en el HTTP Request`);\n}\nconst productiveId = Number(mecanico.advisorId);\n\nconst [horaInicioMec, horaFinMec] = String(turno.huecoMecanico).split(/[-–—]/).map(s => s.trim());\nconst productiveAttendanceHour = cleanHHMM(horaInicioMec);\nconst productiveAttendanceEndHour = cleanHHMM(horaFinMec);\n\nconst specialtyIds = (mecanico.specialties || []).map(s => s.id);\nconst serviceTypeIdWorkshop = Number(\n  specialtyIds.find(id => IDS_MANTENIMIENTO.includes(id)) ?? specialtyIds[0] ?? 5\n);\n\n// 5. Cotización y Servicios Ofrecidos\nconst quotationScheduleVO = cotizacionNode.result?.quotationScheduleVO || cotizacionNode.quotationScheduleVO;\nconst serviceIdComercial = Number(quotationScheduleVO.quotationVOs[0].serviceId);\n\n// 6. Concesionario, Vehículo y Cliente\nconst dealerCode = Number(tabla.sucursal);\nconst customerId = Number(tabla.customerK);\nconst vehiclePlate = trigger.patente || tabla.plate || null;\nconst vehicleVin = tabla.chassi;\nconst modelGroup = Number(tabla.model_id);\n\n// 6b. Concesionario al que asiste el cliente.\nconst esGralPico =\n  norm(trigger.gralPico) === 'si' ||\n  norm(trigger.resumen).includes('general pico') ||\n  norm(trigger.nombre_asesor).includes('gral pico') ||\n  norm(trigger.nombre_asesor).includes('general pico');\nconst nombreConcesionario = esGralPico\n  ? NOMBRE_GRAL_PICO\n  : (SUCURSALES[String(tabla.sucursal)] || `Sucursal ${tabla.sucursal}`);\n\nconst nombreCliente = [tabla.firstname, tabla.lastname].filter(Boolean).join(' ').trim();\nconst kmDeclarados = (String(trigger.resumen || '').match(/km declarados:\\s*(\\d(?:[\\d.]*\\d)?)/i) || [])[1];\nconst lastKm = kmDeclarados ? Number(String(kmDeclarados).replace(/\\./g, '')) : null;\n\n// 6b2. Nota del asistente sobre el precio (precio aproximado / circular / sin precio),\n// guardada por get_detail_servicios en la data table notas_turno_af para este servicio\nlet notaAsistente = '';\ntry {\n  const n = $('Nota AF').first().json || {};\n  if (n.nota && (!n.service_id || Number(n.service_id) === Number(tabla.service_id))) notaAsistente = String(n.nota);\n} catch (e) {}\n// Si Ford no trae precio en el presupuesto (por ejemplo, turnos de un mes que todavía no tiene precios cargados),\n// la nota del asesor lleva el precio que el bot le informó al cliente. Si Ford trae precio, esa nota no hace falta.\n// Turno de Diagnóstico (opción 4): al cliente NO se le informó precio. Se agenda con el service por km,\n// la nota del asesor lo aclara y no se carga en el presupuesto ningún precio informado por el bot.\nconst resumenTxt = String(trigger.resumen || '');\nconst esDiagnostico = /tipo de turno:\\s*diagn[oó]stico/i.test(resumenTxt);\nconst detalleDiag = esDiagnostico\n  ? ((resumenTxt.match(/Detalle del cliente:\\s*(.+?)(?:\\.\\s*(?:Service|Km declarados|No se le inform)|$)/i) || [])[1] || '').trim()\n  : '';\nif (esDiagnostico) notaAsistente = '';\nconst precioFord = Number(quotationScheduleVO?.quotationVOs?.[0]?.price) > 0;\nif (/Precio informado al cliente/i.test(notaAsistente) && precioFord) notaAsistente = '';\n// Y en ese caso se carga en el presupuesto del turno el mismo precio, para que la Agenda no muestre \"Precio a confirmar\".\n// Ford acepta el precio en centavos en price y discount (mismo formato que devuelve cuando tiene el precio).\n// Precio que el bot le dijo al cliente, según la nota guardada:\n//  - plan de Ford: \"Precio informado al cliente: $575.680\"\n//  - fallback con precio de la circular: \"Se le informó al cliente $333.950 según la circular\"\n//  - fallback con precio aproximado: \"Se le informó como referencia el precio de <versión>: $589.680\"\nconst notaTxt = String(notaAsistente);\nconst mPrecio = notaTxt.match(/Precio informado al cliente:\\s*\\$\\s?([\\d.,]+)/i)\n  || notaTxt.match(/Se le inform[oó] al cliente\\s*\\$\\s?([\\d.,]+)/i)\n  || notaTxt.match(/como referencia el precio de[^$]*\\$\\s?([\\d.,]+)/i);\nconst qv = quotationScheduleVO?.quotationVOs?.[0];\nif (!precioFord && mPrecio && qv) {\n  const precioInformado = Number(String(mPrecio[1]).replace(/[^\\d]/g, ''));\n  if (precioInformado > 0) { qv.price = precioInformado * 100; qv.discount = precioInformado * 100; }\n}\n\n// 6c. Observaciones — customerRemark = bloque \"Cliente\", advisorRemark = bloque \"Concesionario\"\n// Ford rechaza el turno con SCHEDULING.BAD_REQUEST si advisorRemark supera ~200 caracteres\n// (probado el 18/11: 200 entra, 250 no). customerRemark acepta al menos 300.\nconst MAX_OBS_ASESOR = 200;\nconst MAX_OBS_CLIENTE = 300;\nconst limpiar = (s) => String(s || '').replace(/\\s+/g, ' ').trim();\nconst recortar = (s, max) => (s.length <= max ? s : s.slice(0, max - 1).trimEnd() + '…');\n\nconst obsCliente = recortar(limpiar([\n  String(trigger.resumen || '').trim(),\n  `Concesionario: ${nombreConcesionario}.`,\n  vehiclePlate ? `Patente: ${vehiclePlate}.` : '',\n].filter(Boolean).join(' ')), MAX_OBS_CLIENTE);\n\n// Para el asesor: primero lo imprescindible y la nota del precio; el resto se agrega solo si entra.\nconst notaCorta = limpiar(notaAsistente)\n  .replace(/^\\[Asistente\\]\\s*/, 'Asistente: ')\n  .replace(/Ford no informó precio por API\\.\\s*/i, 'Ford sin precio. ')\n  .replace(/Se le informó al cliente/i, 'Se informó al cliente')\n  .replace(/según la circular de Ford/i, 'según circular Ford')\n  .replace(/Precio informado al cliente:/i, 'Precio informado al cliente (Ford no lo trae):');\nconst notaDiag = esDiagnostico\n  ? [\n      'DIAGNÓSTICO: el cliente eligió la opción 4. NO se le informó precio.',\n      `Falla: ${recortar(limpiar(detalleDiag).replace(/\\.$/, '') || 'sin detalle', 70)}`.replace(/([^…])$/, '$1.'),\n    ]\n  : [];\nconst obsBase = [\n  esDiagnostico ? 'Turno WhatsApp.' : 'Turno del asistente de WhatsApp.',\n  ...notaDiag,\n  vehiclePlate ? `Patente: ${vehiclePlate}.` : '',\n  kmDeclarados ? `KM: ${kmDeclarados}.` : '',\n].filter(Boolean);\nconst obsOpcionales = [\n  nombreCliente ? `Cliente: ${nombreCliente}.` : '',\n  tabla.model ? `Vehículo: ${tabla.model}.` : '',\n  `Concesionario: ${nombreConcesionario}.`,\n].filter(Boolean);\nlet partesAsesor = notaCorta ? [...obsBase, notaCorta] : [...obsBase];\nfor (const p of obsOpcionales) {\n  const prueba = notaCorta ? [...partesAsesor.slice(0, -1), p, notaCorta] : [...partesAsesor, p];\n  if (limpiar(prueba.join(' ')).length <= MAX_OBS_ASESOR) partesAsesor = prueba;\n}\nconst obsConcesionario = recortar(limpiar(partesAsesor.join(' ')), MAX_OBS_ASESOR);\n\n// 7. Armado del payload con la estructura exacta de la API\nconst payload = {\n  country: \"ARG\",\n  dealer: dealerCode,\n  division: 1,\n  scheduleDate: scheduleDate,\n  scheduleHour: scheduleHourNum,\n  vin: vehicleVin,\n  offeredServices: [serviceIdComercial],\n  quotationScheduleVO: quotationScheduleVO,\n  advisor: advisorId,\n  createUser: CREATE_USER,\n  sendEmail: true,\n  contactCountry: \"ARG\",\n  vehiclePlate: vehiclePlate,\n  contactCustomerId: customerId,\n  customerId: customerId,\n  customerRemark: obsCliente,\n  advisorRemark: obsConcesionario,\n  isDriverInformation: null,\n  scheduleSource: \"D\",\n  scheduleType: \"R\",\n  model: \"\",\n  group: modelGroup,\n  createS: getCreateSTimestamp(),\n  campaignsId: [],\n  lastKm: lastKm,\n  oilLifeRemaining: null,\n  iolmMonths: null,\n  referredBy: 0,\n  // Campos que manda hoy la agenda de Ford (formato nuevo de create-schedule-and-workshop)\n  iolmParts: [],\n  recallVOs: [],\n  returned: \"N\",\n  towTruckNeeded: \"N\",\n  towTruckType: null,\n  towingReason: null,\n  scheduleWorkshop: [\n    {\n      openSchedule: false,\n      noShow: false,\n      productiveId: productiveId,\n      productiveAttendanceHour: productiveAttendanceHour,\n      productiveAttendanceEndHour: productiveAttendanceEndHour,\n      productiveAttendance: scheduleDate,\n      assignedService: [{ id: serviceTypeIdWorkshop, duration: 60 }],\n      status: \"SCHEDULED\",\n      statusSchedule: \"SCHEDULED\",\n      delay: false,\n      height: 138.88888888888889\n    }\n  ]\n};\n\nreturn [{ json: { body: payload } }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -9802,6 +9936,82 @@
         },
         "options": {}
       }
+    },
+    {
+      "id": "6d40512e-c9f0-414e-bdc3-779e32fb29df",
+      "name": "Llegó sucursal válida?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1184,
+        552
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a1c2e3f4-0b1d-4e2f-9a3b-sucursalvalid1",
+              "leftValue": "={{ ['244', '60834'].includes(String($('When Executed by Another Workflow').first().json.idSucursal ?? '').trim()) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "a16d4578-5178-4a28-8211-0a2093aeaaec",
+      "name": "Guardar sucursal de get_user",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.5,
+      "position": [
+        1424,
+        552
+      ],
+      "parameters": {
+        "operation": "upsert",
+        "table": {
+          "__rl": true,
+          "value": "agenda_ford",
+          "mode": "list",
+          "cachedResultName": "agenda_ford"
+        },
+        "dataMode": "defineBelow",
+        "columnToMatchOn": "id_conversation",
+        "valueToMatchOn": "={{ String($('When Executed by Another Workflow').first().json.id_conversation) }}",
+        "valuesToSend": {
+          "values": [
+            {
+              "column": "sucursal",
+              "value": "={{ String($('When Executed by Another Workflow').first().json.idSucursal).trim() }}"
+            },
+            {
+              "column": "company",
+              "value": "2"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "mySql": {
+          "id": "MYmGGfM8lz7xrUC9",
+          "name": "MySQL account"
+        }
+      }
     }
   ],
   "pinData": {
@@ -9852,6 +10062,6 @@
     }
   ],
   "triggerCount": 0,
-  "updatedAt": "2026-11-25T19:49:25.516Z",
-  "versionId": "80e2d139-f30a-40ec-ad0f-3aa195023760"
+  "updatedAt": "2026-11-27T13:44:32.700Z",
+  "versionId": "d23679d4-af2d-45d1-a5aa-804c5e2d439e"
 }
